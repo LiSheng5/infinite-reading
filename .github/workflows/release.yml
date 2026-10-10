@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: tag 与 VERSION 必须一致
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(cat VERSION)"
+          echo "tag=$tag VERSION=$ver"
+          [ "$tag" = "$ver" ] || { echo "::error::tag（$tag）与 VERSION（$ver）不一致，请先跑 node tools/sync-version.mjs"; exit 1; }
+
+      - name: 版本号一致性
+        run: node tools/sync-version.mjs --check
+
+      - name: 发布前跑离线评测
+        run: node eval/run.js
+
+      - name: 打包源码 zip
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix="infinite-reading-${GITHUB_REF_NAME}/" \
+            -o "dist/infinite-reading-${GITHUB_REF_NAME}.zip" HEAD
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/infinite-reading-${GITHUB_REF_NAME}.zip" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

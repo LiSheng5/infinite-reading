@@ -1,0 +1,17 @@
+# 统一行尾：源码一律 LF（CI 跑 Linux，Windows 编辑器也都能正确处理）
+* text=auto eol=lf
+
+# 少数必须 CRLF 的脚本
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.woff binary
+*.woff2 binary

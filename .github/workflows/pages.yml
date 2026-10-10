@@ -1,0 +1,45 @@
+name: Deploy demo to GitHub Pages
+
+# 在线 Demo（开源路线图 W2 / L0）：纯静态站点，直接部署仓库根目录。
+# 部署后：https://LiSheng5.github.io/infinite-reading/          ← 开始页
+#         https://LiSheng5.github.io/infinite-reading/?demo=1   ← 免配置离线演示
+# 启用方式：仓库 Settings → Pages → Build and deployment → Source 选「GitHub Actions」。
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: 打包静态站点（排除开发文件）
+        run: |
+          mkdir -p _site
+          cp -r index.html css js icons manifest.webmanifest sw.js _site/
+          cp LICENSE README.md _site/ 2>/dev/null || true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

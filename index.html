@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>无限阅读 · ∞ Reading</title>
+
+<!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2563eb">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="无限阅读">
+
+<!-- 字体：国内优先 jsDelivr（霞鹜文楷），Google Fonts 作为其余字体的来源 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Liu+Jian+Mao+Cao&family=Ma+Shan+Zheng&family=Long+Cang&family=ZCOOL+XiaoWei&family=Noto+Serif+SC&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css?v=0.2.0">
+</head>
+<body>
+<div id="app">
+
+  <!-- 撕纸便签：旁白气泡的纸张质感（纤维 + 颗粒）。两个滤镜在本文件定义一次，
+       由 css/style.css 的 .bubble-narration 经 filter: url(#…) 引用；
+       必须留在文档内且不能 display:none，否则引用解析不到。 -->
+  <svg class="note-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="ir-note-fibers" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65 0.85"
+                      numOctaves="3" seed="12" stitchTiles="stitch" result="noise" />
+        <feColorMatrix in="noise" type="saturate" values="0" result="gray" />
+        <feComponentTransfer in="gray">
+          <feFuncA type="table" tableValues="0 0.22" />
+        </feComponentTransfer>
+      </filter>
+      <filter id="ir-note-grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.035"
+                      numOctaves="2" seed="7" result="grainNoise" />
+        <feColorMatrix in="grainNoise" type="saturate" values="0" />
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- 背景图层（两层交替淡入淡出，画面氛围） -->
+  <div id="bg-a" class="bg-layer show"></div>
+  <div id="bg-b" class="bg-layer"></div>
+
+  <!-- ========== 开始页（应用入口：点一张模式卡即由此开局） ========== -->
+  <section id="screen-start" class="screen">
+    <div class="start-card">
+      <h1 class="title">无限阅读</h1>
+
+      <!-- 三个模式（§4.8）：只有名字，点哪张即由此开局（无介绍、无单独的「开始」按钮） -->
+      <div id="start-modes" class="mode-cards start-mode-cards">
+        <button class="mode-card" data-mode="choice"><b>剧情</b></button>
+        <button class="mode-card" data-mode="chat"><b>对话</b></button>
+        <button class="mode-card" data-mode="rp"><b>扮演</b></button>
+      </div>
+
+      <!-- 入口按钮收在模式卡下面，与三张模式卡聚成一块（尺寸保持原样，不跟着模式卡收小） -->
+      <div class="row">
+        <button id="btn-open-settings" class="btn">⚙ 接入模型</button>
+        <button id="btn-continue" class="btn ghost hidden">↶ 继续上次</button>
+      </div>
+      <div class="row row-secondary">
+        <button id="btn-start-shelf" class="btn slim">我的书架</button>
+        <button id="btn-start-import" class="btn slim">文本导入</button>
+        <button id="btn-start-demo" class="btn slim" title="不用配置、不用联网：用内置剧本和本地占位图先看一遍完整流程">🎬 离线演示</button>
+      </div>
+
+      <div id="start-premise-wrap">
+        <label class="field-label" for="setup-premise">故事设定（仅剧情模式用；开演前可随意修改）</label>
+        <textarea id="setup-premise" rows="8" spellcheck="false"></textarea>
+      </div>
+      <p class="version">无限阅读 v0.2 · 纯本地运行 · 数据只保存在你的浏览器里</p>
+    </div>
+  </section>
+
+  <!-- ========== 故事书架（§7 / T-P2-1） ========== -->
+  <section id="screen-shelf" class="screen hidden">
+    <div class="shelf-wrap">
+      <header class="shelf-head">
+        <div>
+          <h1 class="title">无限阅读</h1>
+          <p class="subtitle">我的书架</p>
+        </div>
+        <div class="shelf-actions">
+          <button id="btn-new-story" class="btn primary">＋ 新故事</button>
+          <button id="btn-import" class="btn">↑ 导入</button>
+          <button id="btn-import-text" class="btn">粘贴文本导入</button>
+          <button id="btn-shelf-settings" class="btn">⚙ 模型设置</button>
+          <button id="btn-shelf-home" class="btn ghost">← 首页</button>
+        </div>
+      </header>
+
+      <div id="shelf-empty" class="shelf-empty">
+        <p>还没有故事。</p>
+        <p class="hint">点「＋ 新故事」开始；也可以把 <b>.irstory.json</b> 文件拖进这个窗口导入。</p>
+      </div>
+      <div id="shelf-grid" class="shelf-grid"></div>
+
+      <p class="shelf-foot">数据只保存在你的浏览器里 · 退出即自动存档</p>
+    </div>
+  </section>
+
+  <!-- ========== 阅读界面（聊天记录 : 画面 = 双栏，§4.6） ========== -->
+  <section id="screen-game" class="screen hidden">
+    <header class="hud">
+      <div class="hud-left">
+        <button id="btn-back-home" class="hud-btn" title="返回首页（自动存档）">←</button>
+        <span id="hud-title" class="story-title"></span>
+        <span id="hud-mode" class="mode-chip"></span>
+        <!-- 离线演示模式标识（?demo=1）：点它=去掉查询参数，回到可配置真模型的普通模式 -->
+        <a id="demo-chip" class="mode-chip demo-chip hidden" href="?"
+           title="离线演示模式：内置剧本 + 本地占位图，未连接任何模型。点此回到可配置真模型的普通模式">🎬 演示</a>
+      </div>
+      <div class="hud-actions">
+        <button id="btn-hud-shelf" class="hud-btn" title="我的书架">书架</button>
+        <button id="btn-hud-new" class="hud-btn" title="开一个新故事">＋ 新故事</button>
+        <button id="btn-savepoint" class="hud-btn" title="打一个具名存档点">存档</button>
+        <button id="btn-manual-gen" class="hud-btn" title="让 AI 画师为当前场景作画">作画</button>
+        <button id="btn-toggle-image" class="hud-btn" title="收起 / 展开画面面板">画面</button>
+        <button id="btn-settings" class="hud-btn" title="模型设置">⚙</button>
+      </div>
+    </header>
+
+    <div id="game-layout" class="game-layout">
+      <div id="chat-pane" class="chat-pane">
+        <div id="chat-scroll" class="chat-scroll"></div>
+        <footer class="composer">
+          <div class="input-row">
+            <input id="player-input" placeholder="输入你想说的话、想做的事……" autocomplete="off">
+            <button id="btn-send" class="btn primary">发送</button>
+          </div>
+        </footer>
+      </div>
+
+      <div id="splitter" class="splitter" title="拖动调整聊天 / 画面比例"></div>
+
+      <div id="image-pane" class="image-pane">
+        <div id="stage-wrap" class="stage-wrap">
+          <img id="stage-img" class="stage-img hidden" alt="">
+          <div id="stage-empty" class="stage-empty">画面会在这里展开</div>
+          <span id="gen-status" class="pill stage-pill hidden"></span>
+          <button id="btn-stage-painter" class="stage-btn stage-btn-left" title="画师工作台（看 / 改这张图的提示词）">✎</button>
+          <button id="btn-immersive" class="stage-btn" title="全屏沉浸（收起聊天）">⛶</button>
+        </div>
+        <div id="thumb-strip" class="thumb-strip"></div>
+      </div>
+    </div>
+
+    <!-- 全屏沉浸第三态：画面占满，聊天收成底部浮动条（§4.6） -->
+    <div id="immersive-bar" class="immersive-bar hidden">
+      <div id="immersive-text" class="immersive-text"></div>
+      <div class="input-row">
+        <input id="immersive-input" placeholder="继续故事……" autocomplete="off">
+        <button id="btn-immersive-send" class="btn primary">发送</button>
+        <button id="btn-immersive-exit" class="hud-btn" title="退出沉浸">✕</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 新故事 · 选模式（§4.8） ========== -->
+  <div id="modal-new" class="modal hidden">
+    <div class="modal-card narrow">
+      <div class="modal-head">
+        <h2>新故事</h2>
+        <button id="btn-close-new" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="mode-cards">
+          <button class="mode-card" data-mode="choice">
+            <b>剧情</b><span>给选项的故事。开头有一页设定向导，你把世界观与人物交代清楚，故事就从那里生长。</span>
+          </button>
+          <button class="mode-card" data-mode="chat">
+            <b>对话</b><span>纯聊天。没有选项，随性说话；关系与印象会慢慢积累下来。</span>
+          </button>
+          <button class="mode-card" data-mode="rp">
+            <b>扮演</b><span>角色扮演。以一张角色卡登场（可空白自建，也可导入 SillyTavern V2/V3 PNG 卡），玩的是关系。</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 开局设定向导（剧情模式，§4.8 / T-P2-3） ========== -->
+  <div id="modal-wizard" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>开局设定</h2>
+        <button id="btn-close-wizard" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="draft-row">
+          <label>一句话让 AI 起草<input id="wz-draft-input" type="text" placeholder="例如：雨夜便利店里的十年之约"></label>
+          <button id="btn-wz-draft" class="btn">✎ 起草</button>
+        </div>
+        <p class="hint" id="wz-draft-hint">起草模型可在模型设置里更换（默认跟随剧情模型）。草稿出来后再改成你自己的话即可。</p>
+
+        <label>世界观<textarea id="wz-world" rows="3" spellcheck="false" placeholder="时代、地点、规则、气氛……"></textarea></label>
+        <label>主要人物（每行一个：名字｜性格｜说话方式）<textarea id="wz-characters" rows="3" spellcheck="false" placeholder="周叙｜话里有话、克制｜简短、喜欢反问"></textarea></label>
+        <label>你的角色<textarea id="wz-role" rows="2" spellcheck="false" placeholder="你是谁、从哪来、想做什么……"></textarea></label>
+        <label>风格基调（画面与文字的调子，之后用于试画锚定）<input id="wz-style" type="text" placeholder="克制的悬疑，冷色，雨夜霓虹"></label>
+        <label>想看的发展（可选）<textarea id="wz-development" rows="2" spellcheck="false" placeholder="你希望故事朝哪个方向走……"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-wz-cancel" class="btn ghost">取消</button>
+        <button id="btn-wz-start" class="btn primary">开始故事</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 剧情文本导入（R12 路径② / §4.11 / T-P6-1） ========== -->
+  <div id="modal-import-text" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>粘贴剧情文本导入</h2>
+        <button id="btn-close-import-text" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <div id="it-step-paste">
+          <label>整理模型（用谁来把文本整理成故事设定）
+            <select id="it-model-mode">
+              <option value="follow">跟随剧情模型（默认）</option>
+              <option value="draft">起草模型（「模型设置」里单独配的那个）</option>
+            </select>
+          </label>
+          <label>粘贴任意剧情文本（设定文 / 小说片段 / 别人游戏的聊天记录）
+            <textarea id="it-text" rows="10" spellcheck="false" placeholder="把文本整段粘进来，点「开始整理」……"></textarea>
+          </label>
+          <p class="hint" id="it-plan-hint"></p>
+          <p class="hint">文本会原样发给上面选的模型；整理产物只在这里预览，你确认之后才会建新档。想单独指定一个便宜的整理模型：在「模型设置 · 起草模型」里填，然后这里选「起草模型」。</p>
+          <div class="row-inline">
+            <button id="btn-it-run" class="btn primary">✎ 开始整理</button>
+            <button id="btn-it-cancel" class="btn ghost">取消</button>
+          </div>
+        </div>
+
+        <div id="it-step-run" class="hidden">
+          <p class="hint" id="it-run-info"></p>
+          <p class="hint" id="it-status"></p>
+        </div>
+
+        <div id="it-step-confirm" class="hidden">
+          <p class="hint" id="it-confirm-info"></p>
+          <label>标题<input id="it-title" type="text" spellcheck="false"></label>
+          <label>故事设定（进入对局后常驻）<textarea id="it-premise" rows="6" spellcheck="false"></textarea></label>
+          <div class="grid2">
+            <label>地点<input id="it-place" type="text" spellcheck="false"></label>
+            <label>时间<input id="it-time" type="text" spellcheck="false"></label>
+          </div>
+          <label>画面参考（喂给画师的一句话）<input id="it-scene" type="text" spellcheck="false"></label>
+          <label>人物（名字｜在场／离场｜性格｜说话方式，每行一个）<textarea id="it-characters" rows="4" spellcheck="false"></textarea></label>
+          <label>伏笔（每行一条）<textarea id="it-threads" rows="3" spellcheck="false"></textarea></label>
+          <label>画风关键词（英文逗号分隔，用于开局试画 4 张候选）<input id="it-style" type="text" spellcheck="false"></label>
+          <p class="hint">确认后建新档并走试画锚定。「用户确认修改」这一步是设计里明确不能跳过的：导入文本是别人的内容，由你把关。</p>
+          <div class="row-inline">
+            <button id="btn-it-start" class="btn primary">用它开局</button>
+            <button id="btn-it-back" class="btn ghost">← 重新粘贴</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 导出（§4.11 / T-P2-4） ========== -->
+  <div id="modal-export" class="modal hidden">
+    <div class="modal-card narrow">
+      <div class="modal-head">
+        <h2>导出故事</h2>
+        <button id="btn-close-export" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" id="export-story-name"></p>
+        <div class="radio-col">
+          <label class="check"><input type="radio" name="export-kind" value="full" checked> <b>完整档案</b> —— 含全部剧情记录，别人导入后可原样续玩</label>
+          <label class="check"><input type="radio" name="export-kind" value="premise"> <b>精简设定包</b> —— 只含开局材料（premise / 世界卡 / 画风），导入后预填向导重新开局</label>
+        </div>
+        <label class="check"><input id="export-src" type="checkbox"> 附带原图（文件更大；默认只带缩略图 + 提示词）</label>
+        <p class="hint">导入的图片在书架作画风参考展示；缺原图的场景可「按原 prompt 重画」恢复。</p>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-do-export" class="btn primary">导出 .irstory.json</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 画师工作台（§4.3 / T-P3-1） ========== -->
+  <div id="modal-painter" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>画师工作台</h2>
+        <button id="btn-close-painter" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="pw-top">
+          <img id="pw-preview" class="pw-preview" alt="">
+          <div class="pw-meta-col">
+            <label>这张画的说明（alt）<input id="pw-alt" type="text" spellcheck="false"></label>
+            <p class="hint" id="pw-meta"></p>
+          </div>
+        </div>
+
+        <label>完整 prompt（发给生图模型的原话，可改）<textarea id="pw-prompt" rows="4" spellcheck="false"></textarea></label>
+        <div class="row-inline">
+          <button id="btn-pw-redraw" class="btn primary">按此重画</button>
+          <button id="btn-pw-force" class="btn" title="把视觉设定卡的画风与人物设定压进这张图重画">按设定卡强制重画</button>
+          <button id="btn-pw-reset" class="btn ghost" title="丢掉手改，回到画师写的原稿">↺ 回到画师原稿</button>
+          <button id="btn-pw-anchor" class="btn ghost" title="重走「试画 4 张候选 → 定视觉设定卡」">锚定画风</button>
+          <span class="hint" id="pw-status"></span>
+        </div>
+
+        <fieldset>
+          <legend>出图参数（与「模型设置 · 生图模型」同一份设置）</legend>
+          <div class="grid2">
+            <label>比例
+              <select id="pw-aspect">
+                <option value="16:9">16:9 横屏</option>
+                <option value="9:16">9:16 竖屏</option>
+                <option value="1:1">1:1 方形</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label>本次尺寸<input id="pw-size" type="text" readonly></label>
+          </div>
+          <div class="grid2" id="pw-row-wh">
+            <label>宽<input id="pw-width" type="number" min="64" step="16"></label>
+            <label>高<input id="pw-height" type="number" min="64" step="16"></label>
+          </div>
+          <p class="hint">改了这里，下一张图也用同样的尺寸；服务商只认固定档位时按报错提示调整。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>与画师对话（说「灯光暖一点」，它会改上面的 prompt）</legend>
+          <div id="pw-thread" class="pw-thread"></div>
+          <div class="input-row">
+            <input id="pw-input" placeholder="例如：灯光暖一点 / 改成特写 / 雾气再重些" autocomplete="off">
+            <button id="btn-pw-send" class="btn">发送</button>
+          </div>
+          <p class="hint">画师子代理是隔离调用：只看这张图的提示词、画风锚与最近剧情，用完即弃，不污染剧情对话；线程随存档保留。</p>
+        </fieldset>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-pw-close" class="btn">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 画风锚定（R3 / §5 / T-P4-1） ========== -->
+  <div id="modal-anchor" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>锚定画风</h2>
+        <button id="btn-close-anchor" class="hud-btn" title="关闭（跳过锚定）">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" id="anchor-intro"></p>
+
+        <div id="anchor-step-pick">
+          <div id="anchor-grid" class="anchor-grid"></div>
+          <div class="row-inline">
+            <button id="btn-anchor-more" class="btn">↺ 再试一批</button>
+            <button id="btn-anchor-skip" class="btn ghost">跳过，自由发挥</button>
+            <button id="btn-anchor-use" class="btn primary" disabled>用这张定画风</button>
+          </div>
+          <p class="hint">4 张候选按你设置的比例试画；选定后画师会起草一张视觉设定卡，之后每张画都带着它。</p>
+        </div>
+
+        <div id="anchor-step-card" class="hidden">
+          <div class="ac-top">
+            <img id="anchor-card-preview" class="anchor-preview" alt="">
+            <p class="hint" id="ac-picked-kw"></p>
+          </div>
+          <label>画风关键词（英文，逗号分隔）<input id="ac-keywords" type="text" spellcheck="false"></label>
+          <div class="grid2">
+            <label>媒介<input id="ac-medium" type="text" spellcheck="false"></label>
+            <label>色板<input id="ac-palette" type="text" spellcheck="false"></label>
+          </div>
+          <label>人物设定（名字｜英文外貌｜服饰｜特征，每行一个）<textarea id="ac-characters" rows="3" spellcheck="false"></textarea></label>
+          <div class="grid2">
+            <label>负面提示词<input id="ac-negative" type="text" spellcheck="false"></label>
+            <label>备注<input id="ac-note" type="text" spellcheck="false"></label>
+          </div>
+          <fieldset>
+            <legend>跟画师说着改（例如「更冷一些」「人物更接近水彩」）</legend>
+            <div class="input-row">
+              <input id="ac-chat" placeholder="说说你想怎么调" autocomplete="off">
+              <button id="btn-anchor-chat" class="btn">发送</button>
+            </div>
+            <p class="hint" id="ac-status"></p>
+          </fieldset>
+          <div class="row-inline">
+            <button id="btn-anchor-back" class="btn ghost">← 重选</button>
+            <button id="btn-anchor-lock" class="btn primary">锁定这张卡</button>
+            <span class="hint">锁定后记入版本；每张图都会带上它</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 角色卡（R13 / §4.12 / T-P7-1）：统一编辑器 = 自建空白表单 / 导入后可编辑 ========== -->
+  <div id="modal-card" class="modal modal-top hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="card-modal-title">角色卡</h2>
+        <button id="btn-close-card" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" id="card-source-hint"></p>
+        <div class="grid2">
+          <label>名字<input id="rc-name" type="text" spellcheck="false" placeholder="例如：周叙"></label>
+          <label>外貌<input id="rc-appearance" type="text" spellcheck="false" placeholder="一两句；会给画师当参考"></label>
+        </div>
+        <label>性格<textarea id="rc-personality" rows="2" spellcheck="false" placeholder="话里有话、克制……"></textarea></label>
+        <label>场景（你们在哪、什么情况）<textarea id="rc-scene" rows="2" spellcheck="false" placeholder="凌晨的便利店，雨声很大……"></textarea></label>
+        <label>开场白（扮演开局的第一条旁白，由角色卡写）<textarea id="rc-opening" rows="3" spellcheck="false" placeholder="「这么晚还来买东西？」"></textarea></label>
+        <label>示例对话（喂给模型学口吻，不照抄内容）<textarea id="rc-example" rows="3" spellcheck="false" placeholder="{{char}}: 「挑便宜的就走。」"></textarea></label>
+        <label>系统提示（这张卡自带的设定要求，可选）<input id="rc-note" type="text" spellcheck="false"></label>
+        <label class="check"><input id="rc-sync-world" type="checkbox" checked> 同时初始化世界卡人物条目（性格 / 说话方式对接）</label>
+        <p class="hint">导入的是你自己的卡：只兼容 SillyTavern V2/V3 的 PNG 内嵌 JSON 格式，不复制任何代码与内容。
+          <button id="btn-rc-import" class="mini-btn">↑ 选择 PNG 卡</button>
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-rc-cancel" class="btn ghost">取消</button>
+        <button id="btn-rc-save" class="btn primary">保存角色卡</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 模型设置（模型相关全部归置在此，§4.9） ========== -->
+  <div id="modal-settings" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>模型设置</h2>
+        <button id="btn-close-settings" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Base URL 下拉候选：只列「接口地址」不列模型名（地址稳定、无需频繁维护；模型名自己填）。
+             用 datalist，既能选也能手填；各字段以服务商官方文档为准，随时可改。 -->
+        <datalist id="dl-base-url">
+          <option value="https://open.bigmodel.cn/api/paas/v4">国内 · 智谱 GLM（BigModel，对话 + CogView 生图）</option>
+          <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">国内 · 阿里云百炼 · 通义千问（OpenAI 兼容）</option>
+          <option value="https://api.deepseek.com/v1">国内 · DeepSeek（仅对话）</option>
+          <option value="https://ark.cn-beijing.volces.com/api/v3">国内 · 火山方舟 · 豆包</option>
+          <option value="https://api.moonshot.cn/v1">国内 · 月之暗面 Kimi</option>
+          <option value="https://api.siliconflow.cn/v1">国内 · 硅基流动 SiliconFlow（对话 + 生图）</option>
+          <option value="https://api.minimax.chat/v1">国内 · MiniMax（海螺）</option>
+          <option value="https://api.hunyuan.cloud.tencent.com/v1">国内 · 腾讯混元</option>
+          <option value="https://qianfan.baidubce.com/v2">国内 · 百度千帆</option>
+          <option value="https://api.stepfun.com/v1">国内 · 阶跃星辰 StepFun</option>
+          <option value="https://api.lingyiwanwu.com/v1">国内 · 零一万物</option>
+          <option value="https://api.openai.com/v1">国外 · OpenAI（对话 + gpt-image 生图）</option>
+          <option value="https://generativelanguage.googleapis.com/v1beta/openai/">国外 · Google Gemini（OpenAI 兼容）</option>
+          <option value="https://api.x.ai/v1">国外 · xAI Grok</option>
+          <option value="https://api.mistral.ai/v1">国外 · Mistral</option>
+          <option value="https://api.groq.com/openai/v1">国外 · Groq</option>
+          <option value="https://openrouter.ai/api/v1">国外 · OpenRouter（聚合多家）</option>
+          <option value="https://api.together.xyz/v1">国外 · Together AI</option>
+          <option value="https://api.fireworks.ai/inference/v1">国外 · Fireworks</option>
+          <option value="http://localhost:11434/v1">本地 · Ollama</option>
+          <option value="http://localhost:1234/v1">本地 · LM Studio</option>
+          <option value="http://localhost:8000/v1">本地 · vLLM / 其他本地 OpenAI 服务</option>
+        </datalist>
+
+        <p class="hint">任意兼容 OpenAI 格式的接口都能用（云端 / 本地）：Base URL 可从下拉里选常见服务商、也能自己填；模型名与参数由你填——不预置模型名，省得跟着厂商变动一直维护。</p>
+
+        <fieldset>
+          <legend>剧情对话模型（AI1 · 旁白与角色）</legend>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-chat-base" type="text" list="dl-base-url" placeholder="https://…（点这里选常见服务商，也可自己填）"></label>
+            <label>模型<input id="s-chat-model" type="text" placeholder="填你的模型名"></label>
+          </div>
+          <p class="hint">Base URL 点一下输入框会列出常见服务商接口地址（也能自己填），通常以 /v1 结尾；模型名去控制台「模型广场 / 文档」复制准确写法，注意大小写——模型名更新快，故不预置，只给你常用地址。</p>
+          <label>API Key<input id="s-chat-key" type="password" placeholder="sk-…"></label>
+          <p class="hint">API Key 在服务商控制台创建后粘贴，只保存在你的浏览器本地，不会上传到别处。</p>
+          <div class="grid2">
+            <label>温度（0~2，越高越发散）<input id="s-chat-temp" type="number" step="0.1" min="0" max="2"></label>
+            <label id="wrap-chat-thinking" class="hidden">思考档位<select id="s-chat-thinking"></select></label>
+          </div>
+          <label>上下文窗口（token · 70% 压缩阈值按它算）<input id="s-chat-ctx" type="number" min="0" step="1000" placeholder="不知道就留空（回退按条数压缩）"></label>
+          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value，原样并入请求体）<input id="s-chat-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
+          <p class="hint" id="s-chat-cap"></p>
+          <p class="hint">兼容所有 OpenAI 格式接口（云端 / 本地均可）；不内置服务商预设，省得跟着厂商模型变动一直维护。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>画师子代理（把剧情写成绘画提示词）</legend>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-painter-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+            <label>模型<input id="s-painter-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+          </div>
+          <label>API Key<input id="s-painter-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+          <p class="hint">留空即沿用剧情模型的地址与 Key。推荐填最便宜的模型（写提示词不需要强模型）。</p>
+          <p class="hint">每张图下方都有「工作台」：看 / 改完整 prompt、跟画师说着改、按此重画。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>书记员（校对世界卡 / 压缩摘要 / 提取画像）</legend>
+          <label class="check"><input id="s-scribe-enabled" type="checkbox" checked> 启用书记员</label>
+          <label class="check"><input id="s-scribe-ai" type="checkbox" checked> 书记员兼任「压缩摘要 + 滚动风格摘要」（调用失败时自动走本地规则，不花 API）</label>
+          <label class="inline-field">每 <input id="s-scribe-every" type="number" min="1" max="100" class="inline-num" value="10"> 回合校对一次</label>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-scribe-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+            <label>模型<input id="s-scribe-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+          </div>
+          <label>API Key<input id="s-scribe-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+          <p class="hint">留空即沿用剧情模型。推荐填最便宜的模型（校对是便宜活）。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>用户画像（R13 · 默认全关，可按模式开）</legend>
+          <div class="row-inline">
+            <label class="check"><input id="s-profile-choice" type="checkbox"> 剧情模式</label>
+            <label class="check"><input id="s-profile-chat" type="checkbox"> 对话模式</label>
+            <label class="check"><input id="s-profile-rp" type="checkbox"> 扮演模式</label>
+            <button id="btn-profile-all" class="mini-btn">全部开启</button>
+            <button id="btn-profile-none" class="mini-btn">全部关闭</button>
+          </div>
+          <label>存储范围
+            <select id="s-profile-scope">
+              <option value="global">全局（跨故事共享）</option>
+              <option value="per-story">仅当前故事</option>
+            </select>
+          </label>
+          <p class="hint">开启后书记员在校对时顺手提取（失败走本地规则）；每轮只注入与当前话题相关的 Top-N 条 + 常驻一行摘要，条目再多也不涨 token。关闭即停止收集，已存条目保留、可手动清空。</p>
+          <div class="panel-block">
+            <p class="hint" id="profile-state"></p>
+            <div id="profile-list" class="mono-list"></div>
+            <div class="row-inline">
+              <button id="btn-profile-clear" class="mini-btn">清空画像</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>起草模型（开局向导「一句话让 AI 起草」）</legend>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-draft-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+            <label>模型<input id="s-draft-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+          </div>
+          <label>API Key<input id="s-draft-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+          <p class="hint">留空即沿用剧情模型。推荐直接跟随剧情模型（起草需要创造力）。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>生图模型（为每一幕作画）</legend>
+          <div class="grid2">
+            <label id="wrap-image-size" class="hidden">尺寸（该模型支持的档位）<select id="s-image-size"></select></label>
+            <label id="wrap-image-aspect">比例
+              <select id="s-image-aspect">
+                <option value="16:9">16:9 横屏</option>
+                <option value="9:16">9:16 竖屏</option>
+                <option value="1:1">1:1 方形</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label id="wrap-image-quality" class="hidden">质量<select id="s-image-quality"></select></label>
+          </div>
+          <div class="grid2" id="row-image-wh">
+            <label>宽<input id="s-image-width" type="number" min="64" step="16" placeholder="1280"></label>
+            <label>高<input id="s-image-height" type="number" min="64" step="16" placeholder="720"></label>
+          </div>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-image-base" type="text" list="dl-base-url" placeholder="https://…（点这里选，也可自己填）"></label>
+            <label>模型<input id="s-image-model" type="text" placeholder="填你的生图模型名"></label>
+          </div>
+          <p class="hint">生图接口可以和对话不是同一家（有些服务商只做对话、不做生图，就再配一家）；下拉里带「生图」标注的可直接选，地址会自动拼上 /images/generations。</p>
+          <label>API Key<input id="s-image-key" type="password" placeholder="sk-…"></label>
+          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-image-params" type="text" placeholder="steps=30, negative_prompt=blurry"></label>
+          <p class="hint">尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；模型名与参数都可随意填；画师工作台里也能改尺寸。不确定的项留空即可，会走通用默认。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>画风</legend>
+          <div class="grid2">
+            <label>画风预设（未锚定时的兜底）
+              <select id="s-style-preset">
+                <option value="anime">动漫 · 赛璐璐</option>
+                <option value="ink">水墨 · 留白</option>
+                <option value="film">电影 · 写实</option>
+                <option value="pixel">像素 · 复古</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+            <label>自定义画风关键词（英文逗号分隔）<input id="s-style-custom" type="text" placeholder="watercolor, soft light"></label>
+          </div>
+          <p class="hint">锚定后由视觉设定卡接管（见下）；这里只在未锚定时兜底。</p>
+          <div class="panel-block">
+            <p class="hint" id="style-card-state"></p>
+            <div id="style-card-view" class="hidden">
+              <div id="style-card-text" class="mono-line"></div>
+            </div>
+            <div class="row-inline">
+              <button id="btn-anchor-rerun" class="btn">锚定画风（试画 4 张候选）</button>
+            </div>
+            <p class="hint" id="rolling-style-text"></p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>出图时机</legend>
+          <div class="radio-col">
+            <label class="check"><input type="radio" name="s-trigger" value="every"> 每轮对话后 —— AI1 每回复一次就重画，最沉浸，消耗也最大</label>
+            <label class="check"><input type="radio" name="s-trigger" value="choice"> 做出选择后 —— 玩家点选项进入新剧情时才重画，最像传统视觉小说（推荐）</label>
+            <label class="check"><input type="radio" name="s-trigger" value="manual"> 仅手动 —— 只有点「作画」才生成，最省钱</label>
+          </div>
+          <p class="hint">任何时机下都可以随时点右上角「作画」手动补一张。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>生成过程</legend>
+          <label class="check"><input id="s-show-reasoning" type="checkbox" checked> 展示深度思考链（模型返回 reasoning_content 时）</label>
+          <label class="check"><input id="s-tools-enabled" type="checkbox" checked> 下发工具（按需召回世界卡 / 视觉设定卡、请求作画、写入记忆；模型不支持 function calling 时可手动关闭）</label>
+          <div class="row-inline">
+            <span class="hint" id="s-notools-hint"></span>
+            <button id="btn-clear-notools" class="mini-btn">清除降级记录</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>推进模式</legend>
+          <label>当前故事模式
+            <select id="s-story-mode">
+              <option value="choice">剧情（结尾给选项）</option>
+              <option value="chat">对话（纯聊天）</option>
+              <option value="rp">角色扮演（角色卡）</option>
+            </select>
+          </label>
+          <p class="hint">切换只改提示词与渲染，不影响记忆 / 重试 / 作画；记忆数据不随切换清空。</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>故事 · 存档点</legend>
+          <p class="hint" id="sp-empty">进入一个故事后，这里可以打存档点、回到旧存档点。</p>
+          <div id="sp-panel" class="hidden">
+            <div class="row-inline">
+              <button id="btn-add-savepoint" class="btn">打一个存档点</button>
+              <span class="hint">退出故事时会自动存档；存档点保留最近 5 个</span>
+            </div>
+            <div id="sp-list" class="mono-list"></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>故事记忆 · 世界状态卡</legend>
+          <p class="hint" id="memory-empty">开始一个故事后，这里显示它的世界状态卡、摘要栈与留痕。</p>
+          <div id="memory-panels" class="hidden">
+            <div class="row-inline">
+              <button id="btn-inject-memory" class="btn">注入记忆</button>
+              <span class="hint" id="inject-state"></span>
+            </div>
+            <div class="grid2">
+              <label>地点<input id="w-place" type="text"></label>
+              <label>时间<input id="w-time" type="text"></label>
+            </div>
+            <label>画面参考（喂给画师）<input id="w-scene" type="text"></label>
+            <label>伏笔（每行一条）<textarea id="w-threads" rows="3" spellcheck="false"></textarea></label>
+            <label>人物（名字｜在场／离场｜性格｜说话方式｜备注，每行一个）<textarea id="w-characters" rows="3" spellcheck="false"></textarea></label>
+            <label>关系·阶段<input id="w-rel-stage" type="text"></label>
+            <label>关系·纽带（每行一条；书记员随校对维护，也可手改）<textarea id="w-rel-bonds" rows="2" spellcheck="false"></textarea></label>
+            <label>关系·备注<input id="w-rel-notes" type="text"></label>
+            <div class="row-inline">
+              <button id="btn-save-world" class="btn">保存世界卡</button>
+              <span id="world-scribe-at" class="hint"></span>
+            </div>
+            <div class="panel-block">
+              <p class="hint" id="rc-status"></p>
+              <div class="row-inline">
+                <button id="btn-edit-card" class="btn">编辑角色卡 / 导入 PNG</button>
+              </div>
+            </div>
+            <details class="panel-block">
+              <summary>摘要栈（<span id="sum-count">0</span> 幕）</summary>
+              <div id="summary-list" class="mono-list"></div>
+            </details>
+            <details class="panel-block">
+              <summary>工具与校对留痕</summary>
+              <div id="tool-list" class="mono-list"></div>
+            </details>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>本地存储与备份</legend>
+          <p class="hint" id="storage-state"></p>
+          <div class="row-inline">
+            <button id="btn-backup-all" class="btn primary">↓ 一键导出全部备份</button>
+            <span class="hint" id="backup-at"></span>
+          </div>
+          <label class="check"><input id="backup-with-keys" type="checkbox"> 备份里也带上 API Key（方便换设备直接可用；文件泄露有被人盗刷的风险，默认不带）</label>
+          <p class="hint">备份文件是 <b>.irbackup.json</b>，含全部故事 + 模型设置 + 用户画像；以后把文件拖回书架窗口即可整体还原（同 id 的故事会被覆盖，其它故事保留）。</p>
+          <details class="panel-block">
+            <summary>数据存在哪？什么情况下会丢？</summary>
+            <p class="hint">全部数据只存在<b>这台设备的这个浏览器</b>里（localStorage，每站点约 5MB 上限），没有任何服务器。下列操作会让它消失，注意避开：</p>
+            <p class="hint">· 清「Cookie 和网站数据 / 站点数据」——会全删（只清「缓存 / 缓存的图片和文件」不受影响）<br>
+              · 无痕 / 隐私模式——关窗即没<br>
+              · 换浏览器、换设备、换打开方式（<b>file:// 和 http://localhost 是两套独立数据，互不相通</b>）<br>
+              · Safari（含 iOS）：7 天没和这个页面交互，ITP 会自动清除脚本可写存储 → 建议「添加到主屏幕」或常来点一下<br>
+              · 磁盘空间紧张时，浏览器可能自动淘汰</p>
+            <p class="hint" id="storage-persist"></p>
+          </details>
+        </fieldset>
+
+        <div class="danger-row">
+          <button id="btn-clear-save" class="btn danger">清空本地存档与设置</button>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-save-settings" class="btn primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 通用确认 / 输入弹窗 ==========
+       替代原生 confirm / prompt：内嵌预览（沙箱 iframe）会静默忽略原生弹窗、
+       直接返回 false / null，表现为「点了没反应」，因此一律走这个自建弹窗。 -->
+  <div id="modal-confirm" class="modal modal-top hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="cf-title">确认</h2>
+        <button id="btn-close-confirm" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="cf-message"></p>
+        <label id="cf-input-wrap" class="hidden"><input id="cf-input" type="text" spellcheck="false"></label>
+      </div>
+      <div class="modal-foot">
+        <button id="cf-cancel" class="btn ghost">取消</button>
+        <button id="cf-ok" class="btn primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <input id="file-import" type="file" accept=".json,.irstory.json,application/json" class="hidden">
+  <input id="file-card" type="file" accept=".png,image/png" class="hidden">
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<script src="js/providers.js?v=0.2.0"></script>
+<script src="js/context.js?v=0.2.0"></script>
+<script src="js/store.js?v=0.2.0"></script>
+<script src="js/modelCapabilities.js?v=0.2.0"></script>
+<script src="js/roleCard.js?v=0.2.0"></script>
+<!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
+<script src="js/demo.js?v=0.2.0"></script>
+<script src="js/app.js?v=0.2.0"></script>
+<!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
+<script src="js/pwa.js?v=0.2.0"></script>
+</body>
+</html>

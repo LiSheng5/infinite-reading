@@ -1,0 +1,22 @@
+# 依赖与构建产物（本仓库刻意保持零依赖、零构建，这里只防手滑）
+node_modules/
+dist/
+*.log
+
+# 编辑器 / IDE 与 AI 助手本地数据
+.codebuddy/
+.vscode/
+.idea/
+.playwright-cli/
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本地临时文件
+*.tmp
+*.bak
+
+# 本地视觉预览草稿（文件头已注明「验证完可删除」）
+_note-preview.html

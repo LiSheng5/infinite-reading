@@ -1,0 +1,188 @@
+# 架构说明
+
+一句话：**一个不依赖构建、不依赖后端、不依赖任何第三方 JS 库的单页应用**——`index.html` + 若干 IIFE 模块，全部逻辑跑在浏览器里，数据存在 `localStorage`。
+
+设计稿（为什么这么设计）见 [`docs/DESIGN.md`](docs/DESIGN.md)；调研与竞品分析见 [`docs/NOTES.md`](docs/NOTES.md)。
+
+---
+
+## 1. 三条硬约束
+
+改动代码前请先接受这三条，它们决定了很多取舍：
+
+1. **零构建**：源码必须能被 `<script src>` 直接加载，不能有 import/export、不能需要编译。`file://` 双击也要能跑。
+2. **零依赖**：不引入第三方库，只用浏览器原生 API 与 `fetch`。
+3. **无后端**：没有服务器可藏秘密，也就没有服务端存储——所有状态都在 `localStorage`，所以「换 origin 就换数据」。
+
+## 2. 模块与命名空间
+
+所有模块都是 IIFE，把导出对象挂到全局 `IR`：
+
+| 文件 | 命名空间 | 职责 | 代表函数 |
+|---|---|---|---|
+| `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders`（空，预留） |
+| `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
+| `js/store.js` | `IR.Store` | 存档层，`localStorage` 的**唯一出口** | `newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings` |
+| `js/modelCapabilities.js` | `IR.ModelCapabilities` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
+| `js/roleCard.js` | `IR.RoleCard` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
+| `js/demo.js` | `IR.Demo` + 两个演示适配器 | 离线演示（`?demo=1`）：把「模型」换成内置剧本与本地占位图 | `enabled`、`applyTo`、`reset`；`ChatProviders['demo']`、`ImageProviders['demo-image']` |
+| `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
+| `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` |
+| `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
+| `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
+
+**脚本顺序是有意义的**（`index.html` 末尾）：
+
+```
+providers.js → context.js → store.js → modelCapabilities.js → roleCard.js → demo.js → app.js → pwa.js
+```
+
+`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+
+`app.js` 在 IIFE 执行期就读取 `IR.Store` 与 `IR.ModelCapabilities`，并在文件末尾直接调用 `init()`，所以它必须最后加载；其余模块之间运行时才互相访问（惰性查 `IR.*`），顺序靠前也不会报错。新增模块请插在 `app.js` 之前。
+
+## 3. 一回合的完整调用链
+
+```
+玩家输入 / 点选项
+  └─ app.js  doSend → sendPlayerAction(action, isChoice)
+       ├─ pushLog({type:'player'|'choice'})
+       ├─ callAI1(action)
+       │    ├─ Context.matchEntityTerms(...)         ← 记下本轮实体词（C-E 启发式留痕）
+       │    ├─ Context.assembleAI1(story, action, opts)  ← 拼系统提示词 + 记忆 + 历史 + tools
+       │    ├─ streamAI1 → IR.ChatProviders[...].chat(cfg, messages, hooks)   ← 唯一的对话网络出口
+       │    ├─ parseAIReply → Context.normalizeAIReply(Context.tolerantJSONParse(text))
+       │    └─ 若有 tool_calls → handleToolCalls → applyToolCall
+       │         ├─ update_memory  → mergeWorld / 写 userProfile / 落一条 {type:'tool'} 留痕
+       │         ├─ recall_*       → 重发一次（把召回内容作为系统块注入）
+       │         └─ request_image  → runToolPaint → painterCompose → assemblePainter
+       │                              → 调对话模型（画师子代理）→ enqueuePaint
+       ├─ 归档：story.messages.push(user + assistant)、pushNarrationEntry、absorbReply
+       ├─ renderChat
+       ├─ maybeEnqueueImage(reply,false)      ← 按 settings.trigger 三档决定是否出图
+       │    └─ enqueueImage → generateScene → painterCompose → runPaint
+       │         └─ IR.ImageProviders[...].generate(cfg, prompt)   ← 唯一的生图网络出口
+       │            → 写入 scenes[] / 缩略图 → 背景淡入（bg-a / bg-b 双层交叉）
+       └─ await postTurn()   ← runSmartCompress（70% 阈值压缩）+ runScribe（书记员校准世界卡）
+```
+
+要点：
+
+- **对话与生图彻底分离**：两个 `Base URL` / `Key` / 模型名各自独立（设置面板里是两组配置）。
+- **画师是子代理**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。
+- **出图任务带 `storyId`**：写入前核对，避免切故事后把图贴到别的档上。
+
+## 4. 数据模型
+
+### 4.1 localStorage 键位（全部在 `js/store.js` 中定义）
+
+| 键 | 内容 |
+|---|---|
+| `ir:settings` | 模型配置、出图时机、界面开关等 |
+| `ir:story-index` | 书架索引（标题、模式、回合数、更新时间） |
+| `ir:story:<id>` | 单个故事的完整数据 |
+| `ir:current` | 上次打开的故事 id |
+| `ir:user-profile` | 跨故事的玩家画像条目 |
+| `ir:migrated-v2` | 迁移标记 |
+| `infinite-reading-v1:*` | 旧版只读键，仅用于一次性迁移 |
+
+### 4.2 story schema v2（`Store.newStory`）
+
+顶层字段：`schema, id, title, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary`。
+
+- `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
+- 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个。
+- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级，**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
+
+### 4.3 对外交换格式
+
+| 文件 | 生成 | 结构 |
+|---|---|---|
+| `.irstory.json` | `buildExportPack` / `doExport` | `{format:'ir-story', schema:2, kind:'full'\|'premise', title, premise, mode, styleTone, world, styleCard, rollingStyle, characterCard, images[], …}` |
+| `.irbackup.json` | `buildBackupPack` / `doBackupAll` | `{format:'ir-backup', schema:1, app, exportedAt, settings, userProfile, stories[]}`，默认剥掉 API Key |
+
+导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。
+
+## 5. 关键不变量（改动时别碰坏）
+
+| 不变量 | 位置 | 为什么 |
+|---|---|---|
+| **不把 `tool_calls` 写进历史** | `app.js`：`slimReply`、`assistantMessage` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
+| **`reasoning` 不进请求体** | `context.js`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
+| **压缩阈值 70%，保留末 8 条** | `context.js`：`COMPRESS_RATIO`、`DEFAULT_KEEP_MESSAGES`、`planCompression` | 控制长局上下文预算；对话窗口未填时退回条数上限（`DEFAULT_MAX_MESSAGES`） |
+| **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱 |
+| **同轮去重**：工具已出图则跳过时机出图 | `app.js`：`turnPaintedByTool`、`maybeEnqueueImage` | 一回合只画一张 |
+| **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `app.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
+| **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `context.js`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
+| **不预置模型名与厂商参数** | `modelCapabilities.js`（表默认空）、`store.js` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
+| **换档保护** | `app.js`：生图 / 书记员结果写回前核对 `storyId` | 切换故事时不污染新档 |
+| **AI 文本一律 `textContent` 渲染** | `app.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
+
+## 6. 上下文策略速览
+
+`Context.assembleAI1` 由这几层自上而下拼成（从贵到便宜）：
+
+1. **模式系统提示词** `systemForMode`：剧情 / 对话 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`）。
+2. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
+3. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
+4. **C-E 启发式注入** `matchEntityTerms` + `heuristicBlock`：玩家话里出现世界卡实体词时，按条数上限带回对应条目；无实体词则零成本不注入。
+5. **按需召回**：由 `recall_world_state` / `recall_style_card` 工具触发，客户端以「单次重发」实现。
+6. **最近消息窗口**：保留最近若干条（默认 8），更早的内容在超过 70% 预算时由 `compressStory` 压进摘要栈。
+
+扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
+
+## 7. 离线演示模式（`?demo=1`）
+
+`js/demo.js` 用「**换适配器**」而不是「分叉业务逻辑」的方式实现零安装演示——演示不是另一套 App，而是同一条链路接了两个假适配器：
+
+| 项 | 做法 |
+|---|---|
+| 判定 | `IR.Demo.enabled()` 读 `location.search`（`?demo=1` / `?demo` / `?demo=true`） |
+| 对话 | 注册 `ChatProviders['demo']`，按**提示词特征**分派：system 含「AI 画师导演」→ 画师任务（场景 / 工作台 / 试画 / 设定卡各有内置回包）；含「书记员」→ 返回空串，让本地规则兜底；user 消息以 `[玩家行动]` / `[设定]` 开头 → AI1，按**调用序号**推进内置剧本（不依赖历史长度，压缩后也不会错位） |
+| 生图 | 注册 `ImageProviders['demo-image']`，用 canvas 现画一张带提示词的占位图并返回 dataURL，出图链路（缩略图、背景淡入、图库）完全一致 |
+| 设置 | `IR.Demo.applyTo(settings)` 返回**副本**：对话 / 生图换成演示适配器、子模型留空沿用、关掉工具；`app.js` 的 `persistSettings()` 在演示模式直接 return，配置永不落盘 |
+| 入口 | `init()` 检测到演示模式就直接 `startDemo()`（跳过开始页与试画锚定）；顶栏「🎬 演示」与开始页「🎬 离线演示」是进出这个模式的开关 |
+
+推论：**新增功能只要走适配器层，演示模式就自动跟着一起走**。反过来，如果哪天演示跑不通，多半说明有人绕过了适配器层——这是个便宜的一致性检查。
+
+`eval/demo-smoke.js` 在 Node 里不放浏览器地跑这套契约（18 项），已接入 CI。
+
+## 8. 评测如何做
+
+`eval/run.js` 只 `require` 纯逻辑模块（`context.js` / `store.js` / `roleCard.js`），不加载 `app.js`，因此**不发任何网络请求**：
+
+- 重放 `eval/mock-story.js` 的 32 回合剧本，与运行时同样地调用 `assembleAI1` / `compressStory`；
+- 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 是否命中 5 类探针（角色名 / 时间设定 / 伏笔原话 / 地点细节 / 玩家自己说过的事）；
+- `checkHeuristic` 校验 C-E 启发式注入的命中与「零注入」；`checkP7` 校验角色卡解析（自造 V2/V3 PNG）与画像预算 / 合并 / 本地提取；
+- 输出总分并与 v0.1 基线（60.0%）对比；低于基线或校验未全中时返回非 0 退出码（CI 据此拦截回归）。
+
+改记忆、压缩、召回相关代码前请先跑 `node eval/run.js`。
+
+## 9. PWA 与离线缓存（`sw.js`）
+
+PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `localhost` 下注册 `sw.js`，`file://` 直接跳过，**业务代码一行都不用改**。
+
+| 请求类型 | 策略 | 为什么 |
+|---|---|---|
+| 导航（打开页面，含 `?demo=1`） | 网络优先 → 断网回退预缓存的 `index.html` | 网络优先保证「改了立刻生效」，绝不被缓存卡住 |
+| 同源静态资源（CSS / JS / 图标 / manifest） | 缓存优先 + 后台静默更新（SWR） | 秒开；`?v=` 版本串本身就是失效开关 |
+| 跨域（对话 / 生图 API、字体 CDN） | 不拦截、不缓存 | **API Key 与剧情文本绝不进缓存** |
+| 非 GET | 不拦截 | 上传/导入走原路 |
+
+预缓存清单**不写死在 SW 里**，而是 `install` 时抓 `index.html`、用正则解析出里面所有 `css/` `js/` `icons/` 资源（含 `?v=`）再逐个缓存——清单跟着页面走，不存在「两份清单不同步」的问题。
+
+`CACHE` 名（`ir-v<版本>`）由 `tools/sync-version.mjs` 从 `VERSION` 注入：版本一变就换缓存、`activate` 时清掉旧的，等价于「跟着发布节奏清缓存」。**改前端资源后如果本地看到旧文件，先怀疑 Service Worker**（DevTools → Application → Service Workers → Unregister）。
+
+## 10. 想扩展的话
+
+- **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `app.js` 的业务逻辑。
+- **视频**：`IR.VideoProviders` 的约定是 `generate(cfg, {prompt, image}) -> {url}`（异步任务型 API 需自行轮询），目前为空。
+- **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口（「纸白主题」在 Backlog 里）。
+- **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
+
+## 11. 已知边界
+
+- localStorage 约 5MB，是本项目最大的硬伤（Backlog：迁 IndexedDB）。
+- `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运。
+- 浏览器直连第三方 API 会被 CORS 拦，无法在纯前端层面解决。
+- API Key 明文存 `localStorage`（详见 [`SECURITY.md`](SECURITY.md)）。

@@ -1,0 +1,49 @@
+name: 功能建议
+description: 想要的新能力、改进或内容
+title: '[建议] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提之前可以先看一眼 [README 的 Backlog](../README.md) 和 [`docs/NOTES.md`](../docs/NOTES.md) 的路线图，可能已经列上了。
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 类型
+      options:
+        - 新功能（玩法 / 机制）
+        - 模型与接口适配
+        - 体验 / 界面细节
+        - 文档 / 翻译
+        - 内容（故事、画风包、角色卡）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先说场景和痛点，再说方案
+      placeholder: 我在……的时候，总是得……，很麻烦。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你的设想
+      description: 希望它长什么样、怎么用。有参考项目/截图更好
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你试过的替代做法
+    validations:
+      required: false
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: 请确认这个建议与本项目的约束不冲突
+      options:
+        - label: 它可以在纯前端、零构建、零依赖、无后端的前提下实现（或你说明了需要的取舍）
+          required: true

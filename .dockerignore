@@ -1,0 +1,17 @@
+# 构建上下文瘦身：镜像只需要 index.html / css / js / icons / manifest / sw.js
+.git/
+.github/
+dist/
+node_modules/
+
+docs/
+eval/
+tools/
+
+*.md
+!README.md
+.codebuddy/
+.playwright-cli/
+.vscode/
+.idea/
+_note-preview.html
