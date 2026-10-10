@@ -54,3 +54,7 @@ jobs:
 
       - name: 演示模式冒烟（node eval/demo-smoke.js）
         run: node eval/demo-smoke.js
+
+      # 带原图的全量备份全靠手写的 ZIP 编码器：CRC / 偏移写错会「能下载但打不开」，这里用独立实现验一遍
+      - name: ZIP 读写冒烟（node eval/zip-smoke.js）
+        run: node eval/zip-smoke.js

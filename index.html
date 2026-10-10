@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>无限阅读 · ∞ Reading</title>
 
 <!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
 <link href="https://fonts.googleapis.com/css2?family=Liu+Jian+Mao+Cao&family=Ma+Shan+Zheng&family=Long+Cang&family=ZCOOL+XiaoWei&family=Noto+Serif+SC&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="css/style.css?v=0.2.0">
+<link rel="stylesheet" href="css/style.css?v=0.3.0">
 </head>
 <body>
 <div id="app">
@@ -75,7 +75,7 @@
         <label class="field-label" for="setup-premise">故事设定（仅剧情模式用；开演前可随意修改）</label>
         <textarea id="setup-premise" rows="8" spellcheck="false"></textarea>
       </div>
-      <p class="version">无限阅读 v0.2 · 纯本地运行 · 数据只保存在你的浏览器里</p>
+      <p class="version">无限阅读 v0.3 · 纯本地运行 · 数据只保存在你的浏览器里</p>
     </div>
   </section>
 
@@ -98,7 +98,7 @@
 
       <div id="shelf-empty" class="shelf-empty">
         <p>还没有故事。</p>
-        <p class="hint">点「＋ 新故事」开始；也可以把 <b>.irstory.json</b> 文件拖进这个窗口导入。</p>
+        <p class="hint">点「＋ 新故事」开始；也可以把 <b>.irstory.json</b> / <b>.irbackup.json</b> / <b>.zip</b>（带原图的备份包）文件拖进这个窗口导入。</p>
       </div>
       <div id="shelf-grid" class="shelf-grid"></div>
 
@@ -489,6 +489,10 @@
           <label>自定义请求参数（高级 · 可选，逗号分隔 key=value，原样并入请求体）<input id="s-chat-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
           <p class="hint" id="s-chat-cap"></p>
           <p class="hint">兼容所有 OpenAI 格式接口（云端 / 本地均可）；不内置服务商预设，省得跟着厂商模型变动一直维护。</p>
+          <div class="row-inline test-row">
+            <button id="btn-test-chat" class="mini-btn">⚡ 测试连接</button>
+            <span class="hint test-state" id="test-chat-state">用当前输入框里的地址与 Key 试连一次（只探测，不生成内容）。</span>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -500,6 +504,10 @@
           <label>API Key<input id="s-painter-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
           <p class="hint">留空即沿用剧情模型的地址与 Key。推荐填最便宜的模型（写提示词不需要强模型）。</p>
           <p class="hint">每张图下方都有「工作台」：看 / 改完整 prompt、跟画师说着改、按此重画。</p>
+          <div class="row-inline test-row">
+            <button id="btn-test-painter" class="mini-btn">⚡ 测试连接</button>
+            <span class="hint test-state" id="test-painter-state">留空项按「沿用剧情模型」代入后再测。</span>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -513,6 +521,10 @@
           </div>
           <label>API Key<input id="s-scribe-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
           <p class="hint">留空即沿用剧情模型。推荐填最便宜的模型（校对是便宜活）。</p>
+          <div class="row-inline test-row">
+            <button id="btn-test-scribe" class="mini-btn">⚡ 测试连接</button>
+            <span class="hint test-state" id="test-scribe-state">留空项按「沿用剧情模型」代入后再测。</span>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -548,6 +560,10 @@
           </div>
           <label>API Key<input id="s-draft-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
           <p class="hint">留空即沿用剧情模型。推荐直接跟随剧情模型（起草需要创造力）。</p>
+          <div class="row-inline test-row">
+            <button id="btn-test-draft" class="mini-btn">⚡ 测试连接</button>
+            <span class="hint test-state" id="test-draft-state">留空项按「沿用剧情模型」代入后再测。</span>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -576,6 +592,10 @@
           <label>API Key<input id="s-image-key" type="password" placeholder="sk-…"></label>
           <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-image-params" type="text" placeholder="steps=30, negative_prompt=blurry"></label>
           <p class="hint">尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；模型名与参数都可随意填；画师工作台里也能改尺寸。不确定的项留空即可，会走通用默认。</p>
+          <div class="row-inline test-row">
+            <button id="btn-test-image" class="mini-btn">⚡ 测试连接</button>
+            <span class="hint test-state" id="test-image-state">只探测地址是否可达（不会真的出图，所以不花钱）。</span>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -691,15 +711,18 @@
         <fieldset>
           <legend>本地存储与备份</legend>
           <p class="hint" id="storage-state"></p>
+          <p class="hint" id="storage-usage"></p>
           <div class="row-inline">
             <button id="btn-backup-all" class="btn primary">↓ 一键导出全部备份</button>
+            <button id="btn-clean-images" class="mini-btn" title="删掉没有任何故事引用的原图；剧情、缩略图、提示词都不动">清理孤儿原图</button>
             <span class="hint" id="backup-at"></span>
           </div>
           <label class="check"><input id="backup-with-keys" type="checkbox"> 备份里也带上 API Key（方便换设备直接可用；文件泄露有被人盗刷的风险，默认不带）</label>
-          <p class="hint">备份文件是 <b>.irbackup.json</b>，含全部故事 + 模型设置 + 用户画像；以后把文件拖回书架窗口即可整体还原（同 id 的故事会被覆盖，其它故事保留）。</p>
+          <label class="check"><input id="backup-with-src" type="checkbox"> 备份里也带上原图（导出为 <b>.zip</b>；图片按二进制存，比 base64 省约 1/3 体积，但文件会明显变大，打包需要等一会儿）</label>
+          <p class="hint">两种备份：<b>.irbackup.json</b>（全部故事 + 模型设置 + 用户画像，<b>不含原图</b>，体积可控）与 <b>.zip</b>（同一份正文 + 全部原图，换设备时连图一起搬）。把文件拖回书架窗口即可整体还原（同 id 的故事会被覆盖，其它故事保留）。只想带走单个故事时，用书架卡片上的「导出 → 附带原图」。</p>
           <details class="panel-block">
             <summary>数据存在哪？什么情况下会丢？</summary>
-            <p class="hint">全部数据只存在<b>这台设备的这个浏览器</b>里（localStorage，每站点约 5MB 上限），没有任何服务器。下列操作会让它消失，注意避开：</p>
+            <p class="hint">全部数据只存在<b>这台设备的这个浏览器</b>里（主库是 <b>IndexedDB</b>，容量由浏览器按磁盘空间分配，通常远大于 localStorage 的约 5MB；原图以 Blob 单独存放），没有任何服务器。下列操作会让它消失，注意避开：</p>
             <p class="hint">· 清「Cookie 和网站数据 / 站点数据」——会全删（只清「缓存 / 缓存的图片和文件」不受影响）<br>
               · 无痕 / 隐私模式——关窗即没<br>
               · 换浏览器、换设备、换打开方式（<b>file:// 和 http://localhost 是两套独立数据，互不相通</b>）<br>
@@ -739,20 +762,24 @@
     </div>
   </div>
 
-  <input id="file-import" type="file" accept=".json,.irstory.json,application/json" class="hidden">
+  <input id="file-import" type="file" accept=".json,.irstory.json,.irbackup.json,.zip,application/json,application/zip" class="hidden">
   <input id="file-card" type="file" accept=".png,image/png" class="hidden">
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<script src="js/providers.js?v=0.2.0"></script>
-<script src="js/context.js?v=0.2.0"></script>
-<script src="js/store.js?v=0.2.0"></script>
-<script src="js/modelCapabilities.js?v=0.2.0"></script>
-<script src="js/roleCard.js?v=0.2.0"></script>
+<script src="js/providers.js?v=0.3.0"></script>
+<script src="js/context.js?v=0.3.0"></script>
+<!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
+<script src="js/storage.js?v=0.3.0"></script>
+<script src="js/store.js?v=0.3.0"></script>
+<script src="js/modelCapabilities.js?v=0.3.0"></script>
+<script src="js/roleCard.js?v=0.3.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.2.0"></script>
-<script src="js/app.js?v=0.2.0"></script>
+<script src="js/demo.js?v=0.3.0"></script>
+<!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
+<script src="js/zip.js?v=0.3.0"></script>
+<script src="js/app.js?v=0.3.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.2.0"></script>
+<script src="js/pwa.js?v=0.3.0"></script>
 </body>
 </html>

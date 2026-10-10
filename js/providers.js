@@ -15,6 +15,86 @@
     return `HTTP ${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`;
   }
 
+  /* ---------------- 「测试连接」：只读探测 ----------------
+   * 原则：只发 GET /models（可选的兜底最小对话请求 max_tokens=1），
+   * **绝不调用 /images/generations**，所以测试永远不会产生出图费用。
+   * 所有探测都不抛异常，统一返回 { level: 'ok'|'warn'|'fail', message }，
+   * 让界面层直接把 message 显示出来即可。 */
+
+  const PROBE_TIMEOUT_MS = 15000;
+
+  function trimBase(cfg) { return String((cfg && cfg.baseUrl) || '').trim().replace(/\/+$/, ''); }
+
+  // 配置格式自检（不联网）：返回人话描述，'' = 没问题
+  function cfgProblem(cfg, needModel) {
+    if (!cfg || !String(cfg.baseUrl || '').trim()) return '还没填 Base URL。';
+    if (!/^https?:\/\//i.test(String(cfg.baseUrl).trim())) return 'Base URL 要以 http:// 或 https:// 开头（现在填的是「' + String(cfg.baseUrl).trim().slice(0, 40) + '」）。';
+    if (needModel && !String(cfg.model || '').trim()) return '还没填模型名。';
+    return '';
+  }
+
+  function friendlyStatus(status, detail) {
+    const tail = detail ? '（接口原文：' + String(detail).replace(/\s+/g, ' ').slice(0, 160) + '）' : '';
+    if (status === 400) return '接口返回 400：请求被拒绝，多半是模型名写错或该模型不支持这个调用方式。' + tail;
+    if (status === 401 || status === 403) return 'API Key 被拒绝（HTTP ' + status + '）：检查 Key 是否复制完整、是否过期、是否有该模型的权限。' + tail;
+    if (status === 404) return '地址找不到（HTTP 404）：Base URL 可能写错了，通常要以 /v1 结尾。' + tail;
+    if (status === 429) return '被限流了（HTTP 429）：Key 本身是通的，稍后再试或换一个额度充足的 Key。' + tail;
+    if (status >= 500) return '服务端错误（HTTP ' + status + '）：接口暂时不可用，稍后再试。' + tail;
+    return 'HTTP ' + status + ' 请求失败。' + tail;
+  }
+
+  function friendlyNetwork(e) {
+    const msg = (e && e.message) ? e.message : String(e || '');
+    if (e && (e.name === 'AbortError' || /abort/i.test(msg))) return '连接超时（' + Math.round(PROBE_TIMEOUT_MS / 1000) + ' 秒）：地址不可达，或被网络 / 代理挡住了。';
+    if (e instanceof TypeError) return '连不上这个地址：可能是 Base URL 写错、断网，或该接口不允许浏览器直连（CORS）。';
+    return '请求失败：' + (msg || '未知错误');
+  }
+
+  async function fetchWithTimeout(url, init) {
+    if (typeof AbortController === 'undefined') return fetch(url, init);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
+    try {
+      return await fetch(url, Object.assign({}, init, { signal: ctrl.signal }));
+    } finally { clearTimeout(timer); }
+  }
+
+  // GET /models：只读、免费。返回 { ok, status, detail, noEndpoint, models }
+  async function probeModels(cfg) {
+    const headers = {};
+    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+    const res = await fetchWithTimeout(trimBase(cfg) + '/models', { method: 'GET', headers });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      return { ok: false, status: res.status, detail, noEndpoint: res.status === 404 || res.status === 405 };
+    }
+    let models = [];
+    try {
+      const data = await res.json();
+      const arr = Array.isArray(data && data.data) ? data.data
+        : (Array.isArray(data && data.models) ? data.models : []);
+      models = arr.map(m => (typeof m === 'string' ? m : (m && (m.id || m.name)) || '')).filter(Boolean);
+    } catch (_) { /* 有的接口返回非 JSON，也算连通 */ }
+    return { ok: true, status: res.status, models };
+  }
+
+  // 兜底：一条 max_tokens=1 的最小对话请求（部分兼容接口没有 /models，费用可忽略）
+  async function probeMinimalChat(cfg) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+    const res = await fetchWithTimeout(trimBase(cfg) + '/chat/completions', {
+      method: 'POST', headers,
+      body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      return { ok: false, status: res.status, detail };
+    }
+    return { ok: true };
+  }
+
   /* ---------------- 对话适配器 ---------------- */
 
   // 思考链（R9 / §4.5）：DeepSeek 等厂商经 reasoning_content 下发；兼容个别只叫 reasoning 的实现
@@ -73,6 +153,39 @@
     // OpenAI 兼容 /chat/completions：覆盖所有提供该格式接口的服务商（云端 / 本地，模型名由用户自填）
     'openai-compatible': {
       label: 'OpenAI 兼容接口',
+
+      /* 「测试连接」：只探测，不生成内容。
+       * 先 GET /models（免费）；服务商没有这个接口时，退回一条 max_tokens=1 的最小对话请求。 */
+      async test(cfg) {
+        const bad = cfgProblem(cfg, true);
+        if (bad) return { level: 'fail', message: bad };
+
+        let r;
+        try { r = await probeModels(cfg); }
+        catch (e) { return { level: 'fail', message: friendlyNetwork(e) }; }
+
+        if (r.ok) {
+          const n = r.models.length;
+          const want = String(cfg.model).trim().toLowerCase();
+          const hit = n ? r.models.some(m => String(m).toLowerCase() === want) : false;
+          const extra = n
+            ? (hit ? '，列表里有你填的「' + cfg.model + '」' : '，但列表里没看到「' + cfg.model + '」（有些服务商不列全，注意大小写）')
+            : '（该接口没有返回模型清单）';
+          return { level: 'ok', message: '连接成功：接口可达，返回 ' + n + ' 个模型' + extra + '。' };
+        }
+
+        if (r.noEndpoint) {
+          // 没有 /models：用一条最小对话请求验证（max_tokens=1）
+          try {
+            const m = await probeMinimalChat(cfg);
+            if (m.ok) return { level: 'ok', message: '连接成功：接口可达并接受了请求（该服务商没有 /models 列表，已用一条最小请求验证）。' };
+            return { level: 'fail', message: friendlyStatus(m.status, m.detail) };
+          } catch (e) { return { level: 'fail', message: friendlyNetwork(e) }; }
+        }
+
+        return { level: 'fail', message: friendlyStatus(r.status, r.detail) };
+      },
+
       async chat(cfg, messages, hooks) {
         const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
         const headers = { 'Content-Type': 'application/json' };
@@ -186,6 +299,31 @@
     //  两种形态都在这里归一成 dataURL 或 URL，用户无需关心。
     'openai-images': {
       label: 'OpenAI 兼容生图',
+
+      /* 「测试连接」：只探测，**绝不出图**（出图一定会花钱）。
+       * 因此这里只能确认「地址填对了、格式没问题」，确认不了 Key 对生图接口是否有效——
+       * 真正的验证只能靠点一次「作画」。 */
+      async test(cfg) {
+        const bad = cfgProblem(cfg, true);
+        if (bad) return { level: 'fail', message: bad };
+
+        let r;
+        try { r = await probeModels(cfg); }
+        catch (e) { return { level: 'fail', message: friendlyNetwork(e) }; }
+
+        if (r.ok) {
+          const n = r.models.length;
+          return { level: 'ok', message: '连接成功：接口可达' + (n ? '，返回 ' + n + ' 个模型' : '') + '，配置格式正确。注意：这里不会真的出图，出图能力要在「作画」时才会用到。' };
+        }
+        if (r.status === 401 || r.status === 403) {
+          return { level: 'warn', message: '地址可达，但 /models 拒绝了这次请求（HTTP ' + r.status + '）：有些服务商的 Key 只能调生图、不能列模型，所以这不一定是错。建议直接用最小尺寸试一张确认。' };
+        }
+        if (r.noEndpoint) {
+          return { level: 'warn', message: '地址可达，但该服务商不提供 /models 探测接口（HTTP ' + r.status + '）。配置格式本身没问题；能否出图只能在「作画」时验证。' };
+        }
+        return { level: 'warn', message: '地址可达，但探测请求没通过：' + friendlyStatus(r.status, r.detail) };
+      },
+
       async generate(cfg, prompt) {
         const url = cfg.baseUrl.replace(/\/+$/, '') + '/images/generations';
         const headers = { 'Content-Type': 'application/json' };

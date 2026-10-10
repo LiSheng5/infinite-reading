@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -75,15 +75,17 @@ In any mode you can also click **🎨 Draw** in the top-right to add an image ma
 
 ## Data and backup
 
-Everything lives in the **current browser's localStorage** (about 5MB). No server, no account, no upload.
+Everything lives in the **current browser** (main store: IndexedDB, sized by the browser from free disk space — far beyond localStorage's ~5MB; original images are kept separately as Blobs). No server, no account, no upload.
 
 **You will lose data permanently** if you: clear "cookies and site data", close an incognito window, switch browsers or devices, switch how you open the app (`file://` ⇄ `localhost`), or leave Safari untouched for 7 days. Clearing only the *cache* is fine. The app requests persistent storage on startup to reduce the risk of eviction.
 
-**Backup**: *Model settings → Local storage & backup → Export everything* gives you an `.irbackup.json`; drop it back onto the shelf window to restore.
+**Backup**: *Model settings → Local storage & backup → Export everything* gives you two options; drop either file back onto the shelf window to restore:
 
-- API keys are excluded by default (you can opt in)
+- `.irbackup.json` — every story + settings + user profile, small and predictable; API keys excluded by default (opt-in)
+- `.zip` — the same payload **plus all original images** (tick "also include original images"); images are stored as raw bytes, ~1/3 smaller than base64, so a new device gets the pictures too
+
 - Warning at 70% usage; reminder if you haven't backed up in 7 days
-- A single story can be exported from its shelf card as `.irstory.json`
+- A single story can be exported from its shelf card as `.irstory.json` (optionally with images)
 
 ## Distribution (four ways)
 
@@ -123,7 +125,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
 | `eval/demo-smoke.js` | Demo smoke test (contract checks, no browser needed) |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip call chain, localStorage keys, and the invariants you must not break.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip call chain, storage keys and backup formats, and the invariants you must not break.
 
 ## Roadmap
 
@@ -133,9 +135,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 **Installable + distributable (2026-10-10)**: **PWA** (manifest + Service Worker, works offline; the cache name follows the version), icon generator (vector + PNGs incl. maskable / iOS), Windows **one-click `启动.bat`** (Python first, falls back to a dependency-free PowerShell server), **Dockerfile + compose** for self-hosting.
 
+**v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `js/zip.js`), and mobile polish (safe areas, 44px touch targets).
+
 **Backlog**
 
-- [ ] Move storage to IndexedDB; local folder / cloud-drive sync
+- [ ] Local folder / cloud-drive sync (IndexedDB landed in v0.3)
 - [ ] Image-to-image reference (character consistency)
 - [ ] Video generation (Kling / Vidu)
 - [ ] Character relationship graph
@@ -151,4 +155,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per [SECURITY.md](SECURITY.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-- **Note**: API keys are stored in plain text in `localStorage` — don't save one on a shared device. The project collects and uploads nothing.
+- **Note**: API keys are stored in plain text in `IndexedDB` — don't save one on a shared device. The project collects and uploads nothing.

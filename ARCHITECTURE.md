@@ -1,6 +1,6 @@
 # 架构说明
 
-一句话：**一个不依赖构建、不依赖后端、不依赖任何第三方 JS 库的单页应用**——`index.html` + 若干 IIFE 模块，全部逻辑跑在浏览器里，数据存在 `localStorage`。
+一句话：**一个不依赖构建、不依赖后端、不依赖任何第三方 JS 库的单页应用**——`index.html` + 若干 IIFE 模块，全部逻辑跑在浏览器里，数据存在 `IndexedDB`。
 
 设计稿（为什么这么设计）见 [`docs/DESIGN.md`](docs/DESIGN.md)；调研与竞品分析见 [`docs/NOTES.md`](docs/NOTES.md)。
 
@@ -12,7 +12,7 @@
 
 1. **零构建**：源码必须能被 `<script src>` 直接加载，不能有 import/export、不能需要编译。`file://` 双击也要能跑。
 2. **零依赖**：不引入第三方库，只用浏览器原生 API 与 `fetch`。
-3. **无后端**：没有服务器可藏秘密，也就没有服务端存储——所有状态都在 `localStorage`，所以「换 origin 就换数据」。
+3. **无后端**：没有服务器可藏秘密，也就没有服务端存储——所有状态都在 `IndexedDB`，所以「换 origin 就换数据」。
 
 ## 2. 模块与命名空间
 
@@ -22,22 +22,29 @@
 |---|---|---|---|
 | `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders`（空，预留） |
 | `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
-| `js/store.js` | `IR.Store` | 存档层，`localStorage` 的**唯一出口** | `newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings` |
+| `js/storage.js` | `IR.Storage` | IndexedDB 适配器（**唯一碰 IndexedDB 的地方**）：开库 + 增删改查，`available=false` 时上层自然退回 localStorage | `available`、`get` / `put` / `del` / `keys` / `entries`、`estimate` |
+| `js/store.js` | `IR.Store` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步 | `boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
 | `js/modelCapabilities.js` | `IR.ModelCapabilities` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
 | `js/roleCard.js` | `IR.RoleCard` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
 | `js/demo.js` | `IR.Demo` + 两个演示适配器 | 离线演示（`?demo=1`）：把「模型」换成内置剧本与本地占位图 | `enabled`、`applyTo`、`reset`；`ChatProviders['demo']`、`ImageProviders['demo-image']` |
+| `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
-| `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` |
+| `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` / `buildBackupZip`、`importZipFile` |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → store.js → modelCapabilities.js → roleCard.js → demo.js → app.js → pwa.js
+providers.js → context.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → app.js → pwa.js
 ```
 
-`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+
+**存储的两条硬约束**（改动时必须守住）：
+
+- **内存优先**：`boot()` 之后所有读走内存、写是「改内存 + 后台异步落盘」，因此 `Store.*` 全是**同步签名**，`app.js` 不用改 async。等落盘用 `Store.flush()`（导出 / 卸载前）。
+- **无 IndexedDB 也要能跑**：Node 评测（`eval/run.js`）没有 `indexedDB`，`Storage.available` 就是 `false`，`store.js` 自动退回 localStorage / 进程内内存。任何新的存储代码都要保留这条退路。
 
 `app.js` 在 IIFE 执行期就读取 `IR.Store` 与 `IR.ModelCapabilities`，并在文件末尾直接调用 `init()`，所以它必须最后加载；其余模块之间运行时才互相访问（惰性查 `IR.*`），顺序靠前也不会报错。新增模块请插在 `app.js` 之前。
 
@@ -74,17 +81,28 @@ providers.js → context.js → store.js → modelCapabilities.js → roleCard.j
 
 ## 4. 数据模型
 
-### 4.1 localStorage 键位（全部在 `js/store.js` 中定义）
+### 4.1 存储与键位（全部在 `js/store.js` 中定义）
+
+**主库是 IndexedDB**（`ir-db`，适配器 `js/storage.js`），三个 object store：
+
+| store | 内容 | 键 |
+|---|---|---|
+| `kv` | 小数据：设置 / 索引 / 当前故事 / 画像 / 迁移标记 | 见下表 |
+| `stories` | 单个故事的完整档案（原图除外） | story id |
+| `images` | 原图 Blob（`{ blob, meta, at }`） | imageId（`img:<sceneId>`） |
+
+`kv` 里的键名沿用 localStorage 时代的 `ir:` 前缀（迁移时原样搬，不重命名）：
 
 | 键 | 内容 |
 |---|---|
 | `ir:settings` | 模型配置、出图时机、界面开关等 |
 | `ir:story-index` | 书架索引（标题、模式、回合数、更新时间） |
-| `ir:story:<id>` | 单个故事的完整数据 |
 | `ir:current` | 上次打开的故事 id |
 | `ir:user-profile` | 跨故事的玩家画像条目 |
-| `ir:migrated-v2` | 迁移标记 |
-| `infinite-reading-v1:*` | 旧版只读键，仅用于一次性迁移 |
+| `ir:migrated-v2` | v0.1 → v0.2 迁移标记 |
+| `ir:migrated-v3` | localStorage → IndexedDB 迁移标记（**只在 IndexedDB 的 `kv` 里**） |
+
+`localStorage` 现在只承担两件事：① 升级前的旧数据（**只读，迁移后原样保留当回退快照，不再写入**）；② `infinite-reading-v1:*` 旧版键（仅用于一次性迁移）。
 
 ### 4.2 story schema v2（`Store.newStory`）
 
@@ -100,8 +118,9 @@ providers.js → context.js → store.js → modelCapabilities.js → roleCard.j
 |---|---|---|
 | `.irstory.json` | `buildExportPack` / `doExport` | `{format:'ir-story', schema:2, kind:'full'\|'premise', title, premise, mode, styleTone, world, styleCard, rollingStyle, characterCard, images[], …}` |
 | `.irbackup.json` | `buildBackupPack` / `doBackupAll` | `{format:'ir-backup', schema:1, app, exportedAt, settings, userProfile, stories[]}`，默认剥掉 API Key |
+| `.irbackup.zip` | `buildBackupZip` / `doBackupAll`（勾选「带上原图」） | 同一个包里两样东西：`ir-backup.json`（同上，`schema:2` 多一份 `images:[{id, path, type, size}]` 清单）+ `images/0001.png…`（原图按二进制原样存放，**不转 base64**） |
 
-导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。
+导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。`.zip` 由 `handleImportFile` 先判扩展名 → `importZipFile` 解包取 `ir-backup.json`，再走同一条 `applyBackupImport(obj, entries)`，原图按清单写回 IndexedDB。
 
 ## 5. 关键不变量（改动时别碰坏）
 
@@ -182,7 +201,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 
 ## 11. 已知边界
 
-- localStorage 约 5MB，是本项目最大的硬伤（Backlog：迁 IndexedDB）。
-- `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运。
+- **主库是 IndexedDB**（`js/storage.js` + `js/store.js`），容量由浏览器按磁盘空间分配，不再受 localStorage 约 5MB 限制；但这仍是**本机这个浏览器**的额度，且**不是无限大**——浏览器、设备剩余空间与存储策略都会影响它。旧版数据留在 localStorage 里作为回退快照，不再写入。
+- `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运（**IndexedDB 也按 origin 隔离**）。
 - 浏览器直连第三方 API 会被 CORS 拦，无法在纯前端层面解决。
-- API Key 明文存 `localStorage`（详见 [`SECURITY.md`](SECURITY.md)）。
+- API Key 明文存 IndexedDB（详见 [`SECURITY.md`](SECURITY.md)）。

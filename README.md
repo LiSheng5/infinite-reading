@@ -1,7 +1,7 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
@@ -78,15 +78,17 @@ cd infinite-reading
 
 ## 数据与备份
 
-数据**只存在当前浏览器的 localStorage**（约 5MB），无服务器、无账号、不上传。
+数据**只存在当前浏览器里**（主库是 IndexedDB，容量由浏览器按设备剩余空间分配，远大于 localStorage 的约 5MB；原图以 Blob 单独存放），无服务器、无账号、不上传。
 
 **会永久丢失的情况**：清「Cookie 和网站数据」、无痕模式关窗、换浏览器或设备、换打开方式（`file://` ⇄ `localhost`）、Safari 7 天未交互。只清「缓存」不受影响。磁盘空间紧张时浏览器也可能自动淘汰（应用启动时会申请「持久化存储」降低这个风险）。
 
-**备份**：「模型设置 → 本地存储与备份 → 一键导出全部备份」得到 `.irbackup.json`，拖回书架窗口即可还原。
+**备份**：「模型设置 → 本地存储与备份 → 一键导出全部备份」有两种产物，拖回书架窗口即可整体还原：
 
-- 默认不含 API Key，可勾选带上
+- `.irbackup.json` —— 全部故事 + 模型设置 + 用户画像，体积可控；默认不含 API Key，可勾选带上
+- `.zip` —— 上面那份正文 + **全部原图**（勾选「备份里也带上原图」）；图片按二进制原样打包，比 base64 省约 1/3 体积，换设备时连图一起搬
+
 - 占用到 70% 预警；超 7 天未备份启动时提醒
-- 单个故事可在书架卡片上「导出」为 `.irstory.json`
+- 单个故事可在书架卡片上「导出」为 `.irstory.json`（可勾选附带原图）
 
 ## 部署与分发（四种走法）
 
@@ -130,7 +132,7 @@ cd infinite-reading
 | `eval/demo-smoke.js` | 演示模式冒烟测试（不开浏览器，验证两个假适配器的接口契约） |
 | `tools/` | 可选脚本：版本号同步、单文件打包（不属于运行时代码） |
 
-模块职责、一回合的完整调用链、localStorage 键位、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+模块职责、一回合的完整调用链、存储键位与备份格式、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 路线图
 
@@ -140,8 +142,10 @@ cd infinite-reading
 
 **可安装 + 可分发（2026-10-10）**：**PWA**（manifest + Service Worker，断网也能打开；缓存名跟着版本号走）、图标生成器（矢量 + 各尺寸 PNG，含 maskable / iOS 主屏）、Windows **一键启动 `启动.bat`**（Python 优先，退回零依赖 PowerShell 服务器）、**Dockerfile + compose**（自托管 / NAS）。
 
+**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，联网自行重试）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
+
 **Backlog**
-- [ ] 存储迁移 IndexedDB；本地目录 / 网盘同步
+- [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）
 - [ ] 图生图参考（人物一致性）
 - [ ] 视频生成（可灵 / Vidu）
 - [ ] 人物关系图
@@ -161,4 +165,4 @@ cd infinite-reading
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
 - **遇到问题**：安全相关请走私密渠道（见 [SECURITY.md](SECURITY.md)），其余请提 Issue（有模板）。
 - **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
-- **注意**：API Key 明文存在浏览器 `localStorage`，共享设备上请勿保存 Key；本项目不收集、不上传任何数据。
+- **注意**：API Key 明文存在浏览器 `IndexedDB`，共享设备上请勿保存 Key；本项目不收集、不上传任何数据。

@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 主逻辑（v0.2 · P2）
+ * 无限阅读 · 主逻辑（v0.3）
  *
  * 结构：
  *  书架（应用入口，§7/T-P2-1）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
@@ -165,6 +165,17 @@
     return '请求失败：' + (e && e.message ? e.message : String(e));
   }
 
+  /* 断网守卫：离线时【不发请求、也不排队】，直接告诉用户「这次点了不算」。
+   * 不排队是刻意的：出图时机有「每轮 / 选择后」的自动触发，若排队等联网后补发，
+   * 用户会在毫不知情的情况下被扣一笔额度。 */
+  function offlineBlocked(what) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      toast('当前离线：' + what + '没有发出，也不计入任何队列。已存的故事照常能看，联网后再点一次即可。', true, true);
+      return true;
+    }
+    return false;
+  }
+
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
   function fmtTime(ts) {
@@ -175,6 +186,13 @@
     return sameDay
       ? d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
       : d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+  // 体积显示：1 MB 以下按 KB 显示 —— 否则「68 KB 的备份」会显示成 0.0 MB，看着像没内容
+  function fmtMB(bytes) {
+    const b = +bytes || 0;
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return Math.round(b / 1024) + ' KB';
+    return (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + ' MB';
   }
 
   let lastSaveWarnAt = 0;
@@ -386,6 +404,67 @@
       img.onerror = () => resolve(null);
       img.src = dataUrl;
     });
+  }
+
+  /* ---------------- 原图（Blob）：存 IndexedDB，取显示地址 ---------------- */
+
+  // 把生成的图转成 Blob：先试 fetch（dataURL / 同源 / 允许 CORS 的 URL 都能成），
+  // 被 CORS 挡住时退回「画进 canvas 再导出」。都失败就返回 null（只留缩略图）。
+  async function fetchBlob(src) {
+    if (!src) return null;
+    try {
+      const r = await fetch(src);
+      if (r.ok) { const b = await r.blob(); if (b && b.size) return b; }
+    } catch (_) { /* 继续走 canvas 兜底 */ }
+    return await new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = img.naturalWidth || img.width;
+          cv.height = img.naturalHeight || img.height;
+          if (!cv.width || !cv.height) { resolve(null); return; }
+          cv.getContext('2d').drawImage(img, 0, 0);
+          cv.toBlob(b => resolve(b), 'image/png');
+        } catch (_) { resolve(null); }   // 画布被跨域图片污染：拿不到像素，只能放弃原图
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  // 存原图；返回 imageId（没有 IndexedDB / 存不下时返回 undefined，退回只留缩略图）
+  async function storeOriginal(sceneId, src, meta) {
+    try {
+      const info = Store.storageInfo();
+      if (!info || !info.available || !info.backend || info.backend !== 'indexeddb') return undefined;
+      const blob = await fetchBlob(src);
+      if (!blob || !blob.size) return undefined;
+      const imageId = 'img:' + sceneId;
+      return Store.putImage(imageId, blob, meta) ? imageId : undefined;
+    } catch (e) {
+      console.warn('原图保存失败（只保留缩略图）：', e);
+      return undefined;
+    }
+  }
+
+  function blobToDataURL(blob) {
+    return new Promise(resolve => {
+      try {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => resolve('');
+        fr.readAsDataURL(blob);
+      } catch (_) { resolve(''); }
+    });
+  }
+
+  // 一张图该显示什么：优先原图（IndexedDB 里的 Blob → objectURL），没有就退回缩略图
+  function sceneSrc(sc, entry) {
+    const id = (sc && sc.imageId) || (entry && entry.imageId);
+    const url = id ? Store.imageURL(id) : null;
+    return url || (sc && (sc.src || sc.thumb)) || (entry && (entry.thumb || entry.src)) || '';
   }
 
   // 打字机（流式失败 / 非流式时的兜底观感）；返回 Promise
@@ -657,21 +736,32 @@
     $('#modal-export').classList.remove('hidden');
   }
 
-  function buildExportPack(st, kind, withSrc) {
+  async function buildExportPack(st, kind, withSrc) {
+    const images = [];
+    for (const s of (st.scenes || []).slice(-12)) {
+      // 带上 scene id：别人导入时才能把「图片」和聊天记录里的图片气泡对上号
+      const im = { id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '', thumb: s.thumb || null };
+      if (s.aspect) im.aspect = s.aspect;
+      if (s.width) im.width = s.width;
+      if (s.height) im.height = s.height;
+      // 附带原图：从 IndexedDB 取回 Blob 再转 base64。
+      // 只在用户明确勾选时做，且文件会明显变大（原图本身就不小，base64 还要再涨约三分之一）。
+      if (withSrc && s.imageId) {
+        const blob = await Store.getImage(s.imageId);
+        if (blob) {
+          const url = await blobToDataURL(blob);
+          if (url) im.src = url;
+        }
+      }
+      images.push(im);
+    }
     const pack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.2',
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.3',
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
       createdAt: st.createdAt, updatedAt: st.updatedAt,
-      images: (st.scenes || []).slice(-12).map(s => {
-        const im = { alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '', thumb: s.thumb || null };
-        if (s.aspect) im.aspect = s.aspect;
-        if (s.width) im.width = s.width;
-        if (s.height) im.height = s.height;
-        if (withSrc && s.src) im.src = s.src;
-        return im;
-      }),
+      images: images,
     };
     if (kind === 'full') {
       pack.log = st.log || [];
@@ -685,8 +775,7 @@
     return pack;
   }
 
-  function download(filename, text) {
-    const blob = new Blob([text], { type: 'application/json' });
+  function downloadBlob(filename, blob) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
@@ -695,14 +784,29 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
-  function doExport() {
+  function download(filename, text) {
+    downloadBlob(filename, new Blob([text], { type: 'application/json' }));
+  }
+
+  async function doExport() {
     const st = Store.loadStory(exportTargetId);
     if (!st) { toast('故事不存在', true); return; }
     const kindEl = document.querySelector('input[name="export-kind"]:checked');
     const kind = kindEl ? kindEl.value : 'full';
     const withSrc = $('#export-src').checked;
-    const hasSrc = (st.scenes || []).some(s => s.src);
-    const pack = buildExportPack(st, kind, withSrc);
+    const hasSrc = (st.scenes || []).some(s => s.imageId || s.src);
+    const btn = $('#btn-do-export');
+    const oldText = btn ? btn.textContent : '';
+    if (withSrc && btn) { btn.disabled = true; btn.textContent = '打包原图中…'; }
+    let pack;
+    try {
+      pack = await buildExportPack(st, kind, withSrc);
+    } catch (e) {
+      toast('打包失败：' + ((e && e.message) ? e.message : e), true, true);
+      return;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = oldText; }
+    }
     const safeTitle = String(st.title || 'story').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
     download(safeTitle + '.irstory.json', JSON.stringify(pack, null, 1));
     markBackedUp();                                   // 导出单个故事也算一次备份
@@ -763,18 +867,44 @@
     el.classList.toggle('alert', !t || (Date.now() - t > BACKUP_REMIND_MS));
   }
 
+  // 真实占用：navigator.storage.estimate()（把 IndexedDB / Cache 等一起算在内，比数键位准得多）
+  async function renderUsageLine() {
+    const el = $('#storage-usage');
+    if (!el) return;
+    el.textContent = '正在统计占用…';
+    let est = null;
+    try { est = IR.Storage ? await IR.Storage.estimate() : null; } catch (_) {}
+    let imgs = 0;
+    try { imgs = (await Store.listImageKeys()).length; } catch (_) {}
+    el.textContent = (est && est.usage != null)
+      ? ('实测占用：约 ' + fmtMB(est.usage) + (est.quota ? '（浏览器给的额度约 ' + fmtMB(est.quota) + '）' : '')
+        + ' · 现存原图 ' + imgs + ' 张。IndexedDB 的可用容量取决于浏览器、设备剩余空间与存储策略，不是无限大。')
+      : ('这台浏览器查不到占用统计 · 现存原图 ' + imgs + ' 张。');
+  }
+
   function renderStoragePanel() {
     const u = localUsage();
     const pct = Math.min(100, Math.round(u.chars / LS_CHAR_LIMIT * 100));
     const n = Store.listStories().length;
+    const info = Store.storageInfo();
     const st = $('#storage-state');
     if (st) {
-      st.textContent = '本应用存档已用约 ' + pct + '%（' + n + ' 个故事 / ' + u.keys + ' 个键位）——'
-        + (pct >= 70
-          ? '⚠ 接近写入上限，先「一键导出全部备份」，再删掉不用的故事腾空间。'
-          : '每个站点约 5MB，到 70% 以上就该收拾一下了。');
-      st.classList.toggle('alert', pct >= 70);
+      if (info.backend === 'indexeddb') {
+        st.textContent = '当前主库：IndexedDB（' + n + ' 个故事）—— 已解除 localStorage 约 5MB 的限制，'
+          + '原图以 Blob 单独存放，缩略图与文本照旧跟着故事走。';
+        st.classList.remove('alert');
+      } else {
+        st.textContent = '本应用存档已用约 ' + pct + '%（' + n + ' 个故事 / ' + u.keys + ' 个键位）——'
+          + (pct >= 70
+            ? '⚠ 接近写入上限，先「一键导出全部备份」，再删掉不用的故事腾空间。'
+            : '每个站点约 5MB，到 70% 以上就该收拾一下了。')
+          + (info.bootError
+            ? '（升级到 IndexedDB 时出错，已安全退回：' + info.bootError + ' —— 数据没丢，但容量仍是约 5MB）'
+            : (info.available ? '' : '（这台浏览器用不了 IndexedDB，所以退回原来的存储方式）'));
+        st.classList.toggle('alert', pct >= 70);
+      }
     }
+    renderUsageLine();
     const ps = $('#storage-persist');
     if (ps) {
       ps.textContent = persistGranted === true
@@ -794,7 +924,7 @@
       ['chat', 'painter', 'scribe', 'draft', 'image'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
     }
     return {
-      format: 'ir-backup', schema: 1, app: '无限阅读 v0.2',
+      format: 'ir-backup', schema: 1, app: '无限阅读 v0.3',
       exportedAt: Date.now(),
       settings: s,
       userProfile: Store.loadUserProfile(),
@@ -802,23 +932,92 @@
     };
   }
 
-  function doBackupAll() {
+  /* 「带原图备份」= 一个 zip 里放两样东西：
+   *   ir-backup.json      与普通备份完全同款（schema 2 只多一份 images 清单）
+   *   images/0001.png …   原图按二进制原样存放
+   * 为什么不把原图 base64 塞进 JSON：大图转 base64 体积涨约 1/3，还会在内存里堆成巨型字符串；
+   * zip 装的是原始字节，体积最省，导出 / 导入都不容易把内存打爆。代价是 .zip 不能直接肉眼查看。 */
+  const IMAGE_EXT = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp',
+    'image/gif': 'gif', 'image/avif': 'avif', 'image/svg+xml': 'svg',
+  };
+
+  async function buildBackupZip(pack, onProgress) {
+    // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份
+    const ids = Array.from(Store.knownImageIds());
+    const files = [];
+    const manifest = [];
+    let bytes = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const blob = await Store.getImage(ids[i]);
+      if (blob && blob.size) {
+        const path = 'images/' + String(manifest.length + 1).padStart(4, '0') + '.' + (IMAGE_EXT[blob.type] || 'bin');
+        files.push({ name: path, data: blob });
+        manifest.push({ id: ids[i], path: path, type: blob.type || 'application/octet-stream', size: blob.size });
+        bytes += blob.size;
+      }
+      if (onProgress) onProgress(i + 1, ids.length, bytes);
+    }
+    const body = Object.assign({}, pack, { schema: 2, images: manifest });
+    files.unshift({ name: 'ir-backup.json', data: JSON.stringify(body, null, 1) });
+    return { blob: await IR.Zip.build(files), count: manifest.length, bytes: bytes };
+  }
+
+  async function doBackupAll() {
     const withKeys = !!($('#backup-with-keys') && $('#backup-with-keys').checked);
+    const withSrc = !!($('#backup-with-src') && $('#backup-with-src').checked);
+    const btn = $('#btn-backup-all');
+    const oldText = btn ? btn.textContent : '';
     const pack = buildBackupPack(!withKeys);
     if (!pack.stories.length) { toast('还没有故事可以备份', true); return; }
     const day = new Date();
     const stamp = day.getFullYear() + String(day.getMonth() + 1).padStart(2, '0') + String(day.getDate()).padStart(2, '0');
-    download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
-    markBackedUp();
-    renderStoragePanel();
-    toast('已导出全部备份：' + pack.stories.length + ' 个故事' + (withKeys ? '（含 API Key，请妥善保管）' : '（不含 API Key）'), false, true);
+    const note = withKeys ? '（含 API Key，请妥善保管）' : '（不含 API Key）';
+
+    if (!withSrc) {
+      download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
+      markBackedUp();
+      renderStoragePanel();
+      toast('已导出全部备份：' + pack.stories.length + ' 个故事' + note, false, true);
+      return;
+    }
+    if (!(IR.Zip && IR.Zip.build)) { toast('打包模块没加载出来：请刷新页面重试', true, true); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = '正在收集原图…'; }
+    try {
+      await Store.flush();                                  // 先把攒着的写盘落下去，备份的才是最新状态
+      const zip = await buildBackupZip(pack, (done, total, bytes) => {
+        if (btn) btn.textContent = '正在打包原图 ' + done + '/' + total + '（' + fmtMB(bytes) + '）…';
+      });
+      if (!zip.count) {
+        // 一张原图都没取到：多半是 v0.2 时代的老故事只存了缩略图（那时原图还没有单独存放）
+        download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
+        markBackedUp();
+        renderStoragePanel();
+        toast('本地没有原图可打包（旧故事可能只存了缩略图），已改为导出不含原图的 .irbackup.json', false, true);
+        return;
+      }
+      downloadBlob('ir-backup-' + stamp + '.zip', zip.blob);
+      markBackedUp();
+      renderStoragePanel();
+      toast('已导出全部备份：' + pack.stories.length + ' 个故事 + ' + zip.count + ' 张原图（' + fmtMB(zip.bytes) + '）' + note, false, true);
+    } catch (e) {
+      toast('打包失败：' + ((e && e.message) ? e.message : e), true, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = oldText; }
+    }
   }
 
-  async function applyBackupImport(obj) {
+  async function applyBackupImport(obj, zipEntries) {
     const stories = (Array.isArray(obj.stories) ? obj.stories : []).filter(s => s && s.id);
+    // 带原图的备份：清单在正文里，图片本体在同包的 images/*（见 buildBackupZip）
+    const manifest = Array.isArray(obj.images) ? obj.images.filter(x => x && x.id && x.path) : [];
+    const pending = zipEntries ? manifest.filter(x => zipEntries.has(x.path)) : [];
+    const missing = manifest.length - pending.length;
     if (!stories.length && !obj.settings) { toast('备份文件里没有可还原的内容', true); return; }
     const ok = await irConfirm(
       '导入备份：还原 ' + stories.length + ' 个故事'
+      + (pending.length ? ' + ' + pending.length + ' 张原图' : '')
       + (obj.settings ? '，并覆盖当前的模型设置' : '')
       + (Array.isArray(obj.userProfile) ? '与用户画像' : '')
       + '？同 id 的故事会被覆盖，其它故事保留。',
@@ -843,9 +1042,27 @@
       syncSettingsToForm();
     }
     if (Array.isArray(obj.userProfile)) Store.saveUserProfile(obj.userProfile);
+
+    // 原图：从 zip 条目直接写回 IndexedDB（字节原样落盘，不经过 base64）
+    let imgs = 0, lost = 0;
+    for (const im of pending) {
+      const raw = zipEntries.get(im.path);
+      if (!raw) { lost++; continue; }
+      const blob = im.type ? raw.slice(0, raw.size, im.type) : raw;
+      if (Store.putImage(im.id, blob, { from: 'backup' })) imgs++; else lost++;
+    }
+    if (pending.length) await Store.flush();
+
     renderShelf();
     renderStoragePanel();
-    toast('已还原备份：' + n + ' 个故事', false, true);
+    toast('已还原备份：' + n + ' 个故事'
+      + (imgs ? ' + ' + imgs + ' 张原图' : '')
+      + (lost
+        ? '；有 ' + lost + ' 张原图没还原'
+          + (IR.Storage && !IR.Storage.available ? '（这台浏览器用不了 IndexedDB，原图存不进本地）' : '（数据不完整）')
+        : '')
+      + (missing ? '；清单里有 ' + missing + ' 张图不在包里（备份文件可能被改动过）' : ''),
+      !!lost, true);
   }
 
   // 超过 7 天没备份（且确实有故事）→ 启动后提醒一次；提醒本身每天最多一次，不刷屏
@@ -872,8 +1089,52 @@
     $('#modal-settings').classList.remove('hidden');
   }
 
+  function isZipFile(file) {
+    const n = String((file && file.name) || '').toLowerCase();
+    const t = String((file && file.type) || '').toLowerCase();
+    return /\.zip$/.test(n) || t === 'application/zip' || t === 'application/x-zip-compressed' || t === 'multipart/x-zip';
+  }
+
+  // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况
+  function pickBackupJson(entries) {
+    if (entries.has('ir-backup.json')) return entries.get('ir-backup.json');
+    let best = null;
+    for (const [name, blob] of entries) {
+      if (!/(^|\/)ir-backup\.json$/i.test(name)) continue;
+      if (!best || name.length < best.name.length) best = { name: name, blob: blob };
+    }
+    return best ? best.blob : null;
+  }
+
+  // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
+  async function importZipFile(file) {
+    if (!(IR.Zip && IR.Zip.read)) { toast('这个版本没有 zip 支持：请刷新页面重试', true, true); return; }
+    toast('正在读取备份包…', false, true);
+    let entries = null;
+    try {
+      entries = await IR.Zip.read(file);
+    } catch (e) {
+      toast('这个 .zip 打不开：' + ((e && e.message) ? e.message : e), true, true);
+      return;
+    }
+    const main = pickBackupJson(entries);
+    if (!main) {
+      toast('这个 zip 里没有 ir-backup.json —— 只认识「一键导出全部备份（带原图）」导出的 .zip。'
+        + '.irstory.json / .irbackup.json 请直接拖进来，不用先压缩。', true, true);
+      return;
+    }
+    let obj = null;
+    try { obj = JSON.parse(await main.text()); } catch (_) {
+      toast('备份包里的 ir-backup.json 不是有效 JSON（文件可能损坏）', true, true);
+      return;
+    }
+    if (!obj || obj.format !== 'ir-backup') { toast('备份包里的 ir-backup.json 不是本应用的备份格式', true, true); return; }
+    applyBackupImport(obj, entries);
+  }
+
   function handleImportFile(file) {
     if (!file) return;
+    if (isZipFile(file)) { importZipFile(file); return; }
     const reader = new FileReader();
     reader.onload = () => {
       let obj = null;
@@ -912,13 +1173,29 @@
     st.turn = obj.turn || 0;
     st.lastSceneSummary = obj.lastSceneSummary || '';
     st.scenes = (obj.images || []).map((im, i) => ({
-      id: 'sc-imp' + i, alt: im.alt || '', prompt: im.prompt || '', promptRaw: im.promptRaw || '',
+      id: im.id || ('sc-imp' + i), alt: im.alt || '', prompt: im.prompt || '', promptRaw: im.promptRaw || '',
       aspect: im.aspect || '', width: im.width || 0, height: im.height || 0,
       thumb: im.thumb || null, src: im.src || null, ts: Date.now(),
     }));
     st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
     Store.saveStory(st);
     showShelf();                       // 导入即进书架，能直接看到新卡片
+    // 档案里带的原图（别人导出时勾了「附带原图」）：转成 Blob 存进 IndexedDB，之后照常显示原图
+    const withOriginal = st.scenes.filter(sc => sc.src && sc.src.indexOf('data:') === 0);
+    if (withOriginal.length) {
+      (async () => {
+        for (const sc of withOriginal) {
+          const imageId = await storeOriginal(sc.id, sc.src, { width: sc.width, height: sc.height });
+          if (imageId) {
+            sc.imageId = imageId;
+            const entry = findImageEntry(sc.id);
+            if (entry) entry.imageId = imageId;
+          }
+        }
+        saveAll();
+        renderStage(); renderThumbs();
+      })();
+    }
     toast('已导入：《' + st.title + '》', false, true);
   }
 
@@ -2050,6 +2327,7 @@
     if (busy || !story) return;
     action = String(action || '').trim();
     if (!action) return;
+    if (offlineBlocked('这条消息')) return;
     busy = true;
     lastActionWasChoice = !!isChoice;
     currentChoices = [];
@@ -2363,6 +2641,7 @@
   // 出一张图：调生图适配器 → 落 scene / log（可标记被替代的旧图，§2 supersededBy）
   async function runPaint(opts) {
     if (!story) return null;
+    if (offlineBlocked('这次作画')) return null;
     const cfgImg = imageCfg(opts.params);
     const imgAdapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
     const src = await imgAdapter.generate(cfgImg, opts.prompt);
@@ -2382,17 +2661,21 @@
       styleCardId: story.styleCard ? (story.styleCard.id + '@' + (story.styleCard.version || 1)) : undefined,
     };
     scene.thumb = await thumb(src);
+    // 原图以 Blob 存 IndexedDB（不再把 base64 塞进档案）；档案里只留一个引用键
+    scene.imageId = await storeOriginal(scene.id, src, {
+      model: scene.model, size: scene.size, width: scene.width, height: scene.height, prompt: scene.prompt,
+    });
     if (opts.supersedesEntry) opts.supersedesEntry.supersededBy = scene.id;
     if (opts.supersedesScene) opts.supersedesScene.supersededBy = scene.id;
     story.scenes.push(scene);
     story.lastBg = scene.id;
     story.log.push({
       type: 'image', id: scene.id, prompt: scene.prompt, promptRaw: scene.promptRaw, alt: scene.alt,
-      thumb: scene.thumb, model: scene.model, size: scene.size,
+      thumb: scene.thumb, imageId: scene.imageId, model: scene.model, size: scene.size,
       aspect: scene.aspect, width: scene.width, height: scene.height, styleCardId: scene.styleCardId,
       ts: scene.ts,
     });
-    setBackground(scene.thumb || src);
+    setBackground(sceneSrc(scene) || src);
     updateRollingStyle(scene);           // §4.10 C-F：每次出图后自动更新（本地规则，不依赖模型）
     refreshRollingStyleByModel(scene);   // 真实模式：书记员顺手刷新；失败保留本地结果
     saveAll();
@@ -2404,6 +2687,8 @@
     if (!story) return;
     // 排队期间已换故事：直接取消，不花画师与生图额度
     if (storyId && story.id !== storyId) { toast('已切换故事，本次作画取消'); return; }
+    // 断网：连画师构思都不发（这一步也要花钱），整单作废，不排队
+    if (offlineBlocked('这次作画')) return;
     const pill = $('#gen-status');
     pill.textContent = 'AI 画师构思中…';
     pill.classList.remove('hidden');
@@ -2502,7 +2787,7 @@
     if (!pw) return;
     const scene = imageSceneById(pw.sceneId);
     const entry = findImageEntry(pw.sceneId);
-    const src = (scene && (scene.src || scene.thumb)) || (entry && entry.thumb) || '';
+    const src = sceneSrc(scene, entry);
     const img = $('#pw-preview');
     if (src) { img.src = src; img.classList.remove('hidden'); }
     else { img.removeAttribute('src'); img.classList.add('hidden'); }
@@ -2554,6 +2839,7 @@
 
   async function painterThreadSend() {
     if (!story || !pw || pw.busy) return;
+    if (offlineBlocked('这句给画师的话')) return;
     const text = $('#pw-input').value.trim();
     if (!text) return;
     $('#pw-input').value = '';
@@ -2807,6 +3093,7 @@
 
   // 试画一张候选：按用户设置的比例出图；不落档、不进剧情记录
   async function paintCandidate(promptEn) {
+    if (offlineBlocked('这次试画')) return null;
     const cfgImg = imageCfg();
     const adapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
     return adapter.generate(cfgImg, promptEn);
@@ -3118,7 +3405,7 @@
       const d = document.createElement('div');
       d.className = 'bubble bubble-image';
       const sc = imageSceneById(e.id);
-      const src = (sc && (sc.src || sc.thumb)) || e.thumb || null;
+      const src = sceneSrc(sc, e) || null;
       if (src) {
         const img = document.createElement('img');
         img.src = src;
@@ -3200,7 +3487,7 @@
     const img = $('#stage-img'), empty = $('#stage-empty');
     if (!story) { img.classList.add('hidden'); empty.classList.remove('hidden'); return; }
     const sc = currentScene();
-    const src = sc && (sc.src || sc.thumb);
+    const src = sceneSrc(sc);
     if (src) {
       img.src = src;
       img.alt = (sc && sc.alt) || '';
@@ -3224,10 +3511,12 @@
       return;
     }
     for (const sc of scenes) {
-      if (!sc.thumb && !sc.src) continue;
+      // 缩略条优先用小图（快）；小图缺失但原图在 IndexedDB 里时，等它异步取回来再显示
+      const src = sc.thumb || sceneSrc(sc);
+      if (!src) continue;
       const img = document.createElement('img');
       img.className = 'thumb' + (story.lastBg === sc.id ? ' active' : '');
-      img.src = sc.thumb || sc.src;
+      img.src = src;
       img.alt = sc.alt || '场景缩略图';
       img.title = sc.alt || '';
       img.onclick = () => { story.lastBg = sc.id; saveAll(); renderStage(); renderThumbs(); };
@@ -3307,7 +3596,7 @@
       if (!opts.deferOpening) runOpening();
     } else {
       const sc = currentScene();
-      if (sc) setBackground(sc.thumb || sc.src);
+      if (sc) setBackground(sceneSrc(sc));
       currentChoices = [];
       renderNarrationToolsAfterLoad();
       saveAll();
@@ -3447,6 +3736,70 @@
     settings.trigger = t ? t.value : 'choice';
     saveAll();
     if (prevShowReasoning !== settings.showReasoning) renderChat();   // 思考链开关即时生效
+  }
+
+  /* ---- 「测试连接」：只读当前输入框的值 ----
+   * 三个原则：① 不保存设置、② 不生成内容、③ 生图绝不出图（不花钱）。
+   * 子模型（画师 / 书记员 / 起草）留空的项按「沿用剧情模型」代入，测的就是实际会用到的那套配置。 */
+  const TEST_TARGETS = {
+    chat:    { kind: 'chat',  self: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
+    painter: { kind: 'chat',  self: ['#s-painter-base', '#s-painter-key', '#s-painter-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
+    scribe:  { kind: 'chat',  self: ['#s-scribe-base', '#s-scribe-key', '#s-scribe-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
+    draft:   { kind: 'chat',  self: ['#s-draft-base', '#s-draft-key', '#s-draft-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
+    image:   { kind: 'image', self: ['#s-image-base', '#s-image-key', '#s-image-model'] },
+  };
+
+  function readTestCfg(t) {
+    const pick = sels => {
+      for (const s of sels) { const el = $(s); const v = el ? String(el.value || '').trim() : ''; if (v) return v; }
+      return '';
+    };
+    let inherited = false;
+    const grab = i => {
+      const own = pick([t.self[i]]);
+      if (own) return own;
+      if (!t.inherit) return '';
+      inherited = true;
+      return pick([t.inherit[i]]);
+    };
+    return {
+      cfg: {
+        provider: t.kind === 'image' ? 'openai-images' : 'openai-compatible',
+        baseUrl: grab(0), apiKey: grab(1), model: grab(2),
+      },
+      inherited,
+    };
+  }
+
+  async function testConnection(key, btn) {
+    const t = TEST_TARGETS[key];
+    if (!t) return;
+    const el = $('#test-' + key + '-state');
+    const set = (level, message) => {
+      if (!el) return;
+      el.className = 'hint test-state' + (level ? ' ' + level : '');
+      el.textContent = message;
+    };
+
+    if (DEMO) { set('warn', '演示模式不联网：这里没有真实接口可测。去掉地址栏的 ?demo=1 重新打开就能测了。'); return; }
+
+    const { cfg, inherited } = readTestCfg(t);
+    const adapter = t.kind === 'image'
+      ? (IR.ImageProviders[cfg.provider] || IR.ImageProviders['openai-images'])
+      : (IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible']);
+    if (!adapter || typeof adapter.test !== 'function') { set('fail', '这个适配器不支持测试连接。'); return; }
+
+    const oldText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '测试中…'; }
+    set(null, '正在连接 ' + (cfg.baseUrl || '（还没填地址）') + ' …');
+    try {
+      const r = await adapter.test(cfg);
+      set(r.level, r.message + (inherited ? '（留空项已按剧情模型代入）' : ''));
+    } catch (e) {
+      set('fail', '测试失败：' + ((e && e.message) ? e.message : String(e)));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = oldText; }
+    }
   }
 
   // 不内置任何服务商预设：Base URL / 模型名 / 参数全部由用户手填，
@@ -3742,6 +4095,7 @@
     };
     $('#btn-manual-gen').onclick = () => {
       if (!story) { toast('先打开一个故事吧'); return; }
+      if (offlineBlocked('这次作画')) return;   // 离线：不排进队列，也不花额度
       enqueueImage(story.lastSceneSummary);
       toast('已加入作画队列');
     };
@@ -3876,8 +4230,27 @@
       ['#s-profile-choice', '#s-profile-chat', '#s-profile-rp'].forEach(s => { $(s).checked = false; });
     };
     $('#btn-profile-clear').onclick = clearProfile;
+    // —— 测试连接（只探测，不保存、不出图） ——
+    Object.keys(TEST_TARGETS).forEach(key => {
+      const btn = $('#btn-test-' + key);
+      if (btn) btn.onclick = () => testConnection(key, btn);
+    });
     $('#btn-save-settings').onclick = () => { applyFormToSettings(); $('#modal-settings').classList.add('hidden'); toast('设置已保存'); };
-    $('#btn-backup-all').onclick = doBackupAll;
+    $('#btn-backup-all').onclick = () => {
+      doBackupAll().catch(e => toast('导出备份失败：' + ((e && e.message) || e), true, true));
+    };
+    // 清理孤儿原图：只删「没有任何故事引用」的 Blob，剧情 / 缩略图 / 提示词都不动
+    $('#btn-clean-images').onclick = async () => {
+      const keys = await Store.listImageKeys();
+      const keep = Store.knownImageIds();
+      const orphans = keys.filter(k => !keep.has(k));
+      if (!orphans.length) { toast('没有可清理的原图（现存 ' + keys.length + ' 张，都有故事引用）'); return; }
+      if (!await irConfirm('清理 ' + orphans.length + ' 张没有故事引用的原图？剧情、缩略图、提示词都不受影响。', { title: '清理孤儿原图', okText: '清理' })) return;
+      orphans.forEach(k => Store.releaseImage(k));
+      await Store.flush();
+      renderStoragePanel();
+      toast('已清理 ' + orphans.length + ' 张孤儿原图', false, true);
+    };
     $('#btn-clear-save').onclick = async () => {
       if (!await irConfirm('清空本地存档与全部设置？此操作不可恢复。', { title: '危险操作', okText: '清空' })) return;
       Store.clearAll();
@@ -3926,6 +4299,10 @@
       }
     });
 
+    // 断网 / 恢复：只是提示，绝不排队、不补发（离线是「这次点了不算」）
+    window.addEventListener('offline', () => toast('已断网：聊天与作画暂时用不了，已存的故事照常能看。联网后重新点一次即可（离线期间不会排队、不会事后偷偷扣额度）。', true, true));
+    window.addEventListener('online', () => toast('网络回来了：可以继续聊、继续作画。', false, true));
+
     // 退出即自动存档
     window.addEventListener('beforeunload', () => { if (story) saveAll(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && story) saveAll(); });
@@ -3934,6 +4311,15 @@
   /* ================= 启动 ================= */
 
   function init() {
+    // 后台落盘失败（最常见：本地空间满）不再静默：10 秒节流提示一次导出备份
+    Store.setPersistErrorHandler(() => {
+      if (Date.now() - lastSaveWarnAt < 10000) return;
+      lastSaveWarnAt = Date.now();
+      toast('存档写入失败（本地空间可能已满）：请「一键导出全部备份」，或删掉不用的故事 / 原图腾出空间', true, true);
+    });
+    // 原图是 Blob、异步取的：取到后把画面与缩略图重画一遍
+    Store.setImageReadyHandler(() => { renderStage(); renderThumbs(); });
+
     Store.migrateLegacy();            // v0.1 旧档 → v0.2（幂等）
     settings = Store.loadSettings();  // 迁移后重新读取
     if (DEMO) settings = IR.Demo.applyTo(settings);   // 只改内存：演示适配器生效，配置不落盘
@@ -3946,5 +4332,16 @@
     remindBackupIfNeeded();                        // P0：7 天没备份就提醒一次
   }
 
-  init();
+  // 先进 boot（装载 IndexedDB / 把 localStorage 旧数据迁过来），再进界面。
+  // boot 失败会自己退回 localStorage 模式：功能一样，只是容量仍是约 5MB —— 数据不会丢。
+  (async () => {
+    let info = null;
+    try { info = await Store.boot(); } catch (e) { console.warn('存储初始化失败：', e); }
+    init();
+    if (info && info.error) {
+      toast('本地存储升级未完成（IndexedDB 用不了），已退回原来的存储方式：数据没丢，但容量仍是约 5MB。', true, true);
+    } else if (info && info.backend === 'indexeddb' && info.migrated && !info.migrated.skipped && info.migrated.stories) {
+      toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
+    }
+  })();
 })();

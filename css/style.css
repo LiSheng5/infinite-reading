@@ -25,6 +25,8 @@
   --accent-soft:  rgba(37, 99, 235, 0.08);
   --accent-line:  rgba(37, 99, 235, 0.35);
   --on-accent:    #ffffff;
+  /* 朱砂：只用于「出错」这类需要立刻被看见的文字（沿用气泡那支朱砂，不另开一套色） */
+  --danger:       #8b3a2f;
   /* 边框与分隔线 */
   --line:         #e3e8ef;
   --line-soft:    rgba(227, 232, 239, 0.80);
@@ -85,6 +87,7 @@
     --accent-soft:  rgba(96, 165, 250, 0.14);
     --accent-line:  rgba(96, 165, 250, 0.38);
     --on-accent:    #0b1120;
+    --danger:       #e8a49b;
     --line:         #26324a;
     --line-soft:    rgba(56, 70, 96, 0.80);
 
@@ -1007,6 +1010,12 @@ label input.inline-num {
 .danger-row { text-align: right; margin-top: 4px; }
 /* 需要用户留意的提示（如存储接近上限）：跟随主题的强调色 */
 .hint.alert { color: var(--accent); }
+/* 「测试连接」结果行：成功 / 需注意 / 失败 */
+.test-row { margin-top: 12px; }
+.test-row .test-state { margin-top: 0; }
+.test-state.ok { color: var(--accent); }
+.test-state.warn { color: var(--ink); }
+.test-state.fail { color: var(--danger); }
 .row-inline { display: flex; align-items: center; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
 .row-inline .hint { margin-top: 0; }
 .inline-field { display: block; font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 10px; letter-spacing: 0.05em; }
@@ -1227,6 +1236,12 @@ label input.inline-num {
   .bubble { max-width: 96%; }
   .modal-card { outline-offset: 3px; }
   .immersive-bar { width: 94vw; }
+  /* 触控：画面上的两个按钮放大到 44px（手指够得着），发送键同理 */
+  .stage-btn { width: 44px; height: 44px; font-size: 17px; }
+  .stage-btn-left { right: 62px; }
+  .input-row .btn { min-height: 44px; }
+  /* 掐掉 iOS 上输入框聚焦时的自动放大（字号已在上面统一到 16px，这里是双保险） */
+  input, select, textarea { font-size: 16px; }
 }
 @media (orientation: portrait) and (max-width: 900px) {
   .game-layout { flex-direction: column; }
@@ -1235,5 +1250,18 @@ label input.inline-num {
   .image-pane { order: 0; flex: 0 0 38vh; min-height: 200px; }
   .stage-wrap { margin: 8px 12px 6px; }
   .thumb-strip { padding: 2px 12px 10px; min-height: 56px; }
-  .thumb { width: 72px; height: 42px; }
+  .thumb { width: 88px; height: 52px; }   /* 手机上也要点得中 */
+}
+
+/* 刘海屏 / 手势条：viewport-fit=cover 之后，把内容从安全区里让出来 */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .hud {
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .composer { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .immersive-bar { margin-bottom: env(safe-area-inset-bottom); }
+  .modal-foot { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .shelf-wrap { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 }
