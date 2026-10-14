@@ -4,12 +4,15 @@
  * 这里是「AI1 每轮发给模型的 messages 怎么拼、旧回合怎么压」的唯一实现：
  * 运行时（js/app.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
  *
- * 组装（§3.1 + §4.10 C-A/C-C）：
- *   [system]  AI1 系统提示词（按 mode：choice / chat / rp）
+ * 组装（§3.1 + §4.10 C-A/C-C，2026-10-14 评审后）：
+ *   [system]  AI1 系统提示词（按 mode：choice / chat / rp；rp 无卡时用降级提示）
+ *   [system]  [风格基调]（≤120 字）+ [故事设定（常驻）]（≤400 字）——此前 styleTone 只影响画面、
+ *             premise 只在开局一回合在场，地基信息随摘要合并流失
  *   [system]  常驻摘要行：「{地点}｜{时间}｜在场：{names}｜伏笔：{最重要的2条}」
  *   [system]  场景摘要栈（压缩产物，越老越模糊）
- *   [最近保留的 messages]（压缩后稳定在 ~4 个回合）
- *   [user]    [玩家行动]（premise 仅开局/强制注入时携带）
+ *   [最近保留的 messages]（已知容量时按 token 动态装，∈ [4, 40]；未知退回 8 条）
+ *   [user]    召回 / 工具回传 / 启发式 / 强制注入作为前缀，后接 [玩家行动]
+ *             （P2-12：注入层并入 user 前缀而非中段 system 块，规避兼容层吞中段 system）
  * 世界卡默认不常驻，靠 recall 工具按需召回、或「强制注入」（P5）。
  *
  * 压缩（§4.10 C-A/C-B）：以 scene_change 为边界做事件级摘要；占满时递归合并最旧两幕。
@@ -30,7 +33,14 @@
   const DEFAULT_WINDOW_MESSAGES = 20;    // v0.1 基线遗留（评测报告用）
   const DEFAULT_KEEP_MESSAGES = 8;       // §3.1：组装窗口 = 最近 8 条 messages（4 个回合）
   const DEFAULT_MAX_MESSAGES = 16;       // 积压超过即压缩（保留 8 + 消化积压）
-  const DEFAULT_MAX_SUMMARIES = 6;       // 摘要栈上限，满了合并最旧两幕
+  const DEFAULT_MAX_SUMMARIES = 6;        // 摘要栈上限，满了合并最旧两幕
+
+  /* 2026-10-14 评审新增（P1-6 / P1-7 / P1-3）：常驻注入与动态窗口的预算参数 */
+  const TONE_MAX_CHARS = 120;             // 风格基调注入上限（文本侧，此前只影响画面）
+  const PREMISE_MAX_CHARS = 400;          // 常驻故事设定摘要上限（此前只在开局一回合在场）
+  const WINDOW_MIN_MESSAGES = 4;          // 动态组装窗口下限
+  const WINDOW_MAX_MESSAGES = 40;         // 动态组装窗口上限
+  const WINDOW_TOKEN_RATIO = 0.5;         // 最近消息最多吃窗口的一半（另一半给系统块/注入/输出）
 
   /* ---------------- 系统提示词（按模式，§3.1 / §4.8） ----------------
    * 剧情模式（choice）：中文字段 JSON 契约（v0.3）；
@@ -56,15 +66,19 @@
    * 画面参考取旁白原文（app.js 的 parseAIReply / absorbReply 有对应兜底）；
    * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
 
-  // 对话模式：就是一个 AI（陪聊 / 答疑 / 顺着话题把故事讲下去）
-  const CHAT_SYSTEM = '你是一个 AI';
+  // 对话模式：伴读者定位 + 叙事任务 + 体量锚定（2026-10-14 评审定案：补齐「顺着讲下去」与 2~6 句锚定，
+  // 不引入 JSON 契约，保持极简）
+  const CHAT_SYSTEM = '你是这部作品的伴读者 AI，顺着玩家的话推进剧情或话题；每次回应 2~6 句中文。';
 
-  // 扮演模式：同 CHAT_SYSTEM，多一句人设锚定与两条硬规则（不出戏 / 不替玩家行事）
-  const RP_SYSTEM = '你是一个 AI，现在在这里进行角色扮演：你就是角色卡里的那个人（名字、性格、说话方式都以角色卡为准）。保持角色不出戏，也不要替玩家说话或行动。';
+  // 扮演模式：同 CHAT_SYSTEM 的定位，多一句人设锚定与两条硬规则（不出戏 / 不替玩家行事）
+  const RP_SYSTEM = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：你就是角色卡里的那个人（名字、性格、说话方式都以角色卡为准）。保持角色不出戏，也不要替玩家说话或行动；每次回应 2~6 句中文。';
 
-  function systemForMode(mode) {
+  // rp 无角色卡（导入 / 旧档可能产生）：指令不能指向不存在的卡，改为自拟并钉住
+  const RP_SYSTEM_FALLBACK = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：这部作品还没有角色卡，请按故事设定自拟你要扮演的角色，之后每一轮都保持这个角色不变，也不要替玩家说话或行动；每次回应 2~6 句中文。';
+
+  function systemForMode(mode, opts) {
     if (mode === 'chat') return CHAT_SYSTEM;
-    if (mode === 'rp') return RP_SYSTEM;
+    if (mode === 'rp') return (opts && opts.noCharacterCard) ? RP_SYSTEM_FALLBACK : RP_SYSTEM;
     return STORY_RULES;
   }
 
@@ -198,6 +212,113 @@
   const TOOLS_AI1 = TOOLS_RECALL.concat([REQUEST_IMAGE_TOOL, UPDATE_MEMORY_TOOL]);
   const TOOL_NAMES_AI1 = TOOLS_AI1.map(t => t.function.name);
   const MAX_TOOL_CALLS_PER_TURN = 2;   // §4.5 每轮上限 2 次
+
+  /* ---------------- 调度工具（模型主动行动） ----------------
+   * 只在「对话 / 扮演」模式、且本地服务在线且后端已开启调度时才下发（见 toolsForMode）。
+   * 调用后触发器进入「待确认」，必须由用户在界面上点确认才生效 ——
+   * 模型可以「安排」，但不能让主动行为自己落地。 */
+
+  const SCHEDULE_ONCE_TOOL = {
+    type: 'function',
+    function: {
+      name: 'schedule_once',
+      description: '安排一次「将来某个时刻主动联系用户」（只提一次，到点后自动结束）。提交后需要用户在界面上确认才会生效。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '这次安排的名字。同一个名字会覆盖旧安排，不会重复创建' },
+          at: { type: 'string', description: '将来的时刻，ISO 8601 格式，例如 2026-10-11T09:00:00+08:00' },
+          prompt: { type: 'string', description: '到点时要做什么（会作为一条消息交给你自己处理）' },
+          reason: { type: 'string', description: '为什么在这个时刻联系用户（会展示给用户看）' },
+        },
+        required: ['name', 'at', 'prompt'],
+      },
+    },
+  };
+
+  const SCHEDULE_HEARTBEAT_TOOL = {
+    type: 'function',
+    function: {
+      name: 'schedule_heartbeat',
+      description: '安排「每隔固定时间主动联系用户」一次（最小 1 分钟）。提交后需要用户在界面上确认才会生效。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '这次安排的名字。同一个名字会覆盖旧安排' },
+          everyMinutes: { type: 'number', description: '间隔分钟数，最小 1' },
+          prompt: { type: 'string', description: '每次到点时要做什么' },
+          reason: { type: 'string', description: '为什么要这样联系用户（会展示给用户看）' },
+        },
+        required: ['name', 'everyMinutes', 'prompt'],
+      },
+    },
+  };
+
+  const SCHEDULE_CRON_TOOL = {
+    type: 'function',
+    function: {
+      name: 'schedule_cron',
+      description: '用日历表达式安排主动联系（如每天 9 点、每周一）。5 字段：分 时 日 月 周；提交后需要用户在界面上确认才会生效。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '这次安排的名字。同一个名字会覆盖旧安排' },
+          expr: { type: 'string', description: 'cron 表达式（5 字段），例如 0 9 * * * 表示每天 09:00' },
+          tz: { type: 'string', description: 'IANA 时区名，例如 Asia/Shanghai；不填按 UTC' },
+          prompt: { type: 'string', description: '到点时要做什么' },
+          reason: { type: 'string', description: '为什么要这样联系用户（会展示给用户看）' },
+        },
+        required: ['name', 'expr', 'prompt'],
+      },
+    },
+  };
+
+  const LIST_TRIGGERS_TOOL = {
+    type: 'function',
+    function: {
+      name: 'list_triggers',
+      description: '查看当前已有的主动联系安排（名字、状态、时间、原因）。',
+      parameters: { type: 'object', properties: {} },
+    },
+  };
+
+  const CANCEL_TRIGGER_TOOL = {
+    type: 'function',
+    function: {
+      name: 'cancel_trigger',
+      description: '取消一个已有的主动联系安排（按名字找）。',
+      parameters: {
+        type: 'object',
+        properties: { name: { type: 'string', description: '要取消的安排名字' } },
+        required: ['name'],
+      },
+    },
+  };
+
+  const SCHEDULE_TOOLS = [
+    SCHEDULE_ONCE_TOOL, SCHEDULE_HEARTBEAT_TOOL, SCHEDULE_CRON_TOOL,
+    LIST_TRIGGERS_TOOL, CANCEL_TRIGGER_TOOL,
+  ];
+  const TOOL_NAMES_SCHEDULE = SCHEDULE_TOOLS.map(t => t.function.name);
+  const SCHEDULE_TOOL_SET = new Set(TOOL_NAMES_SCHEDULE);
+  function isScheduleTool(name) { return SCHEDULE_TOOL_SET.has(String(name)); }
+
+  const SCHEDULE_POLICY_TEXT = [
+    '主动联系（只在对话 / 扮演模式可用）：',
+    '用户说到「到点提醒我」「明天再来找我」「过几小时问问我在干嘛」这类将来才发生的事，就用 schedule_once / schedule_heartbeat / schedule_cron 安排；',
+    'name 是这次安排的身份：同名会覆盖旧安排，不会重复；prompt 写到点时你要做什么，reason 写为什么这个时候找他（用户会看到）；',
+    '这些只是「提案」，用户确认后才生效；用 list_triggers 看已有什么安排，用 cancel_trigger 取消。',
+    '不要在回复里说「工具」「触发器」，用自然的话告诉他你已经安排好了、等他确认。',
+  ].join('');
+
+  // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度工具）
+  function toolsForMode(mode, opts) {
+    const wantSchedule = !!(opts && opts.schedule) && (mode === 'chat' || mode === 'rp');
+    return wantSchedule ? TOOLS_AI1.concat(SCHEDULE_TOOLS) : TOOLS_AI1;
+  }
+  function toolNamesForMode(mode, opts) {
+    return toolsForMode(mode, opts).map(t => t.function.name);
+  }
 
   // 调用策略只留一两句，进系统提示词；不向玩家暴露「工具」概念（§4.5）
   const TOOL_POLICY_TEXT = [
@@ -514,7 +635,13 @@
 
   /* ---------------- token 估算 ---------------- */
 
-  function estimateTokens(text) { return String(text == null ? '' : text).length; }
+  // token 估算：中文 1 字 ≈ 1 token；ASCII（英文/数字/符号）≈ 4 字符 / token。
+  // P1-8（2026-10-14）：此前按字符全长计，英文输入会把 70% 压缩阈值高估约 4 倍、压缩晚触发。
+  function estimateTokens(text) {
+    const s = String(text == null ? '' : text);
+    const ascii = (s.match(/[\x00-\x7F]/g) || []).length;
+    return Math.ceil((s.length - ascii) + ascii * 0.25);
+  }
 
   /* ---------------- 世界卡工具函数 ---------------- */
 
@@ -653,6 +780,24 @@
     return idx;
   }
 
+  // 动态组装窗口（P1-3，2026-10-14）：已知 contextWindow 时按 token 从最近往前装，
+  // 装到窗口一半为止，条数 ∈ [4, 40]；未知容量退回 fallback（评测与旧档口径不变）。
+  // 组装（assembleAI1）与压缩保留（planCompression）共用同一函数，保证「压多少 / 留多少」同口径。
+  function fitWindow(msgs, contextWindow, fallback) {
+    const cw = +contextWindow;
+    if (!Number.isFinite(cw) || cw <= 0) return fallback || DEFAULT_KEEP_MESSAGES;
+    const budget = Math.floor(cw * WINDOW_TOKEN_RATIO);
+    let acc = 0, n = 0;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const t = estimateTokens(String((msgs[i] && msgs[i].content) || ''));
+      if (n > 0 && acc + t > budget) break;
+      acc += t;
+      n += 1;
+      if (n >= WINDOW_MAX_MESSAGES) break;
+    }
+    return Math.max(WINDOW_MIN_MESSAGES, n);
+  }
+
   /**
    * 压缩 story：把超出保留窗口的旧回合压进摘要栈。
    * 触发条件（§4.10 C-C）：
@@ -667,8 +812,8 @@
   function planCompression(story, opts) {
     opts = opts || {};
     if (!story || !Array.isArray(story.messages)) return null;
-    const keep = opts.keepMessages || DEFAULT_KEEP_MESSAGES;
-    const max = opts.maxMessages || DEFAULT_MAX_MESSAGES;
+    const keep0 = opts.keepMessages || fitWindow(story.messages, opts.contextWindow);
+    const max = opts.maxMessages || Math.max(DEFAULT_MAX_MESSAGES, keep0 * 2);
     let overBudget = false;
     const cw = +opts.contextWindow;
     if (Number.isFinite(cw) && cw > 0) {
@@ -677,8 +822,17 @@
     }
     if (story.messages.length <= max && !overBudget) return null;
 
-    // 窗口不足保留条数时无可压旧回合（cut 为负会让 slice 误伤最近消息）
-    const cut = Math.max(0, story.messages.length - keep);
+    // P1-4（2026-10-14）：超预算但常规保留条数下无可压（小窗口 + 长旁白）时，
+    // 降级保留窗口（×0.75 → ×0.5 → ×0.25，下限 2 条）再压，别每轮超发；
+    // 纯条数触发（未超预算）时维持原 keep（slice 不会误伤最近消息）。
+    let keep = keep0;
+    let cut = story.messages.length - keep;
+    if (cut <= 0 && overBudget) {
+      for (const frac of [0.75, 0.5, 0.25]) {
+        const k = Math.max(2, Math.floor(keep0 * frac));
+        if (story.messages.length - k > 0) { keep = k; cut = story.messages.length - k; break; }
+      }
+    }
     if (cut <= 0) return null;
     let candidate = story.messages.slice(0, cut);
     const boundary = lastSceneStart(candidate);
@@ -1147,7 +1301,17 @@
   function assembleAI1(story, playerAction, opts) {
     opts = opts || {};
     const mode = (story && story.mode) || 'choice';
-    const out = [{ role: 'system', content: opts.system || systemForMode(mode) }];
+    const out = [{
+      role: 'system',
+      // P2-13：rp 无角色卡（导入 / 旧档可能产生）时换降级提示，别让指令指向不存在的卡
+      content: opts.system || systemForMode(mode, { noCharacterCard: !(story && story.characterCard) }),
+    }];
+    // P1-6（2026-10-14）：风格基调此前只影响画面，现在也进文本侧（三模式通用，≤120 字）
+    const tone = String((story && story.styleTone) || '').trim();
+    if (tone) out.push({ role: 'system', content: '[风格基调] ' + clip(tone, TONE_MAX_CHARS) });
+    // P1-7（2026-10-14）：premise 此前只在开局一回合在场，地基设定随摘要合并流失——改为常驻摘要
+    const premise = String((story && story.premise) || '').trim();
+    if (premise) out.push({ role: 'system', content: '[故事设定（常驻）]\n' + clip(premise, PREMISE_MAX_CHARS) });
     // R13：rp 角色卡常驻（§4.12）；chat / rp 关系记忆常驻（choice 靠召回工具，不占常驻预算）
     if (mode === 'rp' && story && story.characterCard) {
       const ct = characterCardText(story.characterCard);
@@ -1167,11 +1331,16 @@
     const summaries = ((story && story.summaries) || []).filter(Boolean);
     if (summaries.length) out.push({ role: 'system', content: '[前情摘要]\n' + summaries.join('\n') });
     if (Array.isArray(opts.tools) && opts.tools.length) {
-      out.push({ role: 'system', content: '[可用工具] ' + opts.tools.join(' / ') + '\n' + TOOL_POLICY_TEXT });
+      let block = '[可用工具] ' + opts.tools.join(' / ') + '\n' + TOOL_POLICY_TEXT;
+      if (opts.tools.indexOf('schedule_once') >= 0) block += '\n' + SCHEDULE_POLICY_TEXT;
+      out.push({ role: 'system', content: block });
     }
     const msgs = (story && story.messages) || [];
-    // 默认组装窗口 = 最近 8 条 messages（§3.1）；更早的原文交给摘要栈
-    const windowSize = (opts.windowMessages == null) ? DEFAULT_KEEP_MESSAGES : opts.windowMessages;
+    // 组装窗口（P1-3）：已知容量时按 token 动态装（≤ 窗口一半，∈ [4, 40]），未知退回 8 条；
+    // 更早的原文交给摘要栈。opts.windowMessages 显式指定时永远最优先。
+    const windowSize = opts.windowMessages != null
+      ? opts.windowMessages
+      : fitWindow(msgs, opts.contextWindow);
     const slice = windowSize > 0 ? msgs.slice(-windowSize) : msgs.slice();
     // 只取 role/content：reasoning 等私有字段留在存档里，不进请求体（T-P5-2）
     // 剧情模式：历史 assistant 消息转回中文键，与本轮契约一致（存档不动）
@@ -1183,25 +1352,32 @@
       }
       out.push({ role: m.role, content });
     }
-    // 召回结果贴在本轮玩家行动之前（单次召回重发，§4.5）
+    // 单次注入层（召回 / 工具回传 / 启发式 / 强制注入）都并入本轮 user 消息前缀（P2-12，2026-10-14）。
+    // 此前是插在历史与 user 之间的 role:'system' 块——部分兼容层（Gemini 的 OpenAI 端点、
+    // 某些网关）会合并或忽略中段 system，注入会静默失效；并入 user 前缀语义不丢、兼容面最广。
+    const preUser = [];
     if (Array.isArray(opts.recall) && opts.recall.length) {
       for (const scope of opts.recall) {
         const t = recallBlock(story, scope);
-        if (t) out.push({ role: 'system', content: t });
+        if (t) preUser.push(t);
       }
     }
     // 工具执行结果的回传块（出图成功/失败、记忆已更新），同样贴在本轮行动之前
     if (Array.isArray(opts.inject) && opts.inject.length) {
-      for (const t of opts.inject) if (t) out.push({ role: 'system', content: String(t) });
+      for (const t of opts.inject) if (t) preUser.push(String(t));
     }
     // C-E 启发式注入（§4.10 C-E / T-P5-3）：玩家输入命中世界卡 / 伏笔实体词 → 自动带上对应条目
     if (opts.heuristic !== false) {
       const hb = heuristicBlock(story, playerAction);
-      if (hb) out.push({ role: 'system', content: hb });
+      if (hb) preUser.push(hb);
     }
     // 「🧠 注入记忆」：本轮强制注入完整记忆（§4.4 手动层）
-    if (opts.forceInject) out.push({ role: 'system', content: forceInjectBlock(story, playerAction, opts) });
-    out.push({ role: 'user', content: playerContent(story && story.premise, playerAction, opts) });
+    if (opts.forceInject) preUser.push(forceInjectBlock(story, playerAction, opts));
+    out.push({
+      role: 'user',
+      content: (preUser.length ? preUser.join('\n\n') + '\n\n' : '')
+        + playerContent(story && story.premise, playerAction, opts),
+    });
     return out;
   }
 
@@ -1221,11 +1397,14 @@
   global.IR.Context = {
     BUDGET, COMPRESS_RATIO,
     DEFAULT_WINDOW_MESSAGES, DEFAULT_KEEP_MESSAGES, DEFAULT_MAX_MESSAGES, DEFAULT_MAX_SUMMARIES,
-    AI1_SYSTEM, systemForMode,
+    TONE_MAX_CHARS, PREMISE_MAX_CHARS,
+    WINDOW_MIN_MESSAGES, WINDOW_MAX_MESSAGES, WINDOW_TOKEN_RATIO, fitWindow,
+    AI1_SYSTEM, systemForMode, RP_SYSTEM_FALLBACK,
     PAINTER_SYSTEM, PAINTER_CHAT_SYSTEM, PAINTER_STYLES_SYSTEM, PAINTER_CARD_SYSTEM,
     RECALL_RECENT_PLOT_TOOL, storySettingText,
     RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL, TOOLS_RECALL, TOOL_NAMES_RECALL,
     REQUEST_IMAGE_TOOL, UPDATE_MEMORY_TOOL, TOOLS_AI1, TOOL_NAMES_AI1, MAX_TOOL_CALLS_PER_TURN,
+    SCHEDULE_TOOLS, TOOL_NAMES_SCHEDULE, SCHEDULE_POLICY_TEXT, toolsForMode, toolNamesForMode, isScheduleTool,
     TOOL_POLICY_TEXT, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
     styleCardText, rollingStyleText, painterAnchorText,
     recentImageLines, recentNarrationLines, recentPlotText, assemblePainter,

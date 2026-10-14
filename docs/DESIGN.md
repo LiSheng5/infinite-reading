@@ -1,6 +1,6 @@
-# 无限阅读 v0.2 设计稿 · 上下文策略与画师工作台
+# 无限阅读 · 设计稿 · 上下文策略与画师工作台
 
-> 状态：**设计确认稿 v18**（最近更新 2026-10-07；逐轮定案见 §9 决议时间线；实施交接见 `.codebuddy/HANDOFF.md`）
+> 状态：**设计确认稿**（v0.2 全部定案并落地，并含 v0.3 增量，见 §7.5；最近更新 2026-10-09；逐轮定案见 §9 决议时间线；实施交接见 `.codebuddy/HANDOFF.md`）
 > 开放项：无——v0.2 设计全部确认，且已按本稿全部落地（2026-10-05）
 > 基线：v0.1 已完成并实测（见 [README](../README.md)）
 
@@ -328,18 +328,18 @@ AI1 长局不涨；书记员每 10 回合多一次便宜调用，成本可忽略
 | 模型不支持 function calling | T3 定案（第七轮）：直接带 tools 发，显式 400 就记住该模型并降级无工具模式；走常驻摘要 + 手动注入，`toolsEnabled` 开关手动兜底 |
 | world 字段缺失/非法 | 沿用上一轮卡，书记员校对兜底 |
 | 视觉设定卡未生成 | 画师子代理带滚动风格摘要 `rollingStyle`（第七轮）；连摘要也没有时收到「（未锚定，自由发挥）」 |
-| localStorage 超限 | 分级存储 + 导出 JSON |
+| 存储超限 / 写入失败 | 分级存储（只留缩略图）+ 导出 JSON 备份 |
 | v1 旧存档 | 自动迁移：补默认 world/styleCard/mode='choice' |
 
 ## 7. 存储与数据安全（R4 已确认；第十二轮加存档点；第十八轮补数据安全）
 
 ### 7.1 存哪、存什么
 
-- 介质：**只有 localStorage**（前缀 `ir:`），没有服务端、没有云：`ir:settings` / `ir:story-index` / `ir:story:<id>` / `ir:current` / `ir:user-profile`。
-- 每个故事 = 一份聊天记录（`ir:story:<id>`），含完整 log、world、styleCard、painterThread、mode。
+- 介质：**主库 IndexedDB**（v0.3.0 起，见 §7.5；适配器 `js/storage.js`），没有服务端、没有云：`kv` 里存 `ir:settings` / `ir:story-index` / `ir:current` / `ir:user-profile`，故事正文存 `stories`、原图 Blob 存 `images`；`localStorage` 只留升级前的旧数据当只读回退快照。
+- 每个故事 = 一份聊天记录（`stories` store，键为 story id），含完整 log、world、styleCard、painterThread、mode；原图另存 `images` store。
 - **故事书架**：标题/最后游玩/缩略图，可继续/改名/删除/导出 JSON。**书架即应用入口，无开始界面**（第十二轮；**第十四轮修订：入口回到开始页，书架经「☰ 我的书架 / ↶ 继续上次」进入**；**第十九轮：开始页直接用三张模式卡开局，「＋新故事 → 选模式弹窗」只留在书架**；**第二十轮：阅读页 HUD 也放了「☰ 书架 / ＋新故事」，左上「←」改为回首页——三个模式在局内就能直接开新故事或翻书架**）。
 - **存档（第十二轮定案）**：退出即自动存档；另有**手动存档点**——用户随时点「存档」打一个具名存档点，可随时**回到**任一存档点（恢复到该点的 log/world/画面）。存档点列表在模型设置面板里（归置原则）。
-- **体积控制**（因为 localStorage 每站点只有约 **5MB**）：`serializeStory` 只留最近 120 条 log、最近 12 幕；图片只留**缩略图**（长边 560px JPEG），存档点里剥掉全尺寸 `src`；单故事最多 5 个存档点。
+- **体积控制**（v0.3.0 起主库为 IndexedDB，容量由浏览器按磁盘空间分配，见 §7.5）：`serializeStory` 只留最近 120 条 log、最近 12 幕；缩略图内嵌（长边 560px JPEG），原图以 Blob 另存 `images`；存档点里剥掉全尺寸 `src`；单故事最多 5 个存档点。
 - 导出格式：单故事 `.irstory.json`（可分享/重玩，`kind = full | premise`）；**整体备份 `.irbackup.json`**（第十八轮新增：全部故事 + 设置 + 画像，可整体还原），**带原图的整体备份 `.irbackup.zip`**（v0.3.0 新增：同上正文 + `images/*` 二进制原图，勾选后导出）。
 - 聊天记录窗口为主交互（§4.6）。
 
@@ -359,7 +359,7 @@ AI1 长局不涨；书记员每 10 回合多一次便宜调用，成本可忽略
 
 - **配额**：Web Storage（localStorage + sessionStorage）每 origin 合计约 **10 MiB**（localStorage ≈ 5 MiB）；IndexedDB / Cache / OPFS 大得多——Chrome 约磁盘 60%，Firefox best-effort 取 min(磁盘 10%, 10 GiB)、persistent 可达磁盘 50%。
 - **淘汰（eviction）**：在存储压力、或浏览器总配额超限时按 **LRU** 清除，且**跳过已获 `navigator.storage.persist()` 授权的 origin**；被淘汰时该 origin 的数据**整体清除**（不做部分保留）。Safari 另有「7 天无交互主动清理」。Chrome 团队调研：实际被浏览器删掉的情况**极罕见**。
-- **持久化**：`navigator.storage.persist()` → Firefox 弹窗询问，Chromium / Safari 按站点交互历史自动判定；获批后只有用户手动删除才会消失。**注意豁免范围是 Storage API 管的存储（IndexedDB / Cache / OPFS）；localStorage 属 Web Storage，不在其明确保障内**——要真正吃到豁免需迁到 IndexedDB（§7.5 P1）。
+- **持久化**：`navigator.storage.persist()` → Firefox 弹窗询问，Chromium / Safari 按站点交互历史自动判定；获批后只有用户手动删除才会消失。**注意豁免范围是 Storage API 管的存储（IndexedDB / Cache / OPFS）；localStorage 属 Web Storage，不在其明确保障内**——要真正吃到豁免需迁到 IndexedDB（§7.5 P1，已于 v0.3.0 落地）。
 
 ### 7.4 同类开源项目怎么做（第十八轮调研，只借鉴思路）
 
@@ -443,7 +443,7 @@ AI1 长局不涨；书记员每 10 回合多一次便宜调用，成本可忽略
 | 二十 | 阅读页 HUD 补齐出入口（← 回首页 / ☰ 书架 / ＋新故事）；开始页去掉「开始」按钮、三张模式卡只留名字 |
 | 二十一 | **废止第十五轮「极简」全部禁令**（阴影 / 渐变 / 纹理底等解禁）；旁白气泡改「撕纸便签」（纸色 + 纤维/颗粒噪声 + 纸页投影，仅 `.bubble-narration`，玩家/选项/图片气泡不动） |
 
-**开放项**：v0.2 设计全部确认并落地；仅剩 §7.5 的 P1（IndexedDB 迁移）与 P2（OPFS / 网盘同步），均已进 §11 Backlog。
+**开放项**：v0.2 设计全部确认并落地；§7.5 的 P1（IndexedDB 迁移）已于 **v0.3.0** 落地，仅剩 P2（OPFS / 网盘同步）仍在 §11 Backlog。
 
 **暂缓待议（2026-10-07，未定案）**：用户希望**对话 / 扮演两种模式不设「书架」概念、只有聊天记录**（表述尚未细化），明确「先不要做」，待讨论后再定（涉及 §4.8 入口与 §7.1 书架口径）。
 
@@ -474,5 +474,5 @@ AI1 长局不涨；书记员每 10 回合多一次便宜调用，成本可忽略
 - 人物关系图（参考 NPCSidekick：角色卡内嵌 `relations` + 零依赖 SVG 渲染，见 §10b）
 - 画像/关系记忆的加权检索注入（recency×0.5 + relevance×3 + importance×2，见 §10b）——替代纯关键词匹配的增强项
 - 角色卡增强字段：`voice_samples` 语气锚点 / `taboos` / `entity_synonyms`（见 §10b）
-- **存储升级 P1**：localStorage → IndexedDB（保留兼容读 + 一次性迁移），解除 5MB 上限、缩略图可加宽、原图可保留，并真正吃到 `navigator.storage.persist()` 的免淘汰豁免（见 §7.5）
+- ~~**存储升级 P1**：localStorage → IndexedDB~~ **已落地（v0.3.0，见 §7.5）**：主库迁至 IndexedDB（一次性迁移 + 兼容读），解除 5MB 上限，原图以 Blob 另存，并真正吃到 `navigator.storage.persist()` 的免淘汰豁免
 - **存储升级 P2**：OPFS / File System Access API 让用户指定本地目录作为「存档文件」；WebDAV / 网盘同步（对齐 NextChat），冲突交用户选择（见 §7.5）

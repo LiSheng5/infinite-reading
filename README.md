@@ -12,7 +12,7 @@
 
 **纯前端 · 零构建 · 零依赖 · 无后端**：双击 `index.html` 就能玩，数据只存在你自己的浏览器里。
 
-**当前版本 v0.2** ｜ 文档：[架构](ARCHITECTURE.md) · [设计稿](docs/DESIGN.md) · [调研与规划](docs/NOTES.md) · [更新日志](CHANGELOG.md) · [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md) · [English](README.en.md)
+**当前版本 v0.3** ｜ 文档：[架构](ARCHITECTURE.md) · [设计稿](docs/DESIGN.md) · [调研与规划](docs/NOTES.md) · [更新日志](CHANGELOG.md) · [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md) · [English](README.en.md)
 
 ## 特色
 
@@ -39,7 +39,7 @@ index.html?demo=1
 ![离线演示模式（?demo=1）](docs/screenshot.png)
 
 - **在线 Demo**：`https://LiSheng5.github.io/infinite-reading/?demo=1`（仓库 Settings → Pages → Source 选「GitHub Actions」即启用，工作流已随仓库提供）
-- **一个文件带走**：`npm run bundle` 生成 `dist/ir.html`（约 380 KB，HTML/CSS/JS 全部内联），可以直接当附件发出去，双击就能玩
+- **一个文件带走**：`npm run bundle` 生成 `dist/ir.html`（约 530 KB，HTML/CSS/JS 全部内联），可以直接当附件发出去，双击就能玩
 - 想接真模型：去掉地址栏的 `?demo=1`（顶栏那个「🎬 演示」小胶囊就是入口），回首页点「⚙ 接入模型」即可。演示模式**不会写盘任何配置**，你原来的设置不会被弄脏。
 
 ## 快速开始
@@ -76,6 +76,34 @@ cd infinite-reading
 
 任何时机下都可点右上角「🎨 作画」手动补一张。
 
+## 可选：本地服务（邮件 / 定时主动 / 代下单）
+
+> ⚠️ **风险提示：AI 可能出错，请设置合理额度。** 这三项能力默认**全部关闭**、额度默认 **0**、白名单默认**为空**——不手动开启就什么都不放行。
+
+三项能力需要一个**可选**的本地小服务（不启动它，应用照常用，只是这三个入口会显示「需要启动本地服务」并禁用）：
+
+```bash
+node sidecar/server.mjs            # 首次启动会打印 token
+```
+
+1. 在项目目录运行上面的命令；终端会打印一个 `token`。
+2. 打开应用 →「模型设置 → 本地服务」，把 token 粘进去，点「重新探测」。
+3. 再在「邮件 / 定时主动 / 购物支付」三个分区里按需开启并填好额度、白名单。
+
+| 能力 | 说明 | 只在「对话 / 扮演」模式可用 |
+|---|---|---|
+| 邮件 | 代你写信 / 存草稿 / 发信；**收件人白名单由本地服务硬校验**，不在名单里的只能先落草稿、你确认后才发出；每日上限默认 0；每次发送 / 草稿 / 拒绝都写审计 | ✅ |
+| 定时主动 | 到点让 AI 主动来找你（一次性 / 固定间隔 / 日历表达式含时区）；触发器重启不丢；**免打扰时段与每日上限由你配置，模型改不了**；模型只能「提议」安排，需你确认才生效；可一键暂停 | ✅ |
+| 购物支付 | AI **拿不到任何支付凭证**，只能提交购买意图，由本地服务在代码层强制策略（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、预算隔离）；超阈值弹窗给你确认；每笔台账可导出收据。本期只有「模拟支付」与「仅生成订单、由你在微信 / 支付宝里手动付款」 | ✅ |
+
+安全与边界（详见 [`SECURITY.md`](SECURITY.md)）：
+
+- 服务**只监听 `127.0.0.1`**（局域网 / 外网访问不到），除健康检查外都要 token；按「单进程」设计，重复启动会被拒绝。
+- 额度、白名单、免打扰时段、token 的**唯一真源是 `sidecar/data/config.json`**，它们不会回存到浏览器里——AI 也就无从改写。
+- 支付策略是**防误操作 + 可审计**，不是「防你自己」：你拥有本机文件，理论上可以改配置或代码绕过。
+- **不做任何对微信 / 支付宝 App 的自动化或绕过，也不保存支付密码**；不接真实支付回调。
+- 密钥与账户都留在你本地，本项目不代管任何人的钱或邮箱。
+
 ## 数据与备份
 
 数据**只存在当前浏览器里**（主库是 IndexedDB，容量由浏览器按设备剩余空间分配，远大于 localStorage 的约 5MB；原图以 Blob 单独存放），无服务器、无账号、不上传。
@@ -90,14 +118,15 @@ cd infinite-reading
 - 占用到 70% 预警；超 7 天未备份启动时提醒
 - 单个故事可在书架卡片上「导出」为 `.irstory.json`（可勾选附带原图）
 
-## 部署与分发（四种走法）
+## 部署与分发（五种走法）
 
 | 走法 | 命令 / 操作 | 适合 |
 |---|---|---|
 | 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve .` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
-| 单文件 | `npm run bundle` → `dist/ir.html`（约 390 KB） | 发给别人：一个 HTML 文件，双击即玩 |
+| 单文件 | `npm run bundle` → `dist/ir.html`（约 530 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/?demo=1` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
+| 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（只需 Node ≥ 22，见上节） |
 
 **可安装（PWA）**：用 `https` 或 `localhost` 打开后，浏览器会出现「安装」入口；装完有桌面图标、可离线打开（Service Worker 只缓存本站静态资源，**跨域 API 请求与密钥一律不进缓存**）。
 
@@ -115,22 +144,27 @@ cd infinite-reading
                 ▼
         ImageProvider（/images/generations）
                 ▼
-        背景淡入 + 书架 / 存档点（localStorage，存缩略图）
+        背景淡入 + 书架 / 存档点（IndexedDB，存缩略图）
 ```
 
 | 文件 | 作用 |
 |---|---|
 | `js/providers.js` | 适配器层：`ChatProviders` / `ImageProviders`；`VideoProviders` 已预留（`generate(cfg,{prompt,image}) -> {url}`） |
 | `js/context.js` | 上下文组装、压缩链、文本导入整理 |
-| `js/store.js` | 存档层（schema v2、旧档迁移、书架、存档点） |
+| `js/storage.js` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
+| `js/store.js` | 存档层（内存优先 + 异步落盘；schema v2、旧档迁移、书架、存档点） |
+| `js/zip.js` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
 | `js/roleCard.js` | 角色卡（SillyTavern PNG 解析） |
 | `js/modelCapabilities.js` | 模型参数登记表（默认留空） |
 | `js/app.js` | 状态机、出图时机、设置与存档 |
 | `js/demo.js` | 离线演示：`?demo=1` 时注册「内置剧本」与「本地占位图」两个适配器 |
+| `js/sidecar.js` + `js/features.js` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `js/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
 | `eval/demo-smoke.js` | 演示模式冒烟测试（不开浏览器，验证两个假适配器的接口契约） |
-| `tools/` | 可选脚本：版本号同步、单文件打包（不属于运行时代码） |
+| `eval/zip-smoke.js` 等 | ZIP 冒烟与侧车 / 前端特性测试（`npm test` 一并跑） |
+| `sidecar/` | 可选本地服务（Node 进程）：邮件 / 定时主动 / 受限购物支付；只绑 `127.0.0.1` |
+| `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器（不属于运行时代码） |
 
 模块职责、一回合的完整调用链、存储键位与备份格式、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -142,7 +176,7 @@ cd infinite-reading
 
 **可安装 + 可分发（2026-10-10）**：**PWA**（manifest + Service Worker，断网也能打开；缓存名跟着版本号走）、图标生成器（矢量 + 各尺寸 PNG，含 maskable / iOS 主屏）、Windows **一键启动 `启动.bat`**（Python 优先，退回零依赖 PowerShell 服务器）、**Dockerfile + compose**（自托管 / NAS）。
 
-**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，联网自行重试）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
+**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
 
 **Backlog**
 - [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）

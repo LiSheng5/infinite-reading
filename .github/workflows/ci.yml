@@ -6,7 +6,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-# 本项目零依赖、零构建，CI 只做三件事：语法检查、版本号一致性、离线评测。
+# 本项目零依赖、零构建，CI 只做四件事：语法检查、版本号一致性、离线评测、功能单测。
+# Node 版本与 package.json 的 engines 对齐（>=22）：可选本地服务用 node:sqlite。
 jobs:
   check:
     name: 语法 + 版本号
@@ -16,11 +17,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: JS 语法检查
         run: |
-          for f in js/*.js eval/*.js tools/*.mjs sw.js; do
+          for f in js/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
             node --check "$f"
           done
 
@@ -46,7 +47,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # eval/run.js 不发任何网络请求；总分低于基线或校验未全中时会返回非 0
       - name: node eval/run.js
@@ -58,3 +59,7 @@ jobs:
       # 带原图的全量备份全靠手写的 ZIP 编码器：CRC / 偏移写错会「能下载但打不开」，这里用独立实现验一遍
       - name: ZIP 读写冒烟（node eval/zip-smoke.js）
         run: node eval/zip-smoke.js
+
+      # 可选本地服务：单测全离线（虚拟时钟 / 内存 SQLite / 假 fetch），sidecar-smoke 会自启子进程走真实 HTTP
+      - name: 功能单测（调度 / 邮件 / 支付 / 前端客户端 / 侧车冒烟）
+        run: npm run test:features

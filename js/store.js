@@ -225,6 +225,9 @@
       stylePreset: 'anime',   // P4 视觉设定卡之前的兜底画风
       styleCustom: '',
       trigger: 'choice',      // every | choice | manual（第十二轮砍掉 ai 判断）
+      // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
+      // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
+      sidecar: { port: 4319, token: '' },
       // P0 数据安全：备份时间戳（7 天没备份就提醒一次；提醒本身每天最多一次）
       lastBackupAt: 0,
       lastBackupRemindAt: 0,
@@ -260,6 +263,16 @@
     out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;
     out.scribe.every = (raw.scribe && +raw.scribe.every) ? +raw.scribe.every : 10;
     out.scribe.aiTasks = (raw.scribe && 'aiTasks' in raw.scribe) ? !!raw.scribe.aiTasks : true;
+
+    // 可选本地服务：只迁移连接信息（端口 + token）；安全项真源在侧车 config.json
+    out.sidecar = {
+      port: (raw.sidecar && +raw.sidecar.port > 0 && +raw.sidecar.port < 65536)
+        ? Math.floor(+raw.sidecar.port)
+        : d.sidecar.port,
+      token: (raw.sidecar && typeof raw.sidecar.token === 'string')
+        ? raw.sidecar.token.trim().slice(0, 200)
+        : '',
+    };
 
     // P0 数据安全：备份时间戳（幂等校验）
     out.lastBackupAt = (+raw.lastBackupAt > 0) ? +raw.lastBackupAt : 0;

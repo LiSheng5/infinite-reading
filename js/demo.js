@@ -468,11 +468,222 @@
     turnCount: SCRIPT.turns.length,
   };
 
+  /* ==================== 可选本地服务的「内存 mock」（仅演示模式） ====================
+   * 演示模式要保持零外联，不连真实 sidecar；但三个功能的界面链路要能跑通。
+   * 这里把 IR.Sidecar 换成一整套内存实现（同一批方法名），策略仍按保守默认走一遍。
+   * 注意：只改内存，不落盘、不发任何请求。 */
+  function installSidecarMock() {
+    const S = global.IR && global.IR.Sidecar;
+    if (!S) return false;
+
+    const cfg = {
+      port: 4319,
+      email: { enabled: true, provider: 'mock', allowlist: ['buddy@example.com'], dailyLimit: 3, from: 'demo@example.com', hasResendApiKey: false },
+      schedule: { enabled: true, paused: false, quietHours: [{ start: '23:00', end: '08:00' }], dailyCap: 5, missedPolicy: 'SKIP' },
+      payment: {
+        enabled: true, provider: 'mock', currency: 'CNY',
+        perTx: 10000, daily: 20000, monthly: 50000, autoApprove: 500, cooldownMin: 0,
+        merchantAllowlist: [], merchantBlocklist: [], categoryAllowlist: [], categoryBlocklist: [], budgets: {},
+      },
+    };
+    const state = { seq: 0, triggers: [], drafts: [], audit: [], txs: [] };
+    const nid = p => p + String(++state.seq).padStart(3, '0');
+    const clone = o => JSON.parse(JSON.stringify(o));
+    const committed = () => state.txs.filter(t => t.status === 'charged' || t.status === 'awaiting_payment')
+      .reduce((a, t) => a + t.amountCents, 0);
+
+    function auditPush(kind, to, subject, status, code) {
+      state.audit.unshift({ id: nid('a'), at: Date.now(), kind: kind, to: to, subject: subject, status: status, code: code || '', actor: 'user' });
+    }
+
+    S.__mock = true;
+    S.configure = () => ({ port: 4319, token: 'demo' });
+    S.config = () => ({ port: 4319, token: 'demo' });
+    S.isOnline = () => true;
+    S.probe = () => Promise.resolve(true);
+    S.start = () => {};
+    S.stop = () => {};
+    S.on = () => function () {};
+    S.off = () => {};
+    S.startSSE = () => {};
+    S.status = () => ({
+      state: 'online', online: true, port: 4319, hasToken: true,
+      features: { email: cfg.email.enabled, schedule: cfg.schedule.enabled, payment: cfg.payment.enabled },
+      version: 'demo', lastError: '', health: { ok: true },
+    });
+
+    S.getConfig = () => Promise.resolve({ ok: true, config: clone(cfg) });
+    S.putConfig = patch => {
+      for (const k of ['email', 'schedule', 'payment']) {
+        if (patch && patch[k]) Object.assign(cfg[k], patch[k]);
+      }
+      return S.getConfig();
+    };
+
+    S.listTriggers = () => Promise.resolve(clone(state.triggers));
+    S.upsertTrigger = t => {
+      const src = t || {};
+      const spec = clone(src.spec || {});
+      const found = state.triggers.filter(x => x.name === src.name)[0];
+      const rec = found || { id: nid('t'), name: src.name, createdAt: Date.now() };
+      Object.assign(rec, {
+        type: src.type, spec: spec, channel: src.channel || '', prompt: src.prompt || '', reason: src.reason || '',
+        status: (src.source === 'user') ? 'active' : (found ? found.status : 'pending_confirm'),
+        enabled: true,
+        nextAt: src.type === 'once' ? spec.at : (Date.now() + 3600000),
+      });
+      if (!found) state.triggers.push(rec);
+      return Promise.resolve(clone(rec));
+    };
+    S.confirmTrigger = id => {
+      const t = state.triggers.filter(x => x.id === id)[0];
+      if (t) { t.status = 'active'; t.nextAt = Date.now() + 3600000; }
+      return Promise.resolve(t ? clone(t) : null);
+    };
+    S.cancelTrigger = id => {
+      state.triggers = state.triggers.filter(x => x.id !== id);
+      return Promise.resolve({ ok: true, cancelled: true });
+    };
+    S.listPending = () => Promise.resolve([]);
+    S.ackPending = () => Promise.resolve({ ok: true, acked: true });
+    S.pauseAll = paused => { cfg.schedule.paused = paused !== false; return Promise.resolve({ ok: true, paused: cfg.schedule.paused }); };
+
+    S.emailSend = msg => {
+      const m = msg || {};
+      const to = String(m.to || '').toLowerCase();
+      if (!cfg.email.enabled) return Promise.resolve({ ok: false, code: 'EMAIL_DISABLED', message: '邮件功能未开启。' });
+      if (cfg.email.dailyLimit <= 0) return Promise.resolve({ ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '每日上限为 0（默认保守值）。' });
+      if (cfg.email.allowlist.indexOf(to) < 0 && !m.confirm) {
+        const d = { id: nid('d'), at: Date.now(), to: to, subject: m.subject || '', body: m.body || '', status: 'pending' };
+        state.drafts.push(d);
+        auditPush('draft', to, d.subject, 'denied', 'NEED_CONFIRMATION');
+        return Promise.resolve({ ok: false, code: 'NEED_CONFIRMATION', draftId: d.id, message: '不在白名单里，已存成草稿，需要你确认后才发。' });
+      }
+      auditPush('send', to, m.subject || '', 'ok', '');
+      return Promise.resolve({ ok: true, id: nid('m'), provider: 'mock' });
+    };
+    S.emailSentDrafts = () => Promise.resolve(state.drafts.filter(d => d.status === 'pending').map(clone));
+    S.emailSendDraft = id => {
+      const d = state.drafts.filter(x => x.id === id)[0];
+      if (!d) return Promise.resolve({ ok: false, code: 'DRAFT_NOT_FOUND', message: '找不到草稿。' });
+      d.status = 'sent';
+      auditPush('send', d.to, d.subject, 'ok', '');
+      auditPush('confirm', d.to, d.subject, 'ok', '');
+      return Promise.resolve({ ok: true, id: nid('m'), provider: 'mock' });
+    };
+    S.emailDiscardDraft = id => {
+      const d = state.drafts.filter(x => x.id === id)[0];
+      if (d) d.status = 'discarded';
+      return Promise.resolve({ ok: true, discarded: !!d });
+    };
+    S.emailAudit = () => Promise.resolve({ ok: true, audit: clone(state.audit.slice(0, 20)) });
+    S.emailInbox = () => Promise.resolve({ ok: true, messages: [] });
+
+    S.paymentSummary = () => Promise.resolve({
+      ok: true,
+      summary: {
+        enabled: cfg.payment.enabled, provider: cfg.payment.provider, currency: cfg.payment.currency,
+        perTx: cfg.payment.perTx, daily: cfg.payment.daily, monthly: cfg.payment.monthly,
+        autoApprove: cfg.payment.autoApprove, cooldownMin: cfg.payment.cooldownMin,
+        spent: { daily: committed(), monthly: committed(), agent: committed() },
+        remaining: {
+          daily: Math.max(0, cfg.payment.daily - committed()),
+          monthly: Math.max(0, cfg.payment.monthly - committed()),
+          agent: 0,
+        },
+      },
+    });
+    S.paymentPurchase = payload => {
+      const p = payload || {};
+      const amount = Math.floor(Number(p.amountCents) || 0);
+      const detail = { merchant: p.merchant, category: p.category, amountCents: amount, currency: cfg.payment.currency, items: p.items || [] };
+      if (!cfg.payment.enabled) return Promise.resolve({ ok: false, code: 'GATEWAY_DISABLED', message: '支付功能未开启。' });
+      if (amount <= 0) return Promise.resolve({ ok: false, code: 'BAD_AMOUNT', message: '金额必须大于 0。' });
+      if (amount > cfg.payment.perTx) return Promise.resolve({ ok: false, code: 'AMOUNT_EXCEEDS_LIMIT', message: '超过单笔上限。' });
+      if (committed() + amount > cfg.payment.daily) return Promise.resolve({ ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '超过每日上限。' });
+      const tx = {
+        intentId: nid('pi'), agent: p.agent || 'agent', amountCents: amount, currency: cfg.payment.currency,
+        merchant: p.merchant || '', category: p.category || '', items: p.items || [],
+        status: 'pending', code: '', providerRef: '', createdAt: Date.now(),
+      };
+      state.txs.unshift(tx);
+      return S.paymentSummary().then(s => {
+        if (amount <= cfg.payment.autoApprove) {
+          tx.status = 'charged';
+          tx.providerRef = nid('mockpay-');
+          tx.chargedAt = Date.now();
+          return { ok: true, status: 'charged', intentId: tx.intentId, transaction: clone(tx), summary: s.summary, cart: detail };
+        }
+        return { ok: true, status: 'pending', needsApproval: true, intentId: tx.intentId, message: '需要你确认。', cart: detail, summary: s.summary };
+      });
+    };
+    S.paymentApprove = id => {
+      const t = state.txs.filter(x => x.intentId === id)[0];
+      if (!t || t.status !== 'pending') return Promise.resolve({ ok: false, code: 'INTENT_ALREADY_RESOLVED' });
+      t.status = 'charged';
+      t.providerRef = nid('mockpay-');
+      t.chargedAt = Date.now();
+      return Promise.resolve({ ok: true, status: 'charged', transaction: clone(t) });
+    };
+    S.paymentDeny = id => {
+      const t = state.txs.filter(x => x.intentId === id)[0];
+      if (!t || t.status !== 'pending') return Promise.resolve({ ok: false, code: 'INTENT_ALREADY_RESOLVED' });
+      t.status = 'denied';
+      t.code = 'USER_REJECTED';
+      return Promise.resolve({ ok: true, status: 'denied', code: 'USER_REJECTED' });
+    };
+    S.paymentCharge = S.paymentApprove;
+    S.paymentMarkPaid = id => {
+      const t = state.txs.filter(x => x.intentId === id)[0];
+      if (!t) return Promise.resolve({ ok: false, code: 'INTENT_NOT_FOUND' });
+      t.status = 'charged';
+      t.chargedAt = Date.now();
+      return Promise.resolve({ ok: true, status: 'charged' });
+    };
+    S.paymentTransactions = () => Promise.resolve({ ok: true, transactions: clone(state.txs.slice(0, 20)) });
+    S.paymentReceipt = id => {
+      const t = state.txs.filter(x => x.intentId === id)[0];
+      if (!t) return Promise.resolve(null);
+      return Promise.resolve({
+        ok: true,
+        receipt: {
+          transaction: clone(t),
+          text: '无限阅读 · 交易收据（演示）\n单号：' + t.intentId + '\n金额：' + (t.amountCents / 100).toFixed(2) + ' ' + t.currency
+            + '\n商户：' + t.merchant + '\n状态：' + t.status + '\n备注：演示模式下的模拟收据。',
+        },
+      });
+    };
+    S.paymentMandates = () => Promise.resolve({ ok: true, mandates: [] });
+    S.paymentCreateMandate = m => Promise.resolve({ ok: true, mandate: Object.assign({ id: nid('md') }, m || {}) });
+
+    // app.js 有几处直接走 api()：给一个最小路由（只覆盖界面用到的那几个）
+    S.api = (method, pathText) => {
+      const p = String(pathText || '');
+      if (p.indexOf('/api/triggers') === 0) {
+        return S.listTriggers().then(list => ({
+          ok: true,
+          triggers: list,
+          stats: { active: list.filter(t => t.status === 'active').length, pending: 0 },
+        }));
+      }
+      if (p.indexOf('/api/payment/transactions') === 0) return S.paymentTransactions();
+      if (p.indexOf('/api/payment/summary') === 0) return S.paymentSummary();
+      if (p.indexOf('/api/payment/receipt/') === 0) return S.paymentReceipt(decodeURIComponent(p.split('/').pop()));
+      if (p.indexOf('/api/email/audit') === 0) return S.emailAudit();
+      if (p.indexOf('/api/config') === 0) return S.getConfig();
+      return Promise.resolve({ ok: true });
+    };
+
+    return true;
+  }
+
   const ChatProviders = (global.IR && global.IR.ChatProviders) || {};
   ChatProviders['demo'] = { label: '离线演示（内置剧本，无需 Key）', chat: chat };
 
   const ImageProviders = (global.IR && global.IR.ImageProviders) || {};
   ImageProviders['demo-image'] = { label: '离线演示（本地占位图）', generate: generate };
+
+  Demo.installSidecarMock = installSidecarMock;
 
   global.IR = Object.assign(global.IR || {}, {
     ChatProviders: ChatProviders,

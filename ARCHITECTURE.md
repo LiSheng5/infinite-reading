@@ -12,7 +12,7 @@
 
 1. **零构建**：源码必须能被 `<script src>` 直接加载，不能有 import/export、不能需要编译。`file://` 双击也要能跑。
 2. **零依赖**：不引入第三方库，只用浏览器原生 API 与 `fetch`。
-3. **无后端**：没有服务器可藏秘密，也就没有服务端存储——所有状态都在 `IndexedDB`，所以「换 origin 就换数据」。
+3. **前端核心无后端依赖**：前端本身不需要任何服务器——没有服务端存储，所有状态都在 `IndexedDB`，所以「换 origin 就换数据」。邮件 / 定时主动 / 受限购物支付这三项能力由一个**可选的本地旁路服务（sidecar，`sidecar/`）**提供；**缺它则这三项功能关闭**并在界面上明示，其余功能完全不受影响（见 §12）。
 
 ## 2. 模块与命名空间
 
@@ -32,11 +32,14 @@
 | `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` / `buildBackupZip`、`importZipFile` |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
+| `js/sidecar.js` | `IR.Sidecar` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
+| `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `app.js` 注册） | `attach`、`accept`、`drain` |
+| `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → app.js → pwa.js
+providers.js → context.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → app.js → pwa.js
 ```
 
 `storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
@@ -57,11 +60,11 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
        ├─ callAI1(action)
        │    ├─ Context.matchEntityTerms(...)         ← 记下本轮实体词（C-E 启发式留痕）
        │    ├─ Context.assembleAI1(story, action, opts)  ← 拼系统提示词 + 记忆 + 历史 + tools
-       │    ├─ streamAI1 → IR.ChatProviders[...].chat(cfg, messages, hooks)   ← 唯一的对话网络出口
+       │    ├─ streamAI1 → IR.ChatProviders[...].chat(cfg, messages, hooks)   ← 唯一的对话网络出口（带空闲 / 总超时与中断）
        │    ├─ parseAIReply → Context.normalizeAIReply(Context.tolerantJSONParse(text))
        │    └─ 若有 tool_calls → handleToolCalls → applyToolCall
        │         ├─ update_memory  → mergeWorld / 写 userProfile / 落一条 {type:'tool'} 留痕
-       │         ├─ recall_*       → 重发一次（把召回内容作为系统块注入）
+       │         ├─ recall_*       → 重发一次（召回内容并入本轮 user 前缀注入）
        │         └─ request_image  → runToolPaint → painterCompose → assemblePainter
        │                              → 调对话模型（画师子代理）→ enqueuePaint
        ├─ 归档：story.messages.push(user + assistant)、pushNarrationEntry、absorbReply
@@ -128,8 +131,9 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 |---|---|---|
 | **不把 `tool_calls` 写进历史** | `app.js`：`slimReply`、`assistantMessage` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
 | **`reasoning` 不进请求体** | `context.js`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
-| **压缩阈值 70%，保留末 8 条** | `context.js`：`COMPRESS_RATIO`、`DEFAULT_KEEP_MESSAGES`、`planCompression` | 控制长局上下文预算；对话窗口未填时退回条数上限（`DEFAULT_MAX_MESSAGES`） |
-| **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱 |
+| **压缩阈值 70%，保留窗口按 token 自适应** | `context.js`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
+| **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
+| **工具结果按语义分流** | `app.js`：`callAI1` | `recall_*` / `request_image` 调了就注入重发（模型要的信息 / 产物）；`update_memory` / 调度工具仅无正文时重发；重发永不再带工具 |
 | **同轮去重**：工具已出图则跳过时机出图 | `app.js`：`turnPaintedByTool`、`maybeEnqueueImage` | 一回合只画一张 |
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `app.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
 | **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `context.js`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
@@ -141,12 +145,15 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 
 `Context.assembleAI1` 由这几层自上而下拼成（从贵到便宜）：
 
-1. **模式系统提示词** `systemForMode`：剧情 / 对话 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`）。
-2. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
-3. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
-4. **C-E 启发式注入** `matchEntityTerms` + `heuristicBlock`：玩家话里出现世界卡实体词时，按条数上限带回对应条目；无实体词则零成本不注入。
-5. **按需召回**：由 `recall_world_state` / `recall_style_card` 工具触发，客户端以「单次重发」实现。
-6. **最近消息窗口**：保留最近若干条（默认 8），更早的内容在超过 70% 预算时由 `compressStory` 压进摘要栈。
+1. **模式系统提示词** `systemForMode`：剧情 / 对话 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`；对话 / 扮演是「伴读者」定位 + 2~6 句体量锚定，扮演无角色卡时用降级提示词）。
+2. **风格基调 + 故事设定常驻**：`[风格基调]`（≤120 字）与 `[故事设定（常驻）]`（≤400 字摘要）——地基信息不随摘要合并流失。
+3. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
+4. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
+5. **C-E 启发式注入** `matchEntityTerms` + `heuristicBlock`：玩家话里出现世界卡实体词时，按条数上限带回对应条目；无实体词则零成本不注入。
+6. **按需召回**：由 `recall_world_state` / `recall_style_card` 工具触发，客户端以「单次重发」实现。
+7. **最近消息窗口**：已知容量时按 token 动态装（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条；更早的内容在超过 70% 预算时由 `compressStory` 压进摘要栈（组装前先查预算、超了先压再组）。
+
+召回结果、工具回传、启发式与强制注入统一**并入本轮 user 消息前缀**（不插中段 system 块，规避兼容层吞中段 system）。
 
 扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
 
@@ -163,6 +170,8 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 | 入口 | `init()` 检测到演示模式就直接 `startDemo()`（跳过开始页与试画锚定）；顶栏「🎬 演示」与开始页「🎬 离线演示」是进出这个模式的开关 |
 
 推论：**新增功能只要走适配器层，演示模式就自动跟着一起走**。反过来，如果哪天演示跑不通，多半说明有人绕过了适配器层——这是个便宜的一致性检查。
+
+本地服务的三个功能也照这条办：`?demo=1` 下不连真实 sidecar（保持零外联），而是由 `IR.Demo.installSidecarMock()` 把 `IR.Sidecar` 换成一整套**内存实现**（同一批方法名、同样走保守策略），因此「写邮件 / 定时主动 / 代下单」的界面链路在演示模式下也能完整跑一遍。
 
 `eval/demo-smoke.js` 在 Node 里不放浏览器地跑这套契约（18 项），已接入 CI。
 
@@ -205,3 +214,33 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 - `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运（**IndexedDB 也按 origin 隔离**）。
 - 浏览器直连第三方 API 会被 CORS 拦，无法在纯前端层面解决。
 - API Key 明文存 IndexedDB（详见 [`SECURITY.md`](SECURITY.md)）。
+
+## 12. 可选本地服务（sidecar）
+
+**定位**：不是「应用必须有后端」。前端核心照旧纯前端；`sidecar/` 是一个**可选**的本地伴侣进程，只有三项能力靠它：
+
+| 能力 | 为什么必须在侧车 |
+|---|---|
+| 邮件 | 浏览器无法开 SMTP；收件人白名单与每日上限需要**后端硬校验** |
+| 定时主动 | 浏览器定时器只在页面打开时跑；要「重启不丢 + 常驻触发」必须有进程 |
+| 购物支付 | 策略必须在**模型改不到的代码层**强制执行 |
+
+**启动与连接**：
+
+```bash
+node sidecar/server.mjs            # 首次启动会打印 token
+node sidecar/server.mjs --show-token
+```
+
+- 只绑 `127.0.0.1`（局域网不可达），端口默认 `4319`（可用 `IR_SIDECAR_PORT` / `IR_SIDECAR_DATA_DIR` 环境变量覆盖，单测就是这么隔离的）。
+- 除 `/health` 外所有接口都要 `Authorization: Bearer <token>`；`/health` 只回能力布尔位，前端靠它决定「在线 / 离线」。
+- 前端探测失败即降级：三个功能显示「需要启动本地服务」并禁用（设置里三个分区整体灰显），其余功能不受影响。
+- **单进程**：启动时用锁文件 + 端口占用双重检测，重复启动会被拒绝（避免定时触发被跑两遍）。
+
+**存储与真源**：侧车用 `node:sqlite`（`sidecar/data/ir-sidecar.db`）持久化触发器、触发记录、邮件审计与草稿、支付台账与授权范围。**安全项（额度 / 白名单 / 每日上限 / 免打扰时段 / token）的唯一真源是 `sidecar/data/config.json`**，前端设置页只是它的编辑界面（经 `GET/PUT /api/config`），前端本地不保存这些值，模型也没有任何写入通道——这与 SillyTavern（`config.yaml` + `secrets.json`）、Open WebUI（环境变量 + Admin Panel）、LibreChat（`.env` > `yaml` > 面板）三家一致。
+
+**工具通道的取舍**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），但**只在 `chat` / `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效。邮件与支付**不做成模型工具**——它们是高风险副作用动作，一律走「用户显式发起（界面按钮）→ 确认弹窗 → 执行」，模型最多只能在回复里建议。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
+
+**页面关闭时**：侧车到点只把触发**写入待处理队列**（不打扰、不猜）；前端下次打开时按 `SKIP / RUN_ONCE / RUN_ALL` 补跑，补跑时走的是与真实用户消息完全相同的回合链路（合成一条入站消息 → `sendPlayerAction`）。「页面开着」则由 SSE 实时推送 `trigger.fire`。这一处做成了可替换的策略点（见 `scheduler.mjs` 的 `missedPolicy`）。
+
+**测试**：`eval/scheduler-test.js`（虚拟时钟）、`eval/email-test.js`、`eval/payment-test.js`（策略边界）、`eval/sidecar-smoke.js`（真启子进程走 HTTP）、`eval/frontend-smoke.js`（假 fetch 验离线降级与工具门控），全部接入 `npm test`。

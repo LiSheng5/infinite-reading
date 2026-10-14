@@ -130,6 +130,13 @@
     <div id="game-layout" class="game-layout">
       <div id="chat-pane" class="chat-pane">
         <div id="chat-scroll" class="chat-scroll"></div>
+        <!-- 可选本地服务功能入口：只有「对话 / 扮演」模式可见；本地服务没启动时整体禁用 -->
+        <div id="feature-bar" class="feature-bar hidden">
+          <button id="btn-feat-email" class="chip-btn" type="button">✉ 写邮件</button>
+          <button id="btn-feat-schedule" class="chip-btn" type="button">⏰ 定时主动</button>
+          <button id="btn-feat-payment" class="chip-btn" type="button">🛒 代下单</button>
+          <span id="feature-bar-state" class="hint"></span>
+        </div>
         <footer class="composer">
           <div class="input-row">
             <input id="player-input" placeholder="输入你想说的话、想做的事……" autocomplete="off">
@@ -708,6 +715,99 @@
           </div>
         </fieldset>
 
+        <fieldset id="fs-sidecar">
+          <legend>本地服务（可选）</legend>
+          <p class="hint" id="sidecar-state">未启动</p>
+          <div class="grid2">
+            <label>端口<input id="s-sidecar-port" type="number" min="1" max="65535" placeholder="4319"></label>
+            <label>token<input id="s-sidecar-token" type="text" spellcheck="false" placeholder="启动本地服务时终端会打印"></label>
+          </div>
+          <div class="row-inline">
+            <button id="btn-sidecar-probe" class="btn" type="button">重新探测</button>
+            <span class="hint">在项目目录里运行 <code>node sidecar/server.mjs</code> 即可启动。</span>
+          </div>
+          <p class="hint">这是一个<b>可选</b>的本地小服务，只监听 <b>127.0.0.1</b>。没启动时下面三个功能会显示「需要启动本地服务」并保持禁用，其它功能完全不受影响。token 用来防止本机其它程序乱调你的服务。</p>
+        </fieldset>
+
+        <fieldset id="fs-email">
+          <legend>邮件（默认关闭）</legend>
+          <label class="check"><input id="s-email-enabled" type="checkbox"> 启用邮件功能</label>
+          <div class="grid2">
+            <label>发信渠道
+              <select id="s-email-provider">
+                <option value="mock">模拟（只记账，不真的发信）</option>
+                <option value="resend">Resend（HTTP API）</option>
+              </select>
+            </label>
+            <label>每日发送上限（0 = 一封都不发）<input id="s-email-dailylimit" type="number" min="0" step="1"></label>
+          </div>
+          <label>发件人地址<input id="s-email-from" type="text" spellcheck="false" placeholder="例如 me@example.com"></label>
+          <label>Resend API Key（只存在本地服务里；留空表示不改动已保存的 Key）<input id="s-email-resendkey" type="password" spellcheck="false"></label>
+          <label>收件人白名单（每行一个）<textarea id="s-email-allowlist" rows="3" spellcheck="false" placeholder="buddy@example.com"></textarea></label>
+          <p class="hint">白名单由<b>本地服务硬校验</b>：不在名单里的收件人只能先生成草稿，必须你确认后才会发出。所有发送 / 草稿 / 拒绝都会写入审计记录。</p>
+          <details class="panel-block">
+            <summary>邮件审计（最近记录）</summary>
+            <div id="email-audit" class="mono-list"></div>
+          </details>
+        </fieldset>
+
+        <fieldset id="fs-schedule">
+          <legend>定时主动（默认关闭）</legend>
+          <label class="check"><input id="s-sched-enabled" type="checkbox"> 启用定时主动联系</label>
+          <label class="check"><input id="s-sched-paused" type="checkbox"> 一键暂停所有主动行为</label>
+          <div class="grid2">
+            <label>每日主动消息上限（0 = 不限制）<input id="s-sched-dailycap" type="number" min="0" step="1"></label>
+            <label>错过触发时
+              <select id="s-sched-missed">
+                <option value="SKIP">跳过</option>
+                <option value="RUN_ONCE">补一次</option>
+                <option value="RUN_ALL">全部补齐</option>
+              </select>
+            </label>
+          </div>
+          <label>免打扰时段（每行一段，格式 22:00-08:00）<textarea id="s-sched-quiet" rows="2" spellcheck="false" placeholder="23:00-08:00"></textarea></label>
+          <p class="hint">免打扰时段与每日上限只存在本地服务里，<b>模型改不了</b>。调度必须由本地服务常驻；没启动时会显示「调度已暂停：本地服务未启动」。</p>
+          <div class="row-inline">
+            <button id="btn-trigger-refresh" class="mini-btn" type="button">刷新安排</button>
+            <span class="hint" id="trigger-summary"></span>
+          </div>
+          <div id="trigger-list" class="mono-list"></div>
+          <p class="hint">模型可以提议安排，但一律进入「待确认」，需要你在这里点确认才会生效。</p>
+        </fieldset>
+
+        <fieldset id="fs-payment">
+          <legend>购物支付（默认关闭）</legend>
+          <label class="check"><input id="s-pay-enabled" type="checkbox"> 启用代下单功能</label>
+          <div class="grid2">
+            <label>渠道
+              <select id="s-pay-provider">
+                <option value="mock">模拟支付（不真实扣款）</option>
+                <option value="manual-order">仅生成订单（自己手动付款）</option>
+              </select>
+            </label>
+            <label>货币<input id="s-pay-currency" type="text" maxlength="8" placeholder="CNY"></label>
+          </div>
+          <div class="grid2">
+            <label>单笔上限（分，0 = 不放行）<input id="s-pay-pertx" type="number" min="0" step="100"></label>
+            <label>每日上限（分，0 = 不放行）<input id="s-pay-daily" type="number" min="0" step="100"></label>
+          </div>
+          <div class="grid2">
+            <label>每月上限（分，0 = 不放行）<input id="s-pay-monthly" type="number" min="0" step="100"></label>
+            <label>免确认小额阈值（分，0 = 全部要确认）<input id="s-pay-autoapprove" type="number" min="0" step="100"></label>
+          </div>
+          <div class="grid2">
+            <label>冷静期（分钟）<input id="s-pay-cooldown" type="number" min="0" step="1"></label>
+            <label>商户白名单（每行一个，留空 = 不限）<textarea id="s-pay-merchants" rows="2" spellcheck="false"></textarea></label>
+          </div>
+          <label>品类黑名单（每行一个）<textarea id="s-pay-categories" rows="2" spellcheck="false" placeholder="虚拟币"></textarea></label>
+          <p class="hint">策略由<b>本地服务在代码层强制</b>，AI 拿不到任何支付凭证。默认全是 0 = 什么都不放行，请按需设置。<b>风险提示：AI 可能出错，请设置合理额度。</b></p>
+          <div class="row-inline">
+            <button id="btn-pay-refresh" class="mini-btn" type="button">刷新台账</button>
+            <span class="hint" id="pay-summary"></span>
+          </div>
+          <div id="pay-ledger" class="mono-list"></div>
+        </fieldset>
+
         <fieldset>
           <legend>本地存储与备份</legend>
           <p class="hint" id="storage-state"></p>
@@ -767,6 +867,55 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
+  <!-- ========== 写邮件（可选本地服务） ========== -->
+  <div id="modal-email" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>写邮件</h2>
+        <button id="btn-close-email" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" id="email-status"></p>
+        <label>收件人<input id="em-to" type="text" spellcheck="false" placeholder="buddy@example.com"></label>
+        <label>主题<input id="em-subject" type="text"></label>
+        <label>正文<textarea id="em-body" rows="6"></textarea></label>
+        <p class="hint">不在白名单里的收件人只会先生成草稿，需要你确认后才会真正发出。</p>
+        <details class="panel-block">
+          <summary>待确认草稿</summary>
+          <div id="email-drafts" class="mono-list"></div>
+        </details>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-em-send" class="btn primary" type="button">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 代为下单（可选本地服务；策略由网关强制） ========== -->
+  <div id="modal-payment" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>代为下单</h2>
+        <button id="btn-close-payment" class="hud-btn" title="关闭">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" id="pay-status"></p>
+        <div class="grid2">
+          <label>金额（分）<input id="pm-amount" type="number" min="1" step="1" placeholder="例如 1999 = 19.99 元"></label>
+          <label>商户<input id="pm-merchant" type="text" placeholder="例如 某某书店"></label>
+        </div>
+        <div class="grid2">
+          <label>品类<input id="pm-category" type="text" placeholder="例如 图书"></label>
+          <label>商品描述（可选）<input id="pm-items" type="text" placeholder="书名 x1"></label>
+        </div>
+        <div id="pm-result" class="pay-result"></div>
+      </div>
+      <div class="modal-foot">
+        <button id="btn-pm-submit" class="btn primary" type="button">提交购买意图</button>
+      </div>
+    </div>
+  </div>
+
 <script src="js/providers.js?v=0.3.0"></script>
 <script src="js/context.js?v=0.3.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
@@ -778,6 +927,10 @@
 <script src="js/demo.js?v=0.3.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
 <script src="js/zip.js?v=0.3.0"></script>
+<!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
+<script src="js/sidecar.js?v=0.3.0"></script>
+<!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
+<script src="js/features.js?v=0.3.0"></script>
 <script src="js/app.js?v=0.3.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
 <script src="js/pwa.js?v=0.3.0"></script>

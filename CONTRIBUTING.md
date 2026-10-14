@@ -22,9 +22,9 @@ cd infinite-reading
 | 本地服务（推荐） | `npx serve .` 或 `python -m http.server 8000` | 起在 `http://localhost`，界面与线上一致 |
 | npm 脚本 | `npm run serve` | 等价于 `npx serve .` |
 
-> ⚠️ `file://` 和 `http://localhost` 是**两套独立的 localStorage**，开发时固定用其中一种，别来回切。
+> ⚠️ `file://` 和 `http://localhost` 是**两套独立的本地存储（IndexedDB / localStorage 都按 origin 隔离）**，开发时固定用其中一种，别来回切。
 
-Node 只在两处用到（都不是必须的）：跑离线评测 `node eval/run.js`、同步版本号 `node tools/sync-version.mjs`。要求 Node ≥ 18。
+Node 只在可选处用到（都不是必须的）：跑离线评测 `node eval/run.js`、同步版本号 `node tools/sync-version.mjs`、以及可选的本地服务 `sidecar/`（`node sidecar/server.mjs`）。要求 Node ≥ 22（侧车用到 `node:sqlite`，见 `package.json` 的 `engines`）。
 
 ## 二、目录地图
 
@@ -33,14 +33,21 @@ index.html          单页骨架：所有界面区块 + 脚本加载顺序
 css/style.css       全部样式（CSS 变量 + 主题）
 js/providers.js     适配器层：ChatProviders / ImageProviders / VideoProviders(预留)
 js/context.js       上下文组装与压缩：assembleAI1 / assemblePainter / compressStory
-js/store.js         存档层：localStorage 唯一出口、schema 迁移、书架
-js/roleCard.js      SillyTavern V2/V3 PNG 角色卡解析
+js/storage.js       IndexedDB 适配器（唯一碰 IndexedDB 的地方，无 IndexedDB 时退回 localStorage）
+js/store.js         存档层（唯一出口）：内存优先 + 异步落盘、schema 迁移、书架、存档点
 js/modelCapabilities.js  模型参数登记表（默认留空）
+js/roleCard.js      SillyTavern V2/V3 PNG 角色卡解析
 js/demo.js          离线演示（?demo=1）：内置剧本 + 本地占位图两个适配器
+js/zip.js           零依赖手写 ZIP：带原图的全量备份打包 / 解包
+js/sidecar.js       可选本地服务客户端：/health 探测、token、SSE 退避重连
+js/features.js      主动触达的去重与排队（投递回调由 app.js 注册）
 js/app.js           状态机与 UI：回合编排、出图时机、设置、导入导出
 eval/run.js         离线评测（零依赖、不花 API）
 eval/mock-story.js  评测用的 32 回合长局剧本
 eval/demo-smoke.js  演示模式冒烟测试（不开浏览器，验证适配器契约）
+eval/zip-smoke.js   ZIP 读写冒烟（第二套 CRC32 复算 + 手工解析中央目录）
+eval/scheduler-test.js / email-test.js / payment-test.js / sidecar-smoke.js / frontend-smoke.js  侧车与前端特性测试（接入 npm test）
+sidecar/            可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment
 manifest.webmanifest / sw.js / js/pwa.js   PWA：清单、Service Worker、注册
 icons/              应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx）
@@ -76,7 +83,7 @@ node tools/sync-version.mjs --check   # 版本号一致性
 - **零依赖**：不引入第三方 JS 库，不引入构建工具。需要什么就写什么，标准库优先。
 - **不破坏 `file://`**：代码不得依赖模块系统或需要编译的语法，源码要能被 `<script src>` 直接加载。
 - **模块写法**：IIFE + 往全局 `IR` 上挂命名空间（`IR.Context`、`IR.Store`…），新模块照抄现有文件的头尾即可。
-- **加载顺序**：`index.html` 里脚本顺序是 `providers → context → store → modelCapabilities → roleCard → demo → app → pwa`。`app.js` 会立即读取前面所有模块，所以业务模块必须排在它之前；`pwa.js` 是唯一允许排在它之后的（只注册 Service Worker，不碰 `IR`）。
+- **加载顺序**：`index.html` 里脚本顺序是 `providers → context → storage → store → modelCapabilities → roleCard → demo → zip → sidecar → features → app → pwa`。`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`app.js` 会立即读取前面所有模块，所以业务模块必须排在它之前；`pwa.js` 是唯一允许排在它之后的（只注册 Service Worker，不碰 `IR`）。
 - **改了前端资源看不到变化**：先用 DevTools → Application → Service Workers 注销（`sw.js` 会缓存静态资源），别怀疑人生。
 - **渲染安全**：AI 返回的文本一律走 `textContent` / `createTextNode`，**不要**把模型输出拼进 `innerHTML`。
 - **文案**：界面与注释用简体中文，术语保持一致（如「世界状态卡」「画师子代理」「存档点」）。
@@ -87,7 +94,7 @@ node tools/sync-version.mjs --check   # 版本号一致性
 `VERSION` 是唯一真源，不要手改 `index.html` 里的 `?v=` 或 `package.json` 的 `version`：
 
 ```bash
-echo 0.2.1 > VERSION        # 1) 改真源
+echo 0.3.1 > VERSION        # 1) 改真源
 node tools/sync-version.mjs # 2) 同步到 index.html / package.json
 ```
 

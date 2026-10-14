@@ -23,6 +23,15 @@
 
   const PROBE_TIMEOUT_MS = 15000;
 
+  /* P0-1（2026-10-14 评审）：正式对话请求的超时参数。
+   * 此前只有「测试连接」有 15s 超时，正式请求无 signal——SSE 挂起（服务端僵死、
+   * 代理断流不关连接）会把上游的 busy 标志永久卡死，玩家只能刷新丢回合。
+   * ① 流式：空闲超时，两个 chunk 之间最多 CHAT_IDLE_TIMEOUT_MS；
+   * ② 两种形态都有总上限 CHAT_TOTAL_TIMEOUT_MS；
+   * ③ AbortController 经 hooks.onAborter 交给调用方，「停止」按钮可随时中断。 */
+  const CHAT_IDLE_TIMEOUT_MS = 60000;
+  const CHAT_TOTAL_TIMEOUT_MS = 600000;
+
   function trimBase(cfg) { return String((cfg && cfg.baseUrl) || '').trim().replace(/\/+$/, ''); }
 
   // 配置格式自检（不联网）：返回人话描述，'' = 没问题
@@ -225,67 +234,93 @@
         const wantStream = !!(hooks && hooks.onDelta);
         if (wantStream) body.stream = true;
 
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!res.ok) throw new Error(await readError(res));
-
-        // 非流式
-        if (!wantStream || !res.body) {
-          const data = await res.json();
-          const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
-          const text = msg.content || '';
-          emitReasoning(hooks, reasoningOf(msg));   // 思考链：非流式一次性给全
-          const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
-          if (calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(calls);
-          if (hooks && hooks.onDelta) hooks.onDelta(text);
-          return text;
+        // P0-1（2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
+        // AbortController 经 hooks.onAborter 交给调用方（app.js 的「停止」按钮）；
+        // 流式每收到一个 chunk 重置空闲计时；两种形态都有总上限兜底。
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        if (ctrl && hooks && typeof hooks.onAborter === 'function') {
+          try { hooks.onAborter(ctrl); } catch (_) {}
         }
+        let idleTimer = null, totalTimer = null;
+        const bumpIdle = () => {
+          if (!ctrl || !wantStream) return;
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(() => ctrl.abort(), CHAT_IDLE_TIMEOUT_MS);
+        };
+        if (ctrl) {
+          totalTimer = setTimeout(() => ctrl.abort(), CHAT_TOTAL_TIMEOUT_MS);
+          bumpIdle();
+        }
+        let res;
+        try {
+          res = await fetch(url, {
+            method: 'POST', headers, body: JSON.stringify(body),
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (!res.ok) throw new Error(await readError(res));
 
-        // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示（§4.5）
-        let full = '';
-        const callBuf = [];
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        const handleLine = line => {
-          const t = line.trim();
-          if (!t.startsWith('data:')) return;
-          const payload = t.slice(5).trim();
-          if (payload === '[DONE]') return;
-          try {
-            const j = JSON.parse(payload);
-            const delta = j.choices && j.choices[0] && j.choices[0].delta;
-            const rpiece = reasoningOf(delta);
-            if (rpiece) emitReasoning(hooks, rpiece);
-            const piece = delta && delta.content ? delta.content : '';
-            if (piece) { full += piece; hooks.onDelta(piece); }
-            const calls = delta && delta.tool_calls;
-            if (Array.isArray(calls)) {
-              for (const c of calls) {
-                const i = Number.isInteger(c.index) ? c.index : 0;
-                const acc = callBuf[i] || (callBuf[i] = { id: '', type: 'function', function: { name: '', arguments: '' } });
-                if (c.id) acc.id = c.id;
-                if (c.function) {
-                  if (c.function.name) acc.function.name += c.function.name;
-                  if (c.function.arguments) acc.function.arguments += c.function.arguments;
+          // 非流式
+          if (!wantStream || !res.body) {
+            const data = await res.json();
+            const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
+            const text = msg.content || '';
+            emitReasoning(hooks, reasoningOf(msg));   // 思考链：非流式一次性给全
+            const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+            if (calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(calls);
+            if (hooks && hooks.onDelta) hooks.onDelta(text);
+            return text;
+          }
+
+          // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示（§4.5）
+          let full = '';
+          const callBuf = [];
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          const handleLine = line => {
+            const t = line.trim();
+            if (!t.startsWith('data:')) return;
+            const payload = t.slice(5).trim();
+            if (payload === '[DONE]') return;
+            try {
+              const j = JSON.parse(payload);
+              const delta = j.choices && j.choices[0] && j.choices[0].delta;
+              const rpiece = reasoningOf(delta);
+              if (rpiece) emitReasoning(hooks, rpiece);
+              const piece = delta && delta.content ? delta.content : '';
+              if (piece) { full += piece; hooks.onDelta(piece); }
+              const calls = delta && delta.tool_calls;
+              if (Array.isArray(calls)) {
+                for (const c of calls) {
+                  const i = Number.isInteger(c.index) ? c.index : 0;
+                  const acc = callBuf[i] || (callBuf[i] = { id: '', type: 'function', function: { name: '', arguments: '' } });
+                  if (c.id) acc.id = c.id;
+                  if (c.function) {
+                    if (c.function.name) acc.function.name += c.function.name;
+                    if (c.function.arguments) acc.function.arguments += c.function.arguments;
+                  }
                 }
               }
-            }
-          } catch (_) { /* 忽略无法解析的行 */ }
-        };
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() || '';
-          for (const line of lines) handleLine(line);
+            } catch (_) { /* 忽略无法解析的行 */ }
+          };
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            bumpIdle();   // P0-1：收到 chunk，重置空闲计时
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop() || '';
+            for (const line of lines) handleLine(line);
+          }
+          // 收尾：多字节残留 decode 冲掉；最后一行没带换行也要处理（否则尾部 JSON 被吃掉 → 解析失败）
+          buf += decoder.decode();
+          if (buf.trim()) handleLine(buf);
+          const done_calls = callBuf.filter(Boolean);
+          if (done_calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(done_calls);
+          return full;
+        } finally {
+          if (ctrl) { clearTimeout(idleTimer); clearTimeout(totalTimer); }
         }
-        // 收尾：多字节残留 decode 冲掉；最后一行没带换行也要处理（否则尾部 JSON 被吃掉 → 解析失败）
-        buf += decoder.decode();
-        if (buf.trim()) handleLine(buf);
-        const done_calls = callBuf.filter(Boolean);
-        if (done_calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(done_calls);
-        return full;
       },
     },
   };

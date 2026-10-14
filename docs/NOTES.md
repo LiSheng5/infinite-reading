@@ -96,7 +96,7 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 1. **没有完全一样的对手**。赛道三层：`SillyTavern`（34.1k★，通用 LLM 前端）、`InfiPlot`（380★，云端实时全生成）、`Open Dungeon`（233★，本地一体化）。本项目站在交汇空白区：**零部署纯前端 + 用户主导的透明画师 + 可审计记忆**。
 2. **最值得学**：InfiPlot（预生成 / 成本颗粒度 / 分享格式）、Open Dungeon（立绘参考图做一致性）、NeverEndingQuest（按调用点路由模型 / 编年史摘要 / 压缩缓存）。
 3. **护城河不在代码**，在：一致性闭环（世界卡 ↔ 视觉卡 ↔ 图生图）做到最好、`.irstory.json` 格式生态、中文硬核文档与品牌。
-4. **立刻做**：① 定许可证（现无 LICENSE）；② v0.3「图生图参考」。
+4. **立刻做**：① 定许可证（✅ 已定 **MIT**，见 §3.2）；② v0.3「图生图参考」。
 5. **许可警示**：SillyTavern / InfiPlot 是 AGPL-3.0，**只借鉴思路不可抄代码**；Open Dungeon / MUI Gamebook 是 MIT、AI4VisualNovel 是 Apache-2.0。
 
 ### 2.2 竞品坐标系
@@ -124,7 +124,7 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 | 记忆 | **世界卡（自报 + 校对 + 可改）+ 召回 + 压缩** | WorldInfo（手动） | 未披露 | 滚动摘要 | 最深 |
 | 推进模式 | **剧情 / 对话 / 扮演 三模式** | 聊天 + VN Mode | 单一剧情 | 单一扮演 | D&D |
 | 生态 | ST 卡兼容 + `.irstory.json` | 34.1k★ 生态 | `.infiplot` | 无 | 社区模块 |
-| 许可 | **未定 ⚠️** | AGPL ⚠️ | AGPL ⚠️ | MIT | Fair Source |
+| 许可 | **MIT** ✅ | AGPL ⚠️ | AGPL ⚠️ | MIT | Fair Source |
 
 ### 2.4 独特资产（别浪费）
 
@@ -148,7 +148,7 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 ### 2.6 护城河与风险
 
 - 护城河分层：体验层（一致性闭环）★★★ / 格式层（`.irstory.json` 等）★★★ / 内容层 ★★ / 品牌层 ★★ / 技术层 ★★（易抄，当获客漏斗）。
-- 风险：① **许可红线**（AGPL / Fair Source 只借鉴）；② ST 扩展生态与 InfiPlot roadmap 可能夹击，需快速迭代；③ localStorage 容量硬伤 → 迁 IndexedDB；④ 浏览器直连 CORS + Key 明文需在文档明示；⑤ 内容边界（参考 Open Dungeon 争议）。
+- 风险：① **许可红线**（AGPL / Fair Source 只借鉴）；② ST 扩展生态与 InfiPlot roadmap 可能夹击，需快速迭代；③ ~~localStorage 容量硬伤~~（**已迁 IndexedDB，v0.3.0**）；④ 浏览器直连 CORS + Key 明文需在文档明示；⑤ 内容边界（参考 Open Dungeon 争议）。
 
 ---
 
@@ -158,13 +158,13 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 
 | 项 | 现状 | 影响 |
 |---|---|---|
-| 版本控制 | 无 `.git` | 第一步 `git init` |
-| 许可证 | **无 LICENSE** | **必须先定** |
+| 版本控制 | 已 `git init` 并推送到 GitHub | 已解决 |
+| 许可证 | **MIT**（已定） | 已解决 |
 | 构建 | 无 node_modules、无 bundler；`<script src>` 挂 `IR.*` | **单文件内联极易实现**；也是卖点 |
 | 字体 | 引 Google Fonts + jsDelivr | **国内加载不通**，需本地化 |
-| 存储 | localStorage（5MB） | 桌面壳 origin 变化会导致数据不互通 |
-| 版本号 | `css?v=` 与 `js?v=` 不一致 | 需统一 |
-| 测试 | `eval/run.js`（Node 零依赖） | 天然适合进 CI |
+| 存储 | IndexedDB（v0.3.0 起，淘汰 localStorage 约 5MB 上限） | 桌面壳 origin 变化仍会导致数据不互通 |
+| 版本号 | `VERSION` 单一真源（`tools/sync-version.mjs` 同步 `?v=` 与 `package.json`） | 已统一 |
+| 测试 | `eval/run.js` + 演示 / ZIP / 侧车等 Node 零依赖测试 | 已接入 CI（`npm test`） |
 
 ### 3.2 开源基座（第一步）
 
@@ -172,7 +172,7 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 **第三方资源许可**：霞鹜文楷 OFL-1.1；Google Fonts 各款逐字体确认——打包需随包分发字体与许可，写进 `THIRD-PARTY-NOTICES.md`。
 **最小仓库骨架**：`LICENSE`、`README.md`（补徽章 / Demo / 截图）、`README.en.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、`CHANGELOG.md`、`THIRD-PARTY-NOTICES.md`、`ARCHITECTURE.md`、`.gitignore`、`.github/`（ISSUE / PR 模板 + `ci.yml` + `release.yml`）、`docs/`。
 `.gitignore`：`node_modules/`、`*.log`、`dist/`、`.codebuddy/`、`.vscode/`。
-**版本号统一**：`VERSION` 文件（`0.2.0`），`?v=` 由发布脚本注入，打 tag `v0.2.0`。
+**版本号统一**：`VERSION` 文件（当前 `0.3.0`），`?v=` 由 `tools/sync-version.mjs` 注入到 `index.html` / `package.json`，打 tag `v0.3.0`。
 
 ### 3.3 降低门槛：五级路径
 
@@ -214,8 +214,8 @@ choice 新增：选项 2~3 个、≤12 字、用具体动作开头、代价前�
 ### 3.6 坑与红线
 
 1. Google Fonts 国内不通 → 字体必须本地化。
-2. `localStorage` 三处不一致（网页版 / 单文件 `file://` / 桌面 `tauri://`）→ 每版都要显眼提供导出导入迁移。
-3. **Key 安全**：现 Key 明文存 localStorage；桌面版用系统凭据库，网页版至少 README 明示 + 支持「不保存」。
+2. 本地存储（IndexedDB）三处不一致（网页版 / 单文件 `file://` / 桌面 `tauri://`）→ 每版都要显眼提供导出导入迁移。
+3. **Key 安全**：现 Key 明文存 IndexedDB；桌面版用系统凭据库，网页版至少 README 明示 + 支持「不保存」。
 4. **不要把打包当生态**：安装包解决「进门」，生态靠内容格式 + 贡献体验。
 5. 不要为打包破坏「零构建」：`tools/` 脚本全部可选，`package.json` 只作开发工具。
 6. 许可证一致性：定了 MIT 后续收紧只对新代码生效；第三方资源许可随包分发。

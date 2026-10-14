@@ -252,6 +252,19 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   color: var(--on-accent);
   box-shadow: 0 8px 20px -12px var(--accent);
 }
+
+/* P0-1：busy 期间发送按钮变身「停止」（红色，语义一目了然） */
+.btn.primary.stop {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+.btn.primary.stop:hover {
+  background: #a93226;
+  border-color: #a93226;
+  color: #fff;
+  box-shadow: none;
+}
 /* 次级按钮：透明底 + 细边，比主按钮安静一档 */
 .btn.ghost { background: transparent; border-style: solid; color: var(--ink-dim); }
 .btn.ghost:hover { background: var(--accent-soft); }
@@ -1265,3 +1278,78 @@ label input.inline-num {
   .modal-foot { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
   .shelf-wrap { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 }
+
+/* ==================== 本地服务（sidecar）：状态 / 入口条 / 主动消息标注 ==================== */
+.sidecar-state { font-family: var(--font-body); font-size: 13.5px; letter-spacing: 0.02em; }
+.sidecar-state.on { color: var(--accent); }
+.sidecar-state.off { color: var(--ink-dim); }
+
+/* 本地服务没启动 / 没填 token 时，三个功能分区整体灰显（只是视觉降级，不禁用输入） */
+fieldset.feature-off { opacity: .55; }
+fieldset.feature-off legend { color: var(--ink-dim); }
+
+.feature-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--paper-2);
+}
+.chip-btn {
+  border: 1px solid var(--line);
+  background: var(--btn-bg);
+  color: var(--btn-ink);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, transform .15s;
+}
+.chip-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent-line); transform: translateY(-1px); }
+.chip-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 主动消息：样式沿用玩家气泡，左侧加一条强调线 + 一行轻量标注 */
+.bubble-agent { border-left: 2px solid var(--accent-line); }
+.bubble-agent .agent-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+/* 触发安排 / 台账：一行一条，右侧放操作 */
+.trigger-row, .ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.trigger-row .t-main, .ledger-row .t-main { min-width: 0; }
+.trigger-row .t-name { font-weight: 600; color: var(--ink); }
+.trigger-row .t-meta, .ledger-row .t-meta { font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+.trigger-row .t-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.status-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  margin-left: 6px;
+}
+.status-pill.pending { border-color: var(--accent-line); color: var(--accent); }
+.status-pill.denied { border-color: var(--danger); color: var(--danger); }
+
+.pay-result { font-size: 13.5px; line-height: 1.8; color: var(--ink); }
+.pay-result .ok { color: var(--accent); }
+.pay-result .warn { color: var(--danger); }
+

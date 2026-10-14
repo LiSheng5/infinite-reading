@@ -1,6 +1,6 @@
 # 第三方资源与许可
 
-本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`js/` 下的代码均为本项目原创，只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。
+本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`js/` 下的代码均为本项目原创，只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。**可选本地服务（`sidecar/`）同样零第三方依赖**，只用 Node 内置能力（`node:http`、`node:sqlite`、`node:fs`、`node:crypto`）。
 
 唯一的第三方资源是**字体**。下面是完整清单，以及分发时需要随附的许可。
 
@@ -42,5 +42,25 @@
 
 - **SillyTavern 角色卡 V2/V3**：本项目只实现对 PNG 内嵌 JSON 元数据（`tEXt: chara` / `iTXt: ccv3`）的**格式兼容解析**，未复制其任何代码（SillyTavern 为 AGPL-3.0）。
 - 竞品（SillyTavern、InfiPlot、Open Dungeon、NeverEndingQuest 等）仅作**思路参考**，未引入其源码，相关调研见 `docs/NOTES.md`。
+
+## 四、可选本地服务（sidecar）
+
+`sidecar/` 是**可选**的本地伴侣进程，**本期零第三方依赖**，只使用 Node 内置模块：
+
+| 用途 | 使用的东西 | 位置 |
+|---|---|---|
+| HTTP 服务 | `node:http`（内置） | `sidecar/server.mjs` |
+| 存储 | `node:sqlite`（内置，Node ≥ 22.5） | `sidecar/db.mjs` |
+| 文件 / 随机数 / 哈希比较 | `node:fs` / `node:crypto`（内置） | `sidecar/config.mjs` 等 |
+| 时区与夏令时 | `Intl.DateTimeFormat`（内置） | `sidecar/cron.mjs` |
+| 邮件渠道 | 本期只实现 `mock` 与 `resend`（用内置 `fetch` 调 Resend 的 HTTP API） | `sidecar/email.mjs` |
+
+**计划中、尚未引入**的依赖（引入前会先在此登记并征求确认）：
+
+| 依赖 | 用途 | 许可 | 状态 |
+|---|---|---|---|
+| `nodemailer` | SMTP 发信（浏览器与 `fetch` 都做不到） | MIT | 计划中（邮件二期） |
+
+如上表所示，本项目刻意**不引入** `express`、`croner` 等常见库：HTTP 路由只有十几个、cron 解析只有几十行，自写更符合本项目的零依赖取舍。
 
 如你认为本清单有遗漏或不准确之处，欢迎提 Issue 指出。

@@ -18,5 +18,8 @@ desktop.ini
 *.tmp
 *.bak
 
+# 本地旁路服务（sidecar）运行时数据：config.json / token / SQLite / 锁文件
+sidecar/data/
+
 # 本地视觉预览草稿（文件头已注明「验证完可删除」）
 _note-preview.html

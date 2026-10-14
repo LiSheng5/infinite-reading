@@ -112,6 +112,33 @@
   let exportTargetId = null;
   let anchor = null;             // 画风锚定状态（P4：{ onDone, batch, tried, candidates, pickedIdx, card, busy }）
 
+  /* ---------- P0-1（2026-10-14 评审）：请求中断 ----------
+   * providers.chat 经 hooks.onAborter 回填当前请求的 AbortController；
+   * 发送按钮在 busy 期间变成「停止」，点了就 abort 当前请求并跳过所有自动重试。 */
+  let chatAbortCtrl = null;
+  let stopRequested = false;
+
+  function requestChatStop() {
+    if (!busy || stopRequested) return;
+    stopRequested = true;
+    if (chatAbortCtrl) { try { chatAbortCtrl.abort(); } catch (_) {} }
+    toast('正在停止……');
+  }
+  // 用户主动停止导致的请求失败：跳过「流式失败转非流式」「tools 400 降级」等自动重试
+  function isStopError(e) {
+    return stopRequested && (e && (e.name === 'AbortError' || /abort/i.test((e && e.message) || '')));
+  }
+  // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
+  function setSendButtonsBusy(on) {
+    for (const id of ['#btn-send', '#btn-immersive-send']) {
+      const btn = $(id);
+      if (!btn) continue;
+      btn.disabled = false;
+      btn.textContent = on ? '停止' : '发送';
+      btn.classList.toggle('stop', !!on);
+    }
+  }
+
   /* ================= 小工具 ================= */
 
   let toastTimer = null;
@@ -1087,6 +1114,8 @@
     syncSettingsToForm();
     renderStoragePanel();
     $('#modal-settings').classList.remove('hidden');
+    renderSidecarStatus();
+    if (sidecarReady()) loadFeatureConfig();   // 打开设置时刷新一次安全项（真源在侧车）
   }
 
   function isZipFile(file) {
@@ -1842,6 +1871,11 @@
     } else if (name === 'recall_world_state') summary = '查阅了世界状态卡';
     else if (name === 'recall_style_card') summary = '查阅了视觉设定卡';
     else if (name === 'request_image') summary = '请画师作画';
+    else if (name === 'schedule_once') summary = '安排了一次主动联系（待确认）';
+    else if (name === 'schedule_heartbeat') summary = '安排了定时主动联系（待确认）';
+    else if (name === 'schedule_cron') summary = '安排了日历主动联系（待确认）';
+    else if (name === 'list_triggers') summary = '查看了主动联系安排';
+    else if (name === 'cancel_trigger') summary = '取消了主动联系安排';
     story.log.push({ type: 'tool', tool: name, summary, ts: Date.now() });
   }
 
@@ -2173,8 +2207,10 @@
         },
         onReasoning(piece) { if (hooks && hooks.onReasoning) hooks.onReasoning(piece); },
         onToolCalls(calls) { if (hooks && hooks.onToolCalls) hooks.onToolCalls(calls); },
+        onAborter(ctrl) { chatAbortCtrl = ctrl; },   // P0-1：「停止」按钮中断当前请求
       });
     } catch (e) {
+      if (isStopError(e)) throw e;   // P0-1：用户主动停止——不再降级重试，直接上抛
       if (cfg.tools && /HTTP 400/.test((e && e.message) || '')) {
         if (isToolsRejection(e)) {
           rememberNoTools(cfg);
@@ -2184,8 +2220,11 @@
         delete cfg2.tools;
         return streamAI1(adapter, cfg2, messages, hooks);
       }
-      // 流式失败时兜底走一次非流式（思考链照常经 hooks 回传）
-      text = await adapter.chat(cfg, messages, hooks && hooks.onReasoning ? { onReasoning: hooks.onReasoning } : null);
+      // 流式失败时兜底走一次非流式（思考链照常经 hooks 回传；中断能力照常接上）
+      const fbHooks = (hooks && hooks.onReasoning)
+        ? { onReasoning: hooks.onReasoning, onAborter(ctrl) { chatAbortCtrl = ctrl; } }
+        : { onAborter(ctrl) { chatAbortCtrl = ctrl; } };
+      text = await adapter.chat(cfg, messages, fbHooks);
       streamed = false;
     }
     return { text, streamed };
@@ -2212,6 +2251,635 @@
     return { scene: scene, alt: alt, prompt: prompt, painterErr: painterErr };
   }
 
+  /* ================= 可选本地服务（sidecar）：调度工具与主动消息 ================= */
+
+  // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时才下发
+  function scheduleToolsAvailable() {
+    const S = IR.Sidecar;
+    if (!S || typeof S.isOnline !== 'function' || !S.isOnline()) return false;
+    const st = S.status();
+    return !!(st.features && st.features.schedule && st.hasToken);
+  }
+
+  // 接受 ISO 8601 字符串或时间戳（秒 / 毫秒）；解析不出来返回 0
+  function parseWhen(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return Math.floor(v);
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return 0;
+    if (/^\d{9,}$/.test(s)) {
+      const n = parseInt(s, 10);
+      return n < 1e11 ? n * 1000 : n;          // 10 位当秒处理
+    }
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  function describeTrigger(t) {
+    const spec = (t && t.spec) || {};
+    if (t.type === 'once') return '一次 · ' + fmtTime(spec.at);
+    if (t.type === 'interval') return '每 ' + Math.round((spec.everyMs || 0) / 60000) + ' 分钟';
+    if (t.type === 'cron') return spec.expr + ' @ ' + (spec.tz || 'UTC');
+    return t.type;
+  }
+
+  // 执行调度工具：一律提交给侧车，且一律是「待确认」——模型可以安排，但不能让主动行为自己生效
+  async function runScheduleTool(name, args) {
+    const S = IR.Sidecar;
+    const a = args || {};
+    if (!S || !S.isOnline()) {
+      return '[调度失败] 本地服务没有在运行。请告诉用户：先在「设置 → 本地服务」里启动它，否则没法定时主动联系。';
+    }
+    try {
+      if (name === 'schedule_once') {
+        const at = parseWhen(a.at);
+        if (!at) return '[调度失败] at 需要 ISO 8601 时间，例如 2026-10-11T09:00:00+08:00。';
+        const t = await S.upsertTrigger({
+          name: a.name, type: 'once', spec: { at: at },
+          prompt: a.prompt, reason: a.reason, channel: story ? story.id : '', source: 'model',
+        });
+        return '[已提交，待用户确认] 一次性安排「' + t.name + '」定在 ' + fmtTime(at) + '；用户确认前不会触发。';
+      }
+      if (name === 'schedule_heartbeat') {
+        const mins = Math.max(1, Math.floor(Number(a.everyMinutes) || 0));
+        const t = await S.upsertTrigger({
+          name: a.name, type: 'interval', spec: { everyMs: mins * 60000 },
+          prompt: a.prompt, reason: a.reason, channel: story ? story.id : '', source: 'model',
+        });
+        return '[已提交，待用户确认] 每隔 ' + mins + ' 分钟的安排「' + t.name + '」已创建；用户确认前不会触发。';
+      }
+      if (name === 'schedule_cron') {
+        const t = await S.upsertTrigger({
+          name: a.name, type: 'cron', spec: { expr: a.expr, tz: a.tz || '' },
+          prompt: a.prompt, reason: a.reason, channel: story ? story.id : '', source: 'model',
+        });
+        return '[已提交，待用户确认] 日历安排「' + t.name + '」：' + a.expr + '（' + (a.tz || 'UTC') + '）。';
+      }
+      if (name === 'list_triggers') {
+        const list = await S.listTriggers();
+        if (!list.length) return '[现有安排] 目前没有任何主动联系安排。';
+        return '[现有安排]\n' + list.map(t =>
+          '- ' + t.name + '（' + t.status + ' · ' + describeTrigger(t) + '）原因：' + (t.reason || '未写')
+          + (t.channel ? '［仅当前会话］' : '')).join('\n');
+      }
+      if (name === 'cancel_trigger') {
+        const want = String(a.name || '').trim();
+        const list = await S.listTriggers();
+        const hit = list.filter(t => t.name === want)[0];
+        if (!hit) return '[取消失败] 没有叫「' + want + '」的安排（可以先 list_triggers 看看）。';
+        await S.cancelTrigger(hit.id);
+        if (typeof renderTriggerList === 'function') { try { renderTriggerList(); } catch (_) {} }
+        return '[已取消] 安排「' + hit.name + '」已删除。';
+      }
+      return '[调度失败] 未知的调度动作：' + name;
+    } catch (e) {
+      return '[调度失败] ' + ((e && e.message) || e);
+    }
+  }
+
+  /* ---- 侧车连接状态与主动消息投递 ---- */
+
+  function sidecarReady() {
+    const S = IR.Sidecar;
+    return !!(S && typeof S.isOnline === 'function' && S.isOnline() && S.status().hasToken);
+  }
+
+  function sidecarOffHint() {
+    return '需要启动本地服务：在项目目录运行 node sidecar/server.mjs，再把终端打印的 token 填到「设置 → 本地服务」。';
+  }
+
+  function renderSidecarStatus() {
+    const S = IR.Sidecar;
+    const st = S ? S.status() : { online: false, hasToken: false, features: {}, lastError: '' };
+    const el = $('#sidecar-state');
+    if (el) {
+      el.textContent = st.online
+        ? (st.hasToken ? '本地服务在线' : '本地服务在线（还没填 token）')
+        : ('未启动' + (st.lastError ? '：' + st.lastError : ''));
+      el.className = 'sidecar-state ' + (st.online ? 'on' : 'off');
+    }
+    // 三个功能分区：没连上 / 没 token 就整体灰显（安全项真源在侧车，读不到就别给假象）
+    const ready = !!(st.online && st.hasToken);
+    for (const id of ['#fs-email', '#fs-schedule', '#fs-payment']) {
+      const fs = $(id);
+      if (fs) fs.classList.toggle('feature-off', !ready);
+    }
+    renderFeatureBar();
+  }
+
+  // 局内功能入口条：只有「对话 / 扮演」模式可见；本地服务没启动时整体禁用
+  function renderFeatureBar() {
+    const bar = $('#feature-bar');
+    if (!bar) return;
+    if (!story || (story.mode !== 'chat' && story.mode !== 'rp')) { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    const S = IR.Sidecar;
+    const st = S ? S.status() : { online: false, hasToken: false, features: {} };
+    const ready = !!(st.online && st.hasToken);
+    for (const sel of ['#btn-feat-email', '#btn-feat-schedule', '#btn-feat-payment']) {
+      const b = $(sel);
+      if (!b) continue;
+      b.disabled = !ready;
+      b.title = ready ? '' : sidecarOffHint();
+    }
+    const state = $('#feature-bar-state');
+    if (state) {
+      if (!st.online) state.textContent = '（本地服务未启动，这三个功能已禁用）';
+      else if (!st.hasToken) state.textContent = '（还没填 token）';
+      else {
+        const names = { email: '邮件', schedule: '定时主动', payment: '购物支付' };
+        const on = ['email', 'schedule', 'payment'].filter(k => st.features && st.features[k]).map(k => names[k]);
+        state.textContent = on.length ? ('已开启：' + on.join('、')) : '（都还没在设置里开启）';
+      }
+    }
+  }
+
+  function yuan(cents) { return (Math.floor(Number(cents) || 0) / 100).toFixed(2) + ' 元'; }
+
+  function irDownloadText(filename, text) {
+    try {
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
+  }
+
+  // 页面打开 / 重新上线时补跑：把侧车里排队的触达捞回来（页面关着时侧车只入队，不打扰）
+  async function pullProactive() {
+    const S = IR.Sidecar;
+    const F = IR.Features;
+    if (!S || !F || !S.isOnline() || !S.status().hasToken) return;
+    try {
+      const list = await S.listPending();
+      for (const p of list) {
+        if (p.channel && story && p.channel !== story.id) continue;   // 指定了别的会话就跳过
+        F.accept({ fireId: p.id, prompt: p.prompt, name: p.name, reason: p.reason });
+      }
+    } catch (_) { /* 拉不到就等下一次 */ }
+  }
+
+  async function ackProactive(fireId) {
+    const S = IR.Sidecar;
+    if (!S || !fireId) return;
+    try { await S.ackPending(fireId); } catch (_) {}
+  }
+
+  function initFeatures() {
+    const F = IR.Features;
+    if (!F) return;
+    F.attach({
+      // 什么时候能把主动消息送进回合流程：不忙、有故事、是对话 / 扮演模式、且在线
+      canDeliver: () => !busy && !!story && (story.mode === 'chat' || story.mode === 'rp')
+        && (typeof navigator === 'undefined' || navigator.onLine !== false),
+      deliver: async payload => {
+        if (!payload || !payload.prompt) return;
+        await sendPlayerAction(payload.prompt, false, {
+          kind: 'agent',
+          triggerName: payload.name || '',
+          reason: payload.reason || '',
+          fireId: payload.fireId || '',
+        });
+      },
+    });
+  }
+
+  function initSidecar() {
+    const S = IR.Sidecar;
+    if (!S) return;
+    S.configure(settings.sidecar || {});
+    S.on('state', () => {
+      renderSidecarStatus();
+      if (S.isOnline() && S.status().hasToken) { pullProactive(); loadFeatureConfig(); }
+    });
+    S.on('fire', payload => { if (IR.Features) IR.Features.accept(payload); });
+    S.on('changed', () => { if (typeof renderTriggerList === 'function') { try { renderTriggerList(); } catch (_) {} } });
+    S.start();
+    renderSidecarStatus();
+    pullProactive();
+    if (sidecarReady()) loadFeatureConfig();
+  }
+
+  /* ---- 设置分区：安全项读写（真源在侧车 config.json，这里只是编辑界面） ---- */
+
+  async function loadFeatureConfig() {
+    if (!sidecarReady()) { renderSidecarStatus(); return; }
+    try {
+      const r = await IR.Sidecar.getConfig();
+      const c = (r && r.config) || {};
+      const set = (sel, v) => { const el = $(sel); if (el) el.value = (v === undefined || v === null) ? '' : v; };
+      const chk = (sel, v) => { const el = $(sel); if (el) el.checked = !!v; };
+
+      chk('#s-email-enabled', c.email.enabled);
+      set('#s-email-provider', c.email.provider);
+      set('#s-email-dailylimit', c.email.dailyLimit);
+      set('#s-email-from', c.email.from);
+      set('#s-email-allowlist', (c.email.allowlist || []).join('\n'));
+      const keyEl = $('#s-email-resendkey');
+      if (keyEl) { keyEl.value = ''; keyEl.placeholder = c.email.hasResendApiKey ? '已保存（留空表示不改动）' : '未设置'; }
+
+      chk('#s-sched-enabled', c.schedule.enabled);
+      chk('#s-sched-paused', c.schedule.paused);
+      set('#s-sched-dailycap', c.schedule.dailyCap);
+      set('#s-sched-missed', c.schedule.missedPolicy);
+      set('#s-sched-quiet', (c.schedule.quietHours || []).map(h => h.start + '-' + h.end).join('\n'));
+
+      chk('#s-pay-enabled', c.payment.enabled);
+      set('#s-pay-provider', c.payment.provider);
+      set('#s-pay-currency', c.payment.currency);
+      set('#s-pay-pertx', c.payment.perTx);
+      set('#s-pay-daily', c.payment.daily);
+      set('#s-pay-monthly', c.payment.monthly);
+      set('#s-pay-autoapprove', c.payment.autoApprove);
+      set('#s-pay-cooldown', c.payment.cooldownMin);
+      set('#s-pay-merchants', (c.payment.merchantAllowlist || []).join('\n'));
+      set('#s-pay-categories', (c.payment.categoryBlocklist || []).join('\n'));
+
+      renderTriggerList();
+      renderEmailAudit();
+      renderPayLedger();
+    } catch (e) {
+      toast('读取本地服务配置失败：' + ((e && e.message) || e), true, true);
+    }
+  }
+
+  async function saveFeatureConfig() {
+    if (!sidecarReady()) return;
+    const lines = sel => { const el = $(sel); return el ? el.value.split('\n').map(s => s.trim()).filter(Boolean) : []; };
+    const num = sel => { const el = $(sel); return el ? (Math.max(0, Math.floor(Number(el.value) || 0))) : 0; };
+    const quiet = [];
+    const qel = $('#s-sched-quiet');
+    if (qel) {
+      for (const line of qel.value.split('\n')) {
+        const m = /^\s*(\d{1,2}:\d{2})\s*(?:-|~|到|至)\s*(\d{1,2}:\d{2})\s*$/.exec(line);
+        if (m) quiet.push({ start: m[1], end: m[2] });
+      }
+    }
+    const patch = {
+      email: {
+        enabled: $('#s-email-enabled').checked,
+        provider: $('#s-email-provider').value,
+        from: $('#s-email-from').value.trim(),
+        dailyLimit: num('#s-email-dailylimit'),
+        allowlist: lines('#s-email-allowlist'),
+      },
+      schedule: {
+        enabled: $('#s-sched-enabled').checked,
+        paused: $('#s-sched-paused').checked,
+        dailyCap: num('#s-sched-dailycap'),
+        missedPolicy: $('#s-sched-missed').value,
+        quietHours: quiet,
+      },
+      payment: {
+        enabled: $('#s-pay-enabled').checked,
+        provider: $('#s-pay-provider').value,
+        currency: ($('#s-pay-currency').value.trim() || 'CNY'),
+        perTx: num('#s-pay-pertx'),
+        daily: num('#s-pay-daily'),
+        monthly: num('#s-pay-monthly'),
+        autoApprove: num('#s-pay-autoapprove'),
+        cooldownMin: num('#s-pay-cooldown'),
+        merchantAllowlist: lines('#s-pay-merchants'),
+        categoryBlocklist: lines('#s-pay-categories'),
+      },
+    };
+    const key = $('#s-email-resendkey').value.trim();
+    if (key) patch.email.resendApiKey = key;
+    try {
+      await IR.Sidecar.putConfig(patch);
+      $('#s-email-resendkey').value = '';
+      toast('功能设置已写入本地服务');
+      renderSidecarStatus();
+      renderTriggerList();
+    } catch (e) {
+      toast('写入本地服务失败：' + ((e && e.message) || e), true, true);
+    }
+  }
+
+  /* ---- 主动联系安排 ---- */
+
+  async function renderTriggerList() {
+    const box = $('#trigger-list');
+    if (!box) return;
+    const sum = $('#trigger-summary');
+    if (!sidecarReady()) {
+      box.textContent = sidecarOffHint();
+      if (sum) sum.textContent = '调度已暂停：本地服务未启动';
+      return;
+    }
+    try {
+      const r = await IR.Sidecar.api('GET', '/api/triggers');
+      const list = (r && r.triggers) || [];
+      const st = (r && r.stats) || {};
+      if (sum) sum.textContent = '共 ' + list.length + ' 个安排 · 生效 ' + (st.active || 0) + ' · 待处理 ' + (st.pending || 0) + ' 条';
+      box.innerHTML = '';
+      if (!list.length) {
+        const d = document.createElement('div');
+        d.className = 'hint';
+        d.textContent = '还没有任何安排。';
+        box.appendChild(d);
+        return;
+      }
+      for (const t of list) {
+        const row = document.createElement('div');
+        row.className = 'trigger-row';
+        const main = document.createElement('div');
+        main.className = 't-main';
+        const name = document.createElement('div');
+        name.className = 't-name';
+        name.textContent = t.name;
+        const pill = document.createElement('span');
+        pill.className = 'status-pill' + (t.status === 'pending_confirm' ? ' pending' : '');
+        pill.textContent = t.status === 'pending_confirm' ? '待确认' : (t.status === 'active' ? '生效中' : t.status);
+        name.appendChild(pill);
+        const meta = document.createElement('div');
+        meta.className = 't-meta';
+        meta.textContent = describeTrigger(t) + ' · 原因：' + (t.reason || '未写')
+          + (t.nextAt ? ' · 下次 ' + fmtTime(t.nextAt) : '') + (t.channel ? ' · 仅该会话' : '');
+        main.appendChild(name);
+        main.appendChild(meta);
+        row.appendChild(main);
+
+        const acts = document.createElement('div');
+        acts.className = 't-actions';
+        if (t.status === 'pending_confirm') {
+          const ok = document.createElement('button');
+          ok.className = 'mini-btn';
+          ok.textContent = '确认';
+          ok.onclick = async () => {
+            try { await IR.Sidecar.confirmTrigger(t.id); toast('已生效'); renderTriggerList(); }
+            catch (e) { toast('确认失败：' + ((e && e.message) || e), true); }
+          };
+          acts.appendChild(ok);
+        }
+        const del = document.createElement('button');
+        del.className = 'mini-btn';
+        del.textContent = '取消';
+        del.onclick = async () => {
+          try { await IR.Sidecar.cancelTrigger(t.id); toast('已取消'); renderTriggerList(); }
+          catch (e) { toast('取消失败：' + ((e && e.message) || e), true); }
+        };
+        acts.appendChild(del);
+        row.appendChild(acts);
+        box.appendChild(row);
+      }
+    } catch (e) {
+      box.textContent = '读取安排失败：' + ((e && e.message) || e);
+    }
+  }
+
+  /* ---- 邮件 ---- */
+
+  async function renderEmailAudit() {
+    const box = $('#email-audit');
+    if (!box) return;
+    if (!sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
+    try {
+      const r = await IR.Sidecar.emailAudit(20);
+      const list = (r && r.audit) || [];
+      box.innerHTML = '';
+      if (!list.length) { box.textContent = '还没有邮件记录。'; return; }
+      const KIND = { send: '发送', draft: '草稿', confirm: '确认' };
+      for (const a of list) {
+        const d = document.createElement('div');
+        d.className = 'mono-line';
+        d.textContent = fmtTime(a.at) + ' · ' + (KIND[a.kind] || a.kind) + ' → ' + a.to
+          + (a.subject ? '（' + a.subject + '）' : '') + ' · ' + (a.status === 'ok' ? '成功' : '拒绝')
+          + (a.code ? ' / ' + a.code : '');
+        box.appendChild(d);
+      }
+    } catch (_) { box.textContent = '读取审计失败。'; }
+  }
+
+  async function renderEmailDrafts() {
+    const box = $('#email-drafts');
+    if (!box) return;
+    if (!sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
+    try {
+      const list = await IR.Sidecar.emailSentDrafts();
+      box.innerHTML = '';
+      if (!list.length) { box.textContent = '没有待确认的草稿。'; return; }
+      for (const d of list) {
+        const row = document.createElement('div');
+        row.className = 'trigger-row';
+        const main = document.createElement('div');
+        main.className = 't-main';
+        const to = document.createElement('div');
+        to.className = 't-name';
+        to.textContent = d.to;
+        const meta = document.createElement('div');
+        meta.className = 't-meta';
+        meta.textContent = (d.subject || '（无主题）') + ' · ' + fmtTime(d.at);
+        main.appendChild(to);
+        main.appendChild(meta);
+        row.appendChild(main);
+
+        const acts = document.createElement('div');
+        acts.className = 't-actions';
+        const send = document.createElement('button');
+        send.className = 'mini-btn';
+        send.textContent = '确认发送';
+        send.onclick = async () => {
+          const ok = await irConfirm('确认真的寄出这封邮件？\n\n收件人：' + d.to + '\n主题：' + (d.subject || '（无）'), { title: '确认发送邮件', okText: '发送' });
+          if (!ok) return;
+          try {
+            const r = await IR.Sidecar.emailSendDraft(d.id);
+            toast(r && r.ok ? '已发送' : ('没发出：' + ((r && (r.message || r.code)) || '未知原因')), !(r && r.ok));
+            renderEmailDrafts();
+            renderEmailAudit();
+          } catch (e) { toast('发送失败：' + ((e && e.message) || e), true); }
+        };
+        const del = document.createElement('button');
+        del.className = 'mini-btn';
+        del.textContent = '丢弃';
+        del.onclick = async () => {
+          try { await IR.Sidecar.emailDiscardDraft(d.id); renderEmailDrafts(); } catch (_) {}
+        };
+        acts.appendChild(send);
+        acts.appendChild(del);
+        row.appendChild(acts);
+        box.appendChild(row);
+      }
+    } catch (_) { box.textContent = '读取草稿失败。'; }
+  }
+
+  function openEmailModal() {
+    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    const st = IR.Sidecar.status();
+    const el = $('#email-status');
+    if (el) {
+      el.textContent = (st.features && st.features.email)
+        ? '邮件功能已开启。不在白名单里的收件人只会先存成草稿。'
+        : '邮件功能还没开启：请先在「设置 → 邮件」里启用，并设置白名单与每日上限。';
+    }
+    $('#modal-email').classList.remove('hidden');
+    renderEmailDrafts();
+  }
+
+  async function doEmailSend() {
+    const to = $('#em-to').value.trim();
+    const subject = $('#em-subject').value.trim();
+    const body = $('#em-body').value;
+    if (!to) { toast('先填收件人', true); return; }
+    try {
+      let r = await IR.Sidecar.emailSend({ to: to, subject: subject, body: body });
+      if (r && r.code === 'NEED_CONFIRMATION') {
+        const ok = await irConfirm(
+          '这个收件人不在白名单里，已先存成草稿。\n\n收件人：' + to + '\n\n确认后才会真的寄出。',
+          { title: '需要你确认', okText: '确认发送' }
+        );
+        if (!ok) { toast('已留作草稿，未发送'); renderEmailDrafts(); renderEmailAudit(); return; }
+        r = await IR.Sidecar.emailSendDraft(r.draftId);
+      }
+      if (r && r.ok) {
+        toast('已发送');
+        $('#em-subject').value = '';
+        $('#em-body').value = '';
+      } else {
+        toast('没发出：' + ((r && (r.message || r.code)) || '未知原因'), true, true);
+      }
+      renderEmailDrafts();
+      renderEmailAudit();
+    } catch (e) {
+      toast('发送失败：' + ((e && e.message) || e), true, true);
+    }
+  }
+
+  /* ---- 购物支付 ---- */
+
+  async function renderPayLedger() {
+    const box = $('#pay-ledger');
+    const sum = $('#pay-summary');
+    if (!box) return;
+    if (!sidecarReady()) { box.textContent = sidecarOffHint(); if (sum) sum.textContent = ''; return; }
+    try {
+      const r = await IR.Sidecar.paymentTransactions(20);
+      const list = (r && r.transactions) || [];
+      const s = await IR.Sidecar.paymentSummary('');
+      if (sum && s && s.summary) {
+        sum.textContent = '今日已用 ' + yuan(s.summary.spent.daily) + ' · 本月 ' + yuan(s.summary.spent.monthly)
+          + ' · 每日剩余 ' + yuan(s.summary.remaining.daily);
+      }
+      box.innerHTML = '';
+      if (!list.length) {
+        const d = document.createElement('div');
+        d.className = 'hint';
+        d.textContent = '还没有交易记录。';
+        box.appendChild(d);
+        return;
+      }
+      for (const t of list) {
+        const row = document.createElement('div');
+        row.className = 'ledger-row';
+        const main = document.createElement('div');
+        main.className = 't-main';
+        const head = document.createElement('div');
+        head.className = 't-name';
+        head.textContent = yuan(t.amountCents) + ' · ' + (t.merchant || '（未填商户）');
+        const pill = document.createElement('span');
+        pill.className = 'status-pill' + (t.status === 'denied' ? ' denied' : (t.status === 'pending' ? ' pending' : ''));
+        pill.textContent = t.status + (t.code ? ' / ' + t.code : '');
+        head.appendChild(pill);
+        const meta = document.createElement('div');
+        meta.className = 't-meta';
+        meta.textContent = (t.agent || '（未指定）') + ' · ' + fmtTime(t.createdAt) + (t.providerRef ? ' · ' + t.providerRef : '');
+        main.appendChild(head);
+        main.appendChild(meta);
+        row.appendChild(main);
+
+        const acts = document.createElement('div');
+        acts.className = 't-actions';
+        const rec = document.createElement('button');
+        rec.className = 'mini-btn';
+        rec.textContent = '收据';
+        rec.onclick = async () => {
+          try {
+            const rr = await IR.Sidecar.paymentReceipt(t.intentId);
+            if (rr && rr.receipt) irDownloadText('收据-' + t.intentId + '.txt', rr.receipt.text);
+          } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
+        };
+        acts.appendChild(rec);
+        if (t.status === 'awaiting_payment') {
+          const paid = document.createElement('button');
+          paid.className = 'mini-btn';
+          paid.textContent = '我已支付';
+          paid.onclick = async () => {
+            const ok = await irConfirm('确认你已经在微信 / 支付宝里手动付好款了？', { title: '标记已支付', okText: '已支付' });
+            if (!ok) return;
+            try { await IR.Sidecar.paymentMarkPaid(t.intentId); toast('已标记为已支付'); renderPayLedger(); }
+            catch (e) { toast('操作失败：' + ((e && e.message) || e), true); }
+          };
+          acts.appendChild(paid);
+        }
+        row.appendChild(acts);
+        box.appendChild(row);
+      }
+    } catch (_) { box.textContent = '读取台账失败。'; }
+  }
+
+  function openPaymentModal() {
+    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    const st = IR.Sidecar.status();
+    const el = $('#pay-status');
+    if (el) {
+      el.textContent = (st.features && st.features.payment)
+        ? '支付功能已开启。策略由本地服务在代码层强制，AI 拿不到任何支付凭证。'
+        : '支付功能还没开启：请先在「设置 → 购物支付」里启用并设置额度（默认全是 0，什么都不放行）。';
+    }
+    $('#pm-result').textContent = '';
+    $('#modal-payment').classList.remove('hidden');
+  }
+
+  async function doPaymentSubmit() {
+    const amountCents = Math.floor(Number($('#pm-amount').value) || 0);
+    const merchant = $('#pm-merchant').value.trim();
+    const category = $('#pm-category').value.trim();
+    const itemsText = $('#pm-items').value.trim();
+    const out = $('#pm-result');
+    if (amountCents <= 0) { toast('先填金额（单位：分，例如 1999 = 19.99 元）', true); return; }
+    try {
+      const r = await IR.Sidecar.paymentPurchase({
+        amountCents: amountCents, merchant: merchant, category: category,
+        agent: 'agent', items: itemsText ? [{ name: itemsText }] : [],
+      });
+      if (!r || !r.ok) {
+        out.textContent = '没有放行：' + ((r && (r.message || r.code)) || '未知原因');
+        toast('这一笔没有放行' + (r && r.code ? '（' + r.code + '）' : ''), true, true);
+        renderPayLedger();
+        return;
+      }
+      if (r.needsApproval) {
+        const rem = (r.summary && r.summary.remaining) || {};
+        const lines = [
+          '需要你确认这一笔：',
+          '',
+          '金额：' + yuan(amountCents),
+          '商户：' + (merchant || '（未填）'),
+          '品类：' + (category || '（未填）'),
+        ];
+        if (itemsText) lines.push('商品：' + itemsText);
+        lines.push('', '每日剩余：' + yuan(rem.daily || 0) + ' · 每月剩余：' + yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+        const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
+        const rr = ok ? await IR.Sidecar.paymentApprove(r.intentId) : await IR.Sidecar.paymentDeny(r.intentId);
+        out.textContent = ok
+          ? ((rr && rr.ok) ? ('已放行（' + (rr.status || 'charged') + '）') : ('未完成：' + ((rr && (rr.message || rr.code)) || '')))
+          : '已拒绝这一笔。';
+        toast(ok ? '已确认' : '已拒绝', !ok);
+      } else if (r.status === 'awaiting_payment') {
+        out.textContent = (r.order && r.order.payHint) || '已生成订单，请手动付款后回来点「我已支付」。';
+        toast('已生成订单：请手动付款');
+      } else {
+        out.textContent = '已放行（' + (r.status || 'charged') + '）。';
+        toast('已放行');
+      }
+      renderPayLedger();
+    } catch (e) {
+      toast('提交失败：' + ((e && e.message) || e), true, true);
+    }
+  }
+
   // 执行一轮里的工具调用：留痕 + 副作用（写记忆 / 转画师出图）；返回给重发用的回传块
   async function handleToolCalls(calls) {
     const feedback = [];
@@ -2230,6 +2898,8 @@
         }
       } else if (c.name === 'update_memory') {
         feedback.push('[记忆已更新]\n' + ((c.args && c.args.text) || '世界卡 / 关系已写入'));
+      } else if (IR.Context.isScheduleTool(c.name)) {
+        feedback.push(await runScheduleTool(c.name, c.args));
       }
     }
     renderChat();
@@ -2266,12 +2936,26 @@
 
     const toolsOn = opts.tools !== false && !opts.recall
       && settings.toolsEnabled !== 'off' && !noToolsFor(cfg);
+    // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
+    const schedTools = toolsOn && scheduleToolsAvailable();
     const asmOpts = Object.assign({}, opts);
-    if (toolsOn) asmOpts.tools = IR.Context.TOOL_NAMES_AI1;
+    if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(story.mode, { schedule: schedTools });
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
+    asmOpts.contextWindow = chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
+    // P1-5（2026-10-14）：组装前先查预算，超了就地用本地摘要先压再组——此前是「先组后压」
+    //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
+    // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
+    try {
+      const cw = asmOpts.contextWindow;
+      if (cw > 0 && IR.Context.estimateContextTokens(story, playerAction, asmOpts) > Math.floor(cw * IR.Context.COMPRESS_RATIO)) {
+        IR.Context.compressStory(story, { summarize: IR.Context.localSummarize, contextWindow: cw });
+      }
+    } catch (_) { /* 压缩失败不拦回合：最坏按原样发 */ }
     const messages = IR.Context.assembleAI1(story, playerAction, asmOpts);
-    const cfgTools = toolsOn ? Object.assign({}, cfg, { tools: IR.Context.TOOLS_AI1 }) : cfg;
+    const cfgTools = toolsOn
+      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(story.mode, { schedule: schedTools }) })
+      : cfg;
 
     let streamedCalls = [];
     let reasoning = '';
@@ -2283,30 +2967,51 @@
     // 两路都算：流式 tool_calls 与回包里的 tool_calls
     let calls = streamedCalls.concat(toolList(reply1.tool_calls));
     // 同名同参去重（流式与回包可能重复上报），再按每轮上限裁剪（§4.5）
-    calls = calls.filter((c, i) => calls.findIndex(x => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args)) === i)
-      .slice(0, IR.Context.MAX_TOOL_CALLS_PER_TURN);
+    calls = calls.filter((c, i) => calls.findIndex(x => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args)) === i);
+    // P2-10（2026-10-14）：超出上限的调用不再静默丢弃——留痕让玩家可见，重发时也告知模型
+    const droppedCalls = calls.slice(IR.Context.MAX_TOOL_CALLS_PER_TURN);
+    if (droppedCalls.length) {
+      pushLog({ type: 'tool', tool: 'limit', summary: '已达本轮工具上限，未执行：' + droppedCalls.map(c => c.name).join('、') });
+    }
+    calls = calls.slice(0, IR.Context.MAX_TOOL_CALLS_PER_TURN);
     reply1.tool_calls = [];   // 已经处理过：避免 absorbReply 再记一次留痕
 
     const effect = calls.length ? await handleToolCalls(calls) : { recallScopes: [], feedback: [] };
 
-    // 没写正文就转去调工具（含「JSON 写到一半被工具调用截断」）→ 注入召回内容 / 工具结果后重发一次，重发不再带工具
+    /* P0-2（2026-10-14）：「写了正文 + 调了工具」不再是工具结果的死角。
+     * 此前仅当 noProse 才重发注入——流式下 content 与 tool_calls 同包出现完全可能：
+     * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）；
+     * request_image 出了图但正文无法衔接。按工具语义分流：
+     *  - recall_* / request_image：模型需要的信息 / 产物 → 调了就注入重发；
+     *  - update_memory / schedule_*：fire-and-forget 的事后动作 → 仅 noProse 时重发（原行为）。
+     * 重发永不带工具（§4.5，结构上防循环）；重发不可用而第一版有正文时回退第一版。 */
     const noProse = !reply1.narration || (reply1.parseFailed && reply1.looksJson);
-    if (toolsOn && calls.length && noProse) {
-      reasoning = '';   // 纯工具回合的思考链不对应最终旁白，丢掉
+    const needsFeedback = effect.recallScopes.length > 0 || calls.some(c => c.name === 'request_image');
+    if (toolsOn && calls.length && (noProse || needsFeedback)) {
+      if (noProse) reasoning = '';   // 纯工具回合的思考链不对应最终旁白，丢掉
       // 重发沿用本轮组装选项（含 R13 画像），但不下发工具清单
-      const secondOpts = Object.assign({}, asmOpts, { recall: effect.recallScopes, inject: effect.feedback });
+      const injects = effect.feedback.slice();
+      if (droppedCalls.length) {
+        injects.push('[提示] 以下调用已达本轮上限、未执行：' + droppedCalls.map(c => c.name).join('、') + '，当作没有这回事，别在正文里提它们的结果。');
+      }
+      const secondOpts = Object.assign({}, asmOpts, { recall: effect.recallScopes, inject: injects });
       delete secondOpts.tools;
       const second = await streamAI1(adapter, cfg,
         IR.Context.assembleAI1(story, playerAction, secondOpts),
         { onReasoning(piece) { reasoning += piece; if (live) live.reasoning = reasoning; updateLiveReasoning(); } });
       const reply2 = parseAIReply(second.text);
+      const ok2 = !!(reply2.narration || reply2.choices.length);
+      if (!ok2 && !noProse) {
+        // 重发失败但第一版正文可用：第一版没白写，别用占位提示丢给玩家
+        return { reply: reply1, streamed: first.streamed, reasoning: reasoning };
+      }
       if (reply2.parseFailed && reply2.looksJson) {
         return {
           reply: Object.assign({}, reply2, { narration: '（模型这轮没给出可解析的回复，点「↻ 重试」或再说一句。）' }),
           streamed: second.streamed, reasoning: reasoning,
         };
       }
-      if (reply2.narration || reply2.choices.length) return { reply: reply2, streamed: second.streamed, reasoning: reasoning };
+      if (ok2) return { reply: reply2, streamed: second.streamed, reasoning: reasoning };
       return {
         reply: Object.assign({}, reply2, { narration: '（模型只调用了工具却没写正文，点「↻ 重试」再来一次。）' }),
         streamed: second.streamed,
@@ -2323,18 +3028,22 @@
     return { reply: reply1, streamed: first.streamed, reasoning: reasoning };
   }
 
-  async function sendPlayerAction(action, isChoice) {
+  // meta.kind === 'agent'：这条是「模型主动找你」（来自调度触发），不是玩家输入
+  async function sendPlayerAction(action, isChoice, meta) {
     if (busy || !story) return;
     action = String(action || '').trim();
     if (!action) return;
     if (offlineBlocked('这条消息')) return;
+    const agentMsg = !!(meta && meta.kind === 'agent');
     busy = true;
+    stopRequested = false; chatAbortCtrl = null;   // P0-1：每回合复位停止标记
     lastActionWasChoice = !!isChoice;
     currentChoices = [];
-    $('#btn-send').disabled = true;
-    $('#btn-immersive-send').disabled = true;
+    setSendButtonsBusy(true);   // P0-1：busy 期间发送按钮变身「停止」
 
-    pushLog({ type: isChoice ? 'choice' : 'player', text: action });
+    pushLog(agentMsg
+      ? { type: 'agent', text: action, trigger: meta.triggerName || '', reason: meta.reason || '', fireId: meta.fireId || '' }
+      : { type: isChoice ? 'choice' : 'player', text: action });
     renderChat();
 
     try {
@@ -2353,17 +3062,23 @@
       renderChat();
       maybeEnqueueImage(reply, false);
       await postTurn();
+      if (agentMsg && meta.fireId) await ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
       live = null;
-      toast(netErrHint(e), true, true);
-      story.log.push({ type: 'narration', text: '（AI 走神了，点「↻ 重试」或再试一次吧。）', versions: [], ts: Date.now() });
+      if (isStopError(e)) {   // P0-1：玩家主动停止——不算故障，不弹错误提示
+        story.log.push({ type: 'narration', text: '（已停止。点「↻ 重试」或再试一次。）', versions: [], ts: Date.now() });
+      } else {
+        toast(netErrHint(e), true, true);
+        story.log.push({ type: 'narration', text: '（AI 走神了，点「↻ 重试」或再试一次吧。）', versions: [], ts: Date.now() });
+      }
       renderChat();
     } finally {
       busy = false;
+      stopRequested = false; chatAbortCtrl = null;
       live = null; liveEl = null;
-      $('#btn-send').disabled = false;
-      $('#btn-immersive-send').disabled = false;
+      setSendButtonsBusy(false);
       renderChat();
+      if (IR.Features) IR.Features.drain();   // 忙完了，看看排队的主动消息能不能送
     }
   }
 
@@ -2382,17 +3097,21 @@
   }
 
   // 开局第一幕：让 AI1 主动给出开场旁白与选项（不记录为玩家行动）
+  // P2-11（2026-10-14）：实际请求与存档此前是两句不同的话，retryLast 会以存档版重发、与首发不一致——统一成常量
+  const OPENING_ACTION = '（故事开场。请描写第一幕，把玩家带进场景。）';
+
   async function runOpening() {
     if (busy || !story) return;
     busy = true;
-    $('#btn-send').disabled = true;
+    stopRequested = false; chatAbortCtrl = null;   // P0-1
+    setSendButtonsBusy(true);
     try {
-      const res = await callAI1('（故事开场。请描写第一幕，把玩家带进场景。）', { includePremise: true });
+      const res = await callAI1(OPENING_ACTION, { includePremise: true });
       const reply = res.reply;
       story.turn += 1;
       story.lastSceneSummary = reply.scene_summary || '';
       story.messages.push(
-        { role: 'user', content: IR.Context.playerContent(story.premise, '（故事开场，请给出第一幕）', { includePremise: true }) },
+        { role: 'user', content: IR.Context.playerContent(story.premise, OPENING_ACTION, { includePremise: true }) },
         assistantMessage(reply, res.reasoning),
       );
       pushNarrationEntry(reply.narration, res.reasoning);
@@ -2407,13 +3126,18 @@
       saveAll();
     } catch (e) {
       live = null;
-      toast(netErrHint(e), true, true);
-      story.log.push({ type: 'narration', text: '（AI 走神了，输入任意内容开始故事。）', versions: [], ts: Date.now() });
+      if (isStopError(e)) {
+        story.log.push({ type: 'narration', text: '（已停止。输入任意内容开始故事。）', versions: [], ts: Date.now() });
+      } else {
+        toast(netErrHint(e), true, true);
+        story.log.push({ type: 'narration', text: '（AI 走神了，输入任意内容开始故事。）', versions: [], ts: Date.now() });
+      }
       renderChat();
     } finally {
       busy = false;
+      stopRequested = false; chatAbortCtrl = null;
       live = null; liveEl = null;
-      $('#btn-send').disabled = false;
+      setSendButtonsBusy(false);
       renderChat();
     }
   }
@@ -2478,8 +3202,9 @@
     const removed = msgs.splice(ai - 1, 2); // 暂时移除最后的 [user, assistant]
 
     busy = true;
+    stopRequested = false; chatAbortCtrl = null;   // P0-1
     currentChoices = [];
-    $('#btn-send').disabled = true;
+    setSendButtonsBusy(true);
     renderChat();
     try {
       const res = await callAI1(action.text + '\n（请换一种不同的发展，给出不同的走向）');
@@ -2495,13 +3220,15 @@
       renderChat();
       await postTurn();
     } catch (e) {
-      msgs.splice(ai - 1, 0, ...removed); // 还原
-      toast(netErrHint(e), true, true);
+      msgs.splice(ai - 1, 0, ...removed); // 还原（含主动停止：旧的一对必须放回去）
+      if (isStopError(e)) toast('已停止');
+      else toast(netErrHint(e), true, true);
       renderChat();
     } finally {
       busy = false;
+      stopRequested = false; chatAbortCtrl = null;
       live = null; liveEl = null;
-      $('#btn-send').disabled = false;
+      setSendButtonsBusy(false);
       renderChat();
     }
   }
@@ -2621,6 +3348,7 @@
           if (name === 'recall_recent_plot') wantPlot = true;
         }
       },
+      onAborter(ctrl) { chatAbortCtrl = ctrl; },   // P0-1：画师子代理的请求同样可被「停止」中断
     };
     const useTools = !!opts.tools && settings.toolsEnabled !== 'off';
     const cfg2 = useTools ? Object.assign({}, cfg, { tools: [IR.Context.RECALL_RECENT_PLOT_TOOL] }) : cfg;
@@ -3385,6 +4113,7 @@
     }
 
     updateImmersiveText();
+    renderFeatureBar();
     scrollChatBottom();
   }
 
@@ -3437,6 +4166,23 @@
         note.textContent = '（这张已被重画版替代，画面面板显示新版）';
         d.appendChild(note);
       }
+      return d;
+    }
+
+    // 模型主动联系（调度触发）：样式同玩家气泡，另加一行轻量标注「谁 / 何时 / 为何找你」
+    if (e.type === 'agent') {
+      const d = document.createElement('div');
+      d.className = 'bubble bubble-player bubble-agent';
+      const tag = document.createElement('div');
+      tag.className = 'agent-note';
+      tag.textContent = '💠 AI 主动找你'
+        + (e.trigger ? '（' + e.trigger + '）' : '')
+        + (e.reason ? ' · ' + e.reason : '')
+        + (e.ts ? ' · ' + fmtTime(e.ts) : '');
+      d.appendChild(tag);
+      const body = document.createElement('div');
+      body.textContent = e.text || '';
+      d.appendChild(body);
       return d;
     }
 
@@ -3613,6 +4359,10 @@
   /* ================= 设置界面 ================= */
 
   function syncSettingsToForm() {
+    // 可选本地服务：这里只同步「怎么连它」（端口 + token）；额度 / 白名单等安全项由侧车 config.json 提供
+    const sc = settings.sidecar || {};
+    if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || 4319;
+    if ($('#s-sidecar-token')) $('#s-sidecar-token').value = sc.token || '';
     $('#s-chat-base').value = settings.chat.baseUrl;
     $('#s-chat-model').value = settings.chat.model;
     $('#s-chat-key').value = settings.chat.apiKey;
@@ -3675,6 +4425,12 @@
   }
 
   function applyFormToSettings() {
+    // 连接信息写回前端设置；安全项（额度 / 白名单）不在这里，走 saveFeatureConfig → 侧车
+    settings.sidecar = {
+      port: Number(($('#s-sidecar-port') || {}).value) || 4319,
+      token: (($('#s-sidecar-token') || {}).value || '').trim(),
+    };
+    if (IR.Sidecar) IR.Sidecar.configure(settings.sidecar);
     settings.chat.provider = 'openai-compatible';
     settings.chat.baseUrl = $('#s-chat-base').value.trim();
     settings.chat.model = $('#s-chat-model').value.trim();
@@ -4118,17 +4874,18 @@
     };
 
     // —— 输入 ——
-    const doSend = () => {
-      if (busy) return;
+    const doSend = (opts) => {
+      // P0-1：busy 期间只有点「停止」按钮才中断；Enter / 输入不触发（玩家可能只是提前打字）
+      if (busy) { if (opts && opts.allowStop) requestChatStop(); return; }
       const v = $('#player-input').value.trim();
       if (!v) return;
       $('#player-input').value = '';
       sendPlayerAction(v, false);
     };
-    $('#btn-send').onclick = doSend;
+    $('#btn-send').onclick = () => doSend({ allowStop: true });
     $('#player-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
-    const doImmersiveSend = () => {
-      if (busy) return;
+    const doImmersiveSend = (opts) => {
+      if (busy) { if (opts && opts.allowStop) requestChatStop(); return; }
       const v = $('#immersive-input').value.trim();
       if (!v) return;
       $('#immersive-input').value = '';
@@ -4235,7 +4992,54 @@
       const btn = $('#btn-test-' + key);
       if (btn) btn.onclick = () => testConnection(key, btn);
     });
-    $('#btn-save-settings').onclick = () => { applyFormToSettings(); $('#modal-settings').classList.add('hidden'); toast('设置已保存'); };
+    $('#btn-save-settings').onclick = () => {
+      applyFormToSettings();
+      $('#modal-settings').classList.add('hidden');
+      toast('设置已保存');
+      if (sidecarReady()) saveFeatureConfig();    // 安全项真源在侧车：单独同步一次
+    };
+
+    // —— 可选本地服务：探测 / 功能入口 / 安排与台账 ——
+    const probeBtn = $('#btn-sidecar-probe');
+    if (probeBtn) probeBtn.onclick = () => {
+      const S = IR.Sidecar;
+      if (!S) return;
+      settings.sidecar = {
+        port: Number(($('#s-sidecar-port') || {}).value) || 4319,
+        token: (($('#s-sidecar-token') || {}).value || '').trim(),
+      };
+      persistSettings();
+      S.configure(settings.sidecar);
+      S.probe().then(ok => {
+        renderSidecarStatus();
+        if (ok) { toast('本地服务在线'); loadFeatureConfig(); }
+        else toast('还是连不上：确认已经运行 node sidecar/server.mjs，且端口、token 与配置一致', true, true);
+      });
+    };
+    const triggerBtn = $('#btn-trigger-refresh');
+    if (triggerBtn) triggerBtn.onclick = () => renderTriggerList();
+    const payBtn = $('#btn-pay-refresh');
+    if (payBtn) payBtn.onclick = () => renderPayLedger();
+
+    const featEmail = $('#btn-feat-email');
+    if (featEmail) featEmail.onclick = openEmailModal;
+    const featPay = $('#btn-feat-payment');
+    if (featPay) featPay.onclick = openPaymentModal;
+    const featSched = $('#btn-feat-schedule');
+    if (featSched) featSched.onclick = () => {
+      $('#modal-settings').classList.remove('hidden');
+      if (sidecarReady()) loadFeatureConfig();
+      const fs = $('#fs-schedule');
+      if (fs && fs.scrollIntoView) fs.scrollIntoView({ block: 'start' });
+    };
+    const closeEmail = $('#btn-close-email');
+    if (closeEmail) closeEmail.onclick = () => $('#modal-email').classList.add('hidden');
+    const closePay = $('#btn-close-payment');
+    if (closePay) closePay.onclick = () => $('#modal-payment').classList.add('hidden');
+    const emSend = $('#btn-em-send');
+    if (emSend) emSend.onclick = doEmailSend;
+    const pmSubmit = $('#btn-pm-submit');
+    if (pmSubmit) pmSubmit.onclick = doPaymentSubmit;
     $('#btn-backup-all').onclick = () => {
       doBackupAll().catch(e => toast('导出备份失败：' + ((e && e.message) || e), true, true));
     };
@@ -4325,6 +5129,12 @@
     if (DEMO) settings = IR.Demo.applyTo(settings);   // 只改内存：演示适配器生效，配置不落盘
     bind();
     syncSettingsToForm();
+    initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
+    if (DEMO) {
+      // 演示模式保持零外联：把本地服务换成一整套内存 mock，界面链路照样跑通
+      if (IR.Demo && IR.Demo.installSidecarMock) IR.Demo.installSidecarMock();
+    }
+    initSidecar();                    // 探测本地服务；离线则三功能保持禁用
     if (DEMO) startDemo();            // 演示模式直接开演（跳过开始页与试画锚定）
     else showStart();                 // 入口 = 开始页（v0.1 原样）
     renderShelf();
