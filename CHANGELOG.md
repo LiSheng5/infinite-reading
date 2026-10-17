@@ -15,6 +15,7 @@
 
 ### Notes
 
+- `docs/screenshot.png` 换成了新界面的实拍（README 首屏）；`feature-demo.png` 未重拍。
 - **未改**出图时机默认值（仍是「做出选择后」）；任务书里「改为场景切换时」的联动需要负责人确认，本期不动。
 - 沉浸态的重复输入条（`immersive-bar` / `#immersive-input`）已删除，只保留一个输入框与一个发送函数。
 - `context.js` 只加了一句输入类型说明，输出契约（JSON 键、`playerContent` 外层前缀）未改。
