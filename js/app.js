@@ -142,13 +142,24 @@
   /* ================= 小工具 ================= */
 
   let toastTimer = null;
+  // 同一时刻只保留一条提示（后来者替换前者）：文本写进 #toast-text，
+  // 错误提示额外给一个关闭按钮，其余情况不吃鼠标事件（pointer-events: none）。
   function toast(msg, isErr, long) {
     const el = $('#toast');
-    el.textContent = msg;
+    const text = $('#toast-text');
+    if (text) text.textContent = msg;
+    else el.textContent = msg;
     el.classList.toggle('error', !!isErr);
+    const close = $('#toast-close');
+    if (close) close.classList.toggle('hidden', !isErr);
     el.classList.remove('hidden');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.add('hidden'), long ? 7000 : 3500);
+    toastTimer = setTimeout(hideToast, long ? 7000 : 3500);
+  }
+  function hideToast() {
+    clearTimeout(toastTimer);
+    const el = $('#toast');
+    if (el) el.classList.add('hidden');
   }
 
   /* 自建 confirm / prompt（内嵌预览是沙箱 iframe，原生弹窗被静默忽略 →
@@ -169,20 +180,84 @@
       inp.value = opts.value == null ? '' : String(opts.value);
       inp.placeholder = opts.placeholder || '';
       $('#cf-ok').textContent = opts.okText || '确定';
-      $('#modal-confirm').classList.remove('hidden');
+      openModal('modal-confirm');
       setTimeout(() => {
         if (withInput) { inp.focus(); inp.select(); } else $('#cf-ok').focus();
       }, 0);
     });
   }
   function closeConfirm(value) {
-    $('#modal-confirm').classList.add('hidden');
+    closeModal('modal-confirm');
     const r = cfResolve;
     cfResolve = null;
     if (r) r(value);
   }
   function confirmValue() {
     return $('#cf-input-wrap').classList.contains('hidden') ? true : $('#cf-input').value;
+  }
+
+  /* ---------- 弹窗栈（P0-3） ----------
+   * 十余个弹窗各自独立，演示图里「写邮件」和「代为下单」会叠在一起。
+   * 这里做一个最小的统一入口：
+   *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
+   *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
+   *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
+   *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
+   * 现有 id 与 DOM 全部保持不变。 */
+  const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings'];
+  const MODAL_IDS = [
+    'modal-new', 'modal-wizard', 'modal-import-text', 'modal-export', 'modal-painter',
+    'modal-anchor', 'modal-card', 'modal-settings', 'modal-confirm',
+    'modal-email', 'modal-payment',
+  ];
+  const modalStack = [];
+
+  function openModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (FEATURE_MODALS.indexOf(id) >= 0) {
+      for (const other of modalStack.slice()) {
+        if (other !== id && FEATURE_MODALS.indexOf(other) >= 0) closeModal(other);
+      }
+    }
+    const at = modalStack.indexOf(id);
+    if (at >= 0) modalStack.splice(at, 1);
+    modalStack.push(id);
+    el.classList.remove('hidden');
+    el.setAttribute('aria-hidden', 'false');
+    el.style.zIndex = String(30 + modalStack.length);
+  }
+
+  function closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.add('hidden');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.zIndex = '';
+    }
+    const at = modalStack.indexOf(id);
+    if (at >= 0) modalStack.splice(at, 1);
+    // 关掉后重排剩下几层的层序，保持「后开的在上面」
+    modalStack.forEach((mid, i) => {
+      const m = document.getElementById(mid);
+      if (m) m.style.zIndex = String(30 + i + 1);
+    });
+  }
+
+  // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
+  function dismissModal(id) {
+    if (id === 'modal-confirm') { closeConfirm(null); return; }
+    if (id === 'modal-painter') { closeWorkbench(); return; }
+    if (id === 'modal-anchor') { closeAnchor(); return; }
+    if (id === 'modal-import-text') { closeImportText(); return; }
+    if (id === 'modal-card') { closeCardEditor(true); return; }
+    closeModal(id);
+  }
+
+  function closeTopModal() {
+    if (!modalStack.length) return false;
+    dismissModal(modalStack[modalStack.length - 1]);
+    return true;
   }
 
   function netErrHint(e) {
@@ -641,7 +716,7 @@
   function newStoryFromGame() {
     if (busy) { toast('正在生成中，等这一步结束再离开'); return; }
     if (story) saveAll();             // 切走不丢：当前档先存下（仍留在书架里，可随时回去）
-    $('#modal-new').classList.remove('hidden');
+    openModal('modal-new');
   }
 
   // 开始页三模式（§4.8）：三张卡即三个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
@@ -760,7 +835,7 @@
     exportTargetId = id;
     const st = Store.loadStory(id);
     $('#export-story-name').textContent = '《' + ((st && st.title) || '未命名故事') + '》—— 导出为 .irstory.json 文件，别人导入即可阅读。';
-    $('#modal-export').classList.remove('hidden');
+    openModal('modal-export');
   }
 
   async function buildExportPack(st, kind, withSrc) {
@@ -837,7 +912,7 @@
     const safeTitle = String(st.title || 'story').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
     download(safeTitle + '.irstory.json', JSON.stringify(pack, null, 1));
     markBackedUp();                                   // 导出单个故事也算一次备份
-    $('#modal-export').classList.add('hidden');
+    closeModal('modal-export');
     toast(withSrc && !hasSrc ? '已导出（原图已不在本地，仅带缩略图 + 提示词）' : '已导出：' + safeTitle + '.irstory.json', false, true);
   }
 
@@ -1113,7 +1188,7 @@
     if (DEMO) toast('演示模式：这里的设置改了也不会生效（演示不联网、不写盘）。去掉地址栏的 ?demo=1 重新打开，就可以接入真模型了。', false, true);
     syncSettingsToForm();
     renderStoragePanel();
-    $('#modal-settings').classList.remove('hidden');
+    openModal('modal-settings');
     renderSidecarStatus();
     if (sidecarReady()) loadFeatureConfig();   // 打开设置时刷新一次安全项（真源在侧车）
   }
@@ -1178,7 +1253,7 @@
     if (!obj || obj.format !== 'ir-story') { toast('这不是一个 .irstory.json / .irbackup.json 档案', true, true); return; }
     if (obj.kind === 'premise') {
       // 精简设定包 → 预填开局向导（§4.11 路径①）
-      $('#modal-new').classList.add('hidden');
+      closeModal('modal-new');
       openWizard(wizardPrefillFromPack(obj));
       toast('精简设定包：已预填向导，确认后开始', false, true);
       return;
@@ -1303,13 +1378,13 @@
     $('#it-step-run').classList.add('hidden');
     $('#it-step-confirm').classList.add('hidden');
     importPlanHint();
-    $('#modal-import-text').classList.remove('hidden');
+    openModal('modal-import-text');
     $('#it-text').focus();
   }
 
   function closeImportText() {
     importJob = null;
-    $('#modal-import-text').classList.add('hidden');
+    closeModal('modal-import-text');
   }
 
   function setImportStatus(text) {
@@ -1500,7 +1575,7 @@
     s.world.characters = chars;
     s.world.threads = threads;
     story = s;
-    $('#modal-import-text').classList.add('hidden');
+    closeModal('modal-import-text');
     importJob = null;
     enterGame(true, { deferOpening: true });
     openAnchor({ onDone: runOpening });   // §4.11：建新档 → 试画锚定出画风候选图 → 开场
@@ -1522,12 +1597,12 @@
     $('#card-source-hint').textContent = '来源：' + IR.RoleCard.sourceLabel(card)
       + (mode === 'new' ? '。可以空白自建，也可以导入你自己的 SillyTavern V2/V3 PNG 卡；导入后可随意改。' : '（改完即生效，下一回合开始用新卡）');
     $('#btn-rc-save').textContent = mode === 'new' ? '用这张卡开局' : '保存角色卡';
-    $('#modal-card').classList.remove('hidden');
+    openModal('modal-card');
   }
 
   function closeCardEditor(cancel) {
     const cb = cardEditor && cardEditor.onCancel;
-    $('#modal-card').classList.add('hidden');
+    closeModal('modal-card');
     cardEditor = null;
     if (cancel && cb) cb();
   }
@@ -1565,7 +1640,7 @@
     if (!card.name) { toast('先给角色起个名字吧', true); return; }
     const syncWorld = $('#rc-sync-world').checked;
     if (cardEditor.mode === 'new') {
-      $('#modal-card').classList.add('hidden');
+      closeModal('modal-card');
       cardEditor = null;
       startStoryFromCard(card, syncWorld);
       return;
@@ -1688,7 +1763,7 @@
     const sub = settings.draft || {};
     const src = (sub.provider || sub.model) ? '起草模型单独配置' : '跟随剧情模型';
     $('#wz-draft-hint').textContent = '起草模型：' + (cfg.model || '（未配置）') + '（' + src + '，可在模型设置里更换）。草稿出来后再改成你自己的话即可。';
-    $('#modal-wizard').classList.remove('hidden');
+    openModal('modal-wizard');
   }
 
   function parseCharacterLines(text) {
@@ -1807,7 +1882,7 @@
       name: c.name, presence: '在场', personality: c.personality, speech: c.speech, note: '', noteLocked: false,
     }));
     story = s;
-    $('#modal-wizard').classList.add('hidden');
+    closeModal('modal-wizard');
     enterGame(true, { deferOpening: true });
     openAnchor({ onDone: runOpening });   // §12：剧情模式「向导 → 试画 → 开场」
   }
@@ -2366,11 +2441,17 @@
     renderFeatureBar();
   }
 
+  // 邮件 / 定时主动 / 代下单只在「对话 / 扮演」模式可用：剧情模式里既不能出现，
+  // 也不能被触发（入口函数自己也再挡一次，不依赖界面是否渲染）。
+  function featuresAllowed() {
+    return !!(story && (story.mode === 'chat' || story.mode === 'rp'));
+  }
+
   // 局内功能入口条：只有「对话 / 扮演」模式可见；本地服务没启动时整体禁用
   function renderFeatureBar() {
     const bar = $('#feature-bar');
     if (!bar) return;
-    if (!story || (story.mode !== 'chat' && story.mode !== 'rp')) { bar.classList.add('hidden'); return; }
+    if (!featuresAllowed()) { bar.classList.add('hidden'); return; }
     bar.classList.remove('hidden');
     const S = IR.Sidecar;
     const st = S ? S.status() : { online: false, hasToken: false, features: {} };
@@ -2706,6 +2787,7 @@
   }
 
   function openEmailModal() {
+    if (!featuresAllowed()) { toast('剧情模式里没有邮件：切到对话 / 扮演模式再用', true); return; }
     if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#email-status');
@@ -2714,7 +2796,7 @@
         ? '邮件功能已开启。不在白名单里的收件人只会先存成草稿。'
         : '邮件功能还没开启：请先在「设置 → 邮件」里启用，并设置白名单与每日上限。';
     }
-    $('#modal-email').classList.remove('hidden');
+    openModal('modal-email');
     renderEmailDrafts();
   }
 
@@ -2820,6 +2902,7 @@
   }
 
   function openPaymentModal() {
+    if (!featuresAllowed()) { toast('剧情模式里没有代下单：切到对话 / 扮演模式再用', true); return; }
     if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#pay-status');
@@ -2829,7 +2912,7 @@
         : '支付功能还没开启：请先在「设置 → 购物支付」里启用并设置额度（默认全是 0，什么都不放行）。';
     }
     $('#pm-result').textContent = '';
-    $('#modal-payment').classList.remove('hidden');
+    openModal('modal-payment');
   }
 
   async function doPaymentSubmit() {
@@ -3469,12 +3552,12 @@
       busy: false,
     };
     pwParamsToForm();
-    $('#modal-painter').classList.remove('hidden');
+    openModal('modal-painter');
     renderWorkbench();
   }
 
   function closeWorkbench() {
-    $('#modal-painter').classList.add('hidden');
+    closeModal('modal-painter');
     pw = null;
   }
 
@@ -3755,7 +3838,7 @@
     $('#ac-chat').value = '';
     $('#ac-status').textContent = '';
     $('#btn-anchor-use').disabled = true;
-    $('#modal-anchor').classList.remove('hidden');
+    openModal('modal-anchor');
     runAnchorBatch();
   }
 
@@ -3763,7 +3846,7 @@
   function closeAnchor() {
     const a = anchor;
     anchor = null;
-    $('#modal-anchor').classList.add('hidden');
+    closeModal('modal-anchor');
     if (a && !a.doneFired) {
       a.doneFired = true;
       if (a.onDone) a.onDone();
@@ -4084,7 +4167,8 @@
 
     // 流式 / 打字机中的临时旁白（思考链先流、正文后到，§4.5）
     if (live) {
-      if (settings.showReasoning && live.reasoning) {
+      // 没有思考内容就不渲染折叠条（空白的「思考链」看着像坏了）
+      if (settings.showReasoning && String(live.reasoning || '').trim()) {
         liveReasonEl = reasonLiveBlock(live.reasoning, liveReasonOpen);
         if (liveReasonCollapsed) liveReasonEl.classList.add('collapsed');
         box.appendChild(liveReasonEl);
@@ -4191,8 +4275,8 @@
       : e.type === 'choice' ? 'bubble-choice'
       : 'bubble-narration');
     d.textContent = e.text || '';
-    // 思考链（R9）：旁白上方的可折叠块，showReasoning 可关
-    if (e.type === 'narration' && settings.showReasoning && e.reasoning) {
+    // 思考链（R9）：旁白上方的可折叠块，showReasoning 可关；空内容不渲染
+    if (e.type === 'narration' && settings.showReasoning && String(e.reasoning || '').trim()) {
       d.insertBefore(reasonBlock(e.reasoning, false), d.firstChild);
     }
 
@@ -4286,6 +4370,15 @@
     $('#screen-game').classList.toggle('immersive', !!ui.immersive);
     $('#immersive-bar').classList.toggle('hidden', !ui.immersive);
     $('#btn-toggle-image').title = ui.showImage ? '收起画面面板' : '展开画面面板';
+  }
+
+  // Esc / ✕ 退出沉浸态：回到「自动」布局（P2 统一由 setLayout 负责，这里先给出行为）
+  function exitImmersive() {
+    if (!story || !story.ui || !story.ui.immersive) return false;
+    story.ui.immersive = false;
+    applyLayout();
+    saveAll();
+    return true;
   }
 
   function bindSplitter() {
@@ -4776,12 +4869,12 @@
 
   function bind() {
     // —— 书架 ——
-    $('#btn-new-story').onclick = () => $('#modal-new').classList.remove('hidden');
-    $('#btn-close-new').onclick = () => $('#modal-new').classList.add('hidden');
+    $('#btn-new-story').onclick = () => openModal('modal-new');
+    $('#btn-close-new').onclick = () => closeModal('modal-new');
     document.querySelectorAll('#modal-new .mode-card').forEach(b => {
       b.onclick = () => {
         const mode = b.dataset.mode;
-        $('#modal-new').classList.add('hidden');
+        closeModal('modal-new');
         if (mode === 'choice') openWizard(null);
         else createStoryImmediate(mode);
       };
@@ -4942,12 +5035,12 @@
     $('#btn-anchor-lock').onclick = anchorLock;
     $('#btn-anchor-chat').onclick = anchorCardChat;
     $('#ac-chat').addEventListener('keydown', e => { if (e.key === 'Enter') anchorCardChat(); });
-    $('#btn-anchor-rerun').onclick = () => { $('#modal-settings').classList.add('hidden'); openAnchor({}); };
+    $('#btn-anchor-rerun').onclick = () => { closeModal('modal-settings'); openAnchor({}); };
     $('#btn-pw-anchor').onclick = () => { closeWorkbench(); openAnchor({}); };
 
-    $('#btn-close-settings').onclick = () => $('#modal-settings').classList.add('hidden');
+    $('#btn-close-settings').onclick = () => closeModal('modal-settings');
     $('#modal-settings').addEventListener('click', e => {
-      if (e.target === $('#modal-settings')) $('#modal-settings').classList.add('hidden');
+      if (e.target === $('#modal-settings')) closeModal('modal-settings');
     });
     $('#btn-add-savepoint').onclick = () => {
       if (!story) return;
@@ -4994,7 +5087,7 @@
     });
     $('#btn-save-settings').onclick = () => {
       applyFormToSettings();
-      $('#modal-settings').classList.add('hidden');
+      closeModal('modal-settings');
       toast('设置已保存');
       if (sidecarReady()) saveFeatureConfig();    // 安全项真源在侧车：单独同步一次
     };
@@ -5027,15 +5120,16 @@
     if (featPay) featPay.onclick = openPaymentModal;
     const featSched = $('#btn-feat-schedule');
     if (featSched) featSched.onclick = () => {
-      $('#modal-settings').classList.remove('hidden');
+      if (!featuresAllowed()) { toast('剧情模式里没有定时主动：切到对话 / 扮演模式再用', true); return; }
+      openModal('modal-settings');
       if (sidecarReady()) loadFeatureConfig();
       const fs = $('#fs-schedule');
       if (fs && fs.scrollIntoView) fs.scrollIntoView({ block: 'start' });
     };
     const closeEmail = $('#btn-close-email');
-    if (closeEmail) closeEmail.onclick = () => $('#modal-email').classList.add('hidden');
+    if (closeEmail) closeEmail.onclick = () => closeModal('modal-email');
     const closePay = $('#btn-close-payment');
-    if (closePay) closePay.onclick = () => $('#modal-payment').classList.add('hidden');
+    if (closePay) closePay.onclick = () => closeModal('modal-payment');
     const emSend = $('#btn-em-send');
     if (emSend) emSend.onclick = doEmailSend;
     const pmSubmit = $('#btn-pm-submit');
@@ -5090,18 +5184,30 @@
       if (e.key === 'Enter') { e.preventDefault(); closeConfirm(confirmValue()); }
     });
 
+    // Esc：只关最上层弹窗（确认弹窗要走 closeConfirm 才能收掉 Promise）；
+    // 没有弹窗时才退出沉浸态（P2）。
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') {
-        if (!$('#modal-confirm').classList.contains('hidden')) { closeConfirm(null); return; }
-        if (!$('#modal-anchor').classList.contains('hidden')) { closeAnchor(); return; }
-        closeImportText();
-        $('#modal-settings').classList.add('hidden');
-        $('#modal-wizard').classList.add('hidden');
-        $('#modal-new').classList.add('hidden');
-        $('#modal-export').classList.add('hidden');
-        closeWorkbench();
-      }
+      if (e.key !== 'Escape') return;
+      if (closeTopModal()) return;
+      exitImmersive();
     });
+
+    // 点弹窗遮罩关闭：只处理最上层，避免误关底下那层
+    MODAL_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || id === 'modal-confirm') return;
+      el.addEventListener('click', ev => {
+        if (ev.target !== el) return;
+        if (modalStack[modalStack.length - 1] !== id) return;
+        // 功能类弹窗（尤其设置 / 邮件 / 支付）里填了一半的内容，误点遮罩不该丢
+        if (id === 'modal-settings' || id === 'modal-email' || id === 'modal-payment' || id === 'modal-wizard') return;
+        dismissModal(id);
+      });
+    });
+
+    // 提示条关闭按钮（只有错误提示才显示）
+    const toastClose = $('#toast-close');
+    if (toastClose) toastClose.onclick = hideToast;
 
     // 断网 / 恢复：只是提示，绝不排队、不补发（离线是「这次点了不算」）
     window.addEventListener('offline', () => toast('已断网：聊天与作画暂时用不了，已存的故事照常能看。联网后重新点一次即可（离线期间不会排队、不会事后偷偷扣额度）。', true, true));

@@ -3,6 +3,19 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的写法。
 版本号真源是根目录的 `VERSION` 文件，发布时打同名 tag（如 `v0.2.0`）。
 
+## [0.3.1] — 2026-10-17 · 前端整改 P0（先修会让界面看起来坏掉的 bug）
+
+### Fixed
+
+- **旁白被压扁、聊天区不能滚动**：`.chat-scroll` 是纵向 flex，`.bubble-narration` 又设了 `overflow: hidden`（自动最小高度为 0），于是气泡被收缩成一条、`scrollHeight` 恒等于 `clientHeight`。现在 `.chat-scroll > * { flex-shrink: 0 }`，并补齐 `#screen-game / .chat-pane / .chat-scroll` 的 `min-height: 0` 祖先链；连发十余轮旁白完整可见、能滚动，新消息照常自动滚到底。
+- **提示条盖住输入框与弹窗按钮**：`.toast` 从「页面底部居中」改到「顶栏下方居中」（`position: fixed`），整条 `pointer-events: none`（只有错误提示的 ✕ 单独放行），不再遮挡发送键与弹窗底部按钮；同一时刻仍只保留一条，后来者替换前者。
+- **弹窗叠放**：新增最小的弹窗栈 `openModal(id)` / `closeModal(id)`。功能类弹窗（写邮件 / 代为下单 / 设置里的定时主动）互斥，打开时先关掉其它功能类；确认弹窗可叠在任意弹窗上；Esc 只关最上层（确认弹窗走 `closeConfirm`，Promise 不会悬空）。
+- **空白思考链**：没有思考内容（纯空白）时不再渲染「思考链」折叠条。
+
+### Notes
+
+- 本阶段只动 `index.html`、`css/style.css` 与 `js/app.js` 的 UI 部分，不动 `context.js` 的输出契约、存档结构与 `sidecar/`。
+
 ## [Unreleased]
 
 ### Added
