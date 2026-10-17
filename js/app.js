@@ -4523,6 +4523,7 @@
     el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
     el.classList.toggle('no-image', !!ui.imageCollapsed && layout !== 'immersive');
     el.classList.toggle('text-hidden', !!immersiveTextHidden);
+    if (layout !== 'stack') { el.classList.remove('stage-strip', 'kb-open'); }
 
     const exitBtn = $('#btn-immersive-exit');
     if (exitBtn) exitBtn.classList.toggle('hidden', layout !== 'immersive');
