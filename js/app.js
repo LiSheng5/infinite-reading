@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 主逻辑（v0.3）
+ * 无限阅读 · 主逻辑（v0.4）
  *
  * 结构：
  *  书架（应用入口，§7/T-P2-1）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
@@ -103,7 +103,8 @@
   let startMode = 'choice';      // 开始页选中的模式（choice | chat | rp）
   let busy = false;              // AI1 回合进行中
   let lastActionWasChoice = false;
-  let currentChoices = [];       // 最新一轮的选项（choice 模式内联渲染）
+  let currentChoices = [];       // 最新一轮的选项（choice 模式：默认收在「💡 灵感」里）
+  let choicesTrayOpen = false;   // 选项托盘是否展开（每轮重置）
   let live = null;               // 流式 / 打字机中的临时旁白 { text, reasoning }
   let liveEl = null;
   let liveReasonEl = null;       // 流式思考窗（方案 B：固定小窗滚动跟随）
@@ -862,7 +863,7 @@
       images.push(im);
     }
     const pack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.3',
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.4',
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
@@ -1030,7 +1031,7 @@
       ['chat', 'painter', 'scribe', 'draft', 'image'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
     }
     return {
-      format: 'ir-backup', schema: 1, app: '无限阅读 v0.3',
+      format: 'ir-backup', schema: 1, app: '无限阅读 v0.4',
       exportedAt: Date.now(),
       settings: s,
       userProfile: Store.loadUserProfile(),
@@ -3142,6 +3143,31 @@
     return { reply: reply1, streamed: first.streamed, reasoning: reasoning };
   }
 
+  // 输入类型（做 / 说 / 导演）：状态按故事记在 story.ui.kind，旧存档缺省 = 做
+  function currentKind() {
+    const k = story && story.ui && story.ui.kind;
+    return (k === 'say' || k === 'direct') ? k : 'do';
+  }
+  // 外层前缀 [玩家行动] 保持不变（demo.js 靠它分派），类型标记作为内层前缀
+  function withKindMarker(text, kind) {
+    const k = (kind === 'say' || kind === 'direct') ? kind : 'do';
+    return '（' + KIND_LABELS[k] + '）' + String(text == null ? '' : text);
+  }
+  function syncKindSwitch() {
+    const k = currentKind();
+    document.querySelectorAll('#kind-switch .seg-btn').forEach(b => {
+      const on = b.dataset.kind === k;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const inp = $('#player-input');
+    if (inp) {
+      inp.placeholder = k === 'say' ? '说点什么……'
+        : k === 'direct' ? '写一句导演指令（世界里的既成事实）……'
+        : '做点什么，或说句话……';
+    }
+  }
+
   // meta.kind === 'agent'：这条是「模型主动找你」（来自调度触发），不是玩家输入
   async function sendPlayerAction(action, isChoice, meta) {
     if (busy || !story) return;
@@ -3149,24 +3175,27 @@
     if (!action) return;
     if (offlineBlocked('这条消息')) return;
     const agentMsg = !!(meta && meta.kind === 'agent');
+    const kind = isChoice ? 'do' : (agentMsg ? null : (((meta && meta.actKind) === 'say' || (meta && meta.actKind) === 'direct') ? meta.actKind : currentKind()));
+    const sentAction = kind ? withKindMarker(action, kind) : action;
     busy = true;
     stopRequested = false; chatAbortCtrl = null;   // P0-1：每回合复位停止标记
     lastActionWasChoice = !!isChoice;
     currentChoices = [];
+    choicesTrayOpen = false;
     setSendButtonsBusy(true);   // P0-1：busy 期间发送按钮变身「停止」
 
     pushLog(agentMsg
       ? { type: 'agent', text: action, trigger: meta.triggerName || '', reason: meta.reason || '', fireId: meta.fireId || '' }
-      : { type: isChoice ? 'choice' : 'player', text: action });
+      : { type: isChoice ? 'choice' : 'player', text: action, kind: kind || 'do' });
     renderChat();
 
     try {
-      const res = await callAI1(action);
+      const res = await callAI1(sentAction);
       const reply = res.reply;
       story.turn += 1;
       story.lastSceneSummary = reply.scene_summary || story.lastSceneSummary;
       story.messages.push(
-        { role: 'user', content: IR.Context.playerContent(story.premise, action) },
+        { role: 'user', content: IR.Context.playerContent(story.premise, sentAction) },
         assistantMessage(reply, res.reasoning),
       );
       pushNarrationEntry(reply.narration, res.reasoning);
@@ -3321,7 +3350,7 @@
     setSendButtonsBusy(true);
     renderChat();
     try {
-      const res = await callAI1(action.text + '\n（请换一种不同的发展，给出不同的走向）');
+      const res = await callAI1(withKindMarker(action.text, action.kind) + '\n（请换一种不同的发展，给出不同的走向）');
       const reply = res.reply;
       msgs.push(removed[0]);
       msgs.push(assistantMessage(reply, res.reasoning));
@@ -4187,13 +4216,9 @@
     box.innerHTML = '';
     if (!story) return;
     const log = story.log || [];
-    const lastNarrIdx = lastNarrationIndex();
-    let lastNarrEl = null;
 
     log.forEach((e, i) => {
-      const el = bubbleFor(e, i);
-      if (i === lastNarrIdx) lastNarrEl = el;
-      box.appendChild(el);
+      box.appendChild(bubbleFor(e, i));
     });
 
     // 流式 / 打字机中的临时旁白（思考链先流、正文后到，§4.5）
@@ -4208,27 +4233,74 @@
       }
       const d = document.createElement('div');
       d.className = 'bubble bubble-narration bubble-live';
-      if (live.text) d.textContent = live.text;
-      else d.innerHTML = '<span class="gen-pill">生成中…</span>';
+      if (live.text) {
+        d.textContent = live.text;
+      } else {
+        const pill = document.createElement('span');
+        pill.className = 'gen-pill';
+        pill.textContent = '生成中…';
+        d.appendChild(pill);
+      }
       box.appendChild(d);
     }
 
-    // 选项内联在最新旁白下方（仅剧情模式，§4.8）
-    if (!busy && !live && lastNarrEl && story.mode === 'choice' && currentChoices && currentChoices.length) {
+    // 选项：默认收在输入区上方的「💡 灵感」里；settings.ui.choices = always 时内联在旁白下
+    renderChoices();
+
+    renderFeatureBar();
+    scrollChatBottom();
+  }
+
+  function renderChoices() {
+    const tray = $('#choice-tray');
+    const btn = $('#btn-inspiration');
+    const badge = $('#inspiration-count');
+    const canShow = !busy && !live && !!story && story.mode === 'choice'
+      && Array.isArray(currentChoices) && currentChoices.length > 0;
+    const inline = (settings.ui && settings.ui.choices) === 'always';
+
+    // 内联（always）：放在聊天记录的末尾（旁白下面；后面若又出了图，也不会被插队）
+    if (canShow && inline) {
+      const box = $('#chat-scroll');
       const wrap = document.createElement('div');
       wrap.className = 'choices-inline';
       currentChoices.forEach(c => {
         const b = document.createElement('button');
+        b.type = 'button';
         b.className = 'choice-btn';
         b.textContent = c;
         b.onclick = () => sendPlayerAction(c, true);
         wrap.appendChild(b);
       });
-      lastNarrEl.appendChild(wrap);
+      if (box) box.appendChild(wrap);
     }
 
-    renderFeatureBar();
-    scrollChatBottom();
+    // 托盘（默认）：按钮带数量角标，点开才显示一排选项
+    if (btn) {
+      const show = canShow && !inline;
+      btn.classList.toggle('hidden', !show);
+      btn.setAttribute('aria-expanded', show && choicesTrayOpen ? 'true' : 'false');
+      if (badge) {
+        badge.textContent = show ? String(currentChoices.length) : '';
+        badge.classList.toggle('hidden', !show);
+      }
+    }
+    if (!tray) return;
+    tray.innerHTML = '';
+    if (!canShow || inline || !choicesTrayOpen) {
+      tray.classList.add('hidden');
+      return;
+    }
+    currentChoices.forEach(c => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tray-btn';
+      b.textContent = c;
+      b.title = c;
+      b.onclick = () => { choicesTrayOpen = false; sendPlayerAction(c, true); };
+      tray.appendChild(b);
+    });
+    tray.classList.remove('hidden');
   }
 
   function bubbleFor(e, index) {
@@ -4540,6 +4612,8 @@
     immersiveTextHidden = false;
     $('#hud-title').textContent = story.title;
     $('#hud-mode').textContent = MODE_LABELS[story.mode] || '剧情';
+    syncKindSwitch();
+    choicesTrayOpen = false;
     applyLayout();
     renderChat();
     renderStage();
@@ -4614,6 +4688,9 @@
     renderProfilePanel();
     $('#s-style-preset').value = settings.stylePreset;
     $('#s-style-custom').value = settings.styleCustom;
+    const sui = settings.ui || Store.defaultSettings().ui;
+    if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
+    if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
     document.querySelectorAll('input[name="s-trigger"]').forEach(r => { r.checked = r.value === settings.trigger; });
     renderCapabilityFields();
     renderStoryPanels();
@@ -4691,6 +4768,14 @@
       scope: $('#s-profile-scope').value === 'per-story' ? 'per-story' : 'global',
     };
 
+    // 界面：布局 / 选项显示（P2；沉浸态不写回，保存后回到自动布局）
+    if (!settings.ui) settings.ui = Store.defaultSettings().ui;
+    if ($('#s-ui-layout')) {
+      const lv = $('#s-ui-layout').value;
+      settings.ui.layout = (lv === 'split' || lv === 'stack') ? lv : 'auto';
+    }
+    if ($('#s-ui-choices')) settings.ui.choices = $('#s-ui-choices').value === 'always' ? 'always' : 'tray';
+
     const prevShowReasoning = settings.showReasoning;
     settings.showReasoning = $('#s-show-reasoning').checked;
     settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
@@ -4699,6 +4784,7 @@
     const t = document.querySelector('input[name="s-trigger"]:checked');
     settings.trigger = t ? t.value : 'choice';
     saveAll();
+    if (story) { applyLayout(); renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== settings.showReasoning) renderChat();   // 思考链开关即时生效
   }
 
@@ -5109,6 +5195,44 @@
     $('#btn-send').onclick = () => doSend({ allowStop: true });
     $('#player-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
 
+    // 做 / 说 / 导演：状态按故事记住
+    document.querySelectorAll('#kind-switch .seg-btn').forEach(b => {
+      b.onclick = () => {
+        if (!story) return;
+        const k = b.dataset.kind;
+        story.ui.kind = (k === 'say' || k === 'direct') ? k : 'do';
+        syncKindSwitch();
+        saveAll();
+        $('#player-input').focus();
+      };
+    });
+
+    // 💡 灵感：展开 / 收起这一轮的选项
+    $('#btn-inspiration').onclick = () => {
+      if (!currentChoices.length || busy || live) return;
+      choicesTrayOpen = !choicesTrayOpen;
+      renderChat();
+      if (choicesTrayOpen) {
+        const tray = $('#choice-tray');
+        if (tray) tray.scrollLeft = 0;
+      }
+    };
+
+    // 虚拟键盘：visualViewport 变矮（弹出键盘）时，堆叠态自动把图收成细条
+    const vv = window.visualViewport;
+    const onViewportChange = () => {
+      const game = $('#screen-game');
+      if (!game) return;
+      const shrunk = !!vv && vv.height < Math.max(300, window.innerHeight * 0.72);
+      game.classList.toggle('kb-open', shrunk);
+    };
+    if (vv) {
+      vv.addEventListener('resize', onViewportChange);
+      vv.addEventListener('scroll', onViewportChange);
+    }
+    $('#player-input').addEventListener('focus', () => setTimeout(onViewportChange, 260));
+    $('#player-input').addEventListener('blur', () => setTimeout(onViewportChange, 260));
+
     bindSplitter();
 
     // —— 向导 ——
@@ -5311,6 +5435,8 @@
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;
       if (closeTopModal()) return;
+      const openMenu = document.querySelector('.menu:not(.hidden)');
+      if (openMenu) { closeMenus(); return; }
       exitImmersive();
     });
 

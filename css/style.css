@@ -471,6 +471,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
 }
 .hud-left { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .hud-actions { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
+.hud-left > .hud-btn, .hud-left > .mode-chip { flex: 0 0 auto; }
 .story-title {
   font-family: var(--font-body);
   font-size: 15px;
@@ -1386,19 +1387,19 @@ label input.inline-num {
   .tray-btn { max-width: 70vw; }
 }
 @media (max-width: 480px) {
-  #hud-mode { display: none; }
-  .story-title { max-width: 26vw; }
-  .hud-text { font-size: 12px; padding: 0 6px; }
+  .story-title { max-width: 24vw; }
+  .hud-text { font-size: 12px; padding: 0 5px; }
+  .mode-chip { font-size: 10px; padding: 0 6px; }
   .bubble { font-size: 16.5px; }
   .input-row .btn { padding: 0 12px; }
   .seg-btn { padding: 0 7px; }
 }
 /* 触屏：所有可点目标不小于 44px，舞台按钮常显 */
 @media (hover: none) {
-  .hud-btn { min-height: 44px; }
-  .mini-btn { min-height: 32px; }
+  .hud-btn, .btn, .mini-btn, .tool-btn, .seg-btn, .menu-item, .choice-btn, .tray-btn { min-height: 44px; }
   .seg-btn { min-width: 44px; }
   .stage-btn, .stage-exit { width: 44px; height: 44px; }
+  .composer-tools { min-height: 44px; }
 }
 /* 掐掉 iOS 上输入框聚焦时的自动放大 */
 @media (max-width: 720px) {

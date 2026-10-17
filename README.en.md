@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.3.2-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -57,7 +57,8 @@ cd infinite-reading
 3. **Click one of the three mode cards to start** — Story, Chat, or Role-play — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode.
    - **📄 Import text**: hand over existing text (a setting document, a novel fragment, a chat log) and let the AI turn it into a starting premise.
    - **☰ My shelf** lists your stories (continue / rename / delete / export); **↶ Continue last** jumps straight back in.
-   - Inside a story, the top-left `←` returns to the home screen, next to **☰ Shelf** and **＋ New story**.
+   - Inside a story the screen is split: text on the left (narration is plain body copy; your own turns are quiet side-lines tagged 做 / 说 / 导演), the stage on the right (current image + thumbnails). The top-left `←` returns home next to the shelf and title; save points, new story, draw this scene and model settings live under the top-right `⋯`.
+   - Above the input, **💡 灵感** keeps this turn's choices folded away — open it for a row of options, or ignore it and type anything. The 做 / 说 / 导演 switch tells the model how to read your line, and is remembered per story.
 
 > ⚠️ `file://` and `http://localhost` are two independent data stores — pick one and stick to it.
 > Direct API calls from the browser may be blocked by CORS (especially under `file://`); if that happens, use a local static server.
@@ -72,7 +73,7 @@ cd infinite-reading
 | After a choice (default) | Closest to a classic visual novel |
 | Manual only | Cheapest |
 
-In any mode you can also click **🎨 Draw** in the top-right to add an image manually.
+In any mode you can also click **🎨 Add one** on the stage (or **⋯ → Draw this scene**) to add an image manually.
 
 ## Optional: local sidecar service (email / proactive scheduling / delegated purchase)
 
@@ -130,7 +131,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
                    ▼
             ImageProvider (/images/generations)
                    ▼
-            background cross-fade + shelf / savepoints (IndexedDB, thumbnails)
+            stage backdrop + shelf / savepoints (IndexedDB, thumbnails)
 ```
 
 | File | Role |
