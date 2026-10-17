@@ -544,7 +544,8 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
 }
 
 /* ==================== 阅读界面 ==================== */
-#screen-game { display: flex; flex-direction: column; }
+/* P0：祖先链每一层都要能收缩，聊天区才能拿到「剩余高度」并滚动 */
+#screen-game { display: flex; flex-direction: column; min-height: 0; }
 .hud {
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 18px; gap: 12px; z-index: 5; flex-wrap: wrap;
@@ -576,11 +577,16 @@ a.demo-chip { text-decoration: none; cursor: pointer; background: var(--accent-s
 a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 .game-layout { flex: 1; display: flex; min-height: 0; }
-.chat-pane { display: flex; flex-direction: column; min-width: 0; width: 50%; }
+.chat-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; width: 50%; }
 .chat-scroll {
   flex: 1; overflow-y: auto; padding: 18px 18px 18px;
   display: flex; flex-direction: column; gap: 16px;
+  min-height: 0;
 }
+/* P0-1：纵向 flex 容器里的气泡不许被压扁。
+   .bubble-narration 设了 overflow:hidden，自动最小高度为 0，默认会被收缩成一条——
+   连发几轮旁白就会互相重叠、聊天区也滚不动。 */
+.chat-scroll > * { flex-shrink: 0; }
 .composer {
   position: relative;
   padding: 16px 18px 16px;
@@ -1197,26 +1203,46 @@ label input.inline-num {
   .anchor-preview { width: 100%; max-height: 150px; }
 }
 
-/* ==================== Toast ==================== */
+/* ==================== Toast ====================
+   P0-2：固定在顶栏下方居中，绝不再盖住输入框、发送键与弹窗底部按钮。
+   整条 pointer-events: none（只有错误提示的 ✕ 单独放行），点得到下面的东西。 */
 .toast {
-  position: absolute;
-  left: 50%; bottom: 32px;
+  position: fixed;
+  left: 50%;
+  top: calc(58px + env(safe-area-inset-top, 0px));
+  bottom: auto;
   transform: translateX(-50%);
   max-width: min(560px, 90vw);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
   border-radius: 10px;
-  padding: 12px 18px;
+  padding: 10px 16px;
   font-family: var(--font-body);
   font-size: 14.5px;
-  line-height: 1.85;
+  line-height: 1.75;
   letter-spacing: 0.03em;
   color: var(--ink);
   box-shadow: var(--shadow-hover);
-  z-index: 40;
+  z-index: 45;
+  pointer-events: none;
 }
-.toast.error { border-left-color: var(--ink); color: var(--ink); }
+.toast.error { border-left-color: var(--danger, var(--ink)); color: var(--ink); }
+.toast-close {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--accent); }
 
 /* ==================== 移动端 / 竖屏 ==================== */
 @media (max-width: 720px) {
