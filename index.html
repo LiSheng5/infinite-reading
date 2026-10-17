@@ -12,41 +12,13 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="无限阅读">
 
-<!-- 字体：国内优先 jsDelivr（霞鹜文楷），Google Fonts 作为其余字体的来源 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-<link href="https://fonts.googleapis.com/css2?family=Liu+Jian+Mao+Cao&family=Ma+Shan+Zheng&family=Long+Cang&family=ZCOOL+XiaoWei&family=Noto+Serif+SC&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+<!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
+     旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.3.1">
+<link rel="stylesheet" href="css/style.css?v=0.3.2">
 </head>
 <body>
 <div id="app">
-
-  <!-- 撕纸便签：旁白气泡的纸张质感（纤维 + 颗粒）。两个滤镜在本文件定义一次，
-       由 css/style.css 的 .bubble-narration 经 filter: url(#…) 引用；
-       必须留在文档内且不能 display:none，否则引用解析不到。 -->
-  <svg class="note-defs" width="0" height="0" aria-hidden="true" focusable="false">
-    <defs>
-      <filter id="ir-note-fibers" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.65 0.85"
-                      numOctaves="3" seed="12" stitchTiles="stitch" result="noise" />
-        <feColorMatrix in="noise" type="saturate" values="0" result="gray" />
-        <feComponentTransfer in="gray">
-          <feFuncA type="table" tableValues="0 0.22" />
-        </feComponentTransfer>
-      </filter>
-      <filter id="ir-note-grain" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.035"
-                      numOctaves="2" seed="7" result="grainNoise" />
-        <feColorMatrix in="grainNoise" type="saturate" values="0" />
-      </filter>
-    </defs>
-  </svg>
-
-  <!-- 背景图层（两层交替淡入淡出，画面氛围） -->
-  <div id="bg-a" class="bg-layer show"></div>
-  <div id="bg-b" class="bg-layer"></div>
 
   <!-- ========== 开始页（应用入口：点一张模式卡即由此开局） ========== -->
   <section id="screen-start" class="screen">
@@ -106,11 +78,14 @@
     </div>
   </section>
 
-  <!-- ========== 阅读界面（聊天记录 : 画面 = 双栏，§4.6） ========== -->
-  <section id="screen-game" class="screen hidden">
+  <!-- ========== 阅读界面：左文右图，各管各的（§4.6）
+       布局只由 #screen-game 的 data-layout 决定：split | stack | immersive。
+       输入区只有一个（沉浸态也不另起一套输入）。 ========== -->
+  <section id="screen-game" class="screen hidden" data-layout="split">
     <header class="hud">
       <div class="hud-left">
-        <button id="btn-back-home" class="hud-btn" title="返回首页（自动存档）">←</button>
+        <button id="btn-back-home" class="hud-btn hud-icon" title="返回首页（自动存档）">←</button>
+        <button id="btn-hud-shelf" class="hud-btn hud-text" title="我的书架">书架</button>
         <span id="hud-title" class="story-title"></span>
         <span id="hud-mode" class="mode-chip"></span>
         <!-- 离线演示模式标识（?demo=1）：点它=去掉查询参数，回到可配置真模型的普通模式 -->
@@ -118,54 +93,72 @@
            title="离线演示模式：内置剧本 + 本地占位图，未连接任何模型。点此回到可配置真模型的普通模式">🎬 演示</a>
       </div>
       <div class="hud-actions">
-        <button id="btn-hud-shelf" class="hud-btn" title="我的书架">书架</button>
-        <button id="btn-hud-new" class="hud-btn" title="开一个新故事">＋ 新故事</button>
-        <button id="btn-savepoint" class="hud-btn" title="打一个具名存档点">存档</button>
-        <button id="btn-manual-gen" class="hud-btn" title="让 AI 画师为当前场景作画">作画</button>
-        <button id="btn-toggle-image" class="hud-btn" title="收起 / 展开画面面板">画面</button>
-        <button id="btn-settings" class="hud-btn" title="模型设置">⚙</button>
+        <button id="btn-toggle-image" class="hud-btn" title="收起 / 展开画面">画面</button>
+        <div class="hud-more">
+          <button id="btn-hud-more" class="hud-btn hud-icon" title="更多" aria-haspopup="menu" aria-expanded="false">⋯</button>
+          <div id="hud-more-menu" class="menu hidden" role="menu">
+            <button id="btn-savepoint" class="menu-item" type="button" role="menuitem">打一个存档点</button>
+            <button id="btn-hud-new" class="menu-item" type="button" role="menuitem">开一个新故事</button>
+            <button id="btn-manual-gen" class="menu-item" type="button" role="menuitem">为当前场景作画</button>
+            <button id="btn-settings" class="menu-item" type="button" role="menuitem">模型设置</button>
+          </div>
+        </div>
       </div>
     </header>
 
     <div id="game-layout" class="game-layout">
       <div id="chat-pane" class="chat-pane">
         <div id="chat-scroll" class="chat-scroll"></div>
-        <!-- 可选本地服务功能入口：只有「对话 / 扮演」模式可见；本地服务没启动时整体禁用 -->
-        <div id="feature-bar" class="feature-bar hidden">
-          <button id="btn-feat-email" class="chip-btn" type="button">✉ 写邮件</button>
-          <button id="btn-feat-schedule" class="chip-btn" type="button">⏰ 定时主动</button>
-          <button id="btn-feat-payment" class="chip-btn" type="button">🛒 代下单</button>
-          <span id="feature-bar-state" class="hint"></span>
-        </div>
         <footer class="composer">
+          <!-- 选项托盘：默认收起，点「💡 灵感」才展开（P2） -->
+          <div id="choice-tray" class="choice-tray hidden"></div>
+          <div class="composer-tools">
+            <button id="btn-inspiration" class="tool-btn hidden" type="button" title="看这一轮的选项">
+              💡 <span>灵感</span><span id="inspiration-count" class="badge hidden"></span>
+            </button>
+            <span class="composer-spacer"></span>
+            <!-- 本地服务功能入口：只在「对话 / 扮演」模式出现；未启动时灰显并说明 -->
+            <div class="menu-wrap">
+              <button id="btn-more-actions" class="tool-btn hidden" type="button" title="更多功能"
+                      aria-haspopup="menu" aria-expanded="false">＋</button>
+              <div id="feature-menu" class="menu menu-up hidden" role="menu">
+                <button id="btn-feat-email" class="menu-item" type="button" role="menuitem">✉ 写邮件</button>
+                <button id="btn-feat-schedule" class="menu-item" type="button" role="menuitem">⏰ 定时主动</button>
+                <button id="btn-feat-payment" class="menu-item" type="button" role="menuitem">🛒 代下单</button>
+                <p id="feature-bar-state" class="menu-note"></p>
+              </div>
+            </div>
+          </div>
           <div class="input-row">
-            <input id="player-input" placeholder="输入你想说的话、想做的事……" autocomplete="off">
+            <div id="kind-switch" class="seg" role="group" aria-label="输入类型">
+              <button class="seg-btn active" data-kind="do" type="button" title="做：你的行动">做</button>
+              <button class="seg-btn" data-kind="say" type="button" title="说：你说的话">说</button>
+              <button class="seg-btn" data-kind="direct" type="button" title="导演：世界里的既成事实">导演</button>
+            </div>
+            <input id="player-input" placeholder="做点什么，或说句话……" autocomplete="off">
             <button id="btn-send" class="btn primary">发送</button>
           </div>
         </footer>
       </div>
 
-      <div id="splitter" class="splitter" title="拖动调整聊天 / 画面比例"></div>
+      <div id="splitter" class="splitter" title="拖动调整文字 / 画面比例；双击恢复 1:1"></div>
 
       <div id="image-pane" class="image-pane">
         <div id="stage-wrap" class="stage-wrap">
+          <!-- 底层：当前图的模糊放大副本；上层：完整的图（contain）+ 暗角 -->
+          <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
           <img id="stage-img" class="stage-img hidden" alt="">
           <div id="stage-empty" class="stage-empty">画面会在这里展开</div>
           <span id="gen-status" class="pill stage-pill hidden"></span>
-          <button id="btn-stage-painter" class="stage-btn stage-btn-left" title="画师工作台（看 / 改这张图的提示词）">✎</button>
-          <button id="btn-immersive" class="stage-btn" title="全屏沉浸（收起聊天）">⛶</button>
+          <div class="stage-actions">
+            <button id="btn-stage-painter" class="stage-btn" title="画师工作台（看 / 改这张图的提示词）">✎</button>
+            <button id="btn-stage-gen" class="stage-btn" title="为当前场景补一张">🎨</button>
+            <button id="btn-immersive" class="stage-btn" title="沉浸（画面铺满）">⛶</button>
+          </div>
+          <button id="btn-immersive-exit" class="stage-exit hidden" type="button" title="退出沉浸（Esc）">✕</button>
         </div>
+        <p id="stage-caption" class="stage-caption"></p>
         <div id="thumb-strip" class="thumb-strip"></div>
-      </div>
-    </div>
-
-    <!-- 全屏沉浸第三态：画面占满，聊天收成底部浮动条（§4.6） -->
-    <div id="immersive-bar" class="immersive-bar hidden">
-      <div id="immersive-text" class="immersive-text"></div>
-      <div class="input-row">
-        <input id="immersive-input" placeholder="继续故事……" autocomplete="off">
-        <button id="btn-immersive-send" class="btn primary">发送</button>
-        <button id="btn-immersive-exit" class="hud-btn" title="退出沉浸">✕</button>
       </div>
     </div>
   </section>
@@ -921,23 +914,23 @@
     </div>
   </div>
 
-<script src="js/providers.js?v=0.3.1"></script>
-<script src="js/context.js?v=0.3.1"></script>
+<script src="js/providers.js?v=0.3.2"></script>
+<script src="js/context.js?v=0.3.2"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.3.1"></script>
-<script src="js/store.js?v=0.3.1"></script>
-<script src="js/modelCapabilities.js?v=0.3.1"></script>
-<script src="js/roleCard.js?v=0.3.1"></script>
+<script src="js/storage.js?v=0.3.2"></script>
+<script src="js/store.js?v=0.3.2"></script>
+<script src="js/modelCapabilities.js?v=0.3.2"></script>
+<script src="js/roleCard.js?v=0.3.2"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.3.1"></script>
+<script src="js/demo.js?v=0.3.2"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.3.1"></script>
+<script src="js/zip.js?v=0.3.2"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.3.1"></script>
+<script src="js/sidecar.js?v=0.3.2"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.3.1"></script>
-<script src="js/app.js?v=0.3.1"></script>
+<script src="js/features.js?v=0.3.2"></script>
+<script src="js/app.js?v=0.3.2"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.3.1"></script>
+<script src="js/pwa.js?v=0.3.2"></script>
 </body>
 </html>

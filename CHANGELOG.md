@@ -3,6 +3,19 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的写法。
 版本号真源是根目录的 `VERSION` 文件，发布时打同名 tag（如 `v0.2.0`）。
 
+## [0.3.2] — 2026-10-17 · 前端整改 P1（电影化暗色舞台）
+
+### Changed
+
+- **设计令牌**：`css/style.css` 顶部统一为暗色舞台的一套变量（`--bg / --stage / --surface / --line / --ink* / --accent / --danger`，圆角统一 `8px`），其余规则只引用变量；删掉 `prefers-color-scheme` 分支，默认始终暗色。纸白主题只在 `[data-theme="paper"]` 预留位置，本期不实现。正文与操作文字保持 4.5:1 以上对比度，焦点环保留，继续尊重 `prefers-reduced-motion`。
+- **去掉远程字体**：删除 Google Fonts（7 个字族）与 jsdelivr 霞鹜文楷；旁白改用衬线系统栈，界面用 `system-ui / PingFang SC / Microsoft YaHei`，提示词用等宽。断网刷新不再依赖任何外部资源。
+- **左栏 = 安静的阅读面**：旁白直接排版成正文（17.5px / 1.95，阅读列约 40em，段间距 22px），无卡片、无纹理、无背景透图；玩家发言弱化为「左侧细线 + 次要色 + 做/说/导演小标签」；聊天区背景为纯 `--bg`。
+- **场景标记行**：聊天里的 `bubble-image` 从大图改成 56px 小缩略图 + 一行 alt，点击即在右侧舞台选中这张；「工作台」入口悬停出现（触屏常显）。
+- **右栏 = 舞台**：全页背景图（`bg-a` / `bg-b`）取消，改为只作用于舞台——底层是当前图的模糊放大副本（`blur(36px) brightness(.45)`），上层是完整的图（`object-fit: contain`）+ 轻微暗角；图下方一行 alt，再下面是缩略条。舞台按钮：✎ 画师工作台、🎨 补一张、⛶ 沉浸（桌面悬停显示，触屏常显）。
+- **顶栏瘦身**：44px 单行；左侧 ← / 书架 / 标题 / 模式芯片 / 演示芯片，右侧「画面」与「⋯」；存档点、新故事、为当前场景作画、模型设置收进「⋯」菜单，原 id 与功能全部保留。
+- **输入区外壳**：一个输入框 + 发送；上方一行预留「💡 灵感」与「＋」。`feature-bar` 改成「＋」菜单（写邮件 / 定时主动 / 代下单），只在对话 / 扮演模式渲染；剧情模式不渲染，且 `openEmailModal` / `openPaymentModal` 与定时入口函数直接返回。本地服务离线时菜单项灰显并在菜单里说明原因。
+- **布局状态先落地**：`#screen-game[data-layout="split|stack|immersive"]` 成为唯一排版依据，新增 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）与 `migrateSettings` 默认值；`setLayout()` 取代原先分散的 `btn-toggle-image` / `btn-immersive` / `bindSplitter` 三处逻辑。分隔条可拖动（每栏最小 28%）、双击恢复 1:1；沉浸态复用同一个输入框（删除 `immersive-bar` 的重复输入）。
+
 ## [0.3.1] — 2026-10-17 · 前端整改 P0（先修会让界面看起来坏掉的 bug）
 
 ### Fixed

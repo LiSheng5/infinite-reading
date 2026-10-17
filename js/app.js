@@ -29,6 +29,8 @@
   };
 
   const MODE_LABELS = { choice: '剧情', chat: '对话', rp: '扮演' };
+  // 做 / 说 / 导演：玩家回合的三种输入语义（旧存档缺 kind 时按「做」处理）
+  const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
 
   const DEFAULT_TOPIC = '雨夜便利店：凌晨三点的第八个货架，与一场没有说出口的告别。';
 
@@ -130,13 +132,11 @@
   }
   // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
   function setSendButtonsBusy(on) {
-    for (const id of ['#btn-send', '#btn-immersive-send']) {
-      const btn = $(id);
-      if (!btn) continue;
-      btn.disabled = false;
-      btn.textContent = on ? '停止' : '发送';
-      btn.classList.toggle('stop', !!on);
-    }
+    const btn = $('#btn-send');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.textContent = on ? '停止' : '发送';
+    btn.classList.toggle('stop', !!on);
   }
 
   /* ================= 小工具 ================= */
@@ -479,16 +479,18 @@
     }
   }
 
-  // 两层背景交替淡入淡出（画面氛围）
-  let bgFlip = false;
-  function setBackground(src) {
-    if (!src) return;
-    const showEl = bgFlip ? $('#bg-a') : $('#bg-b');
-    const hideEl = bgFlip ? $('#bg-b') : $('#bg-a');
-    bgFlip = !bgFlip;
-    showEl.style.backgroundImage = `url("${src}")`;
-    showEl.classList.add('show');
-    hideEl.classList.remove('show');
+  // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
+  // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
+  function setStageArt(src) {
+    const bd = $('#stage-backdrop');
+    if (!bd) return;
+    if (!src) {
+      bd.classList.remove('show');
+      bd.style.backgroundImage = '';
+      return;
+    }
+    bd.style.backgroundImage = 'url(' + JSON.stringify(src) + ')';
+    bd.classList.add('show');
   }
 
   function thumb(dataUrl, maxW) {
@@ -691,6 +693,7 @@
     story = null;
     busy = false;
     live = null;
+    closeMenus();
     $('#screen-start').classList.add('hidden');
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.remove('hidden');
@@ -704,6 +707,7 @@
     story = null;
     busy = false;
     live = null;
+    closeMenus();
     closeWorkbench();
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
@@ -2447,12 +2451,19 @@
     return !!(story && (story.mode === 'chat' || story.mode === 'rp'));
   }
 
-  // 局内功能入口条：只有「对话 / 扮演」模式可见；本地服务没启动时整体禁用
+  // 局内功能入口：只有「对话 / 扮演」模式才有「＋」菜单；本地服务没启动时菜单项灰显
   function renderFeatureBar() {
-    const bar = $('#feature-bar');
-    if (!bar) return;
-    if (!featuresAllowed()) { bar.classList.add('hidden'); return; }
-    bar.classList.remove('hidden');
+    const plus = $('#btn-more-actions');
+    const menu = $('#feature-menu');
+    const state = $('#feature-bar-state');
+    if (!plus || !menu) return;
+    const allowed = featuresAllowed();
+    plus.classList.toggle('hidden', !allowed);
+    if (!allowed) {
+      menu.classList.add('hidden');
+      plus.setAttribute('aria-expanded', 'false');
+      return;
+    }
     const S = IR.Sidecar;
     const st = S ? S.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
@@ -2462,16 +2473,36 @@
       b.disabled = !ready;
       b.title = ready ? '' : sidecarOffHint();
     }
-    const state = $('#feature-bar-state');
     if (state) {
-      if (!st.online) state.textContent = '（本地服务未启动，这三个功能已禁用）';
-      else if (!st.hasToken) state.textContent = '（还没填 token）';
+      if (!st.online) state.textContent = '本地服务未启动：写邮件 / 定时主动 / 代下单需要先启动本地服务。';
+      else if (!st.hasToken) state.textContent = '本地服务在线，但还没填 token（设置 → 本地服务）。';
       else {
         const names = { email: '邮件', schedule: '定时主动', payment: '购物支付' };
         const on = ['email', 'schedule', 'payment'].filter(k => st.features && st.features[k]).map(k => names[k]);
-        state.textContent = on.length ? ('已开启：' + on.join('、')) : '（都还没在设置里开启）';
+        state.textContent = on.length ? ('已开启：' + on.join('、')) : '都还没在设置里开启。';
       }
     }
+  }
+
+  /* ---------- 下拉菜单（顶栏「⋯」/ 输入区「＋」） ---------- */
+  function closeMenus(except) {
+    for (const menu of document.querySelectorAll('.menu')) {
+      if (menu === except) continue;
+      menu.classList.add('hidden');
+    }
+    for (const btn of document.querySelectorAll('[aria-expanded="true"]')) {
+      if (except && btn.getAttribute('aria-controls') === except.id) continue;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function toggleMenu(btn, menu) {
+    if (!btn || !menu) return;
+    const willOpen = menu.classList.contains('hidden');
+    closeMenus(willOpen ? menu : null);
+    menu.classList.toggle('hidden', !willOpen);
+    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    if (willOpen && menu === $('#feature-menu')) renderFeatureBar();
   }
 
   function yuan(cents) { return (Math.floor(Number(cents) || 0) / 100).toFixed(2) + ' 元'; }
@@ -3486,7 +3517,7 @@
       aspect: scene.aspect, width: scene.width, height: scene.height, styleCardId: scene.styleCardId,
       ts: scene.ts,
     });
-    setBackground(sceneSrc(scene) || src);
+    setStageArt(sceneSrc(scene) || src);
     updateRollingStyle(scene);           // §4.10 C-F：每次出图后自动更新（本地规则，不依赖模型）
     refreshRollingStyleByModel(scene);   // 真实模式：书记员顺手刷新；失败保留本地结果
     saveAll();
@@ -4196,7 +4227,6 @@
       lastNarrEl.appendChild(wrap);
     }
 
-    updateImmersiveText();
     renderFeatureBar();
     scrollChatBottom();
   }
@@ -4215,41 +4245,43 @@
       return d;
     }
     if (e.type === 'image') {
+      // 场景标记行：56px 小缩略图 + 一行 alt（不再在聊天里内嵌大图）。
+      // 点图 / 点文字 = 在右侧舞台选中这张；「工作台」入口悬停时才出现。
       const d = document.createElement('div');
       d.className = 'bubble bubble-image';
       const sc = imageSceneById(e.id);
       const src = sceneSrc(sc, e) || null;
+      const selectScene = () => {
+        if (!story) return;
+        story.lastBg = e.id;
+        saveAll();
+        renderStage();
+        renderThumbs();
+      };
       if (src) {
         const img = document.createElement('img');
         img.src = src;
-        img.alt = e.alt || '场景图';
-        img.onclick = () => {
-          if (story) { story.lastBg = e.id; saveAll(); renderStage(); renderThumbs(); }
-        };
+        img.alt = e.alt || '场景缩略图';
+        img.title = '在右侧舞台看这张';
+        img.onclick = selectScene;
         d.appendChild(img);
       }
-      // alt 旁挂画师工作台入口（§4.3：prompt 透明可改）
       const row = document.createElement('div');
       row.className = 'img-alt-row';
       const cap = document.createElement('span');
       cap.className = 'img-alt';
-      cap.textContent = e.alt || '（一幅场景插图）';
-      cap.title = '点开画师工作台：看 / 改这张图的提示词';
-      cap.style.cursor = 'pointer';
-      cap.onclick = () => openWorkbench(e.id);
+      cap.textContent = (e.alt || '（一幅场景插图）') + (e.supersededBy ? ' · 已被重画版替代' : '');
+      cap.title = '点击在右侧舞台查看';
+      cap.onclick = selectScene;
+      row.appendChild(cap);
       const wb = document.createElement('button');
       wb.className = 'mini-btn';
+      wb.type = 'button';
       wb.textContent = '工作台';
       wb.title = '看 / 改完整 prompt、跟画师说着改、按此重画';
       wb.onclick = () => openWorkbench(e.id);
-      row.appendChild(cap); row.appendChild(wb);
+      row.appendChild(wb);
       d.appendChild(row);
-      if (e.supersededBy) {
-        const note = document.createElement('div');
-        note.className = 'img-superseded';
-        note.textContent = '（这张已被重画版替代，画面面板显示新版）';
-        d.appendChild(note);
-      }
       return d;
     }
 
@@ -4274,7 +4306,17 @@
     d.className = 'bubble ' + (e.type === 'player' ? 'bubble-player'
       : e.type === 'choice' ? 'bubble-choice'
       : 'bubble-narration');
-    d.textContent = e.text || '';
+    // 玩家发言带「做 / 说 / 导演」小标签（旧存档缺 kind 时按「做」显示）
+    if (e.type === 'player' || e.type === 'choice') {
+      const tag = document.createElement('span');
+      tag.className = 'kind-tag';
+      tag.textContent = e.type === 'choice' ? '选择' : (KIND_LABELS[e.kind] || KIND_LABELS.do);
+      d.appendChild(tag);
+    }
+    const body = document.createElement('span');
+    body.className = 'bubble-text';
+    body.textContent = e.text || '';
+    d.appendChild(body);
     // 思考链（R9）：旁白上方的可折叠块，showReasoning 可关；空内容不渲染
     if (e.type === 'narration' && settings.showReasoning && String(e.reasoning || '').trim()) {
       d.insertBefore(reasonBlock(e.reasoning, false), d.firstChild);
@@ -4314,19 +4356,29 @@
   /* ================= 渲染：画面面板 ================= */
 
   function renderStage() {
-    const img = $('#stage-img'), empty = $('#stage-empty');
-    if (!story) { img.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+    const img = $('#stage-img'), empty = $('#stage-empty'), cap = $('#stage-caption');
+    if (!story) {
+      img.classList.add('hidden');
+      empty.classList.remove('hidden');
+      setStageArt('');
+      if (cap) cap.textContent = '';
+      return;
+    }
     const sc = currentScene();
     const src = sceneSrc(sc);
     if (src) {
       img.src = src;
-      img.alt = (sc && sc.alt) || '';
+      img.alt = (sc && sc.alt) || '当前画面';
       img.classList.remove('hidden');
       empty.classList.add('hidden');
+      setStageArt(src);
     } else {
       img.classList.add('hidden');
       empty.classList.remove('hidden');
+      setStageArt('');
     }
+    // 图下方一行淡色说明（alt）：舞台自己说明自己，聊天里不再放大图
+    if (cap) cap.textContent = src ? ((sc && sc.alt) || '') : '';
   }
 
   function renderThumbs() {
@@ -4354,62 +4406,124 @@
     }
   }
 
-  function updateImmersiveText() {
-    const el = $('#immersive-text');
-    if (!el) return;
-    const last = story ? lastNarration() : null;
-    el.textContent = last ? last.text : (story && story.premise ? story.premise.split('\n')[0] : '');
+  /* ================= 渲染：布局状态（P2 的统一入口） =================
+   * 所有排版只由 #screen-game 的 data-layout 决定：
+   *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
+   * 比例 / 收起 / 选项显示都存在 settings.ui（全局），story.ui 只记输入类型。 */
+
+  const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
+  let immersiveTextHidden = false;
+
+  function uiState() {
+    if (!settings.ui || typeof settings.ui !== 'object') settings.ui = Store.defaultSettings().ui;
+    return settings.ui;
   }
 
-  /* ================= 渲染：布局（双栏 / 沉浸 / 折叠） ================= */
+  function autoLayout() {
+    return (typeof window !== 'undefined' && window.innerWidth >= 900) ? 'split' : 'stack';
+  }
+
+  function effectiveLayout() {
+    const ui = uiState();
+    if (ui.layout === 'immersive') return 'immersive';
+    if (ui.layout === 'split' || ui.layout === 'stack') return ui.layout;
+    return autoLayout();
+  }
+
+  function isImmersive() {
+    return effectiveLayout() === 'immersive';
+  }
+
+  function setLayout(next) {
+    const ui = uiState();
+    ui.layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
+    if (ui.layout !== 'immersive') immersiveTextHidden = false;
+    applyLayout();
+    persistSettings();
+  }
 
   function applyLayout() {
-    const ui = (story && story.ui) || Store.defaultUi();
-    $('#chat-pane').style.width = Math.round((ui.split || 0.5) * 100) + '%';
-    $('#screen-game').classList.toggle('no-image', !ui.showImage);
-    $('#screen-game').classList.toggle('immersive', !!ui.immersive);
-    $('#immersive-bar').classList.toggle('hidden', !ui.immersive);
-    $('#btn-toggle-image').title = ui.showImage ? '收起画面面板' : '展开画面面板';
+    const el = $('#screen-game');
+    if (!el) return;
+    const ui = uiState();
+    const layout = effectiveLayout();
+    el.dataset.layout = layout;
+    el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
+    el.classList.toggle('no-image', !!ui.imageCollapsed && layout !== 'immersive');
+    el.classList.toggle('text-hidden', !!immersiveTextHidden);
+
+    const exitBtn = $('#btn-immersive-exit');
+    if (exitBtn) exitBtn.classList.toggle('hidden', layout !== 'immersive');
+    const toggle = $('#btn-toggle-image');
+    if (toggle) toggle.title = ui.imageCollapsed ? '展开画面' : '收起画面';
+    const imm = $('#btn-immersive');
+    if (imm) imm.title = layout === 'immersive' ? '退出沉浸（Esc）' : '沉浸（画面铺满）';
   }
 
-  // Esc / ✕ 退出沉浸态：回到「自动」布局（P2 统一由 setLayout 负责，这里先给出行为）
-  function exitImmersive() {
-    if (!story || !story.ui || !story.ui.immersive) return false;
-    story.ui.immersive = false;
+  // 画面（收起 / 展开舞台）：沉浸态下等同于退出沉浸
+  function toggleStagePanel() {
+    if (!story) return;
+    const ui = uiState();
+    if (isImmersive()) { setLayout('auto'); return; }
+    ui.imageCollapsed = !ui.imageCollapsed;
     applyLayout();
-    saveAll();
+    persistSettings();
+  }
+
+  function enterImmersive() {
+    if (!story) return;
+    setLayout('immersive');
+    immersiveTextHidden = false;
+    applyLayout();
+  }
+
+  // Esc / ✕ 退出沉浸态：回到「自动」布局
+  function exitImmersive() {
+    if (!isImmersive()) return false;
+    immersiveTextHidden = false;
+    setLayout('auto');
     return true;
   }
 
   function bindSplitter() {
     const sp = $('#splitter');
+    if (!sp) return;
     let dragging = false;
-    const onMove = (clientX) => {
-      if (!story) return;
+    const onMove = (clientX, touch) => {
+      if (!story || effectiveLayout() !== 'split') return;
       const rect = $('#game-layout').getBoundingClientRect();
-      let p = (clientX - rect.left) / Math.max(1, rect.width);
-      p = Math.max(0.08, Math.min(0.92, p));
-      story.ui.split = p;
+      const p = (clientX - rect.left) / Math.max(1, rect.width);
+      // 每栏最小约 28%
+      uiState().splitRatio = Math.max(0.28, Math.min(0.72, p));
       applyLayout();
+      if (touch && touch.preventDefault) touch.preventDefault();
     };
     const stop = () => {
       if (!dragging) return;
       dragging = false;
       sp.classList.remove('dragging');
-      if (!story) return;
-      if (story.ui.split < 0.15) story.ui.split = 0.10;        // 吸附：画面为主
-      else if (story.ui.split > 0.85) story.ui.split = 0.90;   // 吸附：聊天为主
-      applyLayout();
-      saveAll();
+      if (story) persistSettings();
     };
     sp.addEventListener('mousedown', e => { dragging = true; sp.classList.add('dragging'); e.preventDefault(); });
     window.addEventListener('mousemove', e => { if (dragging) onMove(e.clientX); });
     window.addEventListener('mouseup', stop);
-    sp.addEventListener('touchstart', e => { dragging = true; sp.classList.add('dragging'); }, { passive: true });
+    sp.addEventListener('touchstart', () => { dragging = true; sp.classList.add('dragging'); }, { passive: true });
     window.addEventListener('touchmove', e => {
-      if (dragging && e.touches && e.touches[0]) { onMove(e.touches[0].clientX); e.preventDefault(); }
+      if (dragging && e.touches && e.touches[0]) onMove(e.touches[0].clientX, e);
     }, { passive: false });
     window.addEventListener('touchend', stop);
+    // 双击分隔条恢复 1:1
+    sp.addEventListener('dblclick', () => {
+      uiState().splitRatio = 0.5;
+      applyLayout();
+      persistSettings();
+    });
+    // 窗口尺寸变化：auto 需要在 split / stack 之间切换
+    let rzTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(rzTimer);
+      rzTimer = setTimeout(applyLayout, 120);
+    });
   }
 
   /* ================= 进入 / 离开故事 ================= */
@@ -4421,6 +4535,9 @@
     $('#screen-start').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
     $('#screen-game').classList.remove('hidden');
+    $('#screen-game').classList.remove('stage-strip', 'text-hidden');
+    closeMenus();
+    immersiveTextHidden = false;
     $('#hud-title').textContent = story.title;
     $('#hud-mode').textContent = MODE_LABELS[story.mode] || '剧情';
     applyLayout();
@@ -4434,8 +4551,6 @@
       // deferOpening：先走试画锚定（P4），锚定结束（锁定/跳过）后再开场
       if (!opts.deferOpening) runOpening();
     } else {
-      const sc = currentScene();
-      if (sc) setBackground(sceneSrc(sc));
       currentChoices = [];
       renderNarrationToolsAfterLoad();
       saveAll();
@@ -4927,12 +5042,13 @@
     });
 
     // —— 阅读页 HUD ——
-    // 左上「←」退出故事回首页；书架与新故事单独给按钮，三个模式共用（不进书架也能直接开新故事）
+    // 左上「←」退出故事回首页；书架、标题与模式留在顶栏，其余收进「⋯」。
     $('#btn-back-home').onclick = showStart;
     $('#btn-hud-shelf').onclick = showShelf;
-    $('#btn-hud-new').onclick = newStoryFromGame;
-    $('#btn-settings').onclick = openSettings;
+    $('#btn-hud-new').onclick = () => { closeMenus(); newStoryFromGame(); };
+    $('#btn-settings').onclick = () => { closeMenus(); openSettings(); };
     $('#btn-savepoint').onclick = async () => {
+      closeMenus();
       if (!story) return;
       const name = await irConfirm('给这个存档点起个名字', {
         title: '存档点', input: true, okText: '保存',
@@ -4942,29 +5058,44 @@
       addSavepoint(String(name).trim() || undefined);
       toast('已打存档点');
     };
-    $('#btn-manual-gen').onclick = () => {
+    const manualGenerate = () => {
+      closeMenus();
       if (!story) { toast('先打开一个故事吧'); return; }
       if (offlineBlocked('这次作画')) return;   // 离线：不排进队列，也不花额度
       enqueueImage(story.lastSceneSummary);
       toast('已加入作画队列');
     };
-    $('#btn-toggle-image').onclick = () => {
+    $('#btn-manual-gen').onclick = manualGenerate;
+    $('#btn-stage-gen').onclick = e => { if (e) e.stopPropagation(); manualGenerate(); };
+    $('#btn-toggle-image').onclick = toggleStagePanel;
+    $('#btn-stage-painter').onclick = e => { if (e) e.stopPropagation(); openWorkbench(null); };
+    $('#btn-immersive').onclick = e => {
+      if (e) e.stopPropagation();
       if (!story) return;
-      story.ui.showImage = !story.ui.showImage;
-      applyLayout(); saveAll();
+      if (isImmersive()) exitImmersive(); else enterImmersive();
     };
-    $('#btn-stage-painter').onclick = () => openWorkbench(null);   // 画师工作台（当前画面）
-    $('#btn-immersive').onclick = () => {
-      if (!story) return;
-      story.ui.immersive = true;
-      applyLayout(); saveAll();
-      $('#immersive-input').focus();
-    };
-    $('#btn-immersive-exit').onclick = () => {
-      if (!story) return;
-      story.ui.immersive = false;
-      applyLayout(); saveAll();
-    };
+    $('#btn-immersive-exit').onclick = e => { if (e) e.stopPropagation(); exitImmersive(); };
+
+    // 顶栏「⋯」/ 输入区「＋」：打开前先刷新菜单项状态
+    $('#btn-hud-more').onclick = e => { e.stopPropagation(); toggleMenu($('#btn-hud-more'), $('#hud-more-menu')); };
+    $('#btn-more-actions').onclick = e => { e.stopPropagation(); toggleMenu($('#btn-more-actions'), $('#feature-menu')); };
+    document.addEventListener('click', e => {
+      if (e.target.closest && e.target.closest('.menu-item')) { closeMenus(); return; }
+      if (e.target.closest && e.target.closest('.menu, .hud-more, .menu-wrap')) return;
+      closeMenus();
+    });
+
+    // 舞台点击：沉浸态显示 / 隐藏文字；堆叠态收起 / 展开成细条
+    $('#stage-wrap').addEventListener('click', e => {
+      if (e.target.closest && e.target.closest('button')) return;
+      const layout = effectiveLayout();
+      if (layout === 'immersive') {
+        immersiveTextHidden = !immersiveTextHidden;
+        $('#screen-game').classList.toggle('text-hidden', immersiveTextHidden);
+      } else if (layout === 'stack') {
+        $('#screen-game').classList.toggle('stage-strip');
+      }
+    });
 
     // —— 输入 ——
     const doSend = (opts) => {
@@ -4977,15 +5108,6 @@
     };
     $('#btn-send').onclick = () => doSend({ allowStop: true });
     $('#player-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
-    const doImmersiveSend = (opts) => {
-      if (busy) { if (opts && opts.allowStop) requestChatStop(); return; }
-      const v = $('#immersive-input').value.trim();
-      if (!v) return;
-      $('#immersive-input').value = '';
-      sendPlayerAction(v, false);
-    };
-    $('#btn-immersive-send').onclick = doImmersiveSend;
-    $('#immersive-input').addEventListener('keydown', e => { if (e.key === 'Enter') doImmersiveSend(); });
 
     bindSplitter();
 

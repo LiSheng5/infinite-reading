@@ -192,9 +192,11 @@
     return { style: '', scenes: '', wardrobe: '', updatedAt: 0 };
   }
 
-  // 界面状态（随存档记住）：双栏比例 / 画面面板开合 / 全屏沉浸（§4.6、§4.9）
+  // 界面状态（随存档记住）：输入类型（做 / 说 / 导演）。
+  // split / showImage / immersive 是 v0.3 的旧字段，仍原样保留在存档里（不读、不删），
+  // 布局状态已统一到 settings.ui（layout / splitRatio / imageCollapsed）。
   function defaultUi() {
-    return { split: 0.5, showImage: true, immersive: false };
+    return { kind: 'do', split: 0.5, showImage: true, immersive: false };
   }
 
   function defaultSubModel() {
@@ -219,6 +221,13 @@
       draft: defaultSubModel(),                                // 开局向导起草
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '' },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
+      // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
+      ui: {
+        layout: 'auto',          // auto | split | stack | immersive
+        splitRatio: 0.5,         // 双栏比例（每栏最小约 28%）
+        imageCollapsed: false,   // 舞台收起（聊天占满）
+        choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
+      },
       showReasoning: true,
       toolsEnabled: 'on',
       noTools: [],            // P5-1 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
@@ -258,6 +267,17 @@
       trigger: ['every', 'choice', 'manual'].indexOf(raw.trigger) >= 0
         ? raw.trigger
         : (raw.trigger === 'ai' ? 'every' : d.trigger), // v0.1 的 'ai' 已废 → 退回 every
+    };
+
+    // 界面布局（P2，新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
+    const rawUi = (raw.ui && typeof raw.ui === 'object') ? raw.ui : {};
+    let ratio = +rawUi.splitRatio;
+    if (!Number.isFinite(ratio) || ratio <= 0) ratio = d.ui.splitRatio;
+    out.ui = {
+      layout: ['auto', 'split', 'stack', 'immersive'].indexOf(rawUi.layout) >= 0 ? rawUi.layout : d.ui.layout,
+      splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
+      imageCollapsed: !!rawUi.imageCollapsed,
+      choices: rawUi.choices === 'always' ? 'always' : 'tray',
     };
 
     out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;
