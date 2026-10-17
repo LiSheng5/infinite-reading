@@ -15,7 +15,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.3.2">
+<link rel="stylesheet" href="css/style.css?v=0.4.0">
 </head>
 <body>
 <div id="app">
@@ -47,7 +47,7 @@
         <label class="field-label" for="setup-premise">故事设定（仅剧情模式用；开演前可随意修改）</label>
         <textarea id="setup-premise" rows="8" spellcheck="false"></textarea>
       </div>
-      <p class="version">无限阅读 v0.3 · 纯本地运行 · 数据只保存在你的浏览器里</p>
+      <p class="version">无限阅读 v0.4 · 纯本地运行 · 数据只保存在你的浏览器里</p>
     </div>
   </section>
 
@@ -636,6 +636,26 @@
         </fieldset>
 
         <fieldset>
+          <legend>界面</legend>
+          <div class="grid2">
+            <label>布局
+              <select id="s-ui-layout">
+                <option value="auto">自动（宽屏双栏 / 窄屏堆叠）</option>
+                <option value="split">双栏（左文右图）</option>
+                <option value="stack">堆叠（图在上、文在下）</option>
+              </select>
+            </label>
+            <label>选项显示
+              <select id="s-ui-choices">
+                <option value="tray">收在「💡 灵感」里</option>
+                <option value="always">始终内联在旁白下</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">沉浸（画面铺满）从舞台右上角的 ⛶ 进入，Esc 或 ✕ 退出；分隔条双击恢复 1:1。</p>
+        </fieldset>
+
+        <fieldset>
           <legend>生成过程</legend>
           <label class="check"><input id="s-show-reasoning" type="checkbox" checked> 展示深度思考链（模型返回 reasoning_content 时）</label>
           <label class="check"><input id="s-tools-enabled" type="checkbox" checked> 下发工具（按需召回世界卡 / 视觉设定卡、请求作画、写入记忆；模型不支持 function calling 时可手动关闭）</label>
@@ -914,23 +934,23 @@
     </div>
   </div>
 
-<script src="js/providers.js?v=0.3.2"></script>
-<script src="js/context.js?v=0.3.2"></script>
+<script src="js/providers.js?v=0.4.0"></script>
+<script src="js/context.js?v=0.4.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.3.2"></script>
-<script src="js/store.js?v=0.3.2"></script>
-<script src="js/modelCapabilities.js?v=0.3.2"></script>
-<script src="js/roleCard.js?v=0.3.2"></script>
+<script src="js/storage.js?v=0.4.0"></script>
+<script src="js/store.js?v=0.4.0"></script>
+<script src="js/modelCapabilities.js?v=0.4.0"></script>
+<script src="js/roleCard.js?v=0.4.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.3.2"></script>
+<script src="js/demo.js?v=0.4.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.3.2"></script>
+<script src="js/zip.js?v=0.4.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.3.2"></script>
+<script src="js/sidecar.js?v=0.4.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.3.2"></script>
-<script src="js/app.js?v=0.3.2"></script>
+<script src="js/features.js?v=0.4.0"></script>
+<script src="js/app.js?v=0.4.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.3.2"></script>
+<script src="js/pwa.js?v=0.4.0"></script>
 </body>
 </html>

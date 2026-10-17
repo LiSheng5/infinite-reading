@@ -1,7 +1,7 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.3.2-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
@@ -59,7 +59,8 @@ cd infinite-reading
 3. **点一张模式卡就开局**：开始页上有三张模式卡——**剧情**（用下面的「故事设定」框开一局）、**对话**（自由聊）、**扮演**（先建 / 导入角色卡）。点哪张就直接按哪种模式开局，**没有单独的「开始」按钮**；「故事设定」框常驻，只给剧情模式用。
    - 「📄 文本导入」：把现成文本（设定文 / 小说片段 / 聊天记录）交给 AI 整理成开局材料，确认后再建新档。
    - 「☰ 我的书架」进故事列表（继续 / 改名 / 删除 / 导出），「↶ 继续上次」直接回到上一个故事；书架里的「＋新故事」也能选模式开局。
-   - 进了故事（三个模式都一样），顶栏左上「←」是**回首页**，旁边还有「☰ 书架」和「＋ 新故事」——玩到一半想换一局、翻书架或回首页，直接点就行（点「＋ 新故事」会先把当前这一幕存好）。
+   - 进了故事（三个模式都一样），界面是「左文右图」：左边只排文字（旁白是正文，玩家发言弱化成一侧细线 + 做/说/导演小标签），右边是舞台（当前画面 + 缩略条）。顶栏左上「←」是**回首页**，旁边是书架与标题；存档点、新故事、为当前场景作画、模型设置都收在右上角「⋯」里（开新故事前会先把当前这一幕存好）。
+   - 输入框上方有「💡 灵感」：模型给的选项默认收在这里，点开是一排选项，点哪个就以哪个行动继续；也可以完全不理它、自己打字。输入框左侧的「做 / 说 / 导演」只改变模型如何理解这句话，按故事记住。
 
 > ⚠️ `file://` 与 `http://localhost` 是两套独立数据，选定一种就别换。
 > 浏览器直连 API 可能被 CORS 拦（`file://` 下尤其常见），遇到就改用本地静态服务。
@@ -74,7 +75,7 @@ cd infinite-reading
 | 做出选择后（默认） | 最像传统视觉小说 |
 | 仅手动 | 最省钱 |
 
-任何时机下都可点右上角「🎨 作画」手动补一张。
+任何时机下都可点舞台右上角「🎨 补一张」（或「⋯ → 为当前场景作画」）手动补一张。
 
 ## 可选：本地服务（邮件 / 定时主动 / 代下单）
 

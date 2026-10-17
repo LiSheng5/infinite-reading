@@ -72,7 +72,7 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
        ├─ maybeEnqueueImage(reply,false)      ← 按 settings.trigger 三档决定是否出图
        │    └─ enqueueImage → generateScene → painterCompose → runPaint
        │         └─ IR.ImageProviders[...].generate(cfg, prompt)   ← 唯一的生图网络出口
-       │            → 写入 scenes[] / 缩略图 → 背景淡入（bg-a / bg-b 双层交叉）
+       │            → 写入 scenes[] / 缩略图 → 舞台换图（模糊底色 + 完整图 + 缩略条）
        └─ await postTurn()   ← runSmartCompress（70% 阈值压缩）+ runScribe（书记员校准世界卡）
 ```
 
@@ -112,6 +112,7 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 顶层字段：`schema, id, title, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary`。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
+- `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个。
 - 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级，**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
 
