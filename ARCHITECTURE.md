@@ -22,6 +22,7 @@
 |---|---|---|---|
 | `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders`（空，预留） |
 | `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
+| `js/tree.js` | `IR.Tree` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换 | `ensure`、`begin` / `commit` / `seal`、`project`、`switchSibling` / `switchTo`、`pushLate`、`imageIdsOf` |
 | `js/storage.js` | `IR.Storage` | IndexedDB 适配器（**唯一碰 IndexedDB 的地方**）：开库 + 增删改查，`available=false` 时上层自然退回 localStorage | `available`、`get` / `put` / `del` / `keys` / `entries`、`estimate` |
 | `js/store.js` | `IR.Store` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步 | `boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
 | `js/modelCapabilities.js` | `IR.ModelCapabilities` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
@@ -32,6 +33,7 @@
 | `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` / `buildBackupZip`、`importZipFile` |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
+| `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
 | `js/sidecar.js` | `IR.Sidecar` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `app.js` 注册） | `attach`、`accept`、`drain` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
@@ -39,10 +41,10 @@
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → app.js → pwa.js
+providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → app.js → pwa.js
 ```
 
-`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -107,14 +109,15 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 
 `localStorage` 现在只承担两件事：① 升级前的旧数据（**只读，迁移后原样保留当回退快照，不再写入**）；② `infinite-reading-v1:*` 旧版键（仅用于一次性迁移）。
 
-### 4.2 story schema v2（`Store.newStory`）
+### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
-顶层字段：`schema, id, title, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary`。
+顶层字段：`schema, id, title, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
 - `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
-- 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个。
-- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级，**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
+- `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`IR.Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `IR.Tree.ensure` 幂等迁移成线性链（末条旁白 `versions > 1` 展开成兄弟、旧存档点按 `sp.turn` 映射 `nodeId`）。
+- 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。
+- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级（`migrateStory` 原样透传 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
 
 ### 4.3 对外交换格式
 
@@ -141,6 +144,10 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 | **不预置模型名与厂商参数** | `modelCapabilities.js`（表默认空）、`store.js` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
 | **换档保护** | `app.js`：生图 / 书记员结果写回前核对 `storyId` | 切换故事时不污染新档 |
 | **AI 文本一律 `textContent` 渲染** | `app.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
+| **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`app.js` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
+| **`seal` 必须在 `postTurn` 之后** | `app.js`：`sendPlayerAction` / `retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
+| **全树图集必须含非当前分支** | `store.js`：`imageIdsOf` / `knownImageIds`、`js/tree.js`：`imageIdsOf` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径） |
+| **晚到条目 / 画面带 `nodeId` 校验** | `app.js`：`runPaint` / `generateScene` 写回、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log |
 
 ## 6. 上下文策略速览
 
@@ -174,7 +181,7 @@ providers.js → context.js → storage.js → store.js → modelCapabilities.js
 
 本地服务的三个功能也照这条办：`?demo=1` 下不连真实 sidecar（保持零外联），而是由 `IR.Demo.installSidecarMock()` 把 `IR.Sidecar` 换成一整套**内存实现**（同一批方法名、同样走保守策略），因此「写邮件 / 定时主动 / 代下单」的界面链路在演示模式下也能完整跑一遍。
 
-`eval/demo-smoke.js` 在 Node 里不放浏览器地跑这套契约（18 项），已接入 CI。
+`eval/demo-smoke.js` 在 Node 里不放浏览器地跑这套契约（24 项，含「demo 走 3 回合 → 重试 → 切换 → 再切回」的分支树链路），已接入 CI。
 
 ## 8. 评测如何做
 

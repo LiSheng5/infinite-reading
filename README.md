@@ -1,7 +1,7 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.5.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
@@ -152,8 +152,9 @@ node sidecar/server.mjs            # 首次启动会打印 token
 |---|---|
 | `js/providers.js` | 适配器层：`ChatProviders` / `ImageProviders`；`VideoProviders` 已预留（`generate(cfg,{prompt,image}) -> {url}`） |
 | `js/context.js` | 上下文组装、压缩链、文本导入整理 |
+| `js/tree.js` | 分支树数据层：回合树是唯一真源（「↻ 重试」= 新增兄弟、‹ n/m › 切换），log / 世界卡等全是「根 → head」的投影 |
 | `js/storage.js` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
-| `js/store.js` | 存档层（内存优先 + 异步落盘；schema v2、旧档迁移、书架、存档点） |
+| `js/store.js` | 存档层（内存优先 + 异步落盘；schema v3、旧档迁移、书架、存档点） |
 | `js/zip.js` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
 | `js/roleCard.js` | 角色卡（SillyTavern PNG 解析） |
 | `js/modelCapabilities.js` | 模型参数登记表（默认留空） |
@@ -162,7 +163,8 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `js/sidecar.js` + `js/features.js` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `js/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
-| `eval/demo-smoke.js` | 演示模式冒烟测试（不开浏览器，验证两个假适配器的接口契约） |
+| `eval/demo-smoke.js` | 演示模式冒烟测试（不开浏览器，验证两个假适配器的接口契约 + demo 分支树链路） |
+| `eval/tree-test.js` | 分支树数据层测试（Node 离线：投影 / 兄弟切换 / 旧档迁移 / store 集成） |
 | `eval/zip-smoke.js` 等 | ZIP 冒烟与侧车 / 前端特性测试（`npm test` 一并跑） |
 | `sidecar/` | 可选本地服务（Node 进程）：邮件 / 定时主动 / 受限购物支付；只绑 `127.0.0.1` |
 | `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器（不属于运行时代码） |
