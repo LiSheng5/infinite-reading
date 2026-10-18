@@ -612,6 +612,10 @@
       scenes: clone((s.scenes || []).slice(-8).map(sc => Object.assign({}, sc, { src: undefined }))),
       lastBg: s.lastBg || null,
       lastSceneSummary: s.lastSceneSummary || '',
+      // 分支树（§4.6）：nodeId 用于「回到这个存档点 = 回到树上这个节点」；
+      // tree 整棵随存档点备份——老存档点回档会把树重置成直线，得先能整棵接回来
+      nodeId: (s.tree && s.tree.head) || null,
+      tree: clone(s.tree || null),
     };
   }
 
@@ -648,9 +652,23 @@
     if (busy) { toast('正在生成中，等这一步结束再回档'); return; }
     const sp = (story.savepoints || []).find(x => x.id === id);
     if (!sp) return;
-    if (!await irConfirm('回到「' + sp.name + '」？当前进度会先自动存为一个新存档点。', { title: '回档', okText: '回档' })) return;
+    // §4.6 分流：存档点带着 nodeId 且节点还在（当前树或存档点自带的树里）→ 回到树上那个节点；
+    // 老存档点（迁移前）没有节点可回 → 旧的整档快照，树随之重置成一条直线
+    const hasNode = !!(sp.nodeId && ((story.tree && story.tree.nodes[sp.nodeId]) || (sp.tree && sp.tree.nodes && sp.tree.nodes[sp.nodeId])));
+    const msg = '回到「' + sp.name + '」？当前进度会先自动存为一个新存档点。'
+      + (hasNode ? '' : '\n\n这个存档点早于分支功能，回档会重置当前分支树为一条直线（回档前的分支树已整体备份进新存档点）。');
+    if (!await irConfirm(msg, { title: '回档', okText: '回档' })) return;
     addSavepoint('回档前 · ' + fmtTime(Date.now()));
-    restoreSnapshot(story, sp);
+    if (hasNode) {
+      if (!(story.tree && story.tree.nodes[sp.nodeId])) story.tree = clone(sp.tree);   // 树被重置过：从存档点把整棵接回来
+      IR.Tree.switchTo(story, sp.nodeId);   // 含 project：head 落到该节点，世界卡 / 窗口跟着走
+    } else {
+      restoreSnapshot(story, sp);
+      story.tree = null;                    // 没有分支可回：整棵树重置为线性链（§4.6）
+      IR.Tree.ensure(story);
+      IR.Tree.project(story);
+    }
+    currentChoices = choicesFromHead();
     saveAll();
     renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); renderSavepoints();
     toast('已回到：' + sp.name);
@@ -878,6 +896,7 @@
       pack.userProfile = st.userProfile || [];
       pack.turn = st.turn || 0;
       pack.lastSceneSummary = st.lastSceneSummary || '';
+      pack.tree = st.tree || null;   // 分支树（§5⑧）：full 包带整棵树，导入后 ensure 复原分支
     }
     return pack;
   }
@@ -1287,6 +1306,8 @@
       thumb: im.thumb || null, src: im.src || null, ts: Date.now(),
     }));
     st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
+    st.tree = obj.tree ? clone(obj.tree) : null;   // full 包带的分支树（§5⑧）
+    IR.Tree.ensure(st);                            // 导入后建 / 校验树（无树旧包 → 线性链）
     Store.saveStory(st);
     showShelf();                       // 导入即进书架，能直接看到新卡片
     // 档案里带的原图（别人导出时勾了「附带原图」）：转成 Blob 存进 IndexedDB，之后照常显示原图
@@ -1297,11 +1318,18 @@
           const imageId = await storeOriginal(sc.id, sc.src, { width: sc.width, height: sc.height });
           if (imageId) {
             sc.imageId = imageId;
-            const entry = findImageEntry(sc.id);
+            // 这里 story 已被 showShelf 置空：直接在导入的 st 上找（原写法 findImageEntry 永远找不到）
+            const entry = (st.log || []).find(e => e && e.type === 'image' && e.id === sc.id);
             if (entry) entry.imageId = imageId;
+            // 分支树里同一张 scene / 图片条目也换键（§5⑧）：否则非当前分支的图全是死键
+            const nodes = st.tree && st.tree.nodes;
+            if (nodes) for (const nid of Object.keys(nodes)) {
+              for (const sm of (nodes[nid].scenes || [])) if (sm && sm.id === sc.id) sm.imageId = imageId;
+              for (const en of (nodes[nid].entries || [])) if (en && en.type === 'image' && en.id === sc.id) en.imageId = imageId;
+            }
           }
         }
-        saveAll();
+        Store.saveStory(st);   // 换键结果要落盘（story 已切走，saveAll 是空操作）
         renderStage(); renderThumbs();
       })();
     }
@@ -2187,14 +2215,14 @@
     return m;
   }
 
-  function maybeEnqueueImage(reply, isOpen) {
+  function maybeEnqueueImage(reply, isOpen, nodeId) {
     // 去重（§4.7）：本轮 AI1 已经用 request_image 出过图 → 时机出图跳过，同轮不画两张
     if (turnPaintedByTool) { turnPaintedByTool = false; return; }
     const mode = settings.trigger;
     let want = false;
     if (mode === 'every') want = true;
     else if (mode === 'choice' && (lastActionWasChoice || isOpen || story.turn === 1)) want = true;
-    if (want) enqueueImage(reply.scene_summary);
+    if (want) enqueueImage(reply.scene_summary, nodeId);
   }
 
   // 流式清洗：从累积的 JSON 文本里抠出旁白可读部分
@@ -3184,6 +3212,7 @@
     choicesTrayOpen = false;
     setSendButtonsBusy(true);   // P0-1：busy 期间发送按钮变身「停止」
 
+    const mark = IR.Tree.begin(story);   // 记 logMark：必须在 pushLog 之前（§4.1）
     pushLog(agentMsg
       ? { type: 'agent', text: action, trigger: meta.triggerName || '', reason: meta.reason || '', fireId: meta.fireId || '' }
       : { type: isChoice ? 'choice' : 'player', text: action, kind: kind || 'do' });
@@ -3194,17 +3223,25 @@
       const reply = res.reply;
       story.turn += 1;
       story.lastSceneSummary = reply.scene_summary || story.lastSceneSummary;
-      story.messages.push(
-        { role: 'user', content: IR.Context.playerContent(story.premise, sentAction) },
-        assistantMessage(reply, res.reasoning),
-      );
+      const userMsg = { role: 'user', content: IR.Context.playerContent(story.premise, sentAction) };
+      const asst = assistantMessage(reply, res.reasoning);
+      story.messages.push(userMsg, asst);
       pushNarrationEntry(reply.narration, res.reasoning);
       await finishNarration(res.streamed);
       absorbReply(reply);
       currentChoices = reply.choices;
       renderChat();
-      maybeEnqueueImage(reply, false);
+      // §4.1 回合落节点：entries = log.slice(logMark)，head 前移；失败 / 停止不建节点
+      const node = IR.Tree.commit(story, {
+        action: {
+          type: agentMsg ? 'agent' : (isChoice ? 'choice' : 'player'),
+          text: action, kind: kind || null, sent: sentAction,
+        },
+        userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+      });
+      maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
       await postTurn();
+      IR.Tree.seal(story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
       if (agentMsg && meta.fireId) await ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
       live = null;
@@ -3248,23 +3285,29 @@
     busy = true;
     stopRequested = false; chatAbortCtrl = null;   // P0-1
     setSendButtonsBusy(true);
+    const mark = IR.Tree.begin(story);             // 记 logMark（§4.1）
     try {
       const res = await callAI1(OPENING_ACTION, { includePremise: true });
       const reply = res.reply;
       story.turn += 1;
       story.lastSceneSummary = reply.scene_summary || '';
-      story.messages.push(
-        { role: 'user', content: IR.Context.playerContent(story.premise, OPENING_ACTION, { includePremise: true }) },
-        assistantMessage(reply, res.reasoning),
-      );
+      const userMsg = { role: 'user', content: IR.Context.playerContent(story.premise, OPENING_ACTION, { includePremise: true }) };
+      const asst = assistantMessage(reply, res.reasoning);
+      story.messages.push(userMsg, asst);
       pushNarrationEntry(reply.narration, res.reasoning);
       await finishNarration(res.streamed);
       absorbReply(reply);
       currentChoices = reply.choices;
       renderChat();
+      // 开局同样是节点（§4.1）：action.type = 'opening'，sent = OPENING_ACTION
+      const node = IR.Tree.commit(story, {
+        action: { type: 'opening', text: OPENING_ACTION, kind: null, sent: OPENING_ACTION },
+        userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+      });
       await postTurn();
+      IR.Tree.seal(story, node.id);                // 必须在 postTurn 之后（§10）
       if (turnPaintedByTool) turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
-      else if (settings.trigger !== 'manual') enqueueImage(reply.scene_summary);
+      else if (settings.trigger !== 'manual') enqueueImage(reply.scene_summary, node.id);
       else toast('已开局。想看画面随时点右上角「作画」。');
       saveAll();
     } catch (e) {
@@ -3291,7 +3334,7 @@
     story.log.push(entry);
   }
 
-  /* ================= 重试与版本栈（R1 / T-P1-3） ================= */
+  /* ================= 重试与分支（R1 / §4.2、§4.3） ================= */
 
   function lastNarration() {
     if (!story) return null;
@@ -3311,62 +3354,96 @@
     }
     return null;
   }
-  function lastAssistantIndex() {
-    const m = story.messages;
-    for (let i = m.length - 1; i >= 0; i--) if (m[i].role === 'assistant') return i;
-    return -1;
-  }
-  function syncLastAssistantNarration(text) {
-    const i = lastAssistantIndex();
-    if (i < 0) return;
+  // 选项只随 assistantMsg 存档（slimReply 的 JSON）：切分支 / 载入后从 head 的 assistantMsg 恢复（§4.3）
+  function choicesFromMsg(msg) {
+    if (!msg || typeof msg.content !== 'string') return [];
     try {
-      const j = JSON.parse(story.messages[i].content);
-      j.narration = text;
-      story.messages[i].content = JSON.stringify(j);
-    } catch (_) {}
+      const j = JSON.parse(msg.content);
+      return Array.isArray(j.choices) ? j.choices.filter(Boolean).map(String).slice(0, 3) : [];
+    } catch (_) { return []; }
   }
-  function appendVersion(entry, text) {
-    if (!Array.isArray(entry.versions) || !entry.versions.length) entry.versions = [entry.text];
-    entry.versions.push(text);
-    while (entry.versions.length > 5) entry.versions.shift();
-    entry.activeVersion = entry.versions.length - 1;
-    entry.text = text;
+  function choicesFromHead() {
+    const t = story && story.tree;
+    return (t && t.nodes && t.nodes[t.head]) ? choicesFromMsg(t.nodes[t.head].assistantMsg) : [];
   }
+  function treeHeadNodeId() {
+    return (story && story.tree && story.tree.head) || null;
+  }
+  // 这个 log 条目属于哪个节点（§4.4 锚点）：node.entries 与 story.log 是同一批对象（project 按引用共享）
+  function nodeIdOwningEntry(entry) {
+    const t = story && story.tree;
+    if (!t || !t.nodes || !entry) return null;
+    for (const id of Object.keys(t.nodes)) {
+      if ((t.nodes[id].entries || []).indexOf(entry) >= 0) return id;
+    }
+    return null;
+  }
+  // 图所属的节点：条目可能已滑出可见 log 窗口（末 120 条），按 node.scenes 里的 scene id 再找一遍
+  function nodeIdOwningScene(sceneId) {
+    const t = story && story.tree;
+    if (!t || !t.nodes || !sceneId) return null;
+    for (const id of Object.keys(t.nodes)) {
+      if ((t.nodes[id].scenes || []).some(s => s && s.id === sceneId)) return id;
+    }
+    return null;
+  }
+
+  /* ================= 重试 = 新增兄弟（§4.2） / 兄弟切换（§4.3） ================= */
 
   async function retryLast() {
     if (busy || !story) return;
-    const last = lastNarration();
-    const action = lastActionEntry();
-    if (!last || !action) { toast('还没有可以重试的回合'); return; }
+    const tree = story.tree;
+    const old = tree && tree.nodes && tree.nodes[tree.head];
+    // §4.2：重试是在父节点下新增兄弟；当前 head 必须是已结算的回合节点
+    if (!old || old.kind !== 'turn' || !old.sealed || !old.action) { toast('还没有可以重试的回合'); return; }
+    const act = old.action;
+    const isRetryOpening = act.type === 'opening';
+    const sent = act.sent || withKindMarker(act.text, act.kind);
+    const userMsg = old.userMsg || { role: 'user', content: IR.Context.playerContent(story.premise, sent) };
 
-    const msgs = story.messages;
-    const ai = lastAssistantIndex();
-    if (ai < 1) return;
-    const removed = msgs.splice(ai - 1, 2); // 暂时移除最后的 [user, assistant]
+    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正（§10）：
+    // 以前重试是在已被上一版改写过的世界卡上重来
+    IR.Tree.switchTo(story, old.parent);
+    story.turn += 1;            // 与正常回合同口径：turn 在提交前 +1
+    currentChoices = [];
 
     busy = true;
     stopRequested = false; chatAbortCtrl = null;   // P0-1
-    currentChoices = [];
     setSendButtonsBusy(true);
     renderChat();
+    const mark = IR.Tree.begin(story);             // 记 logMark：必须在 pushLog 之前（§4.1）
+    if (!isRetryOpening) {
+      // 重新 pushLog 同一条玩家行动（§4.2）：project 到父节点后旧回合的条目已不在窗口里
+      pushLog(act.type === 'agent'
+        ? { type: 'agent', text: act.text, trigger: '', reason: '', fireId: '' }
+        : { type: act.type === 'choice' ? 'choice' : 'player', text: act.text, kind: act.kind || 'do' });
+    }
     try {
-      const res = await callAI1(withKindMarker(action.text, action.kind) + '\n（请换一种不同的发展，给出不同的走向）');
+      // 重试后缀只出现在请求里，不进存档（§4.2）
+      const res = await callAI1(sent + '\n（请换一种不同的发展，给出不同的走向）', isRetryOpening ? { includePremise: true } : undefined);
       const reply = res.reply;
-      msgs.push(removed[0]);
-      msgs.push(assistantMessage(reply, res.reasoning));
-      appendVersion(last, reply.narration);
-      last.reasoning = clipReasoning(res.reasoning || '');   // 版本栈只存正文；思考链跟着当前这一版
       story.lastSceneSummary = reply.scene_summary || story.lastSceneSummary;
+      const asst = assistantMessage(reply, res.reasoning);
+      story.messages.push(userMsg, asst);          // userMsg 复用原文（不带重试后缀，§4.2）
+      pushNarrationEntry(reply.narration, res.reasoning);
       await finishNarration(res.streamed);
       absorbReply(reply);
       currentChoices = reply.choices;
       renderChat();
+      // 成功：parent = 原 head 的父节点（投影已停在那），落一个新兄弟
+      const node = IR.Tree.commit(story, {
+        action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
+        userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+      });
       await postTurn();
+      IR.Tree.seal(story, node.id);
+      saveAll();
     } catch (e) {
-      msgs.splice(ai - 1, 0, ...removed); // 还原（含主动停止：旧的一对必须放回去）
+      // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）
+      IR.Tree.switchTo(story, old.id);
+      currentChoices = choicesFromHead();
       if (isStopError(e)) toast('已停止');
       else toast(netErrHint(e), true, true);
-      renderChat();
     } finally {
       busy = false;
       stopRequested = false; chatAbortCtrl = null;
@@ -3376,32 +3453,39 @@
     }
   }
 
-  function switchVersion(dir) {
-    const e = lastNarration();
-    if (!e || !Array.isArray(e.versions) || e.versions.length < 2) return;
-    let v = (e.activeVersion == null ? e.versions.length - 1 : e.activeVersion) + dir;
-    v = Math.max(0, Math.min(e.versions.length - 1, v));
-    if (v === e.activeVersion) return;
-    e.activeVersion = v;
-    e.text = e.versions[v];
-    syncLastAssistantNarration(e.text);
-    renderChat();
+  // §4.3 兄弟切换：切到相邻兄弟，沿 active 下探到叶子（续写过的支线会回到它的末端）；不发任何请求
+  function switchSiblingFromBubble(nid, dir) {
+    if (!story || !nid) return;
+    if (busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法（§4.1）
+    const head = IR.Tree.switchSibling(story, nid, dir);
+    if (!head) return;
+    currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
     saveAll();
+    renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); renderSavepoints();
   }
 
   /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） ================= */
 
   let genChain = Promise.resolve();
 
-  function enqueueImage(sceneSummary) {
+  function enqueueImage(sceneSummary, nodeId) {
     const storyId = story && story.id;   // 记住「为谁画的」：等图期间换档也不写错故事
-    genChain = genChain.then(() => generateScene(sceneSummary, storyId)).catch(() => {});
+    const nid = nodeId || treeHeadNodeId();   // 与 nodeId 一样在任务创建时记下（§4.4）
+    genChain = genChain.then(() => generateScene(sceneSummary, storyId, nid)).catch(() => {});
   }
 
   // 顺序队列：对话与在途作画结束后才生成（§4.7）
   function enqueuePaint(opts) {
     const storyId = story && story.id;   // 同上：任务自带故事 id，写入前核对
-    const p = genChain.then(() => runPaint(Object.assign({ storyId }, opts)));
+    // 图落回「它替代的那张图」所属的节点（§4.4）。重画找不到归属就挂到当前 head——
+    // 不锚定的条目下次 project 就丢了；回合内的工具出图没有 supersedes 也没 nodeId，
+    // 不在这里锚定（它在 commit 之前完成，会被 logMark 切片收进当前节点）
+    const supersedes = opts.supersedesEntry || opts.supersedesScene;
+    const nodeId = opts.nodeId
+      || nodeIdOwningEntry(opts.supersedesEntry)
+      || (opts.supersedesScene ? nodeIdOwningScene(opts.supersedesScene.id) : null)
+      || (supersedes ? treeHeadNodeId() : null);
+    const p = genChain.then(() => runPaint(Object.assign({}, opts, { storyId, nodeId })));
     genChain = p.catch(() => {});
     return p;
   }
@@ -3523,6 +3607,17 @@
       return null;
     }
 
+    // §4.4 第二道核对：图归 nodeId 那个回合。节点没了 → 丢弃；
+    // 已 sealed → 走 Tree.pushLate（在当前路径上才进投影 log，否则只写节点）；
+    // 未 sealed → 沿用现有写法（此时它必然是 head，busy 禁止切换）
+    const tree = story.tree;
+    const node = (opts.nodeId && tree && tree.nodes) ? tree.nodes[opts.nodeId] : null;
+    if (opts.nodeId && !node) {
+      toast('这张图所属的回合已不在分支树里，刚画好的图已丢弃');
+      return null;
+    }
+    const onPath = !node || IR.Tree.pathOf(story, tree.head).indexOf(node.id) >= 0;
+
     const scene = {
       id: 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
       prompt: opts.prompt, promptRaw: opts.promptRaw || '', alt: opts.alt || '',
@@ -3538,23 +3633,32 @@
     });
     if (opts.supersedesEntry) opts.supersedesEntry.supersededBy = scene.id;
     if (opts.supersedesScene) opts.supersedesScene.supersededBy = scene.id;
-    story.scenes.push(scene);
-    story.lastBg = scene.id;
-    story.log.push({
+    const entry = {
       type: 'image', id: scene.id, prompt: scene.prompt, promptRaw: scene.promptRaw, alt: scene.alt,
       thumb: scene.thumb, imageId: scene.imageId, model: scene.model, size: scene.size,
       aspect: scene.aspect, width: scene.width, height: scene.height, styleCardId: scene.styleCardId,
       ts: scene.ts,
-    });
-    setStageArt(sceneSrc(scene) || src);
-    updateRollingStyle(scene);           // §4.10 C-F：每次出图后自动更新（本地规则，不依赖模型）
-    refreshRollingStyleByModel(scene);   // 真实模式：书记员顺手刷新；失败保留本地结果
+    };
+    if (node && node.sealed) {
+      // 晚到（§4.4）：先写节点；在路径上再把同一个对象插到该节点末条之后（别追加到末尾）
+      IR.Tree.pushLate(story, node.id, scene);
+      IR.Tree.pushLate(story, node.id, entry);
+    } else {
+      story.scenes.push(scene);
+      story.log.push(entry);
+    }
+    if (onPath) {   // 不在当前分支 → 不动舞台 / 世界侧状态，也不泄漏进当前视图
+      story.lastBg = scene.id;
+      setStageArt(sceneSrc(scene) || src);
+      updateRollingStyle(scene);           // §4.10 C-F：每次出图后自动更新（本地规则，不依赖模型）
+      refreshRollingStyleByModel(scene);   // 真实模式：书记员顺手刷新；失败保留本地结果
+    }
     saveAll();
     renderChat(); renderStage(); renderThumbs();
     return scene;
   }
 
-  async function generateScene(sceneSummary, storyId) {
+  async function generateScene(sceneSummary, storyId, nodeId) {
     if (!story) return;
     // 排队期间已换故事：直接取消，不花画师与生图额度
     if (storyId && story.id !== storyId) { toast('已切换故事，本次作画取消'); return; }
@@ -3576,9 +3680,9 @@
       const prompt = composePrompt(promptRaw, styleText);
       const alt = a2.alt || sceneSummary || '';
 
-      // —— 调生图适配器 ——（storyId 随任务传递，写入前再核对一次）
+      // —— 调生图适配器 ——（storyId / nodeId 随任务传递，写入前再核对一次）
       pill.textContent = 'AI 画师作画中…';
-      await runPaint({ prompt, promptRaw, alt, storyId });
+      await runPaint({ prompt, promptRaw, alt, storyId, nodeId });
     } catch (e) {
       toast('作画失败：' + (e && e.message ? e.message : e), true, true);
     } finally {
@@ -4394,29 +4498,34 @@
       d.insertBefore(reasonBlock(e.reasoning, false), d.firstChild);
     }
 
-    // 最新旁白：重试 + 版本切换（R1 / T-P1-3）
-    if (e.type === 'narration' && index === lastNarrationIndex() && !busy && lastActionEntry()) {
+    // 分支导航（§4.3/§5⑤）：凡是有兄弟的旁白都显示 ‹ n/m ›，点了就切到那条分支；
+    // 「↻ 重试」仍只在最后一条（§5⑤）。旧版本栈已由迁移展开成兄弟（任务书 §6），不再兜底切换。
+    const sibs = (e.type === 'narration' && e.nid && story && story.tree) ? IR.Tree.siblings(story, e.nid) : [];
+    const showRetry = e.type === 'narration' && index === lastNarrationIndex() && !busy && lastActionEntry();
+    const showSibs = e.type === 'narration' && !busy && sibs.length > 1;
+    if (showRetry || showSibs) {
       const tools = document.createElement('div');
       tools.className = 'bubble-tools';
-      const rb = document.createElement('button');
-      rb.className = 'mini-btn';
-      rb.textContent = '↻ 重试';
-      rb.title = '换一种不同的发展（默认替换，旧版保留在版本栈里）';
-      rb.onclick = retryLast;
-      tools.appendChild(rb);
-      const n = Array.isArray(e.versions) ? e.versions.length : 1;
-      if (n > 1) {
+      if (showRetry) {
+        const rb = document.createElement('button');
+        rb.className = 'mini-btn';
+        rb.textContent = '↻ 重试';
+        rb.title = '换一种不同的发展（旧版留在分支里，可用 ‹ › 切回）';
+        rb.onclick = retryLast;
+        tools.appendChild(rb);
+      }
+      if (showSibs) {
         const nav = document.createElement('span');
         nav.className = 'version-nav';
         const prev = document.createElement('button');
-        prev.className = 'mini-btn'; prev.textContent = '‹'; prev.title = '上一版';
-        prev.onclick = () => switchVersion(-1);
+        prev.className = 'mini-btn'; prev.textContent = '‹'; prev.title = '上一条分支';
+        prev.onclick = () => switchSiblingFromBubble(e.nid, -1);
         const label = document.createElement('span');
         label.className = 'version-label';
-        label.textContent = ((e.activeVersion == null ? n - 1 : e.activeVersion) + 1) + '/' + n;
+        label.textContent = (sibs.indexOf(e.nid) + 1) + '/' + sibs.length;
         const next = document.createElement('button');
-        next.className = 'mini-btn'; next.textContent = '›'; next.title = '下一版';
-        next.onclick = () => switchVersion(1);
+        next.className = 'mini-btn'; next.textContent = '›'; next.title = '下一条分支';
+        next.onclick = () => switchSiblingFromBubble(e.nid, 1);
         nav.appendChild(prev); nav.appendChild(label); nav.appendChild(next);
         tools.appendChild(nav);
       }
@@ -4604,6 +4713,11 @@
   function enterGame(fresh, opts) {
     opts = opts || {};
     if (!story) return;
+    // 分支树（§4.1/§3）：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
+    try {
+      IR.Tree.ensure(story);
+      IR.Tree.project(story);
+    } catch (e) { console.warn('IR.Tree 初始化失败（按存档原样继续）：', e); }
     story.ui = Object.assign(Store.defaultUi(), story.ui || {});
     $('#screen-start').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
@@ -4620,13 +4734,13 @@
     renderStage();
     renderThumbs();
     if (fresh) {
-      currentChoices = [];
+      currentChoices = choicesFromHead();
       renderChat();
       saveAll();
       // deferOpening：先走试画锚定（P4），锚定结束（锁定/跳过）后再开场
       if (!opts.deferOpening) runOpening();
     } else {
-      currentChoices = [];
+      currentChoices = choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
       renderNarrationToolsAfterLoad();
       saveAll();
       // 空档补开场（例：锚定向导还没走完就刷新了页面）
