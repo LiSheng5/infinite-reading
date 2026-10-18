@@ -1,10 +1,11 @@
 /*
- * 无限阅读 · 存档层（story schema v2 + 旧档迁移 + IndexedDB 主库）
+ * 无限阅读 · 存档层（story schema v3 + 旧档迁移 + IndexedDB 主库）
  *
  * 职责：所有存档读写都走这里，避免散落各处。
  *  - 存储前缀统一 ir:（settings / story:<id> / story-index / current / user-profile）
- *  - story schema v2：log / world / styleCard / rollingStyle / characterCard /
+ *  - story schema v3：log / world / styleCard / rollingStyle / characterCard /
  *    userProfile / painterThread / messages / mode / savepoints（设计 §2）
+ *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 js/tree.js）
  *  - 主库 = IndexedDB（见 js/storage.js）：解除 localStorage 约 5MB 的天花板，
  *    原图以 Blob 存 images store，不再转成 base64 塞进文本
  *  - v0.1 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
@@ -26,7 +27,8 @@
 (function (global) {
   'use strict';
 
-  const SCHEMA = 2;
+  // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 IR.Tree.ensure
+  const SCHEMA = 3;
 
   const KEYS = {
     settings: 'ir:settings',
@@ -99,9 +101,11 @@
   /* ---------------- 同步存储（回退路径 + 旧数据迁移的读源） ---------------- */
 
   let memLS = null;
-  // 没有 localStorage 的环境（Node 评测）：用进程内 Map 顶上，读写语义一致
+  // 没有可用 localStorage 的环境（Node 评测）：用进程内 Map 顶上，读写语义一致。
+  // 要做能力检测而非真值判断——Node 25 的全局 localStorage 是个没有 getItem/setItem 的占位对象。
   function ls() {
-    if (global.localStorage) return global.localStorage;
+    const g = global.localStorage;
+    if (g && typeof g.getItem === 'function' && typeof g.setItem === 'function') return g;
     if (!memLS) {
       const m = new Map();
       memLS = {
@@ -378,6 +382,8 @@
     out.lastBg = raw.lastBg || null;
     out.lastSceneSummary = raw.lastSceneSummary || '';
     if (!out.world.scene && out.lastSceneSummary) out.world.scene = out.lastSceneSummary;
+    // 分支树原样透传（schema v3）：这里不校验、不依赖 IR.Tree——合法性与降级重建由 IR.Tree.ensure 负责
+    if (raw.tree) out.tree = raw.tree;
     return out;
   }
 
@@ -572,6 +578,18 @@
     if (!rawStory || typeof rawStory !== 'object') return out;
     (rawStory.scenes || []).forEach(s => { if (s && s.imageId) out.push(s.imageId); });
     (rawStory.log || []).forEach(e => { if (e && e.type === 'image' && e.imageId) out.push(e.imageId); });
+    // 分支树里引用到的图也算（含非当前分支）：tree.nodes[*].scenes 与 entries 里的 imageId。
+    // 漏掉就会在删除故事 /「清理孤儿原图」时**静默删掉别的分支的图**（任务书 §10）。
+    // 直接按 tree 形状遍历，不依赖 IR.Tree（本层保持零依赖，eval 脚本 require 就能跑）。
+    const nodes = rawStory.tree && rawStory.tree.nodes;
+    if (nodes && typeof nodes === 'object') {
+      Object.keys(nodes).forEach(id => {
+        const n = nodes[id];
+        if (!n) return;
+        (Array.isArray(n.scenes) ? n.scenes : []).forEach(s => { if (s && s.imageId) out.push(s.imageId); });
+        (Array.isArray(n.entries) ? n.entries : []).forEach(e => { if (e && e.imageId) out.push(e.imageId); });
+      });
+    }
     return out;
   }
 
@@ -713,7 +731,7 @@
       SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi,
-      migrateSettings, migrateStory,
+      migrateSettings, migrateStory, serializeStory,
       newStory,
       loadSettings, saveSettings,
       listStories, loadStory, saveStory, deleteStory, storyThumb,

@@ -53,6 +53,10 @@ jobs:
       - name: node eval/run.js
         run: node eval/run.js
 
+      # 分支树数据层（js/tree.js + store 集成）：纯逻辑单测，不开浏览器、不联网
+      - name: 分支树数据层（node eval/tree-test.js）
+        run: node eval/tree-test.js
+
       - name: 演示模式冒烟（node eval/demo-smoke.js）
         run: node eval/demo-smoke.js
 

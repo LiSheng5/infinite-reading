@@ -17,7 +17,7 @@
     "sidecar": "node sidecar/server.mjs",
     "eval": "node eval/run.js",
     "eval:demo": "node eval/demo-smoke.js",
-    "test": "node eval/run.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/frontend-smoke.js",
+    "test": "node eval/run.js && node eval/tree-test.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/frontend-smoke.js",
     "test:features": "node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/frontend-smoke.js",
     "sync:version": "node tools/sync-version.mjs",
     "check:version": "node tools/sync-version.mjs --check",
