@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.5.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -138,8 +138,9 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 |---|---|
 | `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders`; `VideoProviders` reserved |
 | `js/context.js` | Context assembly, compression chain, text import |
+| `js/tree.js` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
 | `js/storage.js` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
-| `js/store.js` | Persistence (memory-first + async flush; schema v2, legacy migration, shelf, save points) |
+| `js/store.js` | Persistence (memory-first + async flush; schema v3, legacy migration, shelf, save points) |
 | `js/zip.js` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
 | `js/roleCard.js` | Character cards (SillyTavern PNG parsing) |
 | `js/modelCapabilities.js` | Model parameter registry (empty by default) |
@@ -148,7 +149,8 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `js/sidecar.js` + `js/features.js` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `js/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
-| `eval/demo-smoke.js` | Demo smoke test (contract checks, no browser needed) |
+| `eval/demo-smoke.js` | Demo smoke test (contract checks + the demo branch-tree flow, no browser needed) |
+| `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
 | `sidecar/` | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
 | `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server (not runtime code) |

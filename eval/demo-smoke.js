@@ -6,6 +6,7 @@
  * 不开浏览器、不联网，只验一件事：演示模式注册的两个「假适配器」，与真实链路的接口对不对得上——
  *   AI1 回包能被 parseAIReply 认出来；画师回包能被 parsePainterReply 认出来；
  *   书记员等后台任务交回空串，让 app.js 走本地规则兜底；脚本用尽后不会崩。
+ * 另外按任务书 §5 走一遍分支树的 demo 链路：3 回合 → 重试（新增兄弟）→ 切换 → 再切回。
  *
  * 用法：node eval/demo-smoke.js   [--json]
  */
@@ -15,13 +16,14 @@ global.window = global;
 global.location = { search: '?demo=1' };          // 演示模式靠查询参数判定
 
 require(path.join(__dirname, '..', 'js', 'context.js'));
+require(path.join(__dirname, '..', 'js', 'tree.js'));
 require(path.join(__dirname, '..', 'js', 'store.js'));
 require(path.join(__dirname, '..', 'js', 'roleCard.js'));
 require(path.join(__dirname, '..', 'js', 'demo.js'));
 
-const { Context, Store, Demo, ChatProviders, ImageProviders } = global.IR || {};
-if (!Context || !Demo || !ChatProviders || !ImageProviders) {
-  console.error('加载失败：IR.Context / IR.Demo / 适配器缺失。');
+const { Context, Store, Demo, ChatProviders, ImageProviders, Tree } = global.IR || {};
+if (!Context || !Demo || !ChatProviders || !ImageProviders || !Tree) {
+  console.error('加载失败：IR.Context / IR.Demo / IR.Tree / 适配器缺失。');
   process.exit(1);
 }
 
@@ -138,6 +140,66 @@ function setupStory() {
   /* ---------------- 5. 生图适配器：接口形态与真实适配器一致 ---------------- */
   check('生图适配器已注册，且约定同样是 generate(cfg, prompt) -> src',
     typeof demoImg.generate === 'function' && demoImg.generate.length === 2, 'ok');
+
+  /* ---------------- 6. 分支树：demo 走 3 回合 → 重试 → 切换 → 再切回（任务书 §5） ---------------- */
+  Demo.reset();
+  const bt = setupStory();
+  let ai1Calls = 0;
+
+  // 模拟 app.js 的一回合编排（§4.1）：begin → pushLog(player) → AI1 → commit → seal
+  async function demoTurn(sent, requestSent) {
+    const mark = Tree.begin(bt);
+    const um = { role: 'user', content: Context.playerContent(bt.premise, sent) };
+    const raw = await demo.chat(demoed.chat, Context.assembleAI1(bt, requestSent || sent), {});
+    ai1Calls += 1;
+    const j = Context.normalizeAIReply(Context.tolerantJSONParse(raw));
+    const am = { role: 'assistant', content: JSON.stringify({ narration: j.narration, choices: j.choices }) };
+    bt.turn += 1;
+    bt.log.push({ type: 'player', text: sent, kind: 'do', ts: Date.now() });
+    bt.log.push({ type: 'narration', text: j.narration, versions: [j.narration], activeVersion: 0, ts: Date.now() });
+    bt.messages.push(um, am);
+    if (j.world) Context.mergeWorld(bt.world, j.world);
+    const node = Tree.commit(bt, {
+      action: { type: 'player', text: sent, kind: 'do', sent: '（做）' + sent },
+      userMsg: um, assistantMsg: am, logMark: mark.logMark,
+    });
+    Tree.seal(bt, node.id);
+    return node;
+  }
+
+  // 3 回合
+  const rounds = [];
+  for (let i = 1; i <= 3; i++) {
+    await demoTurn('继续（第 ' + i + ' 回合）');
+    rounds.push(bt.log[bt.log.length - 1].text);
+  }
+  check('分支树 · demo 3 回合：一回合一个 turn 节点、每回合都有旁白',
+    Tree.pathOf(bt, bt.tree.head).length === 4 && bt.turn === 3 && rounds.every(x => x && x.length > 10),
+    rounds.map(x => x.slice(0, 8)).join('｜'));
+
+  // 重试 = 新增兄弟（§4.2）：先回到这一回合之前，再换一种发展
+  const old = bt.tree.nodes[bt.tree.head];
+  Tree.switchTo(bt, old.parent);
+  await demoTurn('继续（第 3 回合）', '继续（第 3 回合）\n（请换一种不同的发展，给出不同的走向）');
+  const sib = bt.tree.nodes[bt.tree.head];
+  rounds.push(bt.log[bt.log.length - 1].text);
+  check('分支树 · 重试出兄弟：同 parent、两条分支、旁白不同',
+    sib.parent === old.parent && bt.tree.nodes[sib.parent].children.length === 2 && rounds[3] !== rounds[2],
+    rounds[2].slice(0, 8) + ' ≠ ' + rounds[3].slice(0, 8));
+
+  // 切换 → 再切回（§4.3）：不发任何请求
+  const callsBeforeSwitch = ai1Calls;
+  const h1 = Tree.switchSibling(bt, sib.id, -1);
+  check('分支树 · 切换：落到原分支末端，旁白 / 选项跟着换', !!h1 && h1.id === old.id
+    && bt.log[bt.log.length - 1].text === rounds[2]
+    && JSON.parse(bt.messages[bt.messages.length - 1].content).narration === rounds[2]);
+  const h2 = Tree.switchSibling(bt, old.id, +1);
+  check('分支树 · 再切回：落回重试分支末端，旁白 / 选项跟着回来', !!h2 && h2.id === sib.id
+    && bt.log[bt.log.length - 1].text === rounds[3]
+    && JSON.parse(bt.messages[bt.messages.length - 1].content).narration === rounds[3]);
+  check('分支树 · 切换零网络请求（演示适配器没被再调用）', ai1Calls === callsBeforeSwitch, ai1Calls + ' 次');
+  check('分支树 · siblings 顺序 = 创建序（‹ n/m › 用它定位）',
+    Tree.siblings(bt, old.id).join(',') === [old.id, sib.id].join(','));
 
   /* ---------------- 报告 ---------------- */
   const hit = results.filter(r => r.hit).length;
