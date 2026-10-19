@@ -57,6 +57,14 @@ jobs:
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
+      # 作画串行队列（js/paintQueue.js）：纯逻辑单测，不联网、不依赖真实定时器
+      - name: 作画队列单测（node eval/paintqueue-test.js）
+        run: node eval/paintqueue-test.js
+
+      # 提案（js/proposals.js：模型发起的邮件 / 下单只能产生提案）：假 sidecar 验安全红线，不联网
+      - name: 提案模块单测（node eval/proposals-test.js）
+        run: node eval/proposals-test.js
+
       - name: 演示模式冒烟（node eval/demo-smoke.js）
         run: node eval/demo-smoke.js
 
@@ -65,5 +73,5 @@ jobs:
         run: node eval/zip-smoke.js
 
       # 可选本地服务：单测全离线（虚拟时钟 / 内存 SQLite / 假 fetch），sidecar-smoke 会自启子进程走真实 HTTP
-      - name: 功能单测（调度 / 邮件 / 支付 / 前端客户端 / 侧车冒烟）
+      - name: 功能单测（调度 / 邮件 / 支付 / 提案 / 前端客户端 / 侧车冒烟）
         run: npm run test:features

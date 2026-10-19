@@ -36,15 +36,17 @@
 | `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
 | `js/sidecar.js` | `IR.Sidecar` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `app.js` 注册） | `attach`、`accept`、`drain` |
+| `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
+| `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → app.js → pwa.js
+providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → app.js → pwa.js
 ```
 
-`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`paintQueue.js` 同样在 `app.js` 之前（`app.js` 启动即 `IR.PaintQueue.create`）；`proposals.js` 也在 `app.js` 之前（提案卡渲染与确认要用 `IR.Proposals`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -67,22 +69,31 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
        │    └─ 若有 tool_calls → handleToolCalls → applyToolCall
        │         ├─ update_memory  → mergeWorld / 写 userProfile / 落一条 {type:'tool'} 留痕
        │         ├─ recall_*       → 重发一次（召回内容并入本轮 user 前缀注入）
-       │         └─ request_image  → runToolPaint → painterCompose → assemblePainter
-       │                              → 调对话模型（画师子代理）→ enqueuePaint
+       │         └─ request_image  → submitToolPaint → paintQueue.enqueue（**立刻返回**，不等图）
+       │                              └─ 后台任务：runPaintTask →（剧情模式：painterCompose →
+       │                                 assemblePainter → 画师子代理写提示词；chat / rp：模型已直出
+       │                                 prompt，跳过画师）→ runPaint
        ├─ 归档：story.messages.push(user + assistant)、pushNarrationEntry、absorbReply
        ├─ renderChat
-       ├─ maybeEnqueueImage(reply,false)      ← 按 settings.trigger 三档决定是否出图
-       │    └─ enqueueImage → generateScene → painterCompose → runPaint
-       │         └─ IR.ImageProviders[...].generate(cfg, prompt)   ← 唯一的生图网络出口
-       │            → 写入 scenes[] / 缩略图 → 舞台换图（模糊底色 + 完整图 + 缩略条）
+       ├─ Tree.commit → turnAnchor.nodeId = node.id；失败 / 停止分支 → turnAnchor.dead = true
+       ├─ maybeEnqueueImage(reply,false,node.id)   ← 按 settings.trigger 决定是否出图（chat / rp 短路）
+       │    └─ enqueueImage → paintQueue.enqueue → runPaintTask → painterCompose → runPaint
        └─ await postTurn()   ← runSmartCompress（70% 阈值压缩）+ runScribe（书记员校准世界卡）
+
+后台作画（队列里的 runPaintTask）：
+  构思（画师 / 模型直出）→ 组 prompt → IR.ImageProviders[...].generate(cfg, prompt)   ← 唯一的生图网络出口
+    → 写入 scenes[] / 缩略图 → 舞台换图（模糊底色 + 完整图 + 缩略条）
+    → 落位按 §4.4：anchor.nodeId 有值走节点校验 / pushLate；为空写 story.log / scenes 由 commit 切片收进节点
 ```
 
 要点：
 
 - **对话与生图彻底分离**：两个 `Base URL` / `Key` / 模型名各自独立（设置面板里是两组配置）。
-- **画师是子代理**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。
+- **出图不卡回合**（v0.5.1）：`request_image` 提交进**同一条作画队列**（`IR.PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
+- **画师是子代理，且只属于剧情模式**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**对话 / 扮演的工具出图不经画师**（§3.E）：模型自己写 `prompt` 直出。
+- **「停止」只管聊天回合**（v0.5.1）：`chatAbortCtrl` 只有聊天回合的请求写它；`painterCompose` / 生图不再挂上来，后台作画不被停止中断（超时沿用适配器自己的）。
 - **出图任务带 `storyId`**：写入前核对，避免切故事后把图贴到别的档上。
+- **临时例外（§3.F）**：对话 / 扮演的「手动作画」按钮本期仍走「画师优先、不可用则场景描述兜底」——工具被关 / 模型不吃 tools 时它是唯一出图入口，而 chat / rp 的 `lastSceneSummary` 只是旁白截断、不适合当提示词。等智能体模式改版（画布去掉、工具为主）时整体处理。
 
 ## 4. 数据模型
 
@@ -137,8 +148,11 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | **`reasoning` 不进请求体** | `context.js`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `context.js`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
-| **工具结果按语义分流** | `app.js`：`callAI1` | `recall_*` / `request_image` 调了就注入重发（模型要的信息 / 产物）；`update_memory` / 调度工具仅无正文时重发；重发永不再带工具 |
-| **同轮去重**：工具已出图则跳过时机出图 | `app.js`：`turnPaintedByTool`、`maybeEnqueueImage` | 一回合只画一张 |
+| **工具结果按语义分流** | `app.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image` 已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
+| **同轮去重**：工具已出图则跳过时机出图 | `app.js`：`turnPaintedByTool`、`maybeEnqueueImage` | 一回合只画一张；v0.5.1 起在**提交任务时**置位（出图早已异步完成，事后置位去重会失效） |
+| **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`app.js`：`paintQ` / `runPaintTask` | 时机 / 工具 / 手动 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写） |
+| **回合锚点 `turnAnchor`** | `app.js`：三处回合函数的 commit / catch、`runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
+| **「停止」只中断聊天回合** | `app.js`：`chatAbortCtrl` 只有 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `app.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
 | **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `context.js`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
 | **不预置模型名与厂商参数** | `modelCapabilities.js`（表默认空）、`store.js` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
@@ -147,13 +161,14 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`app.js` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
 | **`seal` 必须在 `postTurn` 之后** | `app.js`：`sendPlayerAction` / `retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
 | **全树图集必须含非当前分支** | `store.js`：`imageIdsOf` / `knownImageIds`、`js/tree.js`：`imageIdsOf` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径） |
-| **晚到条目 / 画面带 `nodeId` 校验** | `app.js`：`runPaint` / `generateScene` 写回、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log |
+| **晚到条目 / 画面带 `nodeId` 校验** | `app.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
+| **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`app.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
 
 ## 6. 上下文策略速览
 
 `Context.assembleAI1` 由这几层自上而下拼成（从贵到便宜）：
 
-1. **模式系统提示词** `systemForMode`：剧情 / 对话 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`；对话 / 扮演是「伴读者」定位 + 2~6 句体量锚定，扮演无角色卡时用降级提示词）。
+1. **模式系统提示词** `systemForMode`：剧情 / 智能体 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`；智能体是通用助手定位，工具能力含画图 / 记事 / 定时 / 写邮件 / 下单，后两样只是提案；扮演是「角色卡里的人」+ 2~6 句体量锚定，无角色卡时用降级提示词）。
 2. **风格基调 + 故事设定常驻**：`[风格基调]`（≤120 字）与 `[故事设定（常驻）]`（≤400 字摘要）——地基信息不随摘要合并流失。
 3. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
 4. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
@@ -247,7 +262,7 @@ node sidecar/server.mjs --show-token
 
 **存储与真源**：侧车用 `node:sqlite`（`sidecar/data/ir-sidecar.db`）持久化触发器、触发记录、邮件审计与草稿、支付台账与授权范围。**安全项（额度 / 白名单 / 每日上限 / 免打扰时段 / token）的唯一真源是 `sidecar/data/config.json`**，前端设置页只是它的编辑界面（经 `GET/PUT /api/config`），前端本地不保存这些值，模型也没有任何写入通道——这与 SillyTavern（`config.yaml` + `secrets.json`）、Open WebUI（环境变量 + Admin Panel）、LibreChat（`.env` > `yaml` > 面板）三家一致。
 
-**工具通道的取舍**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），但**只在 `chat` / `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效。邮件与支付**不做成模型工具**——它们是高风险副作用动作，一律走「用户显式发起（界面按钮）→ 确认弹窗 → 执行」，模型最多只能在回复里建议。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
+**工具通道的取舍（v0.6.0 起）**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），**只在 `chat`（智能体）/ `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效。邮件与支付也做成了模型工具（`email_propose` / `payment_propose`），但**只是提案制**：模型发起的一律停在提案卡上，执行必须由用户点「确认」触发（`js/proposals.js` 状态机 + `IR.Sidecar` 侧车双层把关）；工具**只在 `chat` 模式 + 侧车在线 + 对应 feature 开启且有 token 时下发**（rp / choice 即便能力齐备也不给）。用户显式发起的手写邮件 / 下单表单仍是「界面按钮 → 确认弹窗 → 执行」的老路径。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
 
 **页面关闭时**：侧车到点只把触发**写入待处理队列**（不打扰、不猜）；前端下次打开时按 `SKIP / RUN_ONCE / RUN_ALL` 补跑，补跑时走的是与真实用户消息完全相同的回合链路（合成一条入站消息 → `sendPlayerAction`）。「页面开着」则由 SSE 实时推送 `trigger.fire`。这一处做成了可替换的策略点（见 `scheduler.mjs` 的 `missedPolicy`）。
 
