@@ -70,9 +70,9 @@
    * 画面参考取旁白原文（app.js 的 parseAIReply / absorbReply 有对应兜底）；
    * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
 
-  // 对话模式：伴读者定位 + 叙事任务 + 体量锚定（2026-10-14 评审定案：补齐「顺着讲下去」与 2~6 句锚定，
-  // 不引入 JSON 契约，保持极简）
-  const CHAT_SYSTEM = '你是这部作品的伴读者 AI，顺着玩家的话推进剧情或话题；每次回应 2~6 句中文。';
+  // 智能体模式（原「对话」，v0.6.0）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
+  // 发邮件与花钱只是「提案」：用户在界面上确认前不得声称已完成（红线在 js/proposals.js 落地）。
+  const CHAT_SYSTEM = '你是用户的智能助手。回答直接、简洁，用中文。需要时可以使用你拥有的能力（画图、记事、定时提醒、写邮件、下单），但不要在回复里提「工具」「函数」。发邮件和花钱只是向用户提出请求：先用一两句话说明你要做什么，由用户在界面上确认；在用户确认之前，不要说已经发出或已经付款。';
 
   // 扮演模式：同 CHAT_SYSTEM 的定位，多一句人设锚定与两条硬规则（不出戏 / 不替玩家行事）
   const RP_SYSTEM = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：你就是角色卡里的那个人（名字、性格、说话方式都以角色卡为准）。保持角色不出戏，也不要替玩家说话或行动；每次回应 2~6 句中文。';
@@ -80,11 +80,20 @@
   // rp 无角色卡（导入 / 旧档可能产生）：指令不能指向不存在的卡，改为自拟并钉住
   const RP_SYSTEM_FALLBACK = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：这部作品还没有角色卡，请按故事设定自拟你要扮演的角色，之后每一轮都保持这个角色不变，也不要替玩家说话或行动；每次回应 2~6 句中文。';
 
-  // 对话 / 扮演的提示词保持极简：只补一句输入类型说明（与剧情模式同一条规则的短版）
+  // 对话 / 扮演的提示词保持极简：只补一句输入类型说明（与剧情模式同一条规则的短版）。
+  // v0.6.0：chat（智能体）不再下发做 / 说 / 导演，因此 chat 的系统提示不附这条说明（防模型复述标记）。
   const KIND_MARK_HINT_SHORT = '输入前的（做）/（说）/（导演）是输入类型标记（分别是行动 / 说的话 / 世界里的既成事实），不要复述标记本身。';
 
+  // 切换兼容：rp 存档切成 chat 后，历史用户消息里可能带着内层标记，而 chat 的系统提示
+  // 不再解释它们（模型会照着复述）——组装 chat 历史时剥掉 [玩家行动] 之后紧跟的那一个标记。
+  // 外层 [玩家行动] 前缀保持不变（demo.js 靠它分派）；正文中间出现的（导演）等不动。
+  function stripKindMarker(content) {
+    const s = String(content == null ? '' : content);
+    return s.replace(/(\[玩家行动\] )（(?:做|说|导演)）/, '$1');
+  }
+
   function systemForMode(mode, opts) {
-    if (mode === 'chat') return CHAT_SYSTEM + KIND_MARK_HINT_SHORT;
+    if (mode === 'chat') return CHAT_SYSTEM;
     if (mode === 'rp') return ((opts && opts.noCharacterCard) ? RP_SYSTEM_FALLBACK : RP_SYSTEM) + KIND_MARK_HINT_SHORT;
     return STORY_RULES;
   }
@@ -185,6 +194,24 @@
     },
   };
 
+  // 对话 / 扮演的直出变体（§3.E）：模型自己写生图提示词，不转画师子代理。
+  // 工具名不变（frontend-smoke 对工具名集合的断言继续成立）；只有参数与措辞不同。
+  const REQUEST_IMAGE_DIRECT_TOOL = {
+    type: 'function',
+    function: {
+      name: 'request_image',
+      description: '生成一张图。玩家想看画面，或出现值得定格的一刻时调用。你自己写生图提示词（建议英文）：主体、外貌服饰、环境、光线、构图、画风写清楚；不要出现玩家真名。调用后不会等待结果，图会稍后自动出现在聊天里，别声称已经画好。',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: '英文生图提示词：主体、外貌服饰、环境、光线、构图、画风写清楚' },
+          alt: { type: 'string', description: '一句话中文说明这张图画了什么（用于无障碍与留痕，可选）' },
+        },
+        required: ['prompt'],
+      },
+    },
+  };
+
   const UPDATE_MEMORY_TOOL = {
     type: 'function',
     function: {
@@ -215,8 +242,10 @@
   const TOOLS_RECALL = [RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL];
   const TOOL_NAMES_RECALL = TOOLS_RECALL.map(t => t.function.name);
 
-  // AI1 全量工具（召回 + 作画 + 写记忆），P5-1 一起下发
+  // AI1 全量工具（召回 + 作画 + 写记忆），P5-1 一起下发。
+  // 剧情模式走画师变体（subject）；对话 / 扮演走直出变体（prompt），工具名集合不变（§3.E）
   const TOOLS_AI1 = TOOLS_RECALL.concat([REQUEST_IMAGE_TOOL, UPDATE_MEMORY_TOOL]);
+  const TOOLS_AI1_DIRECT = TOOLS_RECALL.concat([REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL]);
   const TOOL_NAMES_AI1 = TOOLS_AI1.map(t => t.function.name);
   const MAX_TOOL_CALLS_PER_TURN = 2;   // §4.5 每轮上限 2 次
 
@@ -318,10 +347,79 @@
     '不要在回复里说「工具」「触发器」，用自然的话告诉他你已经安排好了、等他确认。',
   ].join('');
 
-  // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度工具）
+  /* ---------------- 邮件 / 下单工具（提案制，v0.6.0） ----------------
+   * 模型发起的邮件 / 下单只能产生「提案」：执行必须由用户在界面上点确认触发
+   * （状态机与执行在 js/proposals.js，红线见该文件头注释）。 */
+
+  const EMAIL_PROPOSE_TOOL = {
+    type: 'function',
+    function: {
+      name: 'email_propose',
+      description: '起草一封给用户的邮件（只是提案）：用户让你写信 / 发邮件时调用。填好收件人、主题与正文提交；用户在界面上确认后才会真正发出，确认前不要说已经发出。',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: '收件人邮箱地址（单个地址，不要换行）' },
+          subject: { type: 'string', description: '邮件主题（不要换行）' },
+          body: { type: 'string', description: '邮件正文' },
+          reason: { type: 'string', description: '一句话说明为什么要发这封信（会展示给用户，可选）' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    },
+  };
+
+  const PAYMENT_PROPOSE_TOOL = {
+    type: 'function',
+    function: {
+      name: 'payment_propose',
+      description: '提交一个代下单提案（只是提案）：用户要买东西、或你建议购买时调用。金额用元（如 12.34）；用户在界面上确认后才会下单扣款，确认前不要说已经付款。',
+      parameters: {
+        type: 'object',
+        properties: {
+          amount: { type: 'number', description: '金额（元），最多两位小数，必须大于 0' },
+          merchant: { type: 'string', description: '商户名（可选）' },
+          category: { type: 'string', description: '品类，例如 图书（可选）' },
+          items: { type: 'array', items: { type: 'string' }, description: '商品名称列表（可选，最多 5 项）' },
+          reason: { type: 'string', description: '一句话说明为什么要买（会展示给用户，可选）' },
+        },
+        required: ['amount'],
+      },
+    },
+  };
+
+  const EMAIL_TOOLS = [EMAIL_PROPOSE_TOOL];
+  const PAYMENT_TOOLS = [PAYMENT_PROPOSE_TOOL];
+  const TOOL_NAMES_PROPOSAL = EMAIL_TOOLS.concat(PAYMENT_TOOLS).map(t => t.function.name);
+  const PROPOSAL_TOOL_SET = new Set(TOOL_NAMES_PROPOSAL);
+  function isProposalTool(name) { return PROPOSAL_TOOL_SET.has(String(name)); }
+
+  const EMAIL_POLICY_TEXT = [
+    '写邮件（只是提案）：',
+    '用户让你写信 / 发邮件时用 email_propose 起草，填收件人 / 主题 / 正文（可带一句 reason 说明为什么发）；',
+    '这只是提案：用户在界面上确认后才会发送，确认前不要说「已经发出」「已经寄出」。',
+  ].join('');
+
+  const PAYMENT_POLICY_TEXT = [
+    '代下单（只是提案）：',
+    '用户要买东西、请你代买时用 payment_propose，金额用元（如 12.34），写清商户 / 品类 / 商品（可带一句 reason）；',
+    '这只是提案：用户在界面上确认后才会下单扣款，确认前不要说「已经付款」「已经买好」。',
+  ].join('');
+
+  // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度 / 邮件 / 下单工具）。
+  // chat / rp 的 request_image 用直出变体（模型自己写提示词、不请画师，§3.E）；choice 保持画师变体。
+  // 邮件 / 下单是高风险副作用动作：只在 chat（智能体）下发——rp / choice 即便传了 true 也不给。
   function toolsForMode(mode, opts) {
-    const wantSchedule = !!(opts && opts.schedule) && (mode === 'chat' || mode === 'rp');
-    return wantSchedule ? TOOLS_AI1.concat(SCHEDULE_TOOLS) : TOOLS_AI1;
+    opts = opts || {};
+    const wantSchedule = !!opts.schedule && (mode === 'chat' || mode === 'rp');
+    const wantEmail = !!opts.email && mode === 'chat';
+    const wantPayment = !!opts.payment && mode === 'chat';
+    const base = (mode === 'chat' || mode === 'rp') ? TOOLS_AI1_DIRECT : TOOLS_AI1;
+    let out = base;
+    if (wantSchedule) out = out.concat(SCHEDULE_TOOLS);
+    if (wantEmail) out = out.concat(EMAIL_TOOLS);
+    if (wantPayment) out = out.concat(PAYMENT_TOOLS);
+    return out;
   }
   function toolNamesForMode(mode, opts) {
     return toolsForMode(mode, opts).map(t => t.function.name);
@@ -1340,6 +1438,8 @@
     if (Array.isArray(opts.tools) && opts.tools.length) {
       let block = '[可用工具] ' + opts.tools.join(' / ') + '\n' + TOOL_POLICY_TEXT;
       if (opts.tools.indexOf('schedule_once') >= 0) block += '\n' + SCHEDULE_POLICY_TEXT;
+      if (opts.tools.indexOf('email_propose') >= 0) block += '\n' + EMAIL_POLICY_TEXT;
+      if (opts.tools.indexOf('payment_propose') >= 0) block += '\n' + PAYMENT_POLICY_TEXT;
       out.push({ role: 'system', content: block });
     }
     const msgs = (story && story.messages) || [];
@@ -1356,6 +1456,9 @@
       if (m.role === 'assistant') {
         if (mode === 'choice') content = toChineseHistory(content);
         else if (mode === 'chat' || mode === 'rp') content = toPlainHistory(content);
+      } else if (m.role === 'user' && mode === 'chat') {
+        // 切换兼容（v0.6.0）：rp 存档切成 chat 后，历史用户消息里的内层标记要剥掉
+        content = stripKindMarker(content);
       }
       out.push({ role: m.role, content });
     }
@@ -1383,7 +1486,9 @@
     out.push({
       role: 'user',
       content: (preUser.length ? preUser.join('\n\n') + '\n\n' : '')
-        + playerContent(story && story.premise, playerAction, opts),
+        + (mode === 'chat'
+          ? stripKindMarker(playerContent(story && story.premise, playerAction, opts))   // chat 不带内层标记
+          : playerContent(story && story.premise, playerAction, opts)),
     });
     return out;
   }
@@ -1410,8 +1515,11 @@
     PAINTER_SYSTEM, PAINTER_CHAT_SYSTEM, PAINTER_STYLES_SYSTEM, PAINTER_CARD_SYSTEM,
     RECALL_RECENT_PLOT_TOOL, storySettingText,
     RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL, TOOLS_RECALL, TOOL_NAMES_RECALL,
-    REQUEST_IMAGE_TOOL, UPDATE_MEMORY_TOOL, TOOLS_AI1, TOOL_NAMES_AI1, MAX_TOOL_CALLS_PER_TURN,
+    REQUEST_IMAGE_TOOL, REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL,
+    TOOLS_AI1, TOOLS_AI1_DIRECT, TOOL_NAMES_AI1, MAX_TOOL_CALLS_PER_TURN,
     SCHEDULE_TOOLS, TOOL_NAMES_SCHEDULE, SCHEDULE_POLICY_TEXT, toolsForMode, toolNamesForMode, isScheduleTool,
+    EMAIL_TOOLS, PAYMENT_TOOLS, TOOL_NAMES_PROPOSAL, EMAIL_POLICY_TEXT, PAYMENT_POLICY_TEXT,
+    isProposalTool, stripKindMarker, KIND_MARK_HINT_SHORT,
     TOOL_POLICY_TEXT, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
     styleCardText, rollingStyleText, painterAnchorText,
     recentImageLines, recentNarrationLines, recentPlotText, assemblePainter,

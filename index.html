@@ -15,7 +15,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.5.0">
+<link rel="stylesheet" href="css/style.css?v=0.6.0">
 </head>
 <body>
 <div id="app">
@@ -28,7 +28,7 @@
       <!-- 三个模式（§4.8）：只有名字，点哪张即由此开局（无介绍、无单独的「开始」按钮） -->
       <div id="start-modes" class="mode-cards start-mode-cards">
         <button class="mode-card" data-mode="choice"><b>剧情</b></button>
-        <button class="mode-card" data-mode="chat"><b>对话</b></button>
+        <button class="mode-card" data-mode="chat"><b>智能体</b></button>
         <button class="mode-card" data-mode="rp"><b>扮演</b></button>
       </div>
 
@@ -176,7 +176,7 @@
             <b>剧情</b><span>给选项的故事。开头有一页设定向导，你把世界观与人物交代清楚，故事就从那里生长。</span>
           </button>
           <button class="mode-card" data-mode="chat">
-            <b>对话</b><span>纯聊天。没有选项，随性说话；关系与印象会慢慢积累下来。</span>
+            <b>智能体</b><span>带工具的助手：能画图、记事、定时、写邮件、下单（都要你确认）。</span>
           </button>
           <button class="mode-card" data-mode="rp">
             <b>扮演</b><span>角色扮演。以一张角色卡登场（可空白自建，也可导入 SillyTavern V2/V3 PNG 卡），玩的是关系。</span>
@@ -652,6 +652,7 @@
               </select>
             </label>
           </div>
+          <p class="hint" id="ui-layout-hint"></p>
           <p class="hint">沉浸（画面铺满）从舞台右上角的 ⛶ 进入，Esc 或 ✕ 退出；分隔条双击恢复 1:1。</p>
         </fieldset>
 
@@ -670,7 +671,7 @@
           <label>当前故事模式
             <select id="s-story-mode">
               <option value="choice">剧情（结尾给选项）</option>
-              <option value="chat">对话（纯聊天）</option>
+              <option value="chat">智能体（带工具的助手）</option>
               <option value="rp">角色扮演（角色卡）</option>
             </select>
           </label>
@@ -934,25 +935,35 @@
     </div>
   </div>
 
-<script src="js/providers.js?v=0.5.0"></script>
-<script src="js/context.js?v=0.5.0"></script>
+<!-- 图片灯箱（chat / rp 内联图点开看大图）：固定遮罩，点遮罩 / Esc 关闭 -->
+<div id="lightbox" class="lightbox hidden" role="dialog" aria-label="查看大图">
+  <img id="lightbox-img" alt="">
+  <p id="lightbox-alt" class="lightbox-alt"></p>
+</div>
+
+<script src="js/providers.js?v=0.6.0"></script>
+<script src="js/context.js?v=0.6.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.5.0"></script>
+<script src="js/tree.js?v=0.6.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.5.0"></script>
-<script src="js/store.js?v=0.5.0"></script>
-<script src="js/modelCapabilities.js?v=0.5.0"></script>
-<script src="js/roleCard.js?v=0.5.0"></script>
+<script src="js/storage.js?v=0.6.0"></script>
+<script src="js/store.js?v=0.6.0"></script>
+<script src="js/modelCapabilities.js?v=0.6.0"></script>
+<script src="js/roleCard.js?v=0.6.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.5.0"></script>
+<script src="js/demo.js?v=0.6.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.5.0"></script>
+<script src="js/zip.js?v=0.6.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.5.0"></script>
+<script src="js/sidecar.js?v=0.6.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.5.0"></script>
-<script src="js/app.js?v=0.5.0"></script>
+<script src="js/features.js?v=0.6.0"></script>
+<!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
+<script src="js/paintQueue.js?v=0.6.0"></script>
+<!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
+<script src="js/proposals.js?v=0.6.0"></script>
+<script src="js/app.js?v=0.6.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.5.0"></script>
+<script src="js/pwa.js?v=0.6.0"></script>
 </body>
 </html>
