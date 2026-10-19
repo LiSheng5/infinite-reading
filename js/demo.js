@@ -548,6 +548,15 @@
     S.ackPending = () => Promise.resolve({ ok: true, acked: true });
     S.pauseAll = paused => { cfg.schedule.paused = paused !== false; return Promise.resolve({ ok: true, paused: cfg.schedule.paused }); };
 
+    // 提案制（v0.6.0）：模型路径只用「存草稿 → 用户确认后发」（与真实侧车的 emailDraft / emailSendDraft 同名同形；
+    // 返回值与 js/sidecar.js 的 emailDraft 一致——直接给草稿对象）。手写表单仍走下面的 emailSend。
+    S.emailDraft = msg => {
+      const m = msg || {};
+      const d = { id: nid('d'), at: Date.now(), to: String(m.to || '').toLowerCase(), subject: m.subject || '', body: m.body || '', status: 'pending' };
+      state.drafts.push(d);
+      auditPush('draft', d.to, d.subject, 'ok', '');
+      return Promise.resolve(clone(d));
+    };
     S.emailSend = msg => {
       const m = msg || {};
       const to = String(m.to || '').toLowerCase();

@@ -142,6 +142,75 @@ async function main() {
       Ctx.isScheduleTool('schedule_once') === true && Ctx.isScheduleTool('request_image') === false);
     check('调度工具共 5 个', Ctx.TOOL_NAMES_SCHEDULE.length === 5, Ctx.TOOL_NAMES_SCHEDULE.join(','));
     check('工具总量仍受每轮上限约束（常量存在）', Ctx.MAX_TOOL_CALLS_PER_TURN === 2);
+
+    // request_image 变体分流（任务书 §3.E）：chat / rp 直出（prompt 必填）、choice 仍是画师（subject）
+    const toolOf = (list, name) => list.filter(t => t.function.name === name)[0];
+    const imgOf = mode => toolOf(Ctx.toolsForMode(mode, { schedule: false }), 'request_image');
+    const chImg = imgOf('chat'), rpImg = imgOf('rp'), chChoiceImg = imgOf('choice');
+    const propsOf = t => ((t && t.function.parameters) || {}).properties || {};
+    const reqOf = t => ((t && t.function.parameters) || {}).required || [];
+    check('request_image：对话模式是直出变体（含 prompt 且必填）',
+      !!chImg && !!propsOf(chImg).prompt && reqOf(chImg).indexOf('prompt') >= 0,
+      JSON.stringify(Object.keys(propsOf(chImg))));
+    check('request_image：扮演模式同为直出变体（含 prompt 且必填）',
+      !!rpImg && !!propsOf(rpImg).prompt && reqOf(rpImg).indexOf('prompt') >= 0);
+    check('request_image：剧情模式仍是画师变体（subject 必填）',
+      !!chChoiceImg && !!propsOf(chChoiceImg).subject && reqOf(chChoiceImg).indexOf('subject') >= 0
+      && !propsOf(chChoiceImg).prompt, JSON.stringify(Object.keys(propsOf(chChoiceImg))));
+    check('工具名集合不变（chat / rp / choice 一致）',
+      chatOff.join(',') === choiceNames.join(',') && namesOf(Ctx.toolsForMode('rp', { schedule: false })).join(',') === choiceNames.join(','),
+      choiceNames.join(','));
+  }
+
+  /* 7b. 智能体（chat）工具集 / 系统提示 / stripKindMarker（任务书 §6 增补，v0.6.0） */
+  if (!Ctx) {
+    check('IR.Context 可用（7b）', false);
+  } else {
+    const namesOf2 = list => list.map(t => t.function.name);
+    const all = { schedule: true, email: true, payment: true };
+    const chatAll = namesOf2(Ctx.toolsForMode('chat', all));
+    const rpAll = namesOf2(Ctx.toolsForMode('rp', all));
+    const choiceAll = namesOf2(Ctx.toolsForMode('choice', all));
+    const chatNone = namesOf2(Ctx.toolsForMode('chat', { schedule: false, email: false, payment: false }));
+    check('门控：chat + email/payment 开启 → 含 email_propose / payment_propose',
+      chatAll.indexOf('email_propose') >= 0 && chatAll.indexOf('payment_propose') >= 0, chatAll.join(','));
+    check('门控：rp 即便传了 true 也不下发邮件 / 下单工具',
+      rpAll.indexOf('email_propose') < 0 && rpAll.indexOf('payment_propose') < 0, rpAll.join(','));
+    check('门控：choice 即便传了 true 也不下发邮件 / 下单工具',
+      choiceAll.indexOf('email_propose') < 0 && choiceAll.indexOf('payment_propose') < 0, choiceAll.join(','));
+    check('门控：chat 但标志为假 → 不含邮件 / 下单工具',
+      chatNone.indexOf('email_propose') < 0 && chatNone.indexOf('payment_propose') < 0, chatNone.join(','));
+    check('isScheduleTool(email_propose) === false / isProposalTool(email_propose) === true',
+      Ctx.isScheduleTool('email_propose') === false && Ctx.isProposalTool('email_propose') === true
+      && Ctx.isProposalTool('payment_propose') === true && Ctx.isProposalTool('request_image') === false);
+    check('提案工具名固定为 email_propose / payment_propose',
+      Ctx.TOOL_NAMES_PROPOSAL.join(',') === 'email_propose,payment_propose', Ctx.TOOL_NAMES_PROPOSAL.join(','));
+    check('既有工具名断言继续通过（request_image / update_memory / 调度类）',
+      chatAll.indexOf('request_image') >= 0 && chatAll.indexOf('update_memory') >= 0
+      && chatAll.indexOf('schedule_once') >= 0 && Ctx.isScheduleTool('schedule_once') === true);
+
+    const chatSys = Ctx.systemForMode('chat');
+    const rpSys = Ctx.systemForMode('rp');
+    const choiceSys = Ctx.systemForMode('choice');
+    check('systemForMode(chat)：不含（做）标记说明', chatSys.indexOf('（做）') < 0, chatSys.slice(0, 40));
+    check('systemForMode(chat)：是智能体系统提示（含「智能助手」）', /智能助手/.test(chatSys));
+    check('systemForMode(rp)：仍含标记说明', rpSys.indexOf('（做）') >= 0 && rpSys.indexOf(Ctx.KIND_MARK_HINT_SHORT) >= 0);
+    check('systemForMode(choice)：仍是剧情 JSON 契约（逐字未动）',
+      choiceSys.indexOf('旁白') >= 0 && choiceSys.indexOf('场景切换') >= 0 && choiceSys.indexOf('（做）') >= 0
+      && choiceSys === Ctx.systemForMode('choice', {}));
+
+    const sm = Ctx.stripKindMarker;
+    check('stripKindMarker：`[玩家行动] （说）你好` → `[玩家行动] 你好`',
+      sm('[玩家行动] （说）你好') === '[玩家行动] 你好', sm('[玩家行动] （说）你好'));
+    check('stripKindMarker：无标记原样不动', sm('[玩家行动] 你好') === '[玩家行动] 你好');
+    check('stripKindMarker：只剥开头那一个',
+      sm('[玩家行动] （做）（说）继续') === '[玩家行动] （说）继续', sm('[玩家行动] （做）（说）继续'));
+    check('stripKindMarker：（导演）出现在正文中间不动',
+      sm('[玩家行动] 走到门口（导演）推开门') === '[玩家行动] 走到门口（导演）推开门'
+      && sm('（导演）开头但没有外层前缀') === '（导演）开头但没有外层前缀');
+    check('stripKindMarker：外层 [玩家行动] 前缀保持不变',
+      sm('[设定]\\nxx\\n\\n[玩家行动] （做）动手') === '[设定]\\nxx\\n\\n[玩家行动] 动手',
+      sm('[设定]\\nxx\\n\\n[玩家行动] （做）动手'));
   }
 
   /* 8. 主动触达编排：去重 + 排队 + 逐条送出 */

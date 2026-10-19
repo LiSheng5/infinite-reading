@@ -630,6 +630,109 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   padding: 0;
 }
 
+/* 内联图气泡（chat / rp：舞台没了，图直接排在聊天流里；点图开灯箱） */
+.bubble-image-inline {
+  display: block;
+  padding: 6px 0;
+}
+.bubble-image-inline img {
+  width: auto; height: auto;
+  max-width: min(100%, 420px);
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+  display: block;
+}
+.bubble-image-inline img:hover { border-color: var(--accent-line); }
+.bubble-image-inline .img-alt {
+  margin-top: 4px;
+  cursor: zoom-in;
+  -webkit-line-clamp: 3;
+}
+
+/* 灯箱：固定遮罩 + 大图，点遮罩 / Esc 关闭 */
+.lightbox {
+  position: fixed; inset: 0;
+  z-index: 60;
+  background: rgba(4, 5, 7, .88);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: min(92vw, 1100px);
+  max-height: 76vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--stage);
+}
+.lightbox-alt {
+  margin: 0;
+  max-width: min(92vw, 900px);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+/* 提案卡（✉ 邮件提案 / 🛒 下单提案）：参数原值 + 确认 / 拒绝 */
+.proposal-card {
+  display: block;
+  border: 1px solid var(--accent-line);
+  border-left: 2px solid var(--accent);
+  background: var(--bubble-accent-soft);
+  padding: 12px 14px;
+}
+.proposal-title {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.proposal-args { display: grid; gap: 4px; }
+.proposal-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.proposal-key {
+  flex: 0 0 3.6em;
+  color: var(--ink-faint);
+  letter-spacing: .08em;
+}
+.proposal-val {
+  flex: 1; min-width: 0;
+  color: var(--bubble-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.proposal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.proposal-status {
+  flex: 1; min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.proposal-ok { color: var(--accent); border-color: var(--accent-line); }
+
 /* 工具 / 系统提示：一行居中的细字，不做成卡片 */
 .chat-note {
   align-self: center;
@@ -1015,6 +1118,15 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
 /* 舞台收起（聊天占满） */
 #screen-game.no-image .image-pane, #screen-game.no-image .splitter { display: none; }
 #screen-game.no-image .chat-pane { width: 100% !important; flex: 1 1 auto; }
+
+/* chat（智能体 / 扮演）：纯聊天布局——没有画面区，聊天列占满宽度 */
+#screen-game[data-layout="chat"] .image-pane,
+#screen-game[data-layout="chat"] .splitter { display: none; }
+#screen-game[data-layout="chat"] .chat-pane { width: 100% !important; flex: 1 1 auto; }
+#screen-game[data-layout="chat"] #btn-toggle-image { display: none; }
+/* 舞台里的 ✎ / 🎨 / ⛶ 与沉浸出口跟着画面区一起消失（舞台区本身已隐藏，这里兜底） */
+#screen-game[data-layout="chat"] .stage-actions,
+#screen-game[data-layout="chat"] .stage-exit { display: none; }
 
 /* 触屏：没有 hover，舞台按钮常显，触控目标不小于 44px */
 @media (hover: none) {

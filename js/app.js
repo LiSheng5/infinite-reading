@@ -28,7 +28,7 @@
     custom: '',
   };
 
-  const MODE_LABELS = { choice: '剧情', chat: '对话', rp: '扮演' };
+  const MODE_LABELS = { choice: '剧情', chat: '智能体', rp: '扮演' };
   // 做 / 说 / 导演：玩家回合的三种输入语义（旧存档缺 kind 时按「做」处理）
   const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
 
@@ -1969,6 +1969,8 @@
     const name = (fn && fn.name) || '';
     let args = {};
     try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
+    // 提案类工具的留痕是 {type:'proposal'} 提案卡本身（确认后另记一条 tool 留痕），这里不再重复记
+    if (IR.Context.isProposalTool(name)) return;
     let summary = name;
     if (name === 'update_memory') {
       if (args.world && typeof args.world === 'object') IR.Context.mergeWorld(story.world, args.world);
@@ -1978,7 +1980,7 @@
       summary = args.text ? ('更新记忆：' + args.text) : '更新记忆';
     } else if (name === 'recall_world_state') summary = '查阅了世界状态卡';
     else if (name === 'recall_style_card') summary = '查阅了视觉设定卡';
-    else if (name === 'request_image') summary = '请画师作画';
+    else if (name === 'request_image') summary = '排队生图';   // §3.A.6：chat / rp 没有画师，措辞中立
     else if (name === 'schedule_once') summary = '安排了一次主动联系（待确认）';
     else if (name === 'schedule_heartbeat') summary = '安排了定时主动联系（待确认）';
     else if (name === 'schedule_cron') summary = '安排了日历主动联系（待确认）';
@@ -2218,6 +2220,8 @@
   function maybeEnqueueImage(reply, isOpen, nodeId) {
     // 去重（§4.7）：本轮 AI1 已经用 request_image 出过图 → 时机出图跳过，同轮不画两张
     if (turnPaintedByTool) { turnPaintedByTool = false; return; }
+    // §3.E.3：对话 / 扮演没有「时机出图」——图只来自模型调用工具或手动按钮（默认行为改动，见 CHANGELOG）
+    if (story && (story.mode === 'chat' || story.mode === 'rp')) return;
     const mode = settings.trigger;
     let want = false;
     if (mode === 'every') want = true;
@@ -2338,26 +2342,13 @@
     return { text, streamed };
   }
 
-  // 本回合是否已由工具出图（用于「工具已出图则跳过本轮时机出图」去重，§4.7）
+  // 本回合是否已由工具出图（用于「工具已出图则跳过本轮时机出图」去重，§4.7）。
+  // v0.5.1 起在**提交任务时**置位（原来是出图完成后），消费点（maybeEnqueueImage、开局路径）不变。
   let turnPaintedByTool = false;
 
-  // request_image：不直连生图——转画师子代理写提示词 → 生图；画师不可用时用场景描述直接兜底（§4.7）
-  async function runToolPaint(args) {
-    const subject = String((args && args.subject) || '').trim();
-    const sceneRef = subject || story.lastSceneSummary || String(story.premise || '').split('\n')[0] || 'story scene';
-    const styleText = styleSuffixText();
-    let a2 = null, painterErr = '';
-    try {
-      a2 = await painterCompose({ sceneRef: sceneRef, styleHint: styleText });
-    } catch (e) {
-      painterErr = (e && e.message) || String(e);   // 画师模型缺失 / 失败：跳过导演判断
-    }
-    const promptRaw = (a2 && a2.promptEn) || sceneRef;
-    const prompt = composePrompt(promptRaw, styleText);
-    const alt = (a2 && a2.alt) || subject || story.lastSceneSummary || '';
-    const scene = await enqueuePaint({ prompt, promptRaw, alt });   // 与「🎨 叫画师」共用同一顺序队列
-    return { scene: scene, alt: alt, prompt: prompt, painterErr: painterErr };
-  }
+  // 回合锚点（§3.A.4）：request_image 在 commit 之前提交、节点还没创建——任务提交时带上它；
+  // 回合 commit 成功后补 nodeId，失败 / 主动停止置 dead；任务开跑前与写回前各核一次。
+  let turnAnchor = { nodeId: null, dead: false };
 
   /* ================= 可选本地服务（sidecar）：调度工具与主动消息 ================= */
 
@@ -2367,6 +2358,19 @@
     if (!S || typeof S.isOnline !== 'function' || !S.isOnline()) return false;
     const st = S.status();
     return !!(st.features && st.features.schedule && st.hasToken);
+  }
+
+  // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
+  // 另外 toolsForMode 只在 chat（智能体）模式放行（红线 7）。
+  function proposalToolsAvailable() {
+    const S = IR.Sidecar;
+    if (!S || typeof S.isOnline !== 'function' || !S.isOnline()) return { email: false, payment: false };
+    const st = S.status();
+    const ready = !!st.hasToken;
+    return {
+      email: !!(ready && st.features && st.features.email),
+      payment: !!(ready && st.features && st.features.payment),
+    };
   }
 
   // 接受 ISO 8601 字符串或时间戳（秒 / 毫秒）；解析不出来返回 0
@@ -2496,9 +2500,15 @@
     const S = IR.Sidecar;
     const st = S ? S.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
+    // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更，见 CHANGELOG）
+    const isChat = !!(story && story.mode === 'chat');
+    const emBtn = $('#btn-feat-email');
+    if (emBtn) emBtn.classList.toggle('hidden', !isChat);
+    const pmBtn = $('#btn-feat-payment');
+    if (pmBtn) pmBtn.classList.toggle('hidden', !isChat);
     for (const sel of ['#btn-feat-email', '#btn-feat-schedule', '#btn-feat-payment']) {
       const b = $(sel);
-      if (!b) continue;
+      if (!b || b.classList.contains('hidden')) continue;
       b.disabled = !ready;
       b.title = ready ? '' : sidecarOffHint();
     }
@@ -2847,7 +2857,8 @@
   }
 
   function openEmailModal() {
-    if (!featuresAllowed()) { toast('剧情模式里没有邮件：切到对话 / 扮演模式再用', true); return; }
+    // v0.6.0：「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    if (!featuresAllowed() || !story || story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#email-status');
@@ -2962,7 +2973,8 @@
   }
 
   function openPaymentModal() {
-    if (!featuresAllowed()) { toast('剧情模式里没有代下单：切到对话 / 扮演模式再用', true); return; }
+    // v0.6.0：「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    if (!featuresAllowed() || !story || story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#pay-status');
@@ -3023,7 +3035,7 @@
     }
   }
 
-  // 执行一轮里的工具调用：留痕 + 副作用（写记忆 / 转画师出图）；返回给重发用的回传块
+  // 执行一轮里的工具调用：留痕 + 副作用（写记忆 / 出图排队）；返回给重发用的回传块
   async function handleToolCalls(calls) {
     const feedback = [];
     const recallScopes = [];
@@ -3032,21 +3044,39 @@
       if (IR.Context.isRecallTool(c.name)) {
         recallScopes.push(IR.Context.RECALL_TOOL_SCOPE[c.name]);
       } else if (c.name === 'request_image') {
-        try {
-          const r = await runToolPaint(c.args);
-          turnPaintedByTool = true;
-          feedback.push('[画师已出图]\n画面：' + (r.alt || '') + '\n（在回复里自然提到这张图，不要说「工具」「系统」。）');
-        } catch (e) {
-          feedback.push('[画师作画失败]\n原因：' + ((e && e.message) || e) + '\n（在回复里自然圆场，别硬说画好了；也不要道歉太多次。）');
-        }
+        // §3.A：不再 await——任务进作画队列立刻返回，图在后台出、完成后落回本回合
+        turnPaintedByTool = true;   // §3.A.3：提交即置位（原来是出图完成后）
+        submitToolPaint(c.args);
+        feedback.push('[已排队生图]\n画面：' + imageBrief(c.args)
+          + '\n（图会稍后自动出现在聊天里。正文里可以自然提一句，但不要声称图已经画好，也不要说「工具」「系统」。）');
       } else if (c.name === 'update_memory') {
         feedback.push('[记忆已更新]\n' + ((c.args && c.args.text) || '世界卡 / 关系已写入'));
       } else if (IR.Context.isScheduleTool(c.name)) {
         feedback.push(await runScheduleTool(c.name, c.args));
+      } else if (IR.Context.isProposalTool(c.name)) {
+        // 提案制（红线 1）：只产生提案卡，绝不执行发送 / 扣款；执行要等用户在界面上点「确认」
+        feedback.push(runProposalTool(c.name, c.args));
       }
     }
     renderChat();
     return { recallScopes: recallScopes.filter((s, i) => recallScopes.indexOf(s) === i), feedback: feedback };
+  }
+
+  // email_propose / payment_propose → 建提案（红线 1/2/3）：
+  // 提案路径只走 IR.Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
+  // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
+  function runProposalTool(name, args) {
+    const kind = name === 'email_propose' ? 'email' : 'payment';
+    const res = IR.Proposals.create(kind, args, Date.now());
+    if (!res || !res.ok) {
+      return '[提案失败] ' + ((res && res.error) || '参数不完整') + '。可以修正后重新提出；不要说已经完成。';
+    }
+    const p = res.proposal;
+    pushLog({ type: 'proposal', proposal: p });
+    if (kind === 'email') {
+      return '[已提交，待用户确认] 邮件给 ' + p.args.to + '，主题「' + p.args.subject + '」；用户在界面确认前不会发送。不要说已经发出。';
+    }
+    return '[已提交，待用户确认] 下单 ' + yuan(p.args.amountCents) + '（' + (p.args.merchant || '未填商户') + '）；用户确认前不会扣款。不要说已经付款。';
   }
 
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发（§4.5）
@@ -3056,6 +3086,7 @@
     const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
 
     turnPaintedByTool = false;   // 本轮工具出图标记（§4.7 去重用）
+    turnAnchor = { nodeId: null, dead: false };   // §3.A.4：本回合锚点，工具出图任务提交时带上
     // C-E 启发式注入（T-P5-3）：玩家输入命中世界卡 / 伏笔实体词 → 本轮自动带上对应条目（与工具召回并行）。
     // 只在「新回合」留痕（重试不重复记），条目本身由 assembleAI1 注入，用户可在留痕面板看到：静默忽略工具时也照带。
     const prevEntry = story.log[story.log.length - 1];
@@ -3081,8 +3112,11 @@
       && settings.toolsEnabled !== 'off' && !noToolsFor(cfg);
     // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
     const schedTools = toolsOn && scheduleToolsAvailable();
+    // 邮件 / 下单（提案制）只在智能体（chat）+ 对应 feature 开启时追加（红线 7；toolsForMode 内部再挡一次模式）
+    const propTools = toolsOn ? proposalToolsAvailable() : { email: false, payment: false };
+    const toolOpts = { schedule: schedTools, email: propTools.email, payment: propTools.payment };
     const asmOpts = Object.assign({}, opts);
-    if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(story.mode, { schedule: schedTools });
+    if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(story.mode, toolOpts);
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
     asmOpts.contextWindow = chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
@@ -3097,7 +3131,7 @@
     } catch (_) { /* 压缩失败不拦回合：最坏按原样发 */ }
     const messages = IR.Context.assembleAI1(story, playerAction, asmOpts);
     const cfgTools = toolsOn
-      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(story.mode, { schedule: schedTools }) })
+      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(story.mode, toolOpts) })
       : cfg;
 
     let streamedCalls = [];
@@ -3123,13 +3157,15 @@
 
     /* P0-2（2026-10-14）：「写了正文 + 调了工具」不再是工具结果的死角。
      * 此前仅当 noProse 才重发注入——流式下 content 与 tool_calls 同包出现完全可能：
-     * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）；
-     * request_image 出了图但正文无法衔接。按工具语义分流：
-     *  - recall_* / request_image：模型需要的信息 / 产物 → 调了就注入重发；
+     * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）。
+     * 按工具语义分流（§3.A.2）：
+     *  - recall_*：模型需要的信息 → 调了就注入重发；
+     *  - request_image：已异步化，模型写了正文就不重发（省一次调用）——「已排队」的
+     *    feedback 只在 noProse 重发时随包注入；
      *  - update_memory / schedule_*：fire-and-forget 的事后动作 → 仅 noProse 时重发（原行为）。
      * 重发永不带工具（§4.5，结构上防循环）；重发不可用而第一版有正文时回退第一版。 */
     const noProse = !reply1.narration || (reply1.parseFailed && reply1.looksJson);
-    const needsFeedback = effect.recallScopes.length > 0 || calls.some(c => c.name === 'request_image');
+    const needsFeedback = effect.recallScopes.length > 0;
     if (toolsOn && calls.length && (noProse || needsFeedback)) {
       if (noProse) reasoning = '';   // 纯工具回合的思考链不对应最终旁白，丢掉
       // 重发沿用本轮组装选项（含 R13 画像），但不下发工具清单
@@ -3176,13 +3212,19 @@
     const k = story && story.ui && story.ui.kind;
     return (k === 'say' || k === 'direct') ? k : 'do';
   }
-  // 外层前缀 [玩家行动] 保持不变（demo.js 靠它分派），类型标记作为内层前缀
+  // 外层前缀 [玩家行动] 保持不变（demo.js 靠它分派），类型标记作为内层前缀。
+  // v0.6.0：chat（智能体）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
   function withKindMarker(text, kind) {
+    const raw = String(text == null ? '' : text);
+    if (story && story.mode === 'chat') return raw;
     const k = (kind === 'say' || kind === 'direct') ? kind : 'do';
-    return '（' + KIND_LABELS[k] + '）' + String(text == null ? '' : text);
+    return '（' + KIND_LABELS[k] + '）' + raw;
   }
   function syncKindSwitch() {
     const k = currentKind();
+    // chat（智能体）没有做 / 说 / 导演：整组开关隐藏（story.ui.kind 保留不清）
+    const sw = $('#kind-switch');
+    if (sw) sw.classList.toggle('hidden', !!(story && story.mode === 'chat'));
     document.querySelectorAll('#kind-switch .seg-btn').forEach(b => {
       const on = b.dataset.kind === k;
       b.classList.toggle('active', on);
@@ -3190,7 +3232,8 @@
     });
     const inp = $('#player-input');
     if (inp) {
-      inp.placeholder = k === 'say' ? '说点什么……'
+      inp.placeholder = (story && story.mode === 'chat') ? '说点什么，或交给我办件事……'
+        : k === 'say' ? '说点什么……'
         : k === 'direct' ? '写一句导演指令（世界里的既成事实）……'
         : '做点什么，或说句话……';
     }
@@ -3203,7 +3246,12 @@
     if (!action) return;
     if (offlineBlocked('这条消息')) return;
     const agentMsg = !!(meta && meta.kind === 'agent');
-    const kind = isChoice ? 'do' : (agentMsg ? null : (((meta && meta.actKind) === 'say' || (meta && meta.actKind) === 'direct') ? meta.actKind : currentKind()));
+    // chat（智能体）：玩家条目 kind 恒为 'do'，发给模型的行动不带内层标记（withKindMarker 对 chat 直接返回原文）
+    const chatMode = !!(story && story.mode === 'chat');
+    const kind = isChoice ? 'do'
+      : (agentMsg ? null
+        : chatMode ? 'do'
+        : (((meta && meta.actKind) === 'say' || (meta && meta.actKind) === 'direct') ? meta.actKind : currentKind()));
     const sentAction = kind ? withKindMarker(action, kind) : action;
     busy = true;
     stopRequested = false; chatAbortCtrl = null;   // P0-1：每回合复位停止标记
@@ -3239,12 +3287,14 @@
         },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
       });
+      turnAnchor.nodeId = node.id;                // §3.A.4：锚点补 nodeId，后台出图任务写回时落位
       maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
       await postTurn();
       IR.Tree.seal(story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
       if (agentMsg && meta.fireId) await ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
       live = null;
+      turnAnchor.dead = true;   // §3.A.4：失败 / 停止——本回合排队中与在途的工具出图丢弃
       if (isStopError(e)) {   // P0-1：玩家主动停止——不算故障，不弹错误提示
         story.log.push({ type: 'narration', text: '（已停止。点「↻ 重试」或再试一次。）', versions: [], ts: Date.now() });
       } else {
@@ -3304,14 +3354,17 @@
         action: { type: 'opening', text: OPENING_ACTION, kind: null, sent: OPENING_ACTION },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
       });
+      turnAnchor.nodeId = node.id;                 // §3.A.4：锚点补 nodeId
       await postTurn();
       IR.Tree.seal(story, node.id);                // 必须在 postTurn 之后（§10）
       if (turnPaintedByTool) turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
+      else if (story.mode === 'chat' || story.mode === 'rp') { /* §3.E.3：对话 / 扮演没有时机出图 */ }
       else if (settings.trigger !== 'manual') enqueueImage(reply.scene_summary, node.id);
       else toast('已开局。想看画面随时点右上角「作画」。');
       saveAll();
     } catch (e) {
       live = null;
+      turnAnchor.dead = true;   // §3.A.4：失败 / 停止分支同样置位
       if (isStopError(e)) {
         story.log.push({ type: 'narration', text: '（已停止。输入任意内容开始故事。）', versions: [], ts: Date.now() });
       } else {
@@ -3435,11 +3488,13 @@
         action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
       });
+      turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
       await postTurn();
       IR.Tree.seal(story, node.id);
       saveAll();
     } catch (e) {
       // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）
+      turnAnchor.dead = true;        // §3.A.4：失败分支置位，本次重试排队中的工具出图丢弃
       IR.Tree.switchTo(story, old.id);
       currentChoices = choicesFromHead();
       if (isStopError(e)) toast('已停止');
@@ -3464,30 +3519,180 @@
     renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); renderSavepoints();
   }
 
-  /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） ================= */
+  /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） =================
+   * v0.5.1（§3.B）：时机出图 / 工具出图 / 手动 / 工作台重画全走同一条串行队列 IR.PaintQueue，
+   * 画师构思也在队列里跑（不与队列外的构思并发）；request_image 已异步化、不卡回合（§3.A）。 */
 
-  let genChain = Promise.resolve();
+  const paintQ = IR.PaintQueue.create({ onChange: function () { renderGenPill(); } });
 
-  function enqueueImage(sceneSummary, nodeId) {
-    const storyId = story && story.id;   // 记住「为谁画的」：等图期间换档也不写错故事
-    const nid = nodeId || treeHeadNodeId();   // 与 nodeId 一样在任务创建时记下（§4.4）
-    genChain = genChain.then(() => generateScene(sceneSummary, storyId, nid)).catch(() => {});
+  // —— 作画胶囊 #gen-status（§3.B）：显示「构思中 / 作画中」并带上队列长度；队列清空才隐藏 ——
+  let genPillText = '';
+
+  function setGenPill(text) {
+    genPillText = String(text || '');
+    renderGenPill();
   }
 
-  // 顺序队列：对话与在途作画结束后才生成（§4.7）
+  function renderGenPill() {
+    const pill = $('#gen-status');
+    if (!pill) return;
+    const n = paintQ.size();
+    if (!n) { pill.classList.add('hidden'); pill.textContent = ''; return; }
+    const waiting = n > 1 ? '（队列 ' + (n - 1) + '）' : '';
+    pill.textContent = (genPillText || 'AI 作画中…') + waiting;
+    pill.classList.remove('hidden');
+  }
+
+  // request_image 的一句话画面说明（feedback 用）：alt 优先，退回 subject / prompt
+  function imageBrief(args) {
+    const a = args || {};
+    const s = String(a.alt || a.subject || a.prompt || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '（未说明）';
+    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+  }
+
+  // 后台作画失败要可见（§3.A.5）：toast + 往它所属的节点留一条 tool 留痕
+  function paintFailVisible(error, task) {
+    const msg = (error && error.message) ? error.message : String(error);
+    toast('作画失败：' + msg, true, true);
+    const anchor = (task && task.anchor) || null;
+    if (anchor && anchor.dead) return;   // 回合已被停止：不再往不存在的节点留痕
+    const nodeId = (task && task.nodeId) || (anchor && anchor.nodeId) || null;
+    pushPaintFailNote(nodeId, '作画失败：' + msg);
+  }
+
+  // 留痕落位与 runPaint 同口径（§4.4）：节点没了丢弃；已 sealed 走 pushLate；否则写 story.log（由 commit 切片收进节点）
+  function pushPaintFailNote(nodeId, summary) {
+    if (!story) return;
+    const tree = story.tree;
+    const node = (nodeId && tree && tree.nodes) ? tree.nodes[nodeId] : null;
+    if (nodeId && !node) return;
+    const entry = { type: 'tool', tool: 'image', summary: summary, ts: Date.now() };
+    if (node && node.sealed) IR.Tree.pushLate(story, node.id, entry);
+    else story.log.push(entry);
+    saveAll();
+    renderChat();
+  }
+
+  // 统一提交：失败在这里变可见（toast + 留痕），调用方拿场景或 null，不再抛异常
+  function submitPaint(task) {
+    return paintQ.enqueue(task).then(r => {
+      if (r.skipped) return null;          // anchor.dead：开跑前就被丢弃，没花额度
+      if (!r.ok) {
+        paintFailVisible(r.error, task);
+        return null;
+      }
+      return r.value || null;
+    });
+  }
+
+  // request_image 入队（§3.A）：立刻返回、不等图；任务带回合锚点，完成后落回「它所属的回合」
+  function submitToolPaint(args) {
+    const storyId = story && story.id;
+    const mode = story && story.mode;
+    const a = args || {};
+    // §3.E：对话 / 扮演直出（模型自己写提示词，不经画师）；剧情模式保持画师构思
+    const direct = mode === 'chat' || mode === 'rp';
+    const rawPrompt = String(a.prompt || '').trim() || String(a.subject || '').trim();
+    const sceneRef = rawPrompt
+      || (story && story.lastSceneSummary)
+      || String((story && story.premise) || '').split('\n')[0] || 'story scene';
+    const anchor = turnAnchor;   // 记住本回合的锚点对象（下一回合 callAI1 会换新对象）
+    return submitPaint({
+      key: null,
+      anchor: anchor,
+      storyId: storyId,
+      nodeId: null,   // commit 前提交：写回时才从 anchor.nodeId 取（§3.A.4）
+      run: () => runPaintTask({
+        storyId: storyId,
+        anchor: anchor,
+        directPrompt: direct ? (rawPrompt || (story && story.lastSceneSummary) || 'atmospheric scene') : '',
+        promptRaw: rawPrompt || undefined,
+        sceneRef: sceneRef,
+        altHint: String(a.alt || a.subject || '').trim(),
+      }),
+    });
+  }
+
+  // 作画任务体（§3.B）：合并原 runToolPaint / generateScene 的重复流程——
+  //   构思（directPrompt 缺省时走画师；画师不可用 / 失败用场景描述兜底）→ 组 prompt → runPaint 出图写回
+  // opts: { storyId, nodeId, anchor, directPrompt, promptRaw, sceneRef, altHint, supersedesEntry, supersedesScene, params }
+  async function runPaintTask(opts) {
+    if (!story) return null;
+    // 排队期间已换故事：直接取消，不花画师与生图额度
+    if (opts.storyId && story.id !== opts.storyId) { toast('已切换故事，本次作画取消'); return null; }
+    // 断网：连画师构思都不发（这一步也要花钱），整单作废
+    if (offlineBlocked('这次作画')) return null;
+
+    const styleText = styleSuffixText();
+    let promptRaw, prompt, alt;
+    if (opts.directPrompt) {
+      // 直出（§3.E）：提示词是模型写的，不请画师
+      promptRaw = opts.promptRaw || opts.directPrompt;
+      prompt = composePrompt(opts.directPrompt, styleText);
+      alt = opts.altHint || opts.sceneRef || '';
+      setGenPill('AI 作画中…');
+    } else {
+      // —— 画师子代理：把剧情写成绘画提示词 ——（剧情模式的工具出图 / 时机出图 / 手动）
+      const sceneRef = opts.sceneRef
+        || story.lastSceneSummary || String(story.premise || '').split('\n')[0] || 'story scene';
+      setGenPill('AI 画师构思中…');
+      let a2 = null;
+      try {
+        a2 = await painterCompose({ sceneRef: sceneRef, styleHint: styleText });
+      } catch (_) { a2 = null; }   // 画师模型缺失 / 失败：跳过导演判断，用场景描述兜底（§4.7）
+      promptRaw = (a2 && a2.promptEn) || sceneRef;
+      prompt = composePrompt(promptRaw, styleText);
+      alt = (a2 && a2.alt) || opts.altHint || sceneRef;
+      setGenPill('AI 画师作画中…');
+    }
+    return runPaint({
+      prompt: prompt, promptRaw: promptRaw, alt: alt,
+      storyId: opts.storyId, nodeId: opts.nodeId, anchor: opts.anchor,
+      supersedesEntry: opts.supersedesEntry, supersedesScene: opts.supersedesScene,
+      params: opts.params,
+    });
+  }
+
+  // 时机出图（§4.7）：节点在任务创建时记下（§4.4），同一条队列串行
+  function enqueueImage(sceneSummary, nodeId, key) {
+    const storyId = story && story.id;   // 记住「为谁画的」：等图期间换档也不写错故事
+    const nid = nodeId || treeHeadNodeId();   // 与 nodeId 一样在任务创建时记下（§4.4）
+    return submitPaint({
+      key: key || null,
+      storyId: storyId,
+      nodeId: nid,
+      run: () => runPaintTask({
+        storyId: storyId, nodeId: nid,
+        sceneRef: String(sceneSummary || ''), altHint: String(sceneSummary || ''),
+      }),
+    });
+  }
+
+  // 提示词已就绪的出图（工作台「按此重画」/「按设定卡强制重画」）：跳过构思直接出图
   function enqueuePaint(opts) {
+    opts = opts || {};
     const storyId = story && story.id;   // 同上：任务自带故事 id，写入前核对
     // 图落回「它替代的那张图」所属的节点（§4.4）。重画找不到归属就挂到当前 head——
     // 不锚定的条目下次 project 就丢了；回合内的工具出图没有 supersedes 也没 nodeId，
-    // 不在这里锚定（它在 commit 之前完成，会被 logMark 切片收进当前节点）
+    // 不在这里锚定（它写回时按 anchor / logMark 切片收进当前节点）
     const supersedes = opts.supersedesEntry || opts.supersedesScene;
     const nodeId = opts.nodeId
       || nodeIdOwningEntry(opts.supersedesEntry)
       || (opts.supersedesScene ? nodeIdOwningScene(opts.supersedesScene.id) : null)
       || (supersedes ? treeHeadNodeId() : null);
-    const p = genChain.then(() => runPaint(Object.assign({}, opts, { storyId, nodeId })));
-    genChain = p.catch(() => {});
-    return p;
+    return submitPaint({
+      key: opts.key || null,
+      storyId: storyId,
+      nodeId: nodeId,
+      run: () => runPaintTask({
+        storyId: storyId, nodeId: nodeId,
+        directPrompt: opts.prompt, promptRaw: opts.promptRaw || opts.prompt,
+        sceneRef: '', altHint: opts.alt || '',
+        supersedesEntry: opts.supersedesEntry, supersedesScene: opts.supersedesScene,
+        params: opts.params,
+      }),
+    });
   }
 
   // 画风兜底后缀（未锚定视觉设定卡时用 settings 画风预设）
@@ -3575,7 +3780,8 @@
           if (name === 'recall_recent_plot') wantPlot = true;
         }
       },
-      onAborter(ctrl) { chatAbortCtrl = ctrl; },   // P0-1：画师子代理的请求同样可被「停止」中断
+      // §3.D：画师构思 / 生图不再写全局 chatAbortCtrl——「停止」只管聊天回合，
+      // 后台作画不受它中断（超时沿用适配器自己的；本期不为作画再造取消按钮）
     };
     const useTools = !!opts.tools && settings.toolsEnabled !== 'off';
     const cfg2 = useTools ? Object.assign({}, cfg, { tools: [IR.Context.RECALL_RECENT_PLOT_TOOL] }) : cfg;
@@ -3597,6 +3803,9 @@
   async function runPaint(opts) {
     if (!story) return null;
     if (offlineBlocked('这次作画')) return null;
+    const anchor = opts.anchor || null;
+    // 工具出图在 commit 之前提交：写回时才从回合锚点取 nodeId（§3.A.4）
+    const nodeId = opts.nodeId || (anchor && anchor.nodeId) || null;
     const cfgImg = imageCfg(opts.params);
     const imgAdapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
     const src = await imgAdapter.generate(cfgImg, opts.prompt);
@@ -3606,13 +3815,19 @@
       toast('已切换故事，刚画好的图已丢弃');
       return null;
     }
+    // §3.A.4 写回前再核一次回合锚点：回合失败 / 被停止 → 丢弃（不落进不存在的节点）
+    if (anchor && anchor.dead) {
+      toast('这一回合已停止，刚画好的图已丢弃');
+      return null;
+    }
 
     // §4.4 第二道核对：图归 nodeId 那个回合。节点没了 → 丢弃；
     // 已 sealed → 走 Tree.pushLate（在当前路径上才进投影 log，否则只写节点）；
-    // 未 sealed → 沿用现有写法（此时它必然是 head，busy 禁止切换）
+    // 未 sealed / 还没 commit（nodeId 为空）→ 沿用现有写法写 story.log / story.scenes，
+    // 由 Tree.commit 的 logMark 切片收进当前节点（commit 与 seal 都会重算 node.scenes）
     const tree = story.tree;
-    const node = (opts.nodeId && tree && tree.nodes) ? tree.nodes[opts.nodeId] : null;
-    if (opts.nodeId && !node) {
+    const node = (nodeId && tree && tree.nodes) ? tree.nodes[nodeId] : null;
+    if (nodeId && !node) {
       toast('这张图所属的回合已不在分支树里，刚画好的图已丢弃');
       return null;
     }
@@ -3658,37 +3873,7 @@
     return scene;
   }
 
-  async function generateScene(sceneSummary, storyId, nodeId) {
-    if (!story) return;
-    // 排队期间已换故事：直接取消，不花画师与生图额度
-    if (storyId && story.id !== storyId) { toast('已切换故事，本次作画取消'); return; }
-    // 断网：连画师构思都不发（这一步也要花钱），整单作废，不排队
-    if (offlineBlocked('这次作画')) return;
-    const pill = $('#gen-status');
-    pill.textContent = 'AI 画师构思中…';
-    pill.classList.remove('hidden');
-
-    try {
-      // —— 画师子代理：把剧情写成绘画提示词 ——
-      const styleText = styleSuffixText();
-      const a2 = await painterCompose({
-        sceneRef: sceneSummary || story.lastSceneSummary || String(story.premise || '').split('\n')[0],
-        styleHint: styleText,
-      });
-
-      const promptRaw = a2.promptEn || sceneSummary || 'atmospheric scene';
-      const prompt = composePrompt(promptRaw, styleText);
-      const alt = a2.alt || sceneSummary || '';
-
-      // —— 调生图适配器 ——（storyId / nodeId 随任务传递，写入前再核对一次）
-      pill.textContent = 'AI 画师作画中…';
-      await runPaint({ prompt, promptRaw, alt, storyId, nodeId });
-    } catch (e) {
-      toast('作画失败：' + (e && e.message ? e.message : e), true, true);
-    } finally {
-      pill.classList.add('hidden');
-    }
-  }
+  // （generateScene 已并入 runPaintTask：构思 → 组 prompt → 出图三处共用一个任务体，§3.B）
 
   /* ================= 画师工作台（§4.3，T-P3-1） ================= */
 
@@ -3878,6 +4063,8 @@
     const prompt = $('#pw-prompt').value.trim();
     const alt = $('#pw-alt').value.trim();
     if (!prompt) { toast('prompt 不能为空', true); return; }
+    const key = 'redraw:' + pw.sceneId;   // §3.C：带 key 防连点（不需要 busy 保护，它改的是已有的图）
+    if (paintQ.has(key)) { toast('这张图已在作画队列里'); return; }
     pw.busy = true;
     $('#btn-pw-redraw').disabled = true;
     $('#btn-pw-send').disabled = true;
@@ -3885,30 +4072,27 @@
     pwParamsToSettings();
     const scene = imageSceneById(pw.sceneId);
     const entry = findImageEntry(pw.sceneId);
-    const pill = $('#gen-status');
-    pill.textContent = 'AI 画师作画中…';
-    pill.classList.remove('hidden');
     try {
       const newScene = await enqueuePaint({
+        key: key,
         prompt, promptRaw: stripStyleSuffix(prompt), alt: alt || (scene && scene.alt) || '',
         supersedesEntry: entry, supersedesScene: scene,
       });
-      if (pw && newScene) {
-        pw.sceneId = newScene.id;
-        pw.prompt = newScene.prompt;
-        pw.promptRaw = newScene.promptRaw;
-        pw.alt = newScene.alt;
+      if (newScene) {
+        if (pw) {
+          pw.sceneId = newScene.id;
+          pw.prompt = newScene.prompt;
+          pw.promptRaw = newScene.promptRaw;
+          pw.alt = newScene.alt;
+        }
+        toast('已重画（旧图保留在记录里）');
       }
-      renderWorkbench();
-      toast('已重画（旧图保留在记录里）');
-    } catch (e) {
-      toast('作画失败：' + (e && e.message ? e.message : e), true, true);
+      if (pw) renderWorkbench();
     } finally {
       if (pw) pw.busy = false;   // 等图期间面板可能被关掉（pw 置空）
       $('#btn-pw-redraw').disabled = false;
       $('#btn-pw-send').disabled = false;
       $('#btn-pw-force').disabled = false;
-      pill.classList.add('hidden');
       saveAll();
     }
   }
@@ -3943,6 +4127,8 @@
     const prompt = composePrompt(raw, suffix);
     if (!prompt) { toast('这张图还没有可用的提示词', true); return; }
 
+    const key = 'redraw:' + pw.sceneId;   // §3.C：带 key 防连点
+    if (paintQ.has(key)) { toast('这张图已在作画队列里'); return; }
     pw.busy = true;
     $('#btn-pw-force').disabled = true;
     $('#btn-pw-redraw').disabled = true;
@@ -3952,30 +4138,27 @@
     pw.prompt = prompt; pw.promptRaw = raw;
     const scene = imageSceneById(pw.sceneId);
     const entry = findImageEntry(pw.sceneId);
-    const pill = $('#gen-status');
-    pill.textContent = 'AI 画师按设定卡重画中…';
-    pill.classList.remove('hidden');
     try {
       const newScene = await enqueuePaint({
+        key: key,
         prompt, promptRaw: raw, alt: alt || (scene && scene.alt) || '',
         supersedesEntry: entry, supersedesScene: scene,
       });
-      if (pw && newScene) {
-        pw.sceneId = newScene.id;
-        pw.prompt = newScene.prompt;
-        pw.promptRaw = newScene.promptRaw;
-        pw.alt = newScene.alt;
+      if (newScene) {
+        if (pw) {
+          pw.sceneId = newScene.id;
+          pw.prompt = newScene.prompt;
+          pw.promptRaw = newScene.promptRaw;
+          pw.alt = newScene.alt;
+        }
+        toast('已按视觉设定卡重画（旧图保留在记录里）');
       }
-      renderWorkbench();
-      toast('已按视觉设定卡重画（旧图保留在记录里）');
-    } catch (e) {
-      toast('作画失败：' + (e && e.message ? e.message : e), true, true);
+      if (pw) renderWorkbench();
     } finally {
       if (pw) pw.busy = false;   // 等图期间面板可能被关掉（pw 置空）
       $('#btn-pw-force').disabled = false;
       $('#btn-pw-redraw').disabled = false;
       $('#btn-pw-send').disabled = false;
-      pill.classList.add('hidden');
       saveAll();
     }
   }
@@ -4407,7 +4590,231 @@
     tray.classList.remove('hidden');
   }
 
+  // 图片 src 只放行 data: / blob: / https:（chat / rp 内联图与灯箱用；javascript: 等一律拒绝）
+  function safeImgSrc(src) {
+    const s = String(src || '');
+    return (/^(data|blob|https):/i.test(s)) ? s : '';
+  }
+
+  // 大图优先取原图（imageURL，IndexedDB），没有就用缩略图
+  function imageFullSrc(sc, entry) {
+    const id = (sc && sc.imageId) || (entry && entry.imageId);
+    const orig = id ? Store.imageURL(id) : null;
+    return safeImgSrc(orig)
+      || safeImgSrc(sc && (sc.src || sc.thumb))
+      || safeImgSrc(entry && (entry.src || entry.thumb))
+      || '';
+  }
+
+  /* ---- 灯箱（chat / rp 的最小看图方案：固定遮罩 + 大图，点遮罩 / Esc 关闭） ---- */
+  function openLightbox(entry) {
+    const box = $('#lightbox');
+    if (!box || !entry) return;
+    const sc = imageSceneById(entry.id);
+    const full = imageFullSrc(sc, entry);
+    if (!full) { toast('这张图没有可用的图像数据', true); return; }
+    const img = $('#lightbox-img');
+    const alt = $('#lightbox-alt');
+    if (img) {
+      img.src = full;
+      img.alt = entry.alt || '插图';
+    }
+    if (alt) alt.textContent = entry.alt || '';
+    box.classList.remove('hidden');
+  }
+  function closeLightbox() {
+    const box = $('#lightbox');
+    if (!box || box.classList.contains('hidden')) return false;
+    box.classList.add('hidden');
+    const img = $('#lightbox-img');
+    if (img) { img.src = ''; img.alt = ''; }
+    return true;
+  }
+
+  // chat / rp 的内联图气泡（v0.6.0：舞台没了，图直接排在聊天流里）；剧情模式仍走缩略图 + 舞台
+  function inlineImageBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'bubble bubble-image bubble-image-inline';
+    const sc = imageSceneById(e.id);
+    const src = safeImgSrc(sceneSrc(sc, e));
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = e.alt || '插图';
+      img.loading = 'lazy';
+      img.onclick = () => openLightbox(e);
+      d.appendChild(img);
+    }
+    const cap = document.createElement('div');
+    cap.className = 'img-alt';
+    cap.textContent = (e.alt || '（一幅插图）') + (e.supersededBy ? ' · 已被重画版替代' : '');
+    cap.onclick = () => openLightbox(e);
+    d.appendChild(cap);
+    return d;
+  }
+
+  /* ---- 提案卡（✉ 邮件提案 / 🛒 下单提案）：参数原值用 textContent 渲染（红线 4），未确认不可执行 ---- */
+  function proposalStatusLabel(p, now) {
+    if (p.status === 'pending') {
+      return (now < p.expiresAt) ? '等待确认' : '已过期';
+    }
+    if (p.status === 'executing') {
+      return (p.result && p.result.needsSecondConfirm && !p.result.resolved) ? '执行中（等待你再确认一次）' : '执行中';
+    }
+    if (p.status === 'done') return p.kind === 'email' ? '已发送' : '已下单';
+    if (p.status === 'denied') return '已拒绝';
+    if (p.status === 'expired') return '已过期';
+    if (p.status === 'failed') return '失败：' + ((p.result && p.result.error) || '未知原因');
+    return p.status;
+  }
+
+  function proposalBubble(e) {
+    const p = e && e.proposal;
+    const now = Date.now();
+    const d = document.createElement('div');
+    d.className = 'bubble proposal-card';
+    if (!p) { d.textContent = '（提案数据缺失）'; return d; }
+    // 过期就地收敛状态（只改内存对象，与节点共享；下次 saveAll 落盘）
+    if (p.status === 'pending' && now >= p.expiresAt) IR.Proposals.markExpired(p);
+
+    const title = document.createElement('div');
+    title.className = 'proposal-title';
+    title.textContent = (p.kind === 'email' ? '✉ 邮件提案' : '🛒 下单提案') + '（要你确认才执行）';
+    d.appendChild(title);
+
+    const table = document.createElement('div');
+    table.className = 'proposal-args';
+    const row = (k, v) => {
+      const r = document.createElement('div');
+      r.className = 'proposal-row';
+      const kk = document.createElement('span');
+      kk.className = 'proposal-key';
+      kk.textContent = k;
+      const vv = document.createElement('span');
+      vv.className = 'proposal-val';
+      vv.textContent = String(v == null ? '' : v);   // 工具参数原值，不是模型转述（红线 4）
+      r.appendChild(kk); r.appendChild(vv);
+      table.appendChild(r);
+    };
+    if (p.kind === 'email') {
+      row('收件人', p.args.to);
+      row('主题', p.args.subject);
+      row('正文', p.args.body);
+    } else {
+      row('金额', yuan(p.args.amountCents));
+      row('商户', p.args.merchant || '（未填）');
+      row('品类', p.args.category || '（未填）');
+      row('商品', (p.args.items || []).map(i => i && i.name).filter(Boolean).join('、') || '（未填）');
+    }
+    if (p.args.reason) row('理由', p.args.reason);
+    d.appendChild(table);
+
+    const foot = document.createElement('div');
+    foot.className = 'proposal-foot';
+    const status = document.createElement('span');
+    status.className = 'proposal-status';
+    let statusText = proposalStatusLabel(p, now);
+    if (p.status === 'pending' && now < p.expiresAt) {
+      const mins = Math.max(1, Math.ceil((p.expiresAt - now) / 60000));
+      statusText += ' · 有效剩 ' + mins + ' 分钟';
+    }
+    status.textContent = statusText;
+    foot.appendChild(status);
+
+    const actionable = p.status === 'pending' && now < p.expiresAt && !busy;
+    if (actionable) {
+      const ok = document.createElement('button');
+      ok.className = 'mini-btn proposal-ok';
+      ok.type = 'button';
+      ok.textContent = '确认';
+      ok.title = '确认后才会真正执行（一封邮件 / 一笔扣款）';
+      ok.onclick = () => { confirmProposal(e); };
+      const no = document.createElement('button');
+      no.className = 'mini-btn';
+      no.type = 'button';
+      no.textContent = '拒绝';
+      no.onclick = () => { denyProposal(e); };
+      foot.appendChild(ok);
+      foot.appendChild(no);
+    }
+    d.appendChild(foot);
+    return d;
+  }
+
+  // 确认 = 一次用户点击 → 最多一次执行（Proposals.confirm 同步抢占状态，连点不会二次执行）
+  async function confirmProposal(entry) {
+    const p = entry && entry.proposal;
+    if (!p) return;
+    if (p.status !== 'pending') { renderChat(); return; }   // 幂等：重复点击不再执行
+    if (!IR.Proposals.isActionable(p, Date.now())) {
+      IR.Proposals.markExpired(p);
+      saveAll(); renderChat();
+      return;
+    }
+    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    let res = null;
+    try {
+      res = await IR.Proposals.confirm(p, IR.Sidecar, Date.now());
+    } catch (err) {
+      p.status = 'failed';
+      p.result = { ok: false, error: String((err && err.message) || err) };
+      res = { status: 'failed' };
+    }
+    if (res && res.needsSecondConfirm) {
+      // 红线 3：sidecar 要求人工确认时不得自动批准——再弹一次带额度余量的确认（文案沿用 doPaymentSubmit）
+      const a = p.args;
+      const rem = (res.summary && res.summary.remaining) || {};
+      const lines = [
+        '需要你确认这一笔：',
+        '',
+        '金额：' + yuan(a.amountCents),
+        '商户：' + (a.merchant || '（未填）'),
+        '品类：' + (a.category || '（未填）'),
+      ];
+      const items = (a.items || []).map(i => i && i.name).filter(Boolean).join('、');
+      if (items) lines.push('商品：' + items);
+      lines.push('', '每日剩余：' + yuan(rem.daily || 0) + ' · 每月剩余：' + yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+      const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
+      if (ok) {
+        try { await IR.Proposals.approveSecond(p, IR.Sidecar); } catch (err) {
+          p.status = 'failed';
+          if (p.result) p.result.error = String((err && err.message) || err);
+        }
+      } else {
+        try { await IR.Proposals.deny(p, IR.Sidecar); } catch (_) {}
+      }
+    }
+    pushLog({ type: 'tool', tool: 'proposal', summary: proposalResultSummary(p) });
+    saveAll();
+    renderChat();
+    renderPayLedger();
+    toast(proposalResultSummary(p), p.status === 'failed');
+  }
+
+  // 拒绝：不执行任何发送 / 扣款；已有 intent / 草稿时由 Proposals.deny 负责清理
+  async function denyProposal(entry) {
+    const p = entry && entry.proposal;
+    if (!p || (p.status !== 'pending' && p.status !== 'executing')) { renderChat(); return; }
+    try { await IR.Proposals.deny(p, IR.Sidecar); } catch (_) {}
+    pushLog({ type: 'tool', tool: 'proposal', summary: proposalResultSummary(p) });
+    saveAll();
+    renderChat();
+  }
+
+  function proposalResultSummary(p) {
+    if (!p) return '提案状态未知';
+    const what = p.kind === 'email'
+      ? ('邮件提案（给 ' + p.args.to + '）')
+      : ('下单提案（' + yuan(p.args.amountCents) + ' · ' + (p.args.merchant || '未填商户') + '）');
+    if (p.status === 'done') return what + (p.kind === 'email' ? '：已发送' : '：已完成');
+    if (p.status === 'denied') return what + '：已拒绝，未执行';
+    if (p.status === 'expired') return what + '：已过期，未执行';
+    if (p.status === 'failed') return what + '：失败（' + ((p.result && p.result.error) || '未知原因') + '）';
+    return what + '：' + p.status;
+  }
+
   function bubbleFor(e, index) {
+    if (e.type === 'proposal') return proposalBubble(e);
     if (e.type === 'tool') {
       const d = document.createElement('div');
       d.className = 'chat-note';
@@ -4421,6 +4828,8 @@
       return d;
     }
     if (e.type === 'image') {
+      // chat / rp（v0.6.0）：舞台没了 → 图直接内联在聊天流里，点开是灯箱；这两个模式不给「工作台」入口
+      if (story && (story.mode === 'chat' || story.mode === 'rp')) return inlineImageBubble(e);
       // 场景标记行：56px 小缩略图 + 一行 alt（不再在聊天里内嵌大图）。
       // 点图 / 点文字 = 在右侧舞台选中这张；「工作台」入口悬停时才出现。
       const d = document.createElement('div');
@@ -4605,10 +5014,20 @@
   }
 
   function effectiveLayout() {
+    // v0.6.0：chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
+    if (story && (story.mode === 'chat' || story.mode === 'rp')) return 'chat';
     const ui = uiState();
     if (ui.layout === 'immersive') return 'immersive';
     if (ui.layout === 'split' || ui.layout === 'stack') return ui.layout;
     return autoLayout();
+  }
+
+  // 设置里的布局项：chat / rp 下给一行灰字说明（布局选项本身不动，切回剧情模式照常生效）
+  function renderLayoutHint() {
+    const el = $('#ui-layout-hint');
+    if (!el) return;
+    const noStage = !!(story && (story.mode === 'chat' || story.mode === 'rp'));
+    el.textContent = noStage ? '此模式没有画面区（纯聊天布局），下面的布局选项只对剧情模式生效。' : '';
   }
 
   function isImmersive() {
@@ -4633,6 +5052,7 @@
     el.classList.toggle('no-image', !!ui.imageCollapsed && layout !== 'immersive');
     el.classList.toggle('text-hidden', !!immersiveTextHidden);
     if (layout !== 'stack') { el.classList.remove('stage-strip', 'kb-open'); }
+    renderLayoutHint();
 
     const exitBtn = $('#btn-immersive-exit');
     if (exitBtn) exitBtn.classList.toggle('hidden', layout !== 'immersive');
@@ -4756,6 +5176,7 @@
   /* ================= 设置界面 ================= */
 
   function syncSettingsToForm() {
+    renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
     // 可选本地服务：这里只同步「怎么连它」（端口 + token）；额度 / 白名单等安全项由侧车 config.json 提供
     const sc = settings.sidecar || {};
     if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || 4319;
@@ -5161,6 +5582,8 @@
       story.mode = m;
       $('#hud-mode').textContent = MODE_LABELS[m] || '剧情';
       saveAll();
+      applyLayout();
+      syncKindSwitch();
       renderChat();
       openCardEditor({
         mode: 'edit',
@@ -5169,6 +5592,8 @@
           $('#s-story-mode').value = prev;
           $('#hud-mode').textContent = MODE_LABELS[prev] || '剧情';
           saveAll();
+          applyLayout();
+          syncKindSwitch();
           renderChat();
         },
       });
@@ -5177,6 +5602,8 @@
     story.mode = m;
     $('#hud-mode').textContent = MODE_LABELS[m] || '剧情';
     saveAll();
+    applyLayout();      // 剧情 ↔ chat/rp 来回切：舞台与图都还在（只是不显示），布局要跟着模式走
+    syncKindSwitch();   // chat 隐藏做 / 说 / 导演；story.ui.kind 保留不清
     renderChat();
     renderStoryPanels();
   }
@@ -5262,8 +5689,12 @@
     const manualGenerate = () => {
       closeMenus();
       if (!story) { toast('先打开一个故事吧'); return; }
+      if (busy) { toast('回复生成中，这一幕写完再作画'); return; }   // §3.C：回复生成中不入队
       if (offlineBlocked('这次作画')) return;   // 离线：不排进队列，也不花额度
-      enqueueImage(story.lastSceneSummary);
+      const key = 'manual:' + treeHeadNodeId();   // §3.C：同一幕不重复入队
+      if (paintQ.has(key)) { toast('这一幕已在作画队列里'); return; }
+      // 场景描述读当前 head 的 lastSceneSummary（投影后即 story.lastSceneSummary）
+      enqueueImage(story.lastSceneSummary, treeHeadNodeId(), key);
       toast('已加入作画队列');
     };
     $('#btn-manual-gen').onclick = manualGenerate;
@@ -5481,7 +5912,7 @@
     if (featPay) featPay.onclick = openPaymentModal;
     const featSched = $('#btn-feat-schedule');
     if (featSched) featSched.onclick = () => {
-      if (!featuresAllowed()) { toast('剧情模式里没有定时主动：切到对话 / 扮演模式再用', true); return; }
+      if (!featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
       openModal('modal-settings');
       if (sidecarReady()) loadFeatureConfig();
       const fs = $('#fs-schedule');
@@ -5545,10 +5976,15 @@
       if (e.key === 'Enter') { e.preventDefault(); closeConfirm(confirmValue()); }
     });
 
+    // 图片灯箱：点遮罩 / 点图都关（Esc 见下面的全局按键）
+    const lightbox = $('#lightbox');
+    if (lightbox) lightbox.onclick = () => closeLightbox();
+
     // Esc：只关最上层弹窗（确认弹窗要走 closeConfirm 才能收掉 Promise）；
     // 没有弹窗时才退出沉浸态（P2）。
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;
+      if (closeLightbox()) return;   // 灯箱最先关（点遮罩也能关）
       if (closeTopModal()) return;
       const openMenu = document.querySelector('.menu:not(.hidden)');
       if (openMenu) { closeMenus(); return; }
