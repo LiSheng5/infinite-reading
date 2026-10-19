@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.5.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.6.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -17,7 +17,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 
 - 🎭 **Improvise freely** — type anything, or pick one of the choices the AI offers.
 - 🎨 **A painter that draws live** — the English prompt is visible and editable, and you can talk to the painter to revise the image.
-- 🧭 **Three modes** — Story (choices), Chat, and Role-play (character card + relationship memory + user profile; imports SillyTavern V2/V3 cards).
+- 🧭 **Three modes** — Story (choices), Agent (a tool-using assistant: draw, remember, schedule, draft email, buy — the last two need your confirmation), and Role-play (character card + relationship memory + user profile; imports SillyTavern V2/V3 cards).
 - 🧠 **It remembers** — an explicit "world state card" plus on-demand recall and auto-compression at 70% of the context window, so long sessions don't forget.
 - 📚 **Made to last** — story shelf, save points, `.irstory.json` import/export, and import of raw story text.
 - 🔌 **Any model** — chat and image models are configured separately; any OpenAI-compatible endpoint works (cloud or local, set your own Base URL).
@@ -54,11 +54,11 @@ cd infinite-reading
    - Double-click `index.html` (pure front-end, no build, no dependencies)
    - Or serve it locally (more robust, recommended): `npx serve .` or `python -m http.server 8000`
 2. Click **⚙ Connect a model** and fill in **Base URL** (pick from the dropdown or type your own), **API Key**, and **model name**. Image models are configured the same way.
-3. **Click one of the three mode cards to start** — Story, Chat, or Role-play — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode.
+3. **Click one of the three mode cards to start** — Story, Agent (a tool-using assistant: draw, remember, schedule, draft email, buy — the last two need your confirmation), or Role-play — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode.
    - **📄 Import text**: hand over existing text (a setting document, a novel fragment, a chat log) and let the AI turn it into a starting premise.
    - **☰ My shelf** lists your stories (continue / rename / delete / export); **↶ Continue last** jumps straight back in.
-   - Inside a story the screen is split: text on the left (narration is plain body copy; your own turns are quiet side-lines tagged 做 / 说 / 导演), the stage on the right (current image + thumbnails). The top-left `←` returns home next to the shelf and title; save points, new story, draw this scene and model settings live under the top-right `⋯`.
-   - Above the input, **💡 灵感** keeps this turn's choices folded away — open it for a row of options, or ignore it and type anything. The 做 / 说 / 导演 switch tells the model how to read your line, and is remembered per story.
+   - **Story mode is split-screen**: text on the left (narration is plain body copy; your own turns are quiet side-lines tagged 做 / 说 / 导演), the stage on the right (current image + thumbnails). **Agent / Role-play are pure chat layouts** (no stage — images sit inline in the chat stream, click for a lightbox). The top-left `←` returns home next to the shelf and title; save points, new story, draw this scene and model settings live under the top-right `⋯`.
+   - Above the input, **💡 灵感** keeps this turn's choices folded away (Story mode only) — open it for a row of options, or ignore it and type anything. The 做 / 说 / 导演 switch appears in Story / Role-play only (Agent mode has no such switch) and tells the model how to read your line; it is remembered per story.
 
 > ⚠️ `file://` and `http://localhost` are two independent data stores — pick one and stick to it.
 > Direct API calls from the browser may be blocked by CORS (especially under `file://`); if that happens, use a local static server.
@@ -85,11 +85,11 @@ These three capabilities need an **optional** local service. Without it the app 
 node sidecar/server.mjs            # prints a token on first start
 ```
 
-| Capability | What it does | Only in chat / role-play mode |
+| Capability | What it does | Modes |
 |---|---|---|
-| Email | Draft / send email on your behalf; the **recipient allowlist is enforced server-side** (non-listed addresses only become drafts you must confirm); daily cap defaults to 0; every send / draft / rejection is audited | yes |
-| Proactive scheduling | Let the AI reach out on time (one-shot / fixed interval / cron with timezone); triggers survive restarts; **quiet hours and the daily cap live in the sidecar and cannot be changed by the model**; the model can only *propose* a trigger — you confirm it; one-click pause | yes |
-| Delegated purchase | The AI **never sees payment credentials**; it can only submit a purchase intent, and the sidecar enforces policy in code (per-transaction / daily / monthly caps, merchant & category lists, cooldown, per-agent budgets). Above the threshold you get a confirmation dialog; the ledger is exportable as a receipt. This release only ships "mock" and "order only, you pay manually in your own payment app" | yes |
+| Email | Draft / send email on your behalf; model-initiated mail stops at a **proposal card** (raw parameters visible) until you click "Confirm"; the **recipient allowlist is enforced server-side** (non-listed addresses only become drafts you must confirm); daily cap defaults to 0; every send / draft / rejection is audited | Agent |
+| Proactive scheduling | Let the AI reach out on time (one-shot / fixed interval / cron with timezone); triggers survive restarts; **quiet hours and the daily cap live in the sidecar and cannot be changed by the model**; the model can only *propose* a trigger — you confirm it; one-click pause | Agent / Role-play |
+| Delegated purchase | The AI **never sees payment credentials**; it can only submit a purchase intent (again stopping at a **proposal card**), and the sidecar enforces policy in code (per-transaction / daily / monthly caps, merchant & category lists, cooldown, per-agent budgets). Above the threshold you get a confirmation dialog; the ledger is exportable as a receipt. This release only ships "mock" and "order only, you pay manually in your own payment app" | Agent |
 
 Safety boundaries (see `SECURITY.md` for details): the service binds **`127.0.0.1` only**, requires a local token, and refuses a second instance; the single source of truth for limits / allowlists / quiet hours / token is `sidecar/data/config.json`; the payment policy is there to **prevent mistakes and stay auditable, not to defend against you**; it **never automates or bypasses any payment app and never stores payment passwords**.
 
