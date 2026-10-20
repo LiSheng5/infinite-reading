@@ -1,5 +1,19 @@
 # 更新日志
 
+## [0.7.1] — 2026-10-20 · 内部结构拆分：js/app.js → js/app/*.js（行为不变）
+
+### Changed
+
+- 内部结构拆分，**行为、DOM、文案、样式一行不变**：原 6284 行的 `js/app.js` 按功能节拆成 `js/app/` 下 15 个经典脚本（IIFE）+ 组合根 `js/app.js`（仅事件绑定与启动，478 行）。
+- 共享状态集中在 `IR.App.state`（`S.xxx`），跨模块调用一律走 `IR.App` 注册表晚绑定（`A.xxx()`）；`core.js` 最先加载并提供工具与常量，`app.js` 最后加载。
+- 新增 `eval/app-structure-test.js`（脚本顺序 / 行数上限 / `A.reg` 唯一 / 顶层解构白名单 / `A.xxx` 引用闭合 / 语法）与 `tools/check-free-calls.mjs`（裸调用启发式检查，允许名单 `tools/free-calls-allow.json`），均已接入 `npm test` 与 CI。
+- 唯一超出「纯搬家」的代码改动：10 个函数内局部 `const S = IR.Sidecar` 改名为 `const SC`（51 处引用同步改名），消除与 `S = IR.App.state` 的撞名；除此之外无任何逻辑改动。
+
+### 已知取舍
+
+- 拆分时新增了 `js/app/round.js`（回合编排：`callAI1` / `sendPlayerAction` / `runOpening` / 工具执行 / 旁白收尾），任务书模块表未列——合并进 `turn.js` 会超过 800 行上限，故独立成模块。
+- codemod 搬家时把源文件相邻的整块注释一并带进了部分模块（纯注释副本，无代码），不影响行为。
+
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的写法。
 版本号真源是根目录的 `VERSION` 文件，发布时打同名 tag（如 `v0.2.0`）。
 

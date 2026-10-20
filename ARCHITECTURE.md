@@ -30,12 +30,13 @@
 | `js/demo.js` | `IR.Demo` + 两个演示适配器 | 离线演示（`?demo=1`）：把「模型」换成内置剧本与本地占位图 | `enabled`、`applyTo`、`reset`；`ChatProviders['demo']`、`ImageProviders['demo-image']` |
 | `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
-| `js/app.js` | 无（不导出） | 状态机 + UI + 回合编排，消费上面所有模块 | `init`、`sendPlayerAction`、`callAI1` / `streamAI1`、`postTurn`、`maybeEnqueueImage`、`generateScene`、`buildExportPack` / `buildBackupPack` / `buildBackupZip`、`importZipFile` |
+| `js/app.js` | 无（组合根） | 事件绑定 + 启动（`bind` / `init` / boot IIFE），只接线不写业务；消费下面所有 `js/app/*` | `bind`、`init` |
+| `js/app/*.js`（15 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
 | `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
 | `js/sidecar.js` | `IR.Sidecar` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
-| `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `app.js` 注册） | `attach`、`accept`、`drain` |
+| `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `js/app/sidecar.js` 的 `initFeatures` 注册） | `attach`、`accept`、`drain` |
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `js/motion.js` | `IR.Motion` | 动效强度解析（**纯逻辑**，Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，不碰 DOM | `resolve` |
@@ -44,23 +45,54 @@
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → app.js → pwa.js
+providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
-`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`paintQueue.js` 同样在 `app.js` 之前（`app.js` 启动即 `IR.PaintQueue.create`）；`proposals.js` 也在 `app.js` 之前（提案卡渲染与确认要用 `IR.Proposals`）；`motion.js` 也在 `app.js` 之前（启动时要 `IR.Motion.resolve` 写 `data-motion`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
-- **内存优先**：`boot()` 之后所有读走内存、写是「改内存 + 后台异步落盘」，因此 `Store.*` 全是**同步签名**，`app.js` 不用改 async。等落盘用 `Store.flush()`（导出 / 卸载前）。
+- **内存优先**：`boot()` 之后所有读走内存、写是「改内存 + 后台异步落盘」，因此 `Store.*` 全是**同步签名**，`js/app/*` 不用改 async。等落盘用 `Store.flush()`（导出 / 卸载前）。
 - **无 IndexedDB 也要能跑**：Node 评测（`eval/run.js`）没有 `indexedDB`，`Storage.available` 就是 `false`，`store.js` 自动退回 localStorage / 进程内内存。任何新的存储代码都要保留这条退路。
 
-`app.js` 在 IIFE 执行期就读取 `IR.Store` 与 `IR.ModelCapabilities`，并在文件末尾直接调用 `init()`，所以它必须最后加载；其余模块之间运行时才互相访问（惰性查 `IR.*`），顺序靠前也不会报错。新增模块请插在 `app.js` 之前。
+`js/app.js` 在 boot IIFE 里先 `Store.boot()` 再调 `init()`，所以它必须最后加载；`js/app/*` 模块之间运行时才互相访问（`A.xxx()` 晚绑定），彼此顺序随意。新增模块请插在 `core.js` 之后、`js/app.js` 之前（见 §2.1）。
+
+### 2.1 `js/app/*`：主逻辑拆分与 `IR.App` 约定（v0.7.1）
+
+原 `js/app.js`（v0.7.0 时 6284 行）按功能节拆成 15 个经典脚本（IIFE），**行为、DOM、文案一行不变**：
+
+| 文件 | 职责（源「节」） | 代表函数 |
+|---|---|---|
+| `js/app/core.js` | 默认值与提示词；共享状态 `A.state`；请求中断；小工具；弹窗栈 | `toast`、`irConfirm`、`openModal` / `closeModal` / `dismissModal`、`requestChatStop`、`persistSettings`、`saveAll` |
+| `js/app/models.js` | 模型能力（T-M-1 / §4.13） | `chatContextWindow`、`renderCapabilityFields`、`thumb` |
+| `js/app/library.js` | 原图（Blob）；存档点；书架；导入 / 导出 | `showShelf`、`startFromStart`、`doExport`、`storeOriginal` |
+| `js/app/backup.js` | 本地存储与备份（P0 数据安全） | `initStorageGuard`、`doBackupAll`、`handleImportFile`、`importZipFile` |
+| `js/app/importer.js` | 剧情文本导入（R12 路径②） | `openImportText`、`runImportText`、`startFromImport` |
+| `js/app/cards.js` | 角色卡；用户画像（数据与导入） | `openCardEditor`、`importCardFile`、`applyProfileEntries` |
+| `js/app/wizard.js` | 开局向导（T-P2-3） | `openWizard`、`draftWizard`、`startFromWizard` |
+| `js/app/turn.js` | AI1 剧情回合；书记员任务；工具护栏；重试与分支 | `streamAI1`、`parseAIReply`、`postTurn`、`retryLast`、`switchSiblingFromBubble` |
+| `js/app/round.js` | 回合编排（任务书模块表外新增）：`callAI1` / 玩家行动 / 开场 / 工具执行 / 旁白收尾 | `callAI1`、`sendPlayerAction`、`runOpening`、`finishNarration`、`pushLog` |
+| `js/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
+| `js/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
+| `js/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台 | `runPaintTask`、`enqueueImage`、`openWorkbench`、`redrawFromWorkbench` |
+| `js/app/styleanchor.js` | 画风锚定（R3 / §5） | `openAnchor`、`runAnchorBatch`、`anchorLock` |
+| `js/app/render.js` | 聊天记录、画面面板、布局、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`applyLayout`、`closeLightbox` |
+| `js/app/settings.js` | 设置界面、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
+| `js/app.js`（保留） | 组合根：事件绑定 + 启动 | `bind`、`init` |
+
+**三条约定**（经典脚本没有 import，靠 `IR.App` 松耦合）：
+
+1. **共享可变状态集中在 `IR.App.state`**：模块顶部 `const A = IR.App, S = A.state;`，之后用 `S.story`、`S.busy`。只在一个模块内用的变量保持模块私有。局部变量遮蔽共享名（形参、`const story = …`）的地方保持原样不改写。
+2. **跨模块调用一律走注册表、晚绑定**：文件末尾 `A.reg({ fnA, fnB })`（重名直接抛错），调用方写 `A.fnA(...)`，**不要在模块顶部解构别的模块的函数**（加载顺序无法保证）。唯一例外：`core.js` 最先加载，其他模块（含 `js/app.js`）可在顶部 `const { $, toast, irConfirm, … } = A;` 解构 **core 的导出**——白名单 = `core.js` 的 `A.reg` 键，由 `eval/app-structure-test.js` 门禁强制。跨模块的回调引用写作 `() => A.fn()` / `e => A.fn(e)`。
+3. **加载顺序**：`IR.*` 模块 → `js/app/core.js` → 其余 `js/app/*.js`（任意顺序）→ `js/app.js`（组合根，最后）。模块顶层只做声明与 `A.reg`；顶层立即执行的代码（`addEventListener` 注册、启动 IIFE）只允许在 `js/app.js`。
+
+**如何新增一个 app 模块**：① 在 `js/app/` 建文件，包 IIFE，顶部 `'use strict'` 与 `const A = IR.App, S = A.state;`（要用 core 工具再加一行解构）；② 业务函数写完后在文件末尾 `A.reg({ … })` 导出**被别的模块调用**的函数（模块私有函数不注册）；③ 在 `index.html` 的 `js/app/core.js` 之后、`js/app.js` 之前加 `<script src="js/app/<新模块>.js?v=…">`；④ 跑 `node eval/app-structure-test.js` 与 `node tools/check-free-calls.mjs`（行数 ≤ 800、`A.reg` 键全局唯一、`A.xxx` 引用闭合、无未解析裸调用）。
 
 ## 3. 一回合的完整调用链
 
 ```
 玩家输入 / 点选项
-  └─ app.js  doSend → sendPlayerAction(action, isChoice)
+  └─ js/app.js  doSend → js/app/round.js  sendPlayerAction(action, isChoice)
        ├─ pushLog({type:'player'|'choice'})
        ├─ callAI1(action)
        │    ├─ Context.matchEntityTerms(...)         ← 记下本轮实体词（C-E 启发式留痕）
@@ -145,25 +177,25 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 
 | 不变量 | 位置 | 为什么 |
 |---|---|---|
-| **不把 `tool_calls` 写进历史** | `app.js`：`slimReply`、`assistantMessage` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
+| **不把 `tool_calls` 写进历史** | `js/app/turn.js`：`slimReply`、`assistantMessage` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
 | **`reasoning` 不进请求体** | `context.js`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `context.js`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
-| **工具结果按语义分流** | `app.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image` 已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
-| **同轮去重**：工具已出图则跳过时机出图 | `app.js`：`turnPaintedByTool`、`maybeEnqueueImage` | 一回合只画一张；v0.5.1 起在**提交任务时**置位（出图早已异步完成，事后置位去重会失效） |
-| **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`app.js`：`paintQ` / `runPaintTask` | 时机 / 工具 / 手动 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写） |
-| **回合锚点 `turnAnchor`** | `app.js`：三处回合函数的 commit / catch、`runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
-| **「停止」只中断聊天回合** | `app.js`：`chatAbortCtrl` 只有 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
-| **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `app.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
+| **工具结果按语义分流** | `js/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image` 已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
+| **同轮去重**：工具已出图则跳过时机出图 | `S.turnPaintedByTool`（`IR.App.state`）、`js/app/turn.js`：`maybeEnqueueImage` | 一回合只画一张；v0.5.1 起在**提交任务时**置位（出图早已异步完成，事后置位去重会失效） |
+| **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`js/app/painter.js`：`paintQ` / `runPaintTask` | 时机 / 工具 / 手动 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写） |
+| **回合锚点 `turnAnchor`** | `S.turnAnchor`（`IR.App.state`）；`js/app/round.js` / `turn.js` 的 commit / catch、`js/app/painter.js` 的 `runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
+| **「停止」只中断聊天回合** | `S.chatAbortCtrl`（`IR.App.state`）只有 `js/app/turn.js` 的 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
+| **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `js/app/turn.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
 | **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `context.js`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
 | **不预置模型名与厂商参数** | `modelCapabilities.js`（表默认空）、`store.js` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
-| **换档保护** | `app.js`：生图 / 书记员结果写回前核对 `storyId` | 切换故事时不污染新档 |
-| **AI 文本一律 `textContent` 渲染** | `app.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
-| **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`app.js` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
-| **`seal` 必须在 `postTurn` 之后** | `app.js`：`sendPlayerAction` / `retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
+| **换档保护** | `js/app/painter.js` / `turn.js`：生图 / 书记员结果写回前核对 `storyId` | 切换故事时不污染新档 |
+| **AI 文本一律 `textContent` 渲染** | `js/app/render.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
+| **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`js/app/*` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
+| **`seal` 必须在 `postTurn` 之后** | `js/app/round.js`：`sendPlayerAction`、`js/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
 | **全树图集必须含非当前分支** | `store.js`：`imageIdsOf` / `knownImageIds`、`js/tree.js`：`imageIdsOf` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径） |
-| **晚到条目 / 画面带 `nodeId` 校验** | `app.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
-| **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`app.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
+| **晚到条目 / 画面带 `nodeId` 校验** | `js/app/painter.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
+| **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`js/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
 | **动画只动合成层属性** | `css/style.css` 的 `@keyframes` 与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
 | **颜色只从令牌来** | `css/style.css` 的 `:root`（唯一改色的地方）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
 
@@ -173,7 +205,7 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 
 **动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient`。
 
-**动效强度**：`<html data-motion="off|standard|rich">`，由 `js/motion.js` 的 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`app.js` 在启动与 `matchMedia` 变化时写入。
+**动效强度**：`<html data-motion="off|standard|rich">`，由 `js/motion.js` 的 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`js/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入。
 
 | 档 | 行为 |
 |---|---|
@@ -210,7 +242,7 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | 判定 | `IR.Demo.enabled()` 读 `location.search`（`?demo=1` / `?demo` / `?demo=true`） |
 | 对话 | 注册 `ChatProviders['demo']`，按**提示词特征**分派：system 含「AI 画师导演」→ 画师任务（场景 / 工作台 / 试画 / 设定卡各有内置回包）；含「书记员」→ 返回空串，让本地规则兜底；user 消息以 `[玩家行动]` / `[设定]` 开头 → AI1，按**调用序号**推进内置剧本（不依赖历史长度，压缩后也不会错位） |
 | 生图 | 注册 `ImageProviders['demo-image']`，用 canvas 现画一张带提示词的占位图并返回 dataURL，出图链路（缩略图、背景淡入、图库）完全一致 |
-| 设置 | `IR.Demo.applyTo(settings)` 返回**副本**：对话 / 生图换成演示适配器、子模型留空沿用、关掉工具；`app.js` 的 `persistSettings()` 在演示模式直接 return，配置永不落盘 |
+| 设置 | `IR.Demo.applyTo(settings)` 返回**副本**：对话 / 生图换成演示适配器、子模型留空沿用、关掉工具；`js/app/core.js` 的 `persistSettings()` 在演示模式直接 return，配置永不落盘 |
 | 入口 | `init()` 检测到演示模式就直接 `startDemo()`（跳过开始页与试画锚定）；顶栏「🎬 演示」与开始页「🎬 离线演示」是进出这个模式的开关 |
 
 推论：**新增功能只要走适配器层，演示模式就自动跟着一起走**。反过来，如果哪天演示跑不通，多半说明有人绕过了适配器层——这是个便宜的一致性检查。
@@ -221,7 +253,7 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 
 ## 8. 评测如何做
 
-`eval/run.js` 只 `require` 纯逻辑模块（`context.js` / `store.js` / `roleCard.js`），不加载 `app.js`，因此**不发任何网络请求**：
+`eval/run.js` 只 `require` 纯逻辑模块（`context.js` / `store.js` / `roleCard.js`），不加载 `js/app.js` 与 `js/app/*`，因此**不发任何网络请求**：
 
 - 重放 `eval/mock-story.js` 的 32 回合剧本，与运行时同样地调用 `assembleAI1` / `compressStory`；
 - 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 是否命中 5 类探针（角色名 / 时间设定 / 伏笔原话 / 地点细节 / 玩家自己说过的事）；
@@ -247,7 +279,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 
 ## 10. 想扩展的话
 
-- **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `app.js` 的业务逻辑。
+- **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `js/app/*` 的业务逻辑。
 - **视频**：`IR.VideoProviders` 的约定是 `generate(cfg, {prompt, image}) -> {url}`（异步任务型 API 需自行轮询），目前为空。
 - **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口。当前是白底蓝强调浅色主题（UI-1）；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
