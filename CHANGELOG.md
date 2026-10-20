@@ -3,6 +3,33 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 与 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的写法。
 版本号真源是根目录的 `VERSION` 文件，发布时打同名 tag（如 `v0.2.0`）。
 
+## [0.7.0] — 2026-10-20 · UI-1：白底蓝强调配色 + 动效基座
+
+### Changed
+
+- **全站配色换成「白做底、蓝做强调、黑做文字和主按钮」**（`css/style.css` 的 `:root`）：底 `#FFFFFF`、面 `#F5F7FA` / `#EEF2F7`、文字 `#0B0F19` / `#5B6678`、强调 `#2563EB`。旧的暖金强调与暗色取值全部废弃；主按钮改**黑底白字**（新令牌 `--on-ink`），蓝色只做强调。`<meta name="theme-color">`、`manifest.webmanifest` 的 `theme_color / background_color` 一并换成 `#FFFFFF`，并新增 `<meta name="color-scheme" content="light">` 与 `:root { color-scheme: light }`。
+- **清理 `:root` 之外的所有颜色字面量**（原约 19 处）：滚动条、悬停底、按钮字色、弹窗 / 灯箱 / 沉浸遮罩、舞台按钮与暗角渐变等全部改走令牌（图上叠层遮罩保留专用令牌 `--scrim` / `--lightbox-bg` / `--stage-*` / `--immersive-scrim`，并在测试里写明理由）。输入框 / 按钮描边改用 `--line-strong`（≥3:1）；accent-soft 选中底上的文字统一用 `ink`。
+- **阴影改静态轻阴影令牌** `--shadow-1` / `--shadow-2`（旧 `--shadow` / `--shadow-hover` 合并掉）；所有 transition 的时长 / 缓动改用动效令牌，不再写死；`box-shadow` 与 `max-height` 退出 transition（动画属性白名单见不变量）。
+
+### Added
+
+- **动效基座**：动效令牌 `--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient`；三档动效强度 `<html data-motion="off|standard|rich">`（`js/motion.js` / `IR.Motion.resolve`，设置 `ui.motion` 默认 `'auto'`，跟随系统「减少动态效果」自动降级、可手动覆盖，显式选择优先）；`visibilitychange` 写 `html[data-paused]` 暂停循环动画；同屏循环动画 ≤ 3 个。
+- **第一批动效**（只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：
+  - **切兄弟滑动**：‹ › 切分支时聊天内容区按方向横向滑入（±24px + 透明度，`--dur-base`，WAAPI）；先切数据 + 重渲染再播入场，连点正确打断；off 档直接切换。
+  - **流式文字逐段淡入**：增量包进 `<span class="delta">`（`createElement` + `textContent`）套 `fadeIn`，存活 span ≤ 200（更早的合并进前缀文本节点），流结束整体合并成单个文本节点；standard 档只对整个气泡做一次淡入，off 无。
+  - **顶栏忙碌进度线 `#busy-line`**：busy 时不确定进度横向流动（rich）/ 透明度呼吸（standard）/ 静态细线（off）。
+  - **图片**：缩略图 → 原图就绪 blur-up（`filter: blur(12px) → 0`）；换画交叉淡入；rich 档舞台当前图缓慢 Ken Burns（离屏 / `data-paused` 暂停）。
+  - **环境光**（仅 rich）：舞台背后与空状态一层极淡蓝径向渐变缓慢漂移（`--ambient-glow`）。
+  - **通用手感**：按钮按下 `scale(.97)`、悬停轻微上浮；弹窗入场 `--ease-spring`；toast 滑入。
+- **自动护栏**（全部 Node、零依赖，已接入 `npm test` 与 CI）：`tools/contrast-check.mjs`（WCAG 对比度令牌对）、`eval/tokens-test.js`（必需令牌 / `:root` 之外无颜色字面量 / `@keyframes` 属性白名单 / 动效令牌存在性 / transition 禁动画重排属性）、`eval/motion-test.js`（`IR.Motion.resolve` 解析）。
+- 设置「界面」分组新增**「动效强度」**下拉（跟随系统 / 关 / 标准 / 丰富）。
+
+### Notes
+
+- 暗色主题**只预留结构**（将来加 `[data-theme="dark"]` 一套令牌即可），本期不实现。
+- 循环动画配额的取舍：作画胶囊 `#gen-status` 与「生成中…」胶囊去掉呼吸循环（保持静态胶囊），把循环预算留给 `#busy-line` + Ken Burns + 环境光。
+- 与任务书假设的差异见 `交付报告-视觉与动效基座-v0.7.0.md`（JS 行内颜色在 `demo.js` 的 canvas 占位图里、app.js 业务代码本就无颜色字面量等）。
+
 ## [0.6.0] — 2026-10-19 · 智能体模式 + 扮演模式去画布：纯聊天布局、内联图、提案制邮件 / 下单
 
 ### Added

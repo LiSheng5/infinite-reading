@@ -132,12 +132,46 @@
     return stopRequested && (e && (e.name === 'AbortError' || /abort/i.test((e && e.message) || '')));
   }
   // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
+  // 顶栏忙碌进度线 #busy-line 跟着同一状态显隐（UI-1 §4.3）
   function setSendButtonsBusy(on) {
+    const line = $('#busy-line');
+    if (line) line.classList.toggle('hidden', !on);
     const btn = $('#btn-send');
     if (!btn) return;
     btn.disabled = false;
     btn.textContent = on ? '停止' : '发送';
     btn.classList.toggle('stop', !!on);
+  }
+
+  /* ================= 动效基座（UI-1） ================= */
+
+  const motionMQ = (typeof window !== 'undefined' && window.matchMedia)
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+
+  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ IR.Motion.resolve
+  function motionLevel() {
+    return IR.Motion.resolve((settings.ui && settings.ui.motion) || 'auto', !!(motionMQ && motionMQ.matches));
+  }
+
+  function applyMotion() {
+    const lv = motionLevel();
+    document.documentElement.dataset.motion = lv;
+    return lv;
+  }
+
+  // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
+  function applyPaused() {
+    if (document.hidden) document.documentElement.dataset.paused = '1';
+    else delete document.documentElement.dataset.paused;
+  }
+
+  // 动效令牌里的时长（毫秒）：JS 侧的 WAAPI 与 CSS 共用同一个真源
+  function motionMs(name, fallbackMs) {
+    try {
+      const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+      return Number.isFinite(v) && v > 0 ? v : fallbackMs;
+    } catch (_) { return fallbackMs; }
   }
 
   /* ================= 小工具 ================= */
@@ -2238,6 +2272,81 @@
       .replace(/",\s*"(?:人物|地点|时间|伏笔|画面|场景切换|选项|choices|scene_change|scene_summary|world)"[\s\S]*$/, '');
   }
 
+  /* ---------- 流式文字逐段淡入（UI-1 §4.2） ----------
+   * 只对「可见文字的增量」动（cleanStream 之后），不给原始 JSON 碎片做动画：
+   * 新增文字包进 span.delta（createElement + textContent）套 fadeIn；
+   * 存活 span 超过 DELTA_MAX_SPANS 时把更早的合并进一个前缀文本节点；
+   * 流结束（finishNarration）整体合并成单个文本节点。
+   * standard 档只对整个气泡做一次淡入（见 style.css 的 .bubble-live）；off 档无。 */
+  const DELTA_MAX_SPANS = 200;
+  let liveDeltaSpans = [];    // 当前气泡里存活的 span.delta
+  let liveDeltaMerged = null; // 已合并的前缀文本节点（更早的文字都在这里）
+  let liveDeltaText = '';     // 当前已显示的可见全量文字
+
+  function resetLiveDelta() {
+    liveDeltaSpans = [];
+    liveDeltaMerged = null;
+    liveDeltaText = '';
+  }
+
+  // 超额的 span 合并进前缀文本节点：DOM 里始终最多约 DELTA_MAX_SPANS 个 span
+  function trimLiveDeltaSpans(el, keep) {
+    const n = liveDeltaSpans.length - keep;
+    if (n <= 0) return;
+    for (let i = 0; i < n; i++) {
+      const span = liveDeltaSpans[i];
+      if (!liveDeltaMerged) {
+        liveDeltaMerged = document.createTextNode('');
+        el.insertBefore(liveDeltaMerged, el.firstChild);
+      }
+      liveDeltaMerged.nodeValue += span.textContent;
+      if (span.parentNode) span.parentNode.removeChild(span);
+    }
+    liveDeltaSpans.splice(0, n);
+  }
+
+  // 流结束：整体合并成单个文本节点
+  function finishLiveDelta(el) {
+    if (el && liveDeltaText) el.textContent = liveDeltaText;
+    resetLiveDelta();
+  }
+
+  function appendLiveDelta(el, fullText) {
+    const level = motionLevel();
+    if (level !== 'rich') {
+      // standard / off：不做逐段淡入（standard 由 CSS 对整个气泡做一次淡入）
+      el.textContent = fullText;
+      liveDeltaText = fullText;
+      return;
+    }
+    if (el.querySelector && el.querySelector('.gen-pill')) {
+      // 「生成中…」占位：清掉再从头铺增量
+      el.textContent = '';
+      liveDeltaSpans = [];
+      liveDeltaMerged = null;
+      liveDeltaText = '';
+    } else if (!liveDeltaText && el.textContent) {
+      liveDeltaText = el.textContent;   // renderChat 重建过气泡：先接上已显示的文字
+    }
+    if (liveDeltaText && fullText.indexOf(liveDeltaText) !== 0) {
+      // 非前缀增长（流式清洗的边界情形，如转义跨块）：整段重建，不做动画
+      el.textContent = fullText;
+      liveDeltaSpans = [];
+      liveDeltaMerged = null;
+      liveDeltaText = fullText;
+      return;
+    }
+    const delta = fullText.slice(liveDeltaText.length);
+    liveDeltaText = fullText;
+    if (!delta) return;
+    const span = document.createElement('span');
+    span.className = 'delta';
+    span.textContent = delta;
+    el.appendChild(span);
+    liveDeltaSpans.push(span);
+    if (liveDeltaSpans.length > DELTA_MAX_SPANS) trimLiveDeltaSpans(el, DELTA_MAX_SPANS);
+  }
+
   // 流式思考链（方案 B）：写进固定小窗，并始终滚到最新——点开看全量也不暂停
   function updateLiveReasoning() {
     if (!live) return;
@@ -2309,7 +2418,7 @@
           if (!live) live = { text: '', reasoning: '' };
           live.text = cleanStream(preview);
           if (!liveEl) liveEl = $('#chat-scroll').querySelector('.bubble-live');
-          if (liveEl) liveEl.textContent = live.text.slice(-1200);
+          if (liveEl) appendLiveDelta(liveEl, live.text);   // UI-1 §4.2：只给可见增量做逐段淡入
           // 正文已开始流式 → 思考窗卷成一行（方案 B：不推走正文，也不骤折）
           if (liveReasonEl && !liveReasonCollapsed) {
             liveReasonCollapsed = true;
@@ -3314,7 +3423,12 @@
 
   // 旁白已进 log：流式就直接落定；非流式用打字机补观感
   async function finishNarration(streamed) {
-    if (streamed) { live = null; return; }
+    if (streamed) {
+      // UI-1 §4.2：流结束把逐段淡入的 span 整体合并成单个文本节点
+      finishLiveDelta(liveEl || $('#chat-scroll').querySelector('.bubble-live'));
+      live = null;
+      return;
+    }
     const el = liveEl || $('#chat-scroll').querySelector('.bubble-live');
     // 非流式：正文来了，思考窗同样卷成一行（与流式收尾一致）
     if (liveReasonEl && !liveReasonCollapsed) {
@@ -3512,11 +3626,45 @@
   function switchSiblingFromBubble(nid, dir) {
     if (!story || !nid) return;
     if (busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法（§4.1）
-    const head = IR.Tree.switchSibling(story, nid, dir);
-    if (!head) return;
-    currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
-    saveAll();
-    renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); renderSavepoints();
+    animateSwap(dir, () => {
+      const head = IR.Tree.switchSibling(story, nid, dir);
+      if (!head) return false;
+      currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
+      saveAll();
+      renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); renderSavepoints();
+      return true;
+    });
+  }
+
+  /* 切兄弟滑动（UI-1 §4.1）：聊天内容区按方向横向滑入（±24px + 透明度，--dur-base）。
+   * 顺序必须是「数据切换 + 重新渲染 → 再播入场」，不能闪出旧内容；
+   * 动画未结束时再次切换要能正确打断（cancel 上一段，最终态由最新一次渲染决定）；
+   * off 档（含系统减少动态）直接切换。WAAPI 只动 transform / opacity。 */
+  let swapAnim = null;
+  function animateSwap(dir, swap) {
+    const box = $('#chat-scroll');
+    const done = typeof swap === 'function' ? swap() : true;
+    if (done === false || !box || typeof box.animate !== 'function') return;
+    if (motionLevel() === 'off') return;
+    if (swapAnim) { try { swapAnim.cancel(); } catch (_) {} swapAnim = null; }
+    if (box.getAnimations) {
+      box.getAnimations().forEach(a => { try { a.cancel(); } catch (_) {} });
+    }
+    box.style.willChange = 'transform, opacity';   // 只在动画进行时临时加
+    const anim = box.animate(
+      [
+        { transform: 'translateX(' + (dir >= 0 ? 24 : -24) + 'px)', opacity: 0 },
+        { transform: 'translateX(0)', opacity: 1 },
+      ],
+      { duration: motionMs('--dur-base', 220), easing: 'cubic-bezier(.2,.8,.2,1)' }
+    );
+    swapAnim = anim;
+    const finish = () => {
+      if (swapAnim === anim) swapAnim = null;
+      box.style.willChange = '';   // 结束移除
+    };
+    anim.onfinish = finish;
+    anim.oncancel = finish;
   }
 
   /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） =================
@@ -4499,6 +4647,7 @@
   function renderChat() {
     liveEl = null;   // DOM 重建后旧引用失效（否则工具回合后的第二次流式会写进已脱离的节点）
     liveReasonEl = null;
+    resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
     const box = $('#chat-scroll');
     box.innerHTML = '';
     if (!story) return;
@@ -4945,30 +5094,86 @@
 
   /* ================= 渲染：画面面板 ================= */
 
-  function renderStage() {
+  // 舞台当前图（UI-1 §4.4）：换画交叉淡入、缩略图 → 原图 blur-up、rich 档 Ken Burns
+  let stageShownSrc = '';   // 当前显示的 src
+  let stageShownId = '';    // 当前场景 id（区分「换画」与「缩略图升级原图」）
+  let stageLoadToken = 0;   // 快速连点缩略条：只让最后一次生效
+
+  function stageImageIdle(img) {
+    img.classList.remove('blur-up', 'fade-swap');
+    img.style.willChange = '';
+  }
+
+  function stagePlaySwap(img, src, cls) {
+    stageImageIdle(img);
+    img.style.willChange = cls === 'blur-up' ? 'filter' : 'opacity';   // 只在动画进行时临时加
+    img.classList.add(cls);
+    const onEnd = () => {
+      img.removeEventListener('animationend', onEnd);
+      stageImageIdle(img);
+      setStageArt(src);   // 交叉淡入结束后才换模糊底（旧底一直垫着，不闪空白）
+    };
+    img.addEventListener('animationend', onEnd);
+  }
+
+  function setStageImage(sc, src) {
     const img = $('#stage-img'), empty = $('#stage-empty'), cap = $('#stage-caption');
-    if (!story) {
+    const sid = (sc && sc.id) || '';
+    if (!src) {
+      stageLoadToken += 1;
+      stageShownSrc = ''; stageShownId = '';
       img.classList.add('hidden');
+      img.classList.remove('has-art');
+      stageImageIdle(img);
       empty.classList.remove('hidden');
       setStageArt('');
       if (cap) cap.textContent = '';
       return;
     }
-    const sc = currentScene();
-    const src = sceneSrc(sc);
-    if (src) {
+    img.alt = (sc && sc.alt) || '当前画面';
+    img.classList.remove('hidden');
+    empty.classList.add('hidden');
+    if (cap) cap.textContent = (sc && sc.alt) || '';
+    if (src === stageShownSrc) return;   // 没换图：不动画
+    const prevSrc = stageShownSrc, prevId = stageShownId;
+    stageShownSrc = src; stageShownId = sid;
+    const token = ++stageLoadToken;
+    const level = motionLevel();
+    const commit = (upgrading) => {
+      if (token !== stageLoadToken) return;
       img.src = src;
-      img.alt = (sc && sc.alt) || '当前画面';
-      img.classList.remove('hidden');
-      empty.classList.add('hidden');
-      setStageArt(src);
-    } else {
-      img.classList.add('hidden');
-      empty.classList.remove('hidden');
-      setStageArt('');
+      img.classList.add('has-art');   // Ken Burns（仅 rich）挂在 has-art 上
+      if (level === 'off') { stageImageIdle(img); setStageArt(src); return; }
+      // 同场景的缩略图 → 原图升级走 blur-up（filter，全站唯一一处）；换画走交叉淡入
+      stagePlaySwap(img, src, upgrading ? 'blur-up' : 'fade-swap');
+    };
+    const pre = new Image();
+    pre.onload = () => commit(!!prevSrc && !!sid && sid === prevId);
+    pre.onerror = () => commit(false);
+    pre.src = src;
+  }
+
+  function renderStage() {
+    const img = $('#stage-img');
+    if (!img) return;
+    if (!story) {
+      setStageImage(null, '');
+      return;
     }
-    // 图下方一行淡色说明（alt）：舞台自己说明自己，聊天里不再放大图
-    if (cap) cap.textContent = src ? ((sc && sc.alt) || '') : '';
+    setStageImage(currentScene(), sceneSrc(currentScene()));
+  }
+
+  // Ken Burns 离屏暂停（data-paused 由 CSS 统一管）：图片不可见时停掉循环
+  let stageIO = null;
+  function watchStageVisibility() {
+    const img = $('#stage-img');
+    if (!img || stageIO || typeof IntersectionObserver !== 'function') return;
+    stageIO = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        en.target.classList.toggle('is-offscreen', !en.isIntersecting);
+      }
+    });
+    stageIO.observe(img);
   }
 
   function renderThumbs() {
@@ -5227,6 +5432,7 @@
     const sui = settings.ui || Store.defaultSettings().ui;
     if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
+    if ($('#s-ui-motion')) $('#s-ui-motion').value = ['auto', 'off', 'standard', 'rich'].indexOf(sui.motion) >= 0 ? sui.motion : 'auto';
     document.querySelectorAll('input[name="s-trigger"]').forEach(r => { r.checked = r.value === settings.trigger; });
     renderCapabilityFields();
     renderStoryPanels();
@@ -5311,6 +5517,11 @@
       settings.ui.layout = (lv === 'split' || lv === 'stack') ? lv : 'auto';
     }
     if ($('#s-ui-choices')) settings.ui.choices = $('#s-ui-choices').value === 'always' ? 'always' : 'tray';
+    if ($('#s-ui-motion')) {
+      const mv = $('#s-ui-motion').value;
+      settings.ui.motion = ['auto', 'off', 'standard', 'rich'].indexOf(mv) >= 0 ? mv : 'auto';
+      applyMotion();   // 动效强度即时生效
+    }
 
     const prevShowReasoning = settings.showReasoning;
     settings.showReasoning = $('#s-show-reasoning').checked;
@@ -6012,9 +6223,12 @@
     window.addEventListener('offline', () => toast('已断网：聊天与作画暂时用不了，已存的故事照常能看。联网后重新点一次即可（离线期间不会排队、不会事后偷偷扣额度）。', true, true));
     window.addEventListener('online', () => toast('网络回来了：可以继续聊、继续作画。', false, true));
 
-    // 退出即自动存档
+    // 退出即自动存档；页面不可见时暂停循环动画（html[data-paused]）
     window.addEventListener('beforeunload', () => { if (story) saveAll(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && story) saveAll(); });
+    document.addEventListener('visibilitychange', () => {
+      applyPaused();
+      if (document.hidden && story) saveAll();
+    });
   }
 
   /* ================= 启动 ================= */
@@ -6032,6 +6246,13 @@
     Store.migrateLegacy();            // v0.1 旧档 → v0.2（幂等）
     settings = Store.loadSettings();  // 迁移后重新读取
     if (DEMO) settings = IR.Demo.applyTo(settings);   // 只改内存：演示适配器生效，配置不落盘
+    // 动效强度（UI-1）：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
+    applyMotion();
+    if (motionMQ) {
+      if (motionMQ.addEventListener) motionMQ.addEventListener('change', applyMotion);
+      else if (motionMQ.addListener) motionMQ.addListener(applyMotion);
+    }
+    watchStageVisibility();           // Ken Burns 离屏暂停
     bind();
     syncSettingsToForm();
     initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）

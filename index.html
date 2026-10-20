@@ -7,7 +7,8 @@
 
 <!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="无限阅读">
@@ -15,7 +16,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.6.0">
+<link rel="stylesheet" href="css/style.css?v=0.7.0">
 </head>
 <body>
 <div id="app">
@@ -104,6 +105,8 @@
           </div>
         </div>
       </div>
+      <!-- 顶栏忙碌进度线（UI-1）：busy 时由 app.js 显隐；样式与三档动效见 style.css -->
+      <div id="busy-line" class="hidden" aria-hidden="true"></div>
     </header>
 
     <div id="game-layout" class="game-layout">
@@ -651,6 +654,14 @@
                 <option value="always">始终内联在旁白下</option>
               </select>
             </label>
+            <label>动效强度
+              <select id="s-ui-motion">
+                <option value="auto">跟随系统</option>
+                <option value="off">关</option>
+                <option value="standard">标准</option>
+                <option value="rich">丰富</option>
+              </select>
+            </label>
           </div>
           <p class="hint" id="ui-layout-hint"></p>
           <p class="hint">沉浸（画面铺满）从舞台右上角的 ⛶ 进入，Esc 或 ✕ 退出；分隔条双击恢复 1:1。</p>
@@ -941,29 +952,31 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.6.0"></script>
-<script src="js/context.js?v=0.6.0"></script>
+<script src="js/providers.js?v=0.7.0"></script>
+<script src="js/context.js?v=0.7.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.6.0"></script>
+<script src="js/tree.js?v=0.7.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.6.0"></script>
-<script src="js/store.js?v=0.6.0"></script>
-<script src="js/modelCapabilities.js?v=0.6.0"></script>
-<script src="js/roleCard.js?v=0.6.0"></script>
+<script src="js/storage.js?v=0.7.0"></script>
+<script src="js/store.js?v=0.7.0"></script>
+<script src="js/modelCapabilities.js?v=0.7.0"></script>
+<script src="js/roleCard.js?v=0.7.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.6.0"></script>
+<script src="js/demo.js?v=0.7.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.6.0"></script>
+<script src="js/zip.js?v=0.7.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.6.0"></script>
+<script src="js/sidecar.js?v=0.7.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.6.0"></script>
+<script src="js/features.js?v=0.7.0"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.6.0"></script>
+<script src="js/paintQueue.js?v=0.7.0"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.6.0"></script>
-<script src="js/app.js?v=0.6.0"></script>
+<script src="js/proposals.js?v=0.7.0"></script>
+<!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
+<script src="js/motion.js?v=0.7.0"></script>
+<script src="js/app.js?v=0.7.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.6.0"></script>
+<script src="js/pwa.js?v=0.7.0"></script>
 </body>
 </html>
