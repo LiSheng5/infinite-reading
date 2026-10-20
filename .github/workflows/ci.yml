@@ -21,9 +21,17 @@ jobs:
 
       - name: JS 语法检查
         run: |
-          for f in js/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
+          for f in js/*.js js/app/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
             node --check "$f"
           done
+
+      # 拆分结构门禁（任务书 §7）：脚本顺序 / 行数上限 / A.reg 唯一 / 顶层解构白名单
+      - name: 拆分结构门禁（node eval/app-structure-test.js）
+        run: node eval/app-structure-test.js
+
+      # 裸调用启发式检查：抓住「搬家后忘了改成 A.xxx(...)」
+      - name: 裸调用检查（node tools/check-free-calls.mjs）
+        run: node tools/check-free-calls.mjs
 
       - name: 版本号一致性（VERSION 为真源）
         run: node tools/sync-version.mjs --check
