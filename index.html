@@ -975,6 +975,8 @@
 <script src="js/proposals.js?v=0.7.0"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
 <script src="js/motion.js?v=0.7.0"></script>
+<!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
+<script src="js/app/core.js?v=0.7.0"></script>
 <script src="js/app.js?v=0.7.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
 <script src="js/pwa.js?v=0.7.0"></script>
