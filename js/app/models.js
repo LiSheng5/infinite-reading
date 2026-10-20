@@ -1,0 +1,225 @@
+/*
+ * js/app/models.js —— 模型能力（T-M-1 / §4.13）
+ * 从 js/app.js 拆出（只搬家，不改行为）。
+ */
+(function () {
+  'use strict';
+
+  const A = IR.App, S = A.state;
+  const { $, Cap, IMAGE_ASPECTS } = A;
+
+
+  /* ---------- P0-1（2026-10-14 评审）：请求中断 ----------
+   * providers.chat 经 hooks.onAborter 回填当前请求的 AbortController；
+   * 发送按钮在 busy 期间变成「停止」，点了就 abort 当前请求并跳过所有自动重试。 */
+
+  // 用户主动停止导致的请求失败：跳过「流式失败转非流式」「tools 400 降级」等自动重试
+  // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
+  // 顶栏忙碌进度线 #busy-line 跟着同一状态显隐（UI-1 §4.3）
+
+  /* ================= 动效基座（UI-1） ================= */
+
+  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ IR.Motion.resolve
+
+  // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
+
+  // 动效令牌里的时长（毫秒）：JS 侧的 WAAPI 与 CSS 共用同一个真源
+
+  /* ================= 小工具 ================= */
+
+  // 同一时刻只保留一条提示（后来者替换前者）：文本写进 #toast-text，
+  // 错误提示额外给一个关闭按钮，其余情况不吃鼠标事件（pointer-events: none）。
+
+  /* 自建 confirm / prompt（内嵌预览是沙箱 iframe，原生弹窗被静默忽略 →
+     直接返回 false / null，表现为「点了没反应」，故不使用原生 confirm / prompt）。
+     irConfirm(msg, { title, okText, input, value, placeholder }) → Promise
+       无输入：确定 resolve(true)，取消 / 关闭 resolve(null)
+       有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null) */
+
+  /* ---------- 弹窗栈（P0-3） ----------
+   * 十余个弹窗各自独立，演示图里「写邮件」和「代为下单」会叠在一起。
+   * 这里做一个最小的统一入口：
+   *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
+   *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
+   *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
+   *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
+   * 现有 id 与 DOM 全部保持不变。 */
+
+  // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
+
+  /* 断网守卫：离线时【不发请求、也不排队】，直接告诉用户「这次点了不算」。
+   * 不排队是刻意的：出图时机有「每轮 / 选择后」的自动触发，若排队等联网后补发，
+   * 用户会在毫不知情的情况下被扣一笔额度。 */
+
+  // 体积显示：1 MB 以下按 KB 显示 —— 否则「68 KB 的备份」会显示成 0.0 MB，看着像没内容
+
+  // 设置落盘的唯一出口：演示模式只改内存，不写盘
+
+  // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型
+
+  // 生图配置：预填档位优先；'__custom__' 或未登记时按比例 + 宽高算 size（R8）
+  // override 供画师工作台传入本图的出图参数（比例 / 宽高）
+
+  /* ---------------- 模型能力（T-M-1 / §4.13） ---------------- */
+
+  function capChat() {
+    try { return Cap && Cap.find ? Cap.find('chat', S.settings.chat.model) : null; } catch (_) { return null; }
+  }
+  function capImage() {
+    try { return Cap && Cap.find ? Cap.find('image', S.settings.image.model) : null; } catch (_) { return null; }
+  }
+
+  // 有效上下文窗口：用户手填优先，其次登记表；0 = 未知（压缩退回条数兜底）
+  function chatContextWindow() {
+    const manual = +S.settings.chat.contextWindow || 0;
+    if (manual > 0) return manual;
+    const cap = capChat();
+    return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
+  }
+
+  function sizeRatioLabel(s) {
+    const m = String(s).match(/^(\d+)\s*[x×]\s*(\d+)$/);
+    if (!m) return '';
+    let a = +m[1], b = +m[2];
+    const gcd = (x, y) => y ? gcd(y, x % y) : x;
+    const g = gcd(a, b) || 1;
+    a /= g; b /= g;
+    if (a > 20 || b > 20) return '';
+    return '（' + a + ':' + b + '）';
+  }
+
+  function pickSizeForAspect(sizes, aspect, w, h) {
+    let target = 16 / 9;
+    if (IMAGE_ASPECTS[aspect]) { target = IMAGE_ASPECTS[aspect][0] / IMAGE_ASPECTS[aspect][1]; }
+    else if (aspect === 'custom' && w > 0 && h > 0) { target = w / h; }
+    let best = sizes[0], bestD = Infinity;
+    for (const s of sizes) {
+      const m = String(s).match(/^(\d+)\s*[x×]\s*(\d+)$/);
+      if (!m) continue;
+      const d = Math.abs(Math.log((+m[1] / +m[2]) / target));
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
+  }
+
+  const LEVEL_LABELS = { low: '低（low）', medium: '中（medium）', high: '高（high）', max: '最大（max）' };
+
+  // 手填尺寸时显示宽/高输入（预填档位模式下由档位决定，隐藏）
+  function showImageWh(show) {
+    $('#row-image-wh').classList.toggle('hidden', !show);
+    $('#s-image-width').disabled = !show;
+    $('#s-image-height').disabled = !show;
+  }
+
+  // 设置面板：按模型能力显隐参数（思考档位 / 尺寸 / 质量 / 上下文窗口提示）
+  function renderCapabilityFields() {
+    // —— 对话模型 ——
+    const cap = capChat();
+    const t = cap && cap.thinking;
+    const thinkWrap = $('#wrap-chat-thinking');
+    if (t && t.kind !== 'none') {
+      thinkWrap.classList.remove('hidden');
+      const opts = [['default', '默认（不下发）']];
+      if (t.kind === 'toggle') {
+        opts.push(['on', '开启思考']);
+        if ((t.values || []).indexOf('disabled') >= 0) opts.push(['off', '关闭思考']);
+      } else if (t.kind === 'levels') {
+        (t.values || []).forEach(v => opts.push([v, LEVEL_LABELS[v] || v]));
+        if (t.toggleParam) opts.push(['off', '关闭思考' + (t.alwaysOn ? '（该模型常开，不生效）' : '')]);
+      }
+      const cur = opts.some(o => o[0] === S.settings.chat.thinking) ? S.settings.chat.thinking : 'default';
+      const sel = $('#s-chat-thinking');
+      sel.innerHTML = opts.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('');
+      sel.value = cur;
+      S.settings.chat.thinking = cur;
+    } else {
+      thinkWrap.classList.add('hidden');
+      S.settings.chat.thinking = 'default';
+    }
+    const ctxInput = $('#s-chat-ctx');
+    ctxInput.value = (+S.settings.chat.contextWindow > 0) ? +S.settings.chat.contextWindow : '';
+    ctxInput.placeholder = (cap && +cap.contextWindow > 0)
+      ? (+cap.contextWindow + '（自动，按登记表）')
+      : '不知道就留空（回退按条数压缩）';
+    const parts = [];
+    if (cap) {
+      parts.push('预填参考：' + cap.model + (Cap.summarize ? '（' + Cap.summarize('chat', cap) + '）' : ''));
+      if (cap.deprecated) parts.push('⚠ 该模型名可能已弃用，可改填新的');
+    } else {
+      parts.push('参数全部手填即可，不影响使用：上下文容量可在服务商「模型广场 / 文档」查到，不知道就留空（回退按条数压缩）；思考档位等厂商参数写进上面的「自定义请求参数」');
+    }
+    $('#s-chat-cap').textContent = parts.join(' · ');
+
+    // —— 生图模型 ——
+    const icap = capImage();
+    const sizes = (icap && icap.image && Array.isArray(icap.image.sizes)) ? icap.image.sizes : [];
+    const sizeWrap = $('#wrap-image-size'), aspectWrap = $('#wrap-image-aspect');
+    const whRow = $('#row-image-wh'), qWrap = $('#wrap-image-quality');
+    if (sizes.length) {
+      sizeWrap.classList.remove('hidden');
+      aspectWrap.classList.add('hidden');
+      const sel = $('#s-image-size');
+      sel.innerHTML = sizes.map(s => '<option value="' + s + '">' + s + sizeRatioLabel(s) + '</option>').join('')
+        + '<option value="__custom__">自定义尺寸…（手填宽高）</option>';
+      const cur = sizes.indexOf(S.settings.image.size) >= 0
+        ? S.settings.image.size
+        : (S.settings.image.size === '__custom__'
+          ? '__custom__'
+          : pickSizeForAspect(sizes, S.settings.image.aspect, +S.settings.image.width, +S.settings.image.height));
+      sel.value = cur;
+      S.settings.image.size = cur;
+      showImageWh(cur === '__custom__');
+      const qs = (icap.image.quality || []);
+      if (qs.length) {
+        qWrap.classList.remove('hidden');
+        const qsel = $('#s-image-quality');
+        qsel.innerHTML = ['<option value="">默认</option>'].concat(qs.map(q => '<option value="' + q + '">' + q + '</option>')).join('');
+        qsel.value = qs.indexOf(S.settings.image.quality) >= 0 ? S.settings.image.quality : '';
+        S.settings.image.quality = qsel.value;
+      } else {
+        qWrap.classList.add('hidden');
+        delete S.settings.image.quality;
+      }
+    } else {
+      sizeWrap.classList.add('hidden');
+      aspectWrap.classList.remove('hidden');
+      whRow.classList.remove('hidden');
+      qWrap.classList.add('hidden');
+      delete S.settings.image.size;
+      delete S.settings.image.quality;
+    }
+  }
+
+  // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
+  // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
+  function setStageArt(src) {
+    const bd = $('#stage-backdrop');
+    if (!bd) return;
+    if (!src) {
+      bd.classList.remove('show');
+      bd.style.backgroundImage = '';
+      return;
+    }
+    bd.style.backgroundImage = 'url(' + JSON.stringify(src) + ')';
+    bd.classList.add('show');
+  }
+
+  function thumb(dataUrl, maxW) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, (maxW || 560) / img.width);
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        try { resolve(cv.toDataURL('image/jpeg', 0.7)); }
+        catch (_) { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
+  A.reg({ chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
+})();
