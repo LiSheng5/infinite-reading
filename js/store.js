@@ -231,6 +231,7 @@
         splitRatio: 0.5,         // 双栏比例（每栏最小约 28%）
         imageCollapsed: false,   // 舞台收起（聊天占满）
         choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
+        motion: 'auto',          // 动效强度（UI-1）：auto | off | standard | rich
       },
       showReasoning: true,
       toolsEnabled: 'on',
@@ -282,6 +283,8 @@
       splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
       imageCollapsed: !!rawUi.imageCollapsed,
       choices: rawUi.choices === 'always' ? 'always' : 'tray',
+      // 动效强度（UI-1）：auto | off | standard | rich，非法值当 auto（幂等）
+      motion: ['auto', 'off', 'standard', 'rich'].indexOf(rawUi.motion) >= 0 ? rawUi.motion : 'auto',
     };
 
     out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;

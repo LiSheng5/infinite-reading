@@ -38,15 +38,16 @@
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `app.js` 注册） | `attach`、`accept`、`drain` |
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
+| `js/motion.js` | `IR.Motion` | 动效强度解析（**纯逻辑**，Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，不碰 DOM | `resolve` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → app.js → pwa.js
+providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → app.js → pwa.js
 ```
 
-`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`paintQueue.js` 同样在 `app.js` 之前（`app.js` 启动即 `IR.PaintQueue.create`）；`proposals.js` 也在 `app.js` 之前（提案卡渲染与确认要用 `IR.Proposals`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `app.js` 之前（回合编排要 `IR.Tree`）；`demo.js` 要赶在 `app.js` 之前（注册演示适配器）；`zip.js` 也排在 `app.js` 之前（导出 / 导入备份时才用到，惰性查 `IR.Zip`）；`paintQueue.js` 同样在 `app.js` 之前（`app.js` 启动即 `IR.PaintQueue.create`）；`proposals.js` 也在 `app.js` 之前（提案卡渲染与确认要用 `IR.Proposals`）；`motion.js` 也在 `app.js` 之前（启动时要 `IR.Motion.resolve` 写 `data-motion`）；`pwa.js` 是唯一的例外，它排在 `app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -163,6 +164,26 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | **全树图集必须含非当前分支** | `store.js`：`imageIdsOf` / `knownImageIds`、`js/tree.js`：`imageIdsOf` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径） |
 | **晚到条目 / 画面带 `nodeId` 校验** | `app.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
 | **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`app.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
+| **动画只动合成层属性** | `css/style.css` 的 `@keyframes` 与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
+| **颜色只从令牌来** | `css/style.css` 的 `:root`（唯一改色的地方）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
+
+### 5.1 设计令牌与动效等级（UI-1）
+
+**颜色**：全站只从 `css/style.css` 的 `:root` 令牌取色——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
+
+**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient`。
+
+**动效强度**：`<html data-motion="off|standard|rich">`，由 `js/motion.js` 的 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`app.js` 在启动与 `matchMedia` 变化时写入。
+
+| 档 | 行为 |
+|---|---|
+| off | 无位移、无循环；最多保留瞬时（≤80ms）的透明度变化 |
+| standard | 淡入淡出与短位移（≤160ms）；无循环动画（忙碌进度线除外，用透明度呼吸）；无 Ken Burns、无环境光、无逐段文字淡入 |
+| rich | 全部动效（默认） |
+
+**本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。
+
+**暂停与预算**：`visibilitychange` 写 `html[data-paused]`，CSS 暂停一切循环动画；同屏循环动画 ≤ 3 个（`#busy-line` + Ken Burns + 环境光）；`will-change` 只在动画进行时临时加、结束移除。
 
 ## 6. 上下文策略速览
 
@@ -228,7 +249,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 
 - **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `app.js` 的业务逻辑。
 - **视频**：`IR.VideoProviders` 的约定是 `generate(cfg, {prompt, image}) -> {url}`（异步任务型 API 需自行轮询），目前为空。
-- **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口（「纸白主题」在 Backlog 里）。
+- **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口。当前是白底蓝强调浅色主题（UI-1）；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
 
 ## 11. 已知边界

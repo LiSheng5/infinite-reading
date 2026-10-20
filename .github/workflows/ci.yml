@@ -28,6 +28,13 @@ jobs:
       - name: 版本号一致性（VERSION 为真源）
         run: node tools/sync-version.mjs --check
 
+      # UI-1 护栏：对比度（WCAG）/ 令牌回归 / 动效强度解析
+      - name: 配色与动效护栏（contrast / tokens / motion）
+        run: |
+          node tools/contrast-check.mjs
+          node eval/tokens-test.js
+          node eval/motion-test.js
+
       - name: PWA 清单与图标自检
         run: |
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8'));if(!m.name||!m.icons||!m.icons.length)throw new Error('manifest 字段不全');m.icons.forEach(i=>{if(!fs.existsSync(i.src))throw new Error('图标缺失: '+i.src)});console.log('manifest ok -> '+m.name+'（'+m.icons.length+' 个图标）')"
