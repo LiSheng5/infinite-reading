@@ -192,309 +192,30 @@
 
   /* ================= AI1：剧情回合 ================= */
 
-  function parseAIReply(raw) {
-    const text = String(raw || '').trim();
-    // 宽容解析（裸换行 / 截断 / 围栏都能救）：剧情模式中文键契约（v0.3）经
-    // normalizeAIReply 映射回内部英文结构；坏包不直接展示给玩家
-    const j = IR.Context.normalizeAIReply(IR.Context.tolerantJSONParse(text));
-    if (j) {
-      return {
-        narration: String(j.narration || '').trim(),
-        choices: Array.isArray(j.choices) ? j.choices.filter(Boolean).map(String).slice(0, 3) : [],
-        scene_change: !!j.scene_change,
-        scene_summary: String(j.scene_summary || '').trim(),
-        world: (j.world && typeof j.world === 'object') ? j.world : null,
-        tool_calls: Array.isArray(j.tool_calls) ? j.tool_calls : [],
-      };
-    }
-    // chat / rp：纯文本契约（2026-10-07 定案）——正文本身就是回复，不做「像 JSON 却坏了」的判错，
-    // 否则正文里出现一个「{」就会被误判成坏包（这两个模式已不再要求模型输出 JSON）
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) {
-      return { narration: text, choices: [], scene_change: false, scene_summary: '', world: null, tool_calls: [], plainText: true };
-    }
-    // 兜底：完全不是 JSON 的（模型没按格式来）→ 原文当旁白，fail-open；
-    // 看着像 JSON 却解析不了（常见于模型写到一半转去调工具）→ 交给 callAI1 当「没写正文」处理
-    const looksJson = /\{/.test(text) || /^\s*```json/i.test(text);
-    return { narration: text, choices: [], scene_change: false, scene_summary: '', parseFailed: true, looksJson: looksJson };
-  }
-
-  function slimReply(r) {
-    return { narration: r.narration, choices: r.choices, scene_change: r.scene_change, scene_summary: r.scene_summary };
-  }
-
-  function applyToolCall(c) {
-    const fn = (c && c.function) ? c.function : c;
-    const name = (fn && fn.name) || '';
-    let args = {};
-    try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
-    // 提案类工具的留痕是 {type:'proposal'} 提案卡本身（确认后另记一条 tool 留痕），这里不再重复记
-    if (IR.Context.isProposalTool(name)) return;
-    let summary = name;
-    if (name === 'update_memory') {
-      if (args.world && typeof args.world === 'object') IR.Context.mergeWorld(S.story.world, args.world);
-      if (args.relationship) IR.Context.mergeWorld(S.story.world, { relationship: args.relationship });
-      // 画像条目按开关 / 范围写入（关开关即停止收集，§4.12）
-      if (Array.isArray(args.profile)) A.applyProfileEntries(args.profile);
-      summary = args.text ? ('更新记忆：' + args.text) : '更新记忆';
-    } else if (name === 'recall_world_state') summary = '查阅了世界状态卡';
-    else if (name === 'recall_style_card') summary = '查阅了视觉设定卡';
-    else if (name === 'request_image') summary = '排队生图';   // §3.A.6：chat / rp 没有画师，措辞中立
-    else if (name === 'schedule_once') summary = '安排了一次主动联系（待确认）';
-    else if (name === 'schedule_heartbeat') summary = '安排了定时主动联系（待确认）';
-    else if (name === 'schedule_cron') summary = '安排了日历主动联系（待确认）';
-    else if (name === 'list_triggers') summary = '查看了主动联系安排';
-    else if (name === 'cancel_trigger') summary = '取消了主动联系安排';
-    S.story.log.push({ type: 'tool', tool: name, summary, ts: Date.now() });
-  }
-
-  function absorbReply(reply) {
-    if (reply.world) IR.Context.mergeWorld(S.story.world, reply.world);
-    if (Array.isArray(reply.tool_calls)) for (const c of reply.tool_calls) applyToolCall(c);
-    // chat / rp 纯文本没有 scene_summary：拿旁白原文当画面参考，免得「🎨 作画」越画越旧
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp') && !reply.scene_summary && reply.narration) {
-      S.story.lastSceneSummary = String(reply.narration).replace(/\s+/g, ' ').slice(0, 120);
-    }
-  }
-
   // 书记员是否可用于「模型任务」（压缩摘要 / 滚动风格摘要）：
   // 开关开启 + 书记员已启用 + 配了模型与适配器
-  function scribeUsable() {
-    const sc = S.settings.scribe || {};
-    if (!sc.aiTasks || !sc.enabled) return false;
-    const cfg = resolveSub('scribe');
-    if (!cfg.provider || !cfg.model) return false;
-    return !!IR.ChatProviders[cfg.provider];
-  }
 
   // 书记员（C-B）：每 N 回合校对世界卡（压缩触发时由 runSmartCompress 顺带完成）；失败时用本地规则兜底
-  async function runScribe() {
-    let result = null;
-    try {
-      const cfg = resolveSub('scribe');
-      if (cfg.provider && cfg.model) {
-        const recent = S.story.log.filter(l => l.type === 'narration').slice(-12).map(l => '· ' + l.text).join('\n');
-        const said = S.story.log.filter(l => l.type === 'player' || l.type === 'choice').slice(-12).map(l => '· ' + l.text).join('\n');
-        const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
-          { role: 'system', content: SCRIBE_SYSTEM },
-          {
-            role: 'user',
-            content: '[当前世界卡]\n' + IR.Context.worldCardText(S.story.world)
-              + '\n\n[最近剧情]\n' + (recent || '（无）')
-              + '\n\n[玩家最近说过的话]\n' + (said || '（无）')   // R13：画像提取的来源
-              + '\n\n' + A.scribeProfileHint(),
-          },
-        ]);
-        result = parseScribe(raw);
-      }
-    } catch (_) { result = null; }
-    if (!result) result = IR.Context.localScribe(S.story.world);
-    // 书记员是整卡重写（最终仲裁）：允许空数组清空
-    if (result.world) IR.Context.mergeWorld(S.story.world, result.world, { allowEmpty: true });
-    if (result.profile && result.profile.length) A.applyProfileEntries(result.profile);   // R13：顺手提取的画像
-    S.story.world.scribeAt = Date.now();
-    S.story.log.push({ type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() });
-  }
-
-  function parseScribe(raw) {
-    const s = String(raw || '');
-    const i = s.indexOf('{'), j = s.lastIndexOf('}');
-    if (i !== -1 && j > i) {
-      try {
-        const o = JSON.parse(s.slice(i, j + 1));
-        return {
-          world: (o.world && typeof o.world === 'object') ? o.world : null,
-          profile: Array.isArray(o.profile) ? o.profile : [],   // R13：顺手提取的画像条目
-          diff: Array.isArray(o.diff) ? o.diff.map(String) : [],
-        };
-      } catch (_) {}
-    }
-    return null;
-  }
 
   /* ---------------- 书记员模型任务（压缩 / 滚动风格摘要） ----------------
    * 真实模式：书记员一次调用同时「压缩 + 校对」（§4.10 C-B）、出图后顺手更新滚动风格摘要（C-F）；
    * 开关关闭、调用失败 → 一律退回本地确定性规则。 */
 
   // 待压缩原回合 → 书记员输入（按幕分组，越靠前越旧）
-  function buildCompressInput(groups) {
-    const parts = ['[当前世界状态卡]\n' + IR.Context.worldCardText(S.story.world)];
-    parts.push('[待压缩的原回合]（按幕分组，越靠前越旧）');
-    let n = (S.story.summaries || []).length;
-    for (const grp of groups) {
-      n += 1;
-      parts.push('—— 第 ' + n + ' 幕 ——');
-      for (let i = 0; i < grp.length; i += 2) {
-        const um = grp[i], am = grp[i + 1];
-        if (um) {
-          const t = String(um.content || '').replace(/^\[设定\][\s\S]*?\n\n/, '').replace(/^\[玩家行动\]\s*/, '');
-          parts.push('玩家：' + t);
-        }
-        if (am) {
-          let j = {};
-          try { j = JSON.parse(am.content); } catch (_) {}
-          parts.push('旁白：' + (j.narration || ''));
-          if (j.scene_change) parts.push('（此处场景切换）');
-        }
-      }
-    }
-    parts.push('', scribeProfileHint());   // R13：压缩顺手提取画像
-    return parts.join('\n');
-  }
-
-  function parseScribeCompress(raw) {
-    const s = String(raw || '');
-    const i = s.indexOf('{'), j = s.lastIndexOf('}');
-    if (i === -1 || j <= i) return null;
-    let o = null;
-    try { o = JSON.parse(s.slice(i, j + 1)); } catch (_) { return null; }
-    if (!o || typeof o !== 'object') return null;
-    return {
-      summaries: Array.isArray(o.summaries) ? o.summaries.filter(Boolean).map(String) : [],
-      world: (o.world && typeof o.world === 'object') ? o.world : null,
-      profile: Array.isArray(o.profile) ? o.profile : [],   // R13
-      diff: Array.isArray(o.diff) ? o.diff.map(String) : [],
-    };
-  }
 
   // 模型压缩（C-B 双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底
-  async function runSmartCompress() {
-    if (!S.story || !scribeUsable()) return null;
-    const plan = IR.Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
-    if (!plan) return null;
-    const cfg = resolveSub('scribe');
-    const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
-      { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
-      { role: 'user', content: buildCompressInput(plan.groups) },
-    ]);
-    const parsed = parseScribeCompress(raw);
-    if (!parsed || !parsed.summaries.length) return null;
-
-    S.story.summaries = (S.story.summaries || []).concat(parsed.summaries);
-    S.story.messages = S.story.messages.slice(plan.candidate.length);
-    IR.Context.trimSummaries(S.story.summaries, IR.Context.DEFAULT_MAX_SUMMARIES);
-    if (parsed.world) IR.Context.mergeWorld(S.story.world, parsed.world, { allowEmpty: true });
-    if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   // R13
-    S.story.world.scribeAt = Date.now();
-    S.story.log.push({
-      type: 'tool', tool: 'scribe',
-      summary: '压缩 ' + parsed.summaries.length + ' 幕 + 校对：' + ((parsed.diff || []).join('；') || '无事实变更'),
-      ts: Date.now(),
-    });
-    return { compressedTurns: parsed.summaries.length, messagesRemoved: plan.candidate.length };
-  }
-
-  function parseRollingStyle(raw) {
-    const s = String(raw || '');
-    const i = s.indexOf('{'), j = s.lastIndexOf('}');
-    if (i === -1 || j <= i) return null;
-    let o = null;
-    try { o = JSON.parse(s.slice(i, j + 1)); } catch (_) { return null; }
-    if (!o || typeof o !== 'object') return null;
-    const out = {};
-    for (const k of ['style', 'scenes', 'wardrobe']) if (o[k]) out[k] = String(o[k]).slice(0, 240);
-    return Object.keys(out).length ? out : null;
-  }
 
   // 出图后：真实模式让书记员顺手更新滚动风格摘要（§4.10 C-F）；失败保留本地规则结果，不打断流程
-  async function refreshRollingStyleByModel(scene) {
-    if (!S.story || !scene || !scribeUsable()) return;
-    const sid = S.story.id;
-    const cfg = resolveSub('scribe');
-    const cur = IR.Context.rollingStyleText(S.story.rollingStyle);
-    const card = S.story.styleCard;
-    try {
-      const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
-        { role: 'system', content: SCRIBE_ROLLING_SYSTEM },
-        {
-          role: 'user',
-          content: '[现有滚动风格摘要]\n' + (cur || '（无）')
-            + '\n\n[锚定视觉设定卡]\n' + ((card && card.locked !== false) ? IR.Context.styleCardText(card) : '（未锚定）')
-            + '\n\n[刚出的这张图]\nalt：' + (scene.alt || '') + '\nprompt：' + (scene.prompt || ''),
-        },
-      ]);
-      const rs = parseRollingStyle(raw);
-      if (!rs || !S.story || S.story.id !== sid) return;    // 中途换档 / 回档：丢弃结果
-      const target = S.story.rollingStyle = Object.assign(Store.defaultRollingStyle(), S.story.rollingStyle || {});
-      if (rs.style) target.style = rs.style;
-      if (rs.scenes) target.scenes = rs.scenes;
-      if (rs.wardrobe) target.wardrobe = rs.wardrobe;
-      target.updatedAt = Date.now();
-      saveAll();
-      if (!$('#modal-settings').classList.contains('hidden')) renderStoryPanels();
-    } catch (_) { /* 保留本地规则结果 */ }
-  }
 
   // 每回合收尾：压缩链（C-A/C-C）+ 书记员（C-B）
-  async function postTurn() {
-    if (!S.story) return;
-    let comp = null;
-    // 真实模式：书记员一次调用做「压缩 + 校对」（C-B 双职）
-    if (scribeUsable()) {
-      try { comp = await runSmartCompress(); } catch (_) { comp = null; }
-    }
-    if (!comp) {
-      // 未触发 / 失败：本地确定性摘要器兜底（不花 API）
-      try {
-        comp = IR.Context.compressStory(S.story, {
-          summarize: IR.Context.localSummarize,
-          contextWindow: A.chatContextWindow(),   // T-M-1：登记表 / 手填容量 → 70% 阈值
-        });
-      } catch (_) { comp = null; }
-      if (comp) S.story.log.push({ type: 'tool', tool: 'compress', summary: comp.compressedTurns + ' 幕压入摘要栈', ts: Date.now() });
-      // 本地压缩没有重写世界卡：按每 N 回合单独校对
-      const every = Math.max(1, +S.settings.scribe.every || 10);
-      if (S.settings.scribe.enabled && S.story.turn > 0 && S.story.turn % every === 0) {
-        await runScribe();
-      }
-    }
-    // R13 用户画像：真实模式由书记员顺手提取（上面两条路径）；失败退回本地规则
-    if (A.profileOn() && !scribeUsable()) A.collectProfileLocal();
-    saveAll();
-    renderChat();
-    if (!$('#modal-settings').classList.contains('hidden')) renderStoryPanels();
-  }
 
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
-  const REASONING_MAX = 4000;
-  function clipReasoning(text) {
-    const s = String(text || '');
-    return s.length > REASONING_MAX ? (s.slice(0, REASONING_MAX) + '\n…（思考链过长，已截断）') : s;
-  }
 
   // 旁白条目（versions = 版本栈）；思考链随条目一起存，供折叠块渲染与以后带 tools 回传
-  function pushNarrationEntry(text, reasoning) {
-    const e = { type: 'narration', text, versions: [text], activeVersion: 0, ts: Date.now() };
-    if (reasoning) e.reasoning = clipReasoning(reasoning);
-    S.story.log.push(e);
-  }
 
   // AI1 原始对话里的 assistant 条目：reasoning 一并存档（不进请求体，§4.5）
-  function assistantMessage(reply, reasoning) {
-    const m = { role: 'assistant', content: JSON.stringify(slimReply(reply)) };
-    if (reasoning) m.reasoning = clipReasoning(reasoning);
-    return m;
-  }
-
-  function maybeEnqueueImage(reply, isOpen, nodeId) {
-    // 去重（§4.7）：本轮 AI1 已经用 request_image 出过图 → 时机出图跳过，同轮不画两张
-    if (S.turnPaintedByTool) { S.turnPaintedByTool = false; return; }
-    // §3.E.3：对话 / 扮演没有「时机出图」——图只来自模型调用工具或手动按钮（默认行为改动，见 CHANGELOG）
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return;
-    const mode = S.settings.trigger;
-    let want = false;
-    if (mode === 'every') want = true;
-    else if (mode === 'choice' && (S.lastActionWasChoice || isOpen || S.story.turn === 1)) want = true;
-    if (want) A.enqueueImage(reply.scene_summary, nodeId);
-  }
 
   // 流式清洗：从累积的 JSON 文本里抠出旁白可读部分
-  function cleanStream(s) {
-    return String(s)
-      .replace(/^\s*```(?:json)?/i, '')
-      .replace(/^\s*\{\s*"(?:旁白|narration)"\s*:\s*"/, '')
-      .replace(/\\n/g, '\n').replace(/\\"/g, '"')
-      .replace(/",\s*"(?:人物|地点|时间|伏笔|画面|场景切换|选项|choices|scene_change|scene_summary|world)"[\s\S]*$/, '');
-  }
 
   /* ---------- 流式文字逐段淡入（UI-1 §4.2） ----------
    * 只对「可见文字的增量」动（cleanStream 之后），不给原始 JSON 碎片做动画：
@@ -502,178 +223,19 @@
    * 存活 span 超过 DELTA_MAX_SPANS 时把更早的合并进一个前缀文本节点；
    * 流结束（finishNarration）整体合并成单个文本节点。
    * standard 档只对整个气泡做一次淡入（见 style.css 的 .bubble-live）；off 档无。 */
-  const DELTA_MAX_SPANS = 200;
-  let liveDeltaSpans = [];    // 当前气泡里存活的 span.delta
-  let liveDeltaMerged = null; // 已合并的前缀文本节点（更早的文字都在这里）
-  let liveDeltaText = '';     // 当前已显示的可见全量文字
-
-  function resetLiveDelta() {
-    liveDeltaSpans = [];
-    liveDeltaMerged = null;
-    liveDeltaText = '';
-  }
 
   // 超额的 span 合并进前缀文本节点：DOM 里始终最多约 DELTA_MAX_SPANS 个 span
-  function trimLiveDeltaSpans(el, keep) {
-    const n = liveDeltaSpans.length - keep;
-    if (n <= 0) return;
-    for (let i = 0; i < n; i++) {
-      const span = liveDeltaSpans[i];
-      if (!liveDeltaMerged) {
-        liveDeltaMerged = document.createTextNode('');
-        el.insertBefore(liveDeltaMerged, el.firstChild);
-      }
-      liveDeltaMerged.nodeValue += span.textContent;
-      if (span.parentNode) span.parentNode.removeChild(span);
-    }
-    liveDeltaSpans.splice(0, n);
-  }
 
   // 流结束：整体合并成单个文本节点
-  function finishLiveDelta(el) {
-    if (el && liveDeltaText) el.textContent = liveDeltaText;
-    resetLiveDelta();
-  }
-
-  function appendLiveDelta(el, fullText) {
-    const level = motionLevel();
-    if (level !== 'rich') {
-      // standard / off：不做逐段淡入（standard 由 CSS 对整个气泡做一次淡入）
-      el.textContent = fullText;
-      liveDeltaText = fullText;
-      return;
-    }
-    if (el.querySelector && el.querySelector('.gen-pill')) {
-      // 「生成中…」占位：清掉再从头铺增量
-      el.textContent = '';
-      liveDeltaSpans = [];
-      liveDeltaMerged = null;
-      liveDeltaText = '';
-    } else if (!liveDeltaText && el.textContent) {
-      liveDeltaText = el.textContent;   // renderChat 重建过气泡：先接上已显示的文字
-    }
-    if (liveDeltaText && fullText.indexOf(liveDeltaText) !== 0) {
-      // 非前缀增长（流式清洗的边界情形，如转义跨块）：整段重建，不做动画
-      el.textContent = fullText;
-      liveDeltaSpans = [];
-      liveDeltaMerged = null;
-      liveDeltaText = fullText;
-      return;
-    }
-    const delta = fullText.slice(liveDeltaText.length);
-    liveDeltaText = fullText;
-    if (!delta) return;
-    const span = document.createElement('span');
-    span.className = 'delta';
-    span.textContent = delta;
-    el.appendChild(span);
-    liveDeltaSpans.push(span);
-    if (liveDeltaSpans.length > DELTA_MAX_SPANS) trimLiveDeltaSpans(el, DELTA_MAX_SPANS);
-  }
 
   // 流式思考链（方案 B）：写进固定小窗，并始终滚到最新——点开看全量也不暂停
-  function updateLiveReasoning() {
-    if (!S.live) return;
-    const el = $('#chat-scroll').querySelector('.reason-live-text');
-    if (!el) { renderChat(); return; }
-    el.textContent = S.live.reasoning || '';
-    const panel = el.parentElement;
-    if (panel) panel.scrollTop = panel.scrollHeight;
-    scrollChatBottom();
-  }
 
   /* ---------- P5-1 工具护栏：显式 400 拒绝 tools 的模型记住后不再下发（§4.5） ---------- */
 
-  function noToolsKey(cfg) {
-    return String((cfg && cfg.baseUrl) || '').replace(/\/+$/, '') + '|' + String((cfg && cfg.model) || '');
-  }
-  function noToolsFor(cfg) {
-    return (S.settings.noTools || []).some(x => noToolsKey(x) === noToolsKey(cfg));
-  }
-  function rememberNoTools(cfg) {
-    if (!cfg || !cfg.model) return;
-    S.settings.noTools = (S.settings.noTools || []).filter(x => noToolsKey(x) !== noToolsKey(cfg));
-    S.settings.noTools.push({ baseUrl: String(cfg.baseUrl || ''), model: String(cfg.model || ''), at: Date.now() });
-    if (S.settings.noTools.length > 20) S.settings.noTools = S.settings.noTools.slice(-20);
-    saveAll();
-    renderNoToolsHint();
-  }
-  function renderNoToolsHint() {
-    const el = $('#s-notools-hint');
-    if (!el) return;
-    const list = S.settings.noTools || [];
-    el.textContent = list.length
-      ? ('已记住 ' + list.length + ' 个不接受 tools 的模型（只存在你这台机器）：' + list.map(x => x.model).join('、') +
-        '。它们自动走无工具模式，靠常驻摘要 + 按需召回（注入记忆）兜底。')
-      : '尚无模型因不接受 tools 被降级。';
-  }
   // 「模型不接受 tools」判定：必须排除参数用法类 400（如 DeepSeek 思考模式不支持 tool_choice）
-  function isToolsRejection(e) {
-    const msg = ((e && e.message) || '').toLowerCase();
-    if (!/http 400/.test(msg)) return false;
-    if (/tool_choice|thinking mode/.test(msg)) return false;
-    return /tool|function/.test(msg);
-  }
   // 归一化成 [{ name, args }]（流式 tool_calls 与回包内嵌的同名字段都算）
-  function toolList(calls) {
-    const out = [];
-    for (const c of (calls || [])) {
-      const fn = (c && c.function) ? c.function : c;
-      const name = (fn && fn.name) || '';
-      if (!name) continue;
-      let args = {};
-      try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
-      out.push({ name, args, raw: c });
-    }
-    return out;
-  }
-  function toolNamesIn(calls) { return toolList(calls).map(c => c.name); }
 
   // 单次请求（流式写进 live 气泡）：带 tools 被显式 400 拒绝 → 记住该 baseUrl+model 并降级重发一次
-  async function streamAI1(adapter, cfg, messages, hooks) {
-    let preview = '';
-    let text = '';
-    let streamed = false;
-    try {
-      text = await adapter.chat(cfg, messages, {
-        onDelta(piece) {
-          streamed = true;
-          preview += piece;
-          if (!S.live) S.live = { text: '', reasoning: '' };
-          S.live.text = cleanStream(preview);
-          if (!S.liveEl) S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
-          if (S.liveEl) appendLiveDelta(S.liveEl, S.live.text);   // UI-1 §4.2：只给可见增量做逐段淡入
-          // 正文已开始流式 → 思考窗卷成一行（方案 B：不推走正文，也不骤折）
-          if (S.liveReasonEl && !S.liveReasonCollapsed) {
-            S.liveReasonCollapsed = true;
-            S.liveReasonEl.classList.add('collapsed');
-          }
-          scrollChatBottom();
-        },
-        onReasoning(piece) { if (hooks && hooks.onReasoning) hooks.onReasoning(piece); },
-        onToolCalls(calls) { if (hooks && hooks.onToolCalls) hooks.onToolCalls(calls); },
-        onAborter(ctrl) { S.chatAbortCtrl = ctrl; },   // P0-1：「停止」按钮中断当前请求
-      });
-    } catch (e) {
-      if (isStopError(e)) throw e;   // P0-1：用户主动停止——不再降级重试，直接上抛
-      if (cfg.tools && /HTTP 400/.test((e && e.message) || '')) {
-        if (isToolsRejection(e)) {
-          rememberNoTools(cfg);
-          toast('该模型不接受 tools 参数：已记住并降级为无工具模式（摘要 + 手动注入照常可用）', false, true);
-        }
-        const cfg2 = Object.assign({}, cfg);
-        delete cfg2.tools;
-        return streamAI1(adapter, cfg2, messages, hooks);
-      }
-      // 流式失败时兜底走一次非流式（思考链照常经 hooks 回传；中断能力照常接上）
-      const fbHooks = (hooks && hooks.onReasoning)
-        ? { onReasoning: hooks.onReasoning, onAborter(ctrl) { S.chatAbortCtrl = ctrl; } }
-        : { onAborter(ctrl) { S.chatAbortCtrl = ctrl; } };
-      text = await adapter.chat(cfg, messages, fbHooks);
-      streamed = false;
-    }
-    return { text, streamed };
-  }
 
   // 本回合是否已由工具出图（用于「工具已出图则跳过本轮时机出图」去重，§4.7）。
   // v0.5.1 起在**提交任务时**置位（原来是出图完成后），消费点（maybeEnqueueImage、开局路径）不变。
@@ -772,7 +334,7 @@
     S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
 
     const toolsOn = opts.tools !== false && !opts.recall
-      && S.settings.toolsEnabled !== 'off' && !noToolsFor(cfg);
+      && S.settings.toolsEnabled !== 'off' && !A.noToolsFor(cfg);
     // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
     const schedTools = toolsOn && A.scheduleToolsAvailable();
     // 邮件 / 下单（提案制）只在智能体（chat）+ 对应 feature 开启时追加（红线 7；toolsForMode 内部再挡一次模式）
@@ -799,13 +361,13 @@
 
     let streamedCalls = [];
     let reasoning = '';
-    const first = await streamAI1(adapter, cfgTools, messages, {
-      onToolCalls(calls) { streamedCalls = streamedCalls.concat(toolList(calls)); },
-      onReasoning(piece) { reasoning += piece; if (S.live) S.live.reasoning = reasoning; updateLiveReasoning(); },
+    const first = await A.streamAI1(adapter, cfgTools, messages, {
+      onToolCalls(calls) { streamedCalls = streamedCalls.concat(A.toolList(calls)); },
+      onReasoning(piece) { reasoning += piece; if (S.live) S.live.reasoning = reasoning; A.updateLiveReasoning(); },
     });
-    const reply1 = parseAIReply(first.text);
+    const reply1 = A.parseAIReply(first.text);
     // 两路都算：流式 tool_calls 与回包里的 tool_calls
-    let calls = streamedCalls.concat(toolList(reply1.tool_calls));
+    let calls = streamedCalls.concat(A.toolList(reply1.tool_calls));
     // 同名同参去重（流式与回包可能重复上报），再按每轮上限裁剪（§4.5）
     calls = calls.filter((c, i) => calls.findIndex(x => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args)) === i);
     // P2-10（2026-10-14）：超出上限的调用不再静默丢弃——留痕让玩家可见，重发时也告知模型
@@ -838,10 +400,10 @@
       }
       const secondOpts = Object.assign({}, asmOpts, { recall: effect.recallScopes, inject: injects });
       delete secondOpts.tools;
-      const second = await streamAI1(adapter, cfg,
+      const second = await A.streamAI1(adapter, cfg,
         IR.Context.assembleAI1(S.story, playerAction, secondOpts),
-        { onReasoning(piece) { reasoning += piece; if (S.live) S.live.reasoning = reasoning; updateLiveReasoning(); } });
-      const reply2 = parseAIReply(second.text);
+        { onReasoning(piece) { reasoning += piece; if (S.live) S.live.reasoning = reasoning; A.updateLiveReasoning(); } });
+      const reply2 = A.parseAIReply(second.text);
       const ok2 = !!(reply2.narration || reply2.choices.length);
       if (!ok2 && !noProse) {
         // 重发失败但第一版正文可用：第一版没白写，别用占位提示丢给玩家
@@ -935,11 +497,11 @@
       S.story.turn += 1;
       S.story.lastSceneSummary = reply.scene_summary || S.story.lastSceneSummary;
       const userMsg = { role: 'user', content: IR.Context.playerContent(S.story.premise, sentAction) };
-      const asst = assistantMessage(reply, res.reasoning);
+      const asst = A.assistantMessage(reply, res.reasoning);
       S.story.messages.push(userMsg, asst);
-      pushNarrationEntry(reply.narration, res.reasoning);
+      A.pushNarrationEntry(reply.narration, res.reasoning);
       await finishNarration(res.streamed);
-      absorbReply(reply);
+      A.absorbReply(reply);
       S.currentChoices = reply.choices;
       renderChat();
       // §4.1 回合落节点：entries = log.slice(logMark)，head 前移；失败 / 停止不建节点
@@ -951,8 +513,8 @@
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
       });
       S.turnAnchor.nodeId = node.id;                // §3.A.4：锚点补 nodeId，后台出图任务写回时落位
-      maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
-      await postTurn();
+      A.maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
+      await A.postTurn();
       IR.Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
       if (agentMsg && meta.fireId) await A.ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
@@ -1010,11 +572,11 @@
       S.story.turn += 1;
       S.story.lastSceneSummary = reply.scene_summary || '';
       const userMsg = { role: 'user', content: IR.Context.playerContent(S.story.premise, OPENING_ACTION, { includePremise: true }) };
-      const asst = assistantMessage(reply, res.reasoning);
+      const asst = A.assistantMessage(reply, res.reasoning);
       S.story.messages.push(userMsg, asst);
-      pushNarrationEntry(reply.narration, res.reasoning);
+      A.pushNarrationEntry(reply.narration, res.reasoning);
       await finishNarration(res.streamed);
-      absorbReply(reply);
+      A.absorbReply(reply);
       S.currentChoices = reply.choices;
       renderChat();
       // 开局同样是节点（§4.1）：action.type = 'opening'，sent = OPENING_ACTION
@@ -1023,7 +585,7 @@
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
       });
       S.turnAnchor.nodeId = node.id;                 // §3.A.4：锚点补 nodeId
-      await postTurn();
+      await A.postTurn();
       IR.Tree.seal(S.story, node.id);                // 必须在 postTurn 之后（§10）
       if (S.turnPaintedByTool) S.turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
       else if (S.story.mode === 'chat' || S.story.mode === 'rp') { /* §3.E.3：对话 / 扮演没有时机出图 */ }
@@ -1057,169 +619,18 @@
 
   /* ================= 重试与分支（R1 / §4.2、§4.3） ================= */
 
-  function lastNarration() {
-    if (!S.story) return null;
-    for (let i = S.story.log.length - 1; i >= 0; i--) if (S.story.log[i].type === 'narration') return S.story.log[i];
-    return null;
-  }
-  function lastNarrationIndex() {
-    if (!S.story) return -1;
-    for (let i = S.story.log.length - 1; i >= 0; i--) if (S.story.log[i].type === 'narration') return i;
-    return -1;
-  }
-  function lastActionEntry() {
-    if (!S.story) return null;
-    for (let i = S.story.log.length - 1; i >= 0; i--) {
-      const t = S.story.log[i].type;
-      if (t === 'player' || t === 'choice') return S.story.log[i];
-    }
-    return null;
-  }
   // 选项只随 assistantMsg 存档（slimReply 的 JSON）：切分支 / 载入后从 head 的 assistantMsg 恢复（§4.3）
-  function choicesFromMsg(msg) {
-    if (!msg || typeof msg.content !== 'string') return [];
-    try {
-      const j = JSON.parse(msg.content);
-      return Array.isArray(j.choices) ? j.choices.filter(Boolean).map(String).slice(0, 3) : [];
-    } catch (_) { return []; }
-  }
-  function choicesFromHead() {
-    const t = S.story && S.story.tree;
-    return (t && t.nodes && t.nodes[t.head]) ? choicesFromMsg(t.nodes[t.head].assistantMsg) : [];
-  }
-  function treeHeadNodeId() {
-    return (S.story && S.story.tree && S.story.tree.head) || null;
-  }
   // 这个 log 条目属于哪个节点（§4.4 锚点）：node.entries 与 story.log 是同一批对象（project 按引用共享）
-  function nodeIdOwningEntry(entry) {
-    const t = S.story && S.story.tree;
-    if (!t || !t.nodes || !entry) return null;
-    for (const id of Object.keys(t.nodes)) {
-      if ((t.nodes[id].entries || []).indexOf(entry) >= 0) return id;
-    }
-    return null;
-  }
   // 图所属的节点：条目可能已滑出可见 log 窗口（末 120 条），按 node.scenes 里的 scene id 再找一遍
-  function nodeIdOwningScene(sceneId) {
-    const t = S.story && S.story.tree;
-    if (!t || !t.nodes || !sceneId) return null;
-    for (const id of Object.keys(t.nodes)) {
-      if ((t.nodes[id].scenes || []).some(s => s && s.id === sceneId)) return id;
-    }
-    return null;
-  }
 
   /* ================= 重试 = 新增兄弟（§4.2） / 兄弟切换（§4.3） ================= */
 
-  async function retryLast() {
-    if (S.busy || !S.story) return;
-    const tree = S.story.tree;
-    const old = tree && tree.nodes && tree.nodes[tree.head];
-    // §4.2：重试是在父节点下新增兄弟；当前 head 必须是已结算的回合节点
-    if (!old || old.kind !== 'turn' || !old.sealed || !old.action) { toast('还没有可以重试的回合'); return; }
-    const act = old.action;
-    const isRetryOpening = act.type === 'opening';
-    const sent = act.sent || withKindMarker(act.text, act.kind);
-    const userMsg = old.userMsg || { role: 'user', content: IR.Context.playerContent(S.story.premise, sent) };
-
-    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正（§10）：
-    // 以前重试是在已被上一版改写过的世界卡上重来
-    IR.Tree.switchTo(S.story, old.parent);
-    S.story.turn += 1;            // 与正常回合同口径：turn 在提交前 +1
-    S.currentChoices = [];
-
-    S.busy = true;
-    S.stopRequested = false; S.chatAbortCtrl = null;   // P0-1
-    setSendButtonsBusy(true);
-    renderChat();
-    const mark = IR.Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前（§4.1）
-    if (!isRetryOpening) {
-      // 重新 pushLog 同一条玩家行动（§4.2）：project 到父节点后旧回合的条目已不在窗口里
-      pushLog(act.type === 'agent'
-        ? { type: 'agent', text: act.text, trigger: '', reason: '', fireId: '' }
-        : { type: act.type === 'choice' ? 'choice' : 'player', text: act.text, kind: act.kind || 'do' });
-    }
-    try {
-      // 重试后缀只出现在请求里，不进存档（§4.2）
-      const res = await callAI1(sent + '\n（请换一种不同的发展，给出不同的走向）', isRetryOpening ? { includePremise: true } : undefined);
-      const reply = res.reply;
-      S.story.lastSceneSummary = reply.scene_summary || S.story.lastSceneSummary;
-      const asst = assistantMessage(reply, res.reasoning);
-      S.story.messages.push(userMsg, asst);          // userMsg 复用原文（不带重试后缀，§4.2）
-      pushNarrationEntry(reply.narration, res.reasoning);
-      await finishNarration(res.streamed);
-      absorbReply(reply);
-      S.currentChoices = reply.choices;
-      renderChat();
-      // 成功：parent = 原 head 的父节点（投影已停在那），落一个新兄弟
-      const node = IR.Tree.commit(S.story, {
-        action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
-        userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
-      });
-      S.turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
-      await postTurn();
-      IR.Tree.seal(S.story, node.id);
-      saveAll();
-    } catch (e) {
-      // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）
-      S.turnAnchor.dead = true;        // §3.A.4：失败分支置位，本次重试排队中的工具出图丢弃
-      IR.Tree.switchTo(S.story, old.id);
-      S.currentChoices = choicesFromHead();
-      if (isStopError(e)) toast('已停止');
-      else toast(netErrHint(e), true, true);
-    } finally {
-      S.busy = false;
-      S.stopRequested = false; S.chatAbortCtrl = null;
-      S.live = null; S.liveEl = null;
-      setSendButtonsBusy(false);
-      renderChat();
-    }
-  }
-
   // §4.3 兄弟切换：切到相邻兄弟，沿 active 下探到叶子（续写过的支线会回到它的末端）；不发任何请求
-  function switchSiblingFromBubble(nid, dir) {
-    if (!S.story || !nid) return;
-    if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法（§4.1）
-    animateSwap(dir, () => {
-      const head = IR.Tree.switchSibling(S.story, nid, dir);
-      if (!head) return false;
-      S.currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
-      saveAll();
-      renderChat(); renderStage(); renderThumbs(); renderStoryPanels(); A.renderSavepoints();
-      return true;
-    });
-  }
 
   /* 切兄弟滑动（UI-1 §4.1）：聊天内容区按方向横向滑入（±24px + 透明度，--dur-base）。
    * 顺序必须是「数据切换 + 重新渲染 → 再播入场」，不能闪出旧内容；
    * 动画未结束时再次切换要能正确打断（cancel 上一段，最终态由最新一次渲染决定）；
    * off 档（含系统减少动态）直接切换。WAAPI 只动 transform / opacity。 */
-  let swapAnim = null;
-  function animateSwap(dir, swap) {
-    const box = $('#chat-scroll');
-    const done = typeof swap === 'function' ? swap() : true;
-    if (done === false || !box || typeof box.animate !== 'function') return;
-    if (motionLevel() === 'off') return;
-    if (swapAnim) { try { swapAnim.cancel(); } catch (_) {} swapAnim = null; }
-    if (box.getAnimations) {
-      box.getAnimations().forEach(a => { try { a.cancel(); } catch (_) {} });
-    }
-    box.style.willChange = 'transform, opacity';   // 只在动画进行时临时加
-    const anim = box.animate(
-      [
-        { transform: 'translateX(' + (dir >= 0 ? 24 : -24) + 'px)', opacity: 0 },
-        { transform: 'translateX(0)', opacity: 1 },
-      ],
-      { duration: motionMs('--dur-base', 220), easing: 'cubic-bezier(.2,.8,.2,1)' }
-    );
-    swapAnim = anim;
-    const finish = () => {
-      if (swapAnim === anim) swapAnim = null;
-      box.style.willChange = '';   // 结束移除
-    };
-    anim.onfinish = finish;
-    anim.oncancel = finish;
-  }
 
   /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） =================
    * v0.5.1（§3.B）：时机出图 / 工具出图 / 手动 / 工作台重画全走同一条串行队列 IR.PaintQueue，
@@ -1345,7 +756,7 @@
   function renderChat() {
     S.liveEl = null;   // DOM 重建后旧引用失效（否则工具回合后的第二次流式会写进已脱离的节点）
     S.liveReasonEl = null;
-    resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
+    A.resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
     const box = $('#chat-scroll');
     box.innerHTML = '';
     if (!S.story) return;
@@ -1603,7 +1014,7 @@
     // 分支导航（§4.3/§5⑤）：凡是有兄弟的旁白都显示 ‹ n/m ›，点了就切到那条分支；
     // 「↻ 重试」仍只在最后一条（§5⑤）。旧版本栈已由迁移展开成兄弟（任务书 §6），不再兜底切换。
     const sibs = (e.type === 'narration' && e.nid && S.story && S.story.tree) ? IR.Tree.siblings(S.story, e.nid) : [];
-    const showRetry = e.type === 'narration' && index === lastNarrationIndex() && !S.busy && lastActionEntry();
+    const showRetry = e.type === 'narration' && index === A.lastNarrationIndex() && !S.busy && A.lastActionEntry();
     const showSibs = e.type === 'narration' && !S.busy && sibs.length > 1;
     if (showRetry || showSibs) {
       const tools = document.createElement('div');
@@ -1613,7 +1024,7 @@
         rb.className = 'mini-btn';
         rb.textContent = '↻ 重试';
         rb.title = '换一种不同的发展（旧版留在分支里，可用 ‹ › 切回）';
-        rb.onclick = retryLast;
+        rb.onclick = A.retryLast;
         tools.appendChild(rb);
       }
       if (showSibs) {
@@ -1621,13 +1032,13 @@
         nav.className = 'version-nav';
         const prev = document.createElement('button');
         prev.className = 'mini-btn'; prev.textContent = '‹'; prev.title = '上一条分支';
-        prev.onclick = () => switchSiblingFromBubble(e.nid, -1);
+        prev.onclick = () => A.switchSiblingFromBubble(e.nid, -1);
         const label = document.createElement('span');
         label.className = 'version-label';
         label.textContent = (sibs.indexOf(e.nid) + 1) + '/' + sibs.length;
         const next = document.createElement('button');
         next.className = 'mini-btn'; next.textContent = '›'; next.title = '下一条分支';
-        next.onclick = () => switchSiblingFromBubble(e.nid, 1);
+        next.onclick = () => A.switchSiblingFromBubble(e.nid, 1);
         nav.appendChild(prev); nav.appendChild(label); nav.appendChild(next);
         tools.appendChild(nav);
       }
@@ -1902,13 +1313,13 @@
     renderStage();
     renderThumbs();
     if (fresh) {
-      S.currentChoices = choicesFromHead();
+      S.currentChoices = A.choicesFromHead();
       renderChat();
       saveAll();
       // deferOpening：先走试画锚定（P4），锚定结束（锁定/跳过）后再开场
       if (!opts.deferOpening) runOpening();
     } else {
-      S.currentChoices = choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
+      S.currentChoices = A.choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
       renderNarrationToolsAfterLoad();
       saveAll();
       // 空档补开场（例：锚定向导还没走完就刷新了页面）
@@ -1961,7 +1372,7 @@
 
     $('#s-show-reasoning').checked = !!S.settings.showReasoning;
     $('#s-tools-enabled').checked = S.settings.toolsEnabled !== 'off';
-    renderNoToolsHint();
+    A.renderNoToolsHint();
     // R13 用户画像：默认全关，可按模式单独开或全开（'all' 与三个勾等价）
     const up = S.settings.userProfile || {};
     const enabled = up.enabled === 'all' ? { choice: true, chat: true, rp: true } : (up.enabled || {});
@@ -2445,7 +1856,7 @@
       if (!S.story) { toast('先打开一个故事吧'); return; }
       if (S.busy) { toast('回复生成中，这一幕写完再作画'); return; }   // §3.C：回复生成中不入队
       if (offlineBlocked('这次作画')) return;   // 离线：不排进队列，也不花额度
-      const key = 'manual:' + treeHeadNodeId();   // §3.C：同一幕不重复入队
+      const key = 'manual:' + A.treeHeadNodeId();   // §3.C：同一幕不重复入队
       if (A.paintQ.has(key)) { toast('这一幕已在作画队列里'); return; }
       // 场景描述读当前 head 的 lastSceneSummary（投影后即 story.lastSceneSummary）
       A.enqueueImage(S.story.lastSceneSummary, treeHeadNodeId(), key);
@@ -2596,7 +2007,7 @@
     $('#btn-clear-notools').onclick = () => {
       S.settings.noTools = [];
       saveAll();
-      renderNoToolsHint();
+      A.renderNoToolsHint();
       toast('已清空「不接受工具」的模型记录，下次会重新尝试下发工具');
     };
     $('#s-image-aspect').onchange = applyAspectToFields;
@@ -2823,5 +2234,5 @@
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
-  A.reg({ refreshRollingStyleByModel, sendPlayerAction, runOpening, pushLog, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, scrollChatBottom, imageSceneById, currentScene, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
+  A.reg({ callAI1, withKindMarker, sendPlayerAction, finishNarration, runOpening, pushLog, scrollChatBottom, imageSceneById, currentScene, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
 })();
