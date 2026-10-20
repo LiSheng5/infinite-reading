@@ -31,7 +31,7 @@
 | `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
 | `js/app.js` | 无（组合根） | 事件绑定 + 启动（`bind` / `init` / boot IIFE），只接线不写业务；消费下面所有 `js/app/*` | `bind`、`init` |
-| `js/app/*.js`（15 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
+| `js/app/*.js`（16 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
 | `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
@@ -40,12 +40,14 @@
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `js/motion.js` | `IR.Motion` | 动效强度解析（**纯逻辑**，Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，不碰 DOM | `resolve` |
+| `js/titles.js` | `IR.Titles` | 自动标题（**纯逻辑**，UI-2 §3.3）：触发判定、给小模型的 prompt、输出清洗、本地兜底、写回护栏；不碰 DOM / 网络 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
+| `js/search.js` | `IR.Search` | 全文搜索（**纯逻辑**，UI-2 §3.4）：标题 + 全部分支节点的子串检索（NFKC / 小写 / 折叠空白，AND 多词），片段带 `ranges`（**输出零 HTML**）；内存索引 `Map(id → doc)` 不持久化 | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
+providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
 `storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
@@ -65,7 +67,8 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 |---|---|---|
 | `js/app/core.js` | 默认值与提示词；共享状态 `A.state`；请求中断；小工具；弹窗栈 | `toast`、`irConfirm`、`openModal` / `closeModal` / `dismissModal`、`requestChatStop`、`persistSettings`、`saveAll` |
 | `js/app/models.js` | 模型能力（T-M-1 / §4.13） | `chatContextWindow`、`renderCapabilityFields`、`thumb` |
-| `js/app/library.js` | 原图（Blob）；存档点；书架；导入 / 导出 | `showShelf`、`startFromStart`、`doExport`、`storeOriginal` |
+| `js/app/library.js` | 原图（Blob）；存档点；开始页与开局入口；导入 / 导出 | `showShelf`、`startFromStart`、`doExport`、`storeOriginal` |
+| `js/app/shelf.js` | 书架页（UI-2）：会话列表 + 搜索 + 自动标题 + 行菜单；`openStory(id, opts)` 支持滚动到命中消息 | `renderShelf`、`openStory`、`maybeAutoTitle`、`regenTitle`、`initShelf`、`searchStats` |
 | `js/app/backup.js` | 本地存储与备份（P0 数据安全） | `initStorageGuard`、`doBackupAll`、`handleImportFile`、`importZipFile` |
 | `js/app/importer.js` | 剧情文本导入（R12 路径②） | `openImportText`、`runImportText`、`startFromImport` |
 | `js/app/cards.js` | 角色卡；用户画像（数据与导入） | `openCardEditor`、`importCardFile`、`applyProfileEntries` |
@@ -145,7 +148,7 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | 键 | 内容 |
 |---|---|
 | `ir:settings` | 模型配置、出图时机、界面开关等 |
-| `ir:story-index` | 书架索引（标题、模式、回合数、更新时间） |
+| `ir:story-index` | 书架索引：`{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`（UI-2 §3.1；`snippet` 每次 `saveStory` 重算；旧索引条目由 `Store.ensureIndexComplete` 幂等补齐） |
 | `ir:current` | 上次打开的故事 id |
 | `ir:user-profile` | 跨故事的玩家画像条目 |
 | `ir:migrated-v2` | v0.1 → v0.2 迁移标记 |
@@ -155,7 +158,9 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 
 ### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
-顶层字段：`schema, id, title, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
+顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
+
+- `titleAuto` / `titleGen`（UI-2 §3.2/§3.3）：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn === 1`（第一次）与 `turn === 6`（第二次），失败不计次。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
 - `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
@@ -198,6 +203,9 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`js/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
 | **动画只动合成层属性** | `css/style.css` 的 `@keyframes` 与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
 | **颜色只从令牌来** | `css/style.css` 的 `:root`（唯一改色的地方）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
+| **自动标题写回护栏**（UI-2 §3.3） | `js/titles.js`：`applyTitle(story, id, title)`；触发在 `js/app/round.js` / `turn.js` 的 `seal` 之后、编排在 `js/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
+| **搜索输出零 HTML、高亮只走 ranges**（UI-2 §3.4/§3.5） | `js/search.js`：`query`（片段 + ranges）；`js/app/shelf.js`：`appendHighlighted`（`createElement('mark')` + `textContent`） | 查询结果只有纯文本与 `[start,end]` 下标；UI 高亮不得拼 `innerHTML`（对抗内容如 `<script>` 原样保留为文本）。搜索文档遍历**全部分支节点**；内存索引不持久化，首次聚焦搜索框惰性构建（分批 ~5 个故事让出主线程），`saveStory` 防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除 |
+| **书架只读索引**（UI-2 §3.1） | `js/store.js`：索引条目 `{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`、`ensureIndexComplete`；`js/app/shelf.js`：`renderShelf` | `renderShelf` 不再对每个故事 `loadStory`；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `ensureIndexComplete` 按需补齐并整体回写一次（幂等）；空标题只显示兜底文案、**不回写存档** |
 
 ### 5.1 设计令牌与动效等级（UI-1）
 

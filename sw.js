@@ -13,7 +13,7 @@
  * CACHE 名里的版本号由 tools/sync-version.mjs 从根目录 VERSION 注入（别手改）：
  * 版本一变 → 新缓存 → 旧的整批删掉，等价于「跟着发布节奏清缓存」。
  */
-const CACHE = 'ir-v0.7.1';
+const CACHE = 'ir-v0.8.0';
 
 const CORE = ['./', './index.html', './manifest.webmanifest'];
 

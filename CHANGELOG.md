@@ -1,5 +1,28 @@
 # 更新日志
 
+## [0.8.0] — 2026-10-20 · UI-2：书架改版（会话列表 + 自动标题 + 全文搜索 + 新建弹层）
+
+### Added
+
+- **书架变「会话列表」**（`js/app/shelf.js`）：顶栏「书架」标题 + 搜索框（上限约 560px）+「＋ 新建」/ 导入 / 设置；下面按 `updatedAt` 分组（今天 / 昨天 / 过去 7 天 / 更早），组头吸顶（轻微毛玻璃，`backdrop-filter` 只用在组头一个元素上）。行 = 56px 缩略图（无图显模式图标）+ 标题（单行省略）+ `[模式] · 第 N 回合 · 相对时间` + 一行摘要（≤60 字）；点整行打开，右侧「⋯」菜单（重命名 / 重新生成标题 / 导出 / 删除，取代旧卡片四按钮；桌面悬停显示、触屏常显）；当前对话（`Store.getCurrentId()`）左边蓝色标记；空状态一句话 + 「＋ 新建」大按钮；超过约 300 条时「更早」默认只渲染前 100 条 + 「展开更多」。
+- **自动标题**（`js/titles.js` / `IR.Titles`，纯逻辑、Node 可测）：新建的**智能体 / 扮演**对话初始标题「新对话」（`titleAuto = true`），回合 `turn === 1` / `turn === 6` 在 `seal` 之后异步触发小模型（`resolveSub('scribe')`）起标题；输出经 `sanitize` 清洗（引号 / 书名号 / markdown / 结尾标点 / 码点截断），失败走本地 `fallback`（首条用户话前 15 字 + …）。**不占用 `busy`、不阻塞下一次发送**，每个故事同时只有一个标题任务；写回护栏（`applyTitle`）核 `story.id` 一致且 `titleAuto` 仍为真（用户改过名就丢弃结果）。书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发任何网络请求**；模型失败静默、不计次。标题从「新对话」变结果时**打字机式替换**（rich 逐字；standard 淡入替换）。
+- **全文搜索**（`js/search.js` / `IR.Search`，纯逻辑、Node 可测）：标题 + 正文（**含所有分支**节点）子串匹配、多词 AND、NFKC / 小写 / 折叠空白规整；标题命中权重 ×5、正文命中次数封顶、同分按更新时间；每结果最多 2 条片段，片段带 `[start,end]` `ranges`（**输出零 HTML**，UI 用 `createElement('mark')` + `textContent` 高亮）。内存索引不持久化：首次聚焦搜索框惰性构建（每批 ~5 个故事让出主线程），`saveStory` 后防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除。查询非空时结果列表替换分组列表（交叉淡入）。
+- **搜索结果点击（本期范围）**：打开对话停在当前 head；命中节点在当前路径且在可见窗口内 → 滚动到该消息并短暂高亮（蓝色描边淡出）；否则打开对话并 toast「该处在较早历史或其他分支，分支页上线后可直接跳转」（**不**挪 head，避免下一次发送意外分叉；完整跳转 UI-4 做）。
+- **「＋ 新建」弹层**：三张模式卡（剧情 / 智能体 / 扮演）进入**现有**创建流程（剧情开局向导 / 扮演角色卡 / 智能体直接开始），流程本身不动；≤720px 底部弹层、其余居中弹窗，`Esc` / 点遮罩关闭。
+- **键盘（桌面）**：`/` 或 `Ctrl/Cmd+K` 聚焦搜索；搜索框内 `↑ ↓` 移动（`role="listbox"` / `option` + `aria-activedescendant`）、`Enter` 打开、`Esc` 清空回列表；列表行 Tab 聚焦、`Enter` 打开、`Shift+F10` / `ContextMenu` 开「⋯」。
+- **索引条目扩充**（`js/store.js`）：`ir:story-index` 增加 `mode / turn / titleAuto / snippet`，`renderShelf` 只读索引（不再对每个故事 `loadStory`）；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `Store.ensureIndexComplete` 按需补齐并整体回写一次（幂等，坏条目 / 丢失故事剔除并记录）；`deleteStory` 同步清理索引与搜索文档。
+- **动效**（走 UI-1 令牌，rich 档启用）：列表行错峰淡入上移（总时长封顶 ~600ms，只对首屏行）；标题打字机替换；搜索结果 ↔ 分组列表交叉淡入；「⋯」菜单 / 弹层沿用 UI-1 手感。
+- 测试：`eval/titles-test.js`（38 项）、`eval/search-test.js`（22 项，含 50×500 节点性能健全性）、`eval/shelf-index-test.js`（18 项），已接入 `npm test` 与 CI（`npm run test:shelf`）。
+
+### Changed
+
+- 旧 `#shelf-grid` 卡片结构移除（「继续 / 改名 / 导出 / 删除」四小按钮由「⋯」菜单取代）；`renderShelf` / `openStory` 从 `js/app/library.js` 迁到新的 `js/app/shelf.js`。
+- 剧情模式助手内容是 JSON 的地方（摘要、搜索文档、标题素材）统一「容错解析出旁白，失败当纯文本」，不再把 `{"narration":…` 原样塞进列表 / 搜索。
+
+### Notes
+
+- 与任务书假设的差异：`renderShelf` / `openStory` 实际位于 `js/app/library.js`（0.7.1 已拆分），本次新增 `js/app/shelf.js` 承载书架页（`js/app/library.js` 行数上限 800 会超）；`genChain` 在代码库中不存在，标题任务独立于 `PaintQueue`。详见交付报告。
+
 ## [0.7.1] — 2026-10-20 · 内部结构拆分：js/app.js → js/app/*.js（行为不变）
 
 ### Changed

@@ -215,7 +215,7 @@
     // R13：rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
     if (mode === 'rp') { A.openCardEditor({ mode: 'new' }); return; }
     const s = Store.newStory({
-      title: '对话 · ' + fmtTime(Date.now()),
+      title: '新对话',           // UI-2 §3.2：初始标题「新对话」，回合 1 / 6 由小模型自动起标题
       premise: CHAT_PREMISE,
       mode: 'chat',
     });

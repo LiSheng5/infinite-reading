@@ -72,6 +72,10 @@ jobs:
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
+      # UI-2：自动标题 / 全文搜索 / 书架索引（纯逻辑单测，不联网）
+      - name: 书架三件套（node eval/titles-test.js + search-test.js + shelf-index-test.js）
+        run: npm run test:shelf
+
       # 作画串行队列（js/paintQueue.js）：纯逻辑单测，不联网、不依赖真实定时器
       - name: 作画队列单测（node eval/paintqueue-test.js）
         run: node eval/paintqueue-test.js

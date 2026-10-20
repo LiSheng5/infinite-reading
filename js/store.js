@@ -328,12 +328,19 @@
   function newStory(opts) {
     opts = opts || {};
     const now = Date.now();
+    const mode = opts.mode || 'choice';         // choice | chat | rp
+    // UI-2 §3.2：新建的智能体 / 扮演对话自动起标题（titleAuto），剧情新故事标题来自设定
+    const titleAuto = ('titleAuto' in opts)
+      ? !!opts.titleAuto
+      : (mode === 'chat' || mode === 'rp');
     return {
       schema: SCHEMA,
       id: opts.id || genId(),
-      title: opts.title || '未命名故事',
+      title: opts.title || (titleAuto ? '新对话' : '未命名故事'),
+      titleAuto: titleAuto,                   // true = 标题可被自动覆盖（UI-2 §3.2）
+      titleGen: +opts.titleGen || 0,          // 已自动生成次数（0 / 1 / 2，§3.3 触发点）
       premise: opts.premise || '',
-      mode: opts.mode || 'choice',            // choice | chat | rp
+      mode: mode,
       createdAt: opts.createdAt || now,
       updatedAt: opts.updatedAt || now,
 
@@ -362,6 +369,9 @@
   function migrateStory(raw) {
     if (!raw || typeof raw !== 'object') return null;
     const out = newStory({ id: raw.id, title: raw.title, premise: raw.premise, mode: raw.mode });
+    // UI-2 §3.2：旧存档一律 titleAuto=false（保留现有标题）；只有存档里显式记了才沿用
+    out.titleAuto = ('titleAuto' in raw) ? !!raw.titleAuto : false;
+    out.titleGen = +raw.titleGen || 0;
     out.createdAt = raw.createdAt || out.createdAt;
     out.updatedAt = raw.updatedAt || out.updatedAt;
 
@@ -555,8 +565,22 @@
     const ok = writeStoryRaw(story.id, serializeStory(story));
     if (!ok) return false;   // 写入失败（超限额）：不更新索引，避免索引与存档不一致
     const idx = listIndex().filter(x => x.id !== story.id);
-    idx.push({ id: story.id, title: story.title, updatedAt: story.updatedAt, thumb: storyThumb(story) });
+    idx.push({
+      id: story.id,
+      title: story.title,
+      updatedAt: story.updatedAt,
+      thumb: storyThumb(story),
+      // UI-2 §3.1：索引条目扩充——书架只读索引，不再对每个故事 loadStory
+      mode: story.mode || 'choice',
+      turn: +story.turn || 0,
+      titleAuto: story.titleAuto === true,
+      snippet: storySnippet(story),   // 每次重算（切兄弟 / 重试后会变，不缓存）
+    });
     writeKV(KEYS.index, idx);
+    // 搜索索引增量重建（防抖约 800ms；js/search.js 已加载才做，纯逻辑层互不依赖）
+    if (global.IR && global.IR.Search && typeof global.IR.Search.notifySave === 'function') {
+      global.IR.Search.notifySave(story);
+    }
     return ok;
   }
   function loadStory(id) {
@@ -570,6 +594,99 @@
     writeKV(KEYS.index, listIndex().filter(x => x.id !== id));
     if (getCurrentId() === id) setCurrentId(null);
     imageIdsOf(raw).forEach(x => releaseImage(x));   // 顺手删原图，不留孤儿占空间
+    // UI-2 §3.1：同步清理搜索文档
+    if (global.IR && global.IR.Search && typeof global.IR.Search.drop === 'function') {
+      global.IR.Search.drop(id);
+    }
+  }
+
+  /* ---------------- 索引条目：snippet 与旧索引迁移（UI-2 §3.1） ---------------- */
+
+  // 助手回复纯文本：剧情模式是 JSON（narration / 旁白），解析失败当纯文本
+  function plainReplyText(raw) {
+    const s = String(raw == null ? '' : raw);
+    const t = s.trim();
+    if (t.charAt(0) === '{') {
+      try {
+        const o = JSON.parse(t);
+        if (o && typeof o === 'object' && !Array.isArray(o)) {
+          const n = o.narration || o.旁白 || o.text || '';
+          if (n) return String(n);
+          if (Array.isArray(o.choices) && o.choices.length) return o.choices.map(String).join(' ');
+        }
+      } catch (_) { /* 坏 JSON：当纯文本 */ }
+    }
+    return s;
+  }
+
+  // 最近一条消息摘要（≤60 字，码点）：当前路径末条旁白 / 回复的纯文本，剥掉 JSON 与标记
+  function storySnippet(story) {
+    if (!story) return '';
+    let text = '';
+    const tree = story.tree;
+    const nodes = tree && tree.nodes;
+    const n = (nodes && tree.head) ? nodes[tree.head] : null;
+    if (n) {
+      const entries = Array.isArray(n.entries) ? n.entries : [];
+      for (let i = entries.length - 1; i >= 0 && !text; i--) {
+        const e = entries[i];
+        if (e && e.type === 'narration' && e.text) text = String(e.text);
+      }
+      if (!text && n.assistantMsg && n.assistantMsg.content != null) text = plainReplyText(n.assistantMsg.content);
+      if (!text && n.action && n.action.text) text = String(n.action.text);
+    }
+    if (!text) {
+      const log = Array.isArray(story.log) ? story.log : [];
+      for (let i = log.length - 1; i >= 0 && !text; i--) {
+        const e = log[i];
+        if (e && e.type === 'narration' && e.text) text = String(e.text);
+      }
+    }
+    text = String(text)
+      .replace(/^\[设定\][\s\S]*?\n\n/, '')
+      .replace(/^\[玩家行动\]\s*/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const a = Array.from(text);
+    return a.length > 60 ? a.slice(0, 60).join('') : text;
+  }
+
+  // 旧索引条目（缺 mode / turn / titleAuto / snippet）按需 loadStory 补齐并整体回写一次。
+  // 幂等：补完后不再触发。坏条目（无 id）与「故事已不存在」的条目剔除并计入 anomalies。
+  function ensureIndexComplete() {
+    const idx = listIndex();
+    let changed = false;
+    let patched = 0;
+    const anomalies = [];
+    const out = [];
+    for (const it of idx) {
+      if (!it || typeof it !== 'object' || !it.id) {
+        changed = true;
+        anomalies.push({ id: (it && it.id) || '', reason: 'bad-entry' });
+        continue;
+      }
+      const complete = it.mode != null && it.turn != null
+        && typeof it.titleAuto === 'boolean' && it.snippet != null;
+      if (complete) { out.push(it); continue; }
+      const st = loadStory(it.id);
+      if (!st) {
+        changed = true;
+        anomalies.push({ id: it.id, reason: 'missing-story' });
+        continue;
+      }
+      changed = true;
+      patched += 1;
+      out.push(Object.assign({}, it, {
+        // 显示兜底文案不回写存档：这里只补索引里的展示字段
+        title: it.title || st.title || '',
+        mode: st.mode || 'choice',
+        turn: +st.turn || 0,
+        titleAuto: st.titleAuto === true,
+        snippet: storySnippet(st),
+      }));
+    }
+    if (changed) writeKV(KEYS.index, out);
+    return { patched: patched, total: idx.length, anomalies: anomalies };
   }
 
   /* ---------------- 原图（Blob） ----------------
@@ -738,6 +855,7 @@
       newStory,
       loadSettings, saveSettings,
       listStories, loadStory, saveStory, deleteStory, storyThumb,
+      listIndex, storySnippet, ensureIndexComplete,
       loadUserProfile, saveUserProfile,
       getCurrentId, setCurrentId, loadCurrent,
       migrateLegacy, clearAll,

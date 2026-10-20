@@ -327,6 +327,15 @@
       return streamOut(replyOf(t ? t.reply : ep), hooks, 18);
     }
 
+    // —— 自动标题（UI-2 §3.3）：按最近的用户话给一个确定性标题（仍不联网） ——
+    if (first.indexOf('起一个不超过 15 个字的标题') !== -1) {
+      let tail = '';
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i] && messages[i].role === 'user') { tail = String(messages[i].content || ''); break; }
+      }
+      return streamOut(tail.trim().slice(0, 12) || '演示对话', hooks, 6);
+    }
+
     // —— 书记员 / 压缩 / 滚动风格等后台任务：返回空串，一律由本地规则兜底 ——
     await sleep(120);
     return '';

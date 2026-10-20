@@ -312,6 +312,8 @@
     d.className = 'bubble ' + (e.type === 'player' ? 'bubble-player'
       : e.type === 'choice' ? 'bubble-choice'
       : 'bubble-narration');
+    // UI-2 §3.7：记下节点 id，搜索结果点进来才能滚到这条消息并高亮
+    if (e.nid) d.dataset.nid = e.nid;
     // 玩家发言带「做 / 说 / 导演」小标签（旧存档缺 kind 时按「做」显示）
     if (e.type === 'player' || e.type === 'choice') {
       const tag = document.createElement('span');
