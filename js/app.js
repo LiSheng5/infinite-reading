@@ -333,7 +333,7 @@
   function startFromStart(mode) {
     startMode = (mode === 'chat' || mode === 'rp') ? mode : 'choice';
     if (startMode === 'choice') startFromPremise();
-    else createStoryImmediate(startMode);
+    else A.createStoryImmediate(startMode);
   }
 
   // 剧情模式：用设定框里的文字直接开一局（v0.1 的快通道）
@@ -583,154 +583,6 @@
   // 书记员输入里的画像指示：开没开都说清楚，省得模型乱输出
 
   /* ================= 开局向导（T-P2-3 / §4.8） ================= */
-
-  function openWizard(prefill) {
-    prefill = prefill || {};
-    $('#wz-draft-input').value = prefill.topic || '';
-    $('#wz-world').value = prefill.world || '';
-    $('#wz-characters').value = prefill.characters || '';
-    $('#wz-role').value = prefill.role || '';
-    $('#wz-style').value = prefill.style || '';
-    $('#wz-development').value = prefill.development || '';
-    const cfg = resolveSub('draft');
-    const sub = S.settings.draft || {};
-    const src = (sub.provider || sub.model) ? '起草模型单独配置' : '跟随剧情模型';
-    $('#wz-draft-hint').textContent = '起草模型：' + (cfg.model || '（未配置）') + '（' + src + '，可在模型设置里更换）。草稿出来后再改成你自己的话即可。';
-    openModal('modal-wizard');
-  }
-
-  function parseCharacterLines(text) {
-    return String(text || '').split('\n').map(line => {
-      const p = line.split('｜').map(s => s.trim());
-      if (!p[0]) return null;
-      return { name: p[0], personality: p[1] || '', speech: p[2] || '' };
-    }).filter(Boolean);
-  }
-
-  function firstSentence(text, max) {
-    const t = String(text || '').trim().split(/[\n。；;]/)[0] || '';
-    return t.slice(0, max || 40);
-  }
-
-  function localDraft(topic) {
-    const t = String(topic || DEFAULT_TOPIC).replace(/^标题[:：]\s*/, '').trim();
-    return {
-      world: '围绕「' + t.slice(0, 24) + '」展开的世界。时代与地点贴近日常，但在寻常处埋着一点异样；规则不解释透，让故事自己显形。',
-      characters: [
-        { name: '叙述者', personality: '沉静、观察力强、话里有话', speech: '简短、克制' },
-        { name: '旧识', personality: '看似随意、实则心事很重', speech: '喜欢反问、句子偏短' },
-      ],
-      role: '你是这场相遇的中心：一个带着未了心愿的人，可以在故事里做任何尝试。',
-      styleTone: '克制的悬疑，暖光与冷影并存，雨夜的质感',
-      development: '从一个安静的细节开场，让异样一点点渗出来。',
-    };
-  }
-
-  function parseDraft(raw) {
-    const s = String(raw || '');
-    const i = s.indexOf('{'), j = s.lastIndexOf('}');
-    if (i === -1 || j <= i) return null;
-    try {
-      const o = JSON.parse(s.slice(i, j + 1));
-      if (!o || (!o.world && !o.role && !Array.isArray(o.characters))) return null;
-      return {
-        world: String(o.world || ''),
-        characters: Array.isArray(o.characters) ? o.characters.filter(Boolean).map(c => ({
-          name: String(c.name || ''), personality: String(c.personality || c.persona || ''), speech: String(c.speech || ''),
-        })).filter(c => c.name) : [],
-        role: String(o.role || ''),
-        styleTone: String(o.styleTone || o.style || ''),
-        development: String(o.development || ''),
-      };
-    } catch (_) { return null; }
-  }
-
-  function fillWizard(d) {
-    if (d.world) $('#wz-world').value = d.world;
-    if (d.characters && d.characters.length) {
-      $('#wz-characters').value = d.characters.map(c => [c.name, c.personality, c.speech].join('｜')).join('\n');
-    }
-    if (d.role) $('#wz-role').value = d.role;
-    if (d.styleTone) $('#wz-style').value = d.styleTone;
-    if (d.development) $('#wz-development').value = d.development;
-  }
-
-  async function draftWizard() {
-    const topic = $('#wz-draft-input').value.trim() || DEFAULT_TOPIC;
-    const btn = $('#btn-wz-draft');
-    btn.disabled = true; btn.textContent = '起草中…';
-    try {
-      const cfg = resolveSub('draft');
-      let d = null;
-      if (!cfg.model) {
-        await sleep(500);
-        d = localDraft(topic);
-      } else {
-        const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
-        const raw = await adapter.chat(cfg, [
-          { role: 'system', content: DRAFT_SYSTEM },
-          { role: 'user', content: topic },
-        ]);
-        d = parseDraft(raw);
-        if (!d) d = localDraft(topic);
-      }
-      fillWizard(d);
-      toast('草稿已填入，改成你自己的话即可');
-    } catch (e) {
-      fillWizard(localDraft(topic));
-      toast(netErrHint(e) + '（已改用本地模板草稿）', true, true);
-    } finally {
-      btn.disabled = false; btn.textContent = '✎ 起草';
-    }
-  }
-
-  function buildPremise(f) {
-    const lines = ['标题：' + f.title];
-    if (f.world) lines.push('世界：' + f.world);
-    if (f.role) lines.push('你的角色：' + f.role);
-    if (f.chars.length) lines.push('主要人物：' + f.chars.map(c => c.name + '（' + [c.personality, c.speech].filter(Boolean).join('，') + '）').join('；'));
-    if (f.style) lines.push('风格：' + f.style);
-    if (f.dev) lines.push('想看的发展：' + f.dev);
-    lines.push('AI 扮演：旁白，以及故事里除你以外的所有角色。剧情随玩家的行动自由生长，不要拒绝玩家的任何尝试。');
-    return lines.join('\n');
-  }
-
-  function startFromWizard() {
-    const topic = $('#wz-draft-input').value.trim();
-    const worldText = $('#wz-world').value.trim();
-    const chars = parseCharacterLines($('#wz-characters').value);
-    const role = $('#wz-role').value.trim();
-    const style = $('#wz-style').value.trim();
-    const dev = $('#wz-development').value.trim();
-    if (!worldText && !role && !chars.length) {
-      toast('至少填一点世界观、人物或你的角色吧', true);
-      return;
-    }
-    const title = (topic || firstSentence(worldText, 20) || '未命名故事').slice(0, 40);
-    const premise = buildPremise({ title, world: worldText, role, chars, style, dev });
-    const s = Store.newStory({ title, premise, mode: 'choice', styleTone: style });
-    // 向导同时初始化世界卡（§4.8）：人物栏 → characters，世界观 → place
-    s.world.place = firstSentence(worldText, 40);
-    s.world.characters = chars.map(c => ({
-      name: c.name, presence: '在场', personality: c.personality, speech: c.speech, note: '', noteLocked: false,
-    }));
-    S.story = s;
-    closeModal('modal-wizard');
-    enterGame(true, { deferOpening: true });
-    openAnchor({ onDone: runOpening });   // §12：剧情模式「向导 → 试画 → 开场」
-  }
-
-  function createStoryImmediate(mode) {
-    // R13：rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
-    if (mode === 'rp') { openCardEditor({ mode: 'new' }); return; }
-    const s = Store.newStory({
-      title: '对话 · ' + fmtTime(Date.now()),
-      premise: CHAT_PREMISE,
-      mode: 'chat',
-    });
-    S.story = s;
-    enterGame(true);
-  }
 
   /* ================= AI1：剧情回合 ================= */
 
@@ -4590,8 +4442,8 @@
       b.onclick = () => {
         const mode = b.dataset.mode;
         closeModal('modal-new');
-        if (mode === 'choice') openWizard(null);
-        else createStoryImmediate(mode);
+        if (mode === 'choice') A.openWizard(null);
+        else A.createStoryImmediate(mode);
       };
     });
     $('#btn-shelf-settings').onclick = A.openSettings;
@@ -4756,8 +4608,8 @@
     // —— 向导 ——
     $('#btn-close-wizard').onclick = () => $('#modal-wizard').classList.add('hidden');
     $('#btn-wz-cancel').onclick = () => $('#modal-wizard').classList.add('hidden');
-    $('#btn-wz-draft').onclick = draftWizard;
-    $('#btn-wz-start').onclick = startFromWizard;
+    $('#btn-wz-draft').onclick = A.draftWizard;
+    $('#btn-wz-start').onclick = A.startFromWizard;
 
     // —— 导出 / 设置 ——
     $('#btn-close-export').onclick = () => $('#modal-export').classList.add('hidden');
@@ -5041,5 +4893,5 @@
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
-  A.reg({ storeOriginal, showShelf, renderShelf, downloadBlob, download, openWizard, sidecarReady, renderSidecarStatus, loadFeatureConfig, runOpening, closeWorkbench, openAnchor, closeAnchor, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
+  A.reg({ storeOriginal, showShelf, renderShelf, downloadBlob, download, sidecarReady, renderSidecarStatus, loadFeatureConfig, runOpening, closeWorkbench, openAnchor, closeAnchor, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
 })();
