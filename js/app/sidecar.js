@@ -12,7 +12,7 @@
   /* ---- 侧车连接状态与主动消息投递 ---- */
 
   function sidecarReady() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     return !!(SC && typeof SC.isOnline === 'function' && SC.isOnline() && SC.status().hasToken);
   }
 
@@ -21,7 +21,7 @@
   }
 
   function renderSidecarStatus() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {}, lastError: '' };
     const el = $('#sidecar-state');
     if (el) {
@@ -58,7 +58,7 @@
       plus.setAttribute('aria-expanded', 'false');
       return;
     }
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
     // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更，见 CHANGELOG）
@@ -121,7 +121,7 @@
 
   // 页面打开 / 重新上线时补跑：把侧车里排队的触达捞回来（页面关着时侧车只入队，不打扰）
   async function pullProactive() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     const F = IR.Features;
     if (!SC || !F || !SC.isOnline() || !SC.status().hasToken) return;
     try {
@@ -134,7 +134,7 @@
   }
 
   async function ackProactive(fireId) {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     if (!SC || !fireId) return;
     try { await SC.ackPending(fireId); } catch (_) {}
   }
@@ -159,7 +159,7 @@
   }
 
   function initSidecar() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     if (!SC) return;
     SC.configure(S.settings.sidecar || {});
     SC.on('state', () => {
@@ -167,7 +167,7 @@
       if (SC.isOnline() && SC.status().hasToken) { pullProactive(); A.loadFeatureConfig(); }
     });
     SC.on('fire', payload => { if (IR.Features) IR.Features.accept(payload); });
-    SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { renderTriggerList(); } catch (_) {} } });
+    SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { A.renderTriggerList(); } catch (_) {} } });
     SC.start();
     renderSidecarStatus();
     pullProactive();

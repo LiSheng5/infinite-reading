@@ -286,10 +286,10 @@
   // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
   function dismissModal(id) {
     if (id === 'modal-confirm') { closeConfirm(null); return; }
-    if (id === 'modal-painter') { closeWorkbench(); return; }
-    if (id === 'modal-anchor') { closeAnchor(); return; }
-    if (id === 'modal-import-text') { closeImportText(); return; }
-    if (id === 'modal-card') { closeCardEditor(true); return; }
+    if (id === 'modal-painter') { A.closeWorkbench(); return; }
+    if (id === 'modal-anchor') { A.closeAnchor(); return; }
+    if (id === 'modal-import-text') { A.closeImportText(); return; }
+    if (id === 'modal-card') { A.closeCardEditor(true); return; }
     closeModal(id);
   }
 

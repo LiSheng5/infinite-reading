@@ -153,7 +153,7 @@
         }
       }
     }
-    parts.push('', scribeProfileHint());   // R13：压缩顺手提取画像
+    parts.push('', A.scribeProfileHint());   // R13：压缩顺手提取画像
     return parts.join('\n');
   }
 
@@ -391,7 +391,7 @@
   function updateLiveReasoning() {
     if (!S.live) return;
     const el = $('#chat-scroll').querySelector('.reason-live-text');
-    if (!el) { renderChat(); return; }
+    if (!el) { A.renderChat(); return; }
     el.textContent = S.live.reasoning || '';
     const panel = el.parentElement;
     if (panel) panel.scrollTop = panel.scrollHeight;
@@ -571,7 +571,7 @@
     const mark = IR.Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前（§4.1）
     if (!isRetryOpening) {
       // 重新 pushLog 同一条玩家行动（§4.2）：project 到父节点后旧回合的条目已不在窗口里
-      pushLog(act.type === 'agent'
+      A.pushLog(act.type === 'agent'
         ? { type: 'agent', text: act.text, trigger: '', reason: '', fireId: '' }
         : { type: act.type === 'choice' ? 'choice' : 'player', text: act.text, kind: act.kind || 'do' });
     }

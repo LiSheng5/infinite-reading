@@ -213,7 +213,7 @@
 
   function createStoryImmediate(mode) {
     // R13：rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
-    if (mode === 'rp') { openCardEditor({ mode: 'new' }); return; }
+    if (mode === 'rp') { A.openCardEditor({ mode: 'new' }); return; }
     const s = Store.newStory({
       title: '对话 · ' + fmtTime(Date.now()),
       premise: CHAT_PREMISE,

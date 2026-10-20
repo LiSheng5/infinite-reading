@@ -19,7 +19,7 @@
 
   // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时才下发
   function scheduleToolsAvailable() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return false;
     const st = SC.status();
     return !!(st.features && st.features.schedule && st.hasToken);
@@ -28,7 +28,7 @@
   // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
   // 另外 toolsForMode 只在 chat（智能体）模式放行（红线 7）。
   function proposalToolsAvailable() {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return { email: false, payment: false };
     const st = SC.status();
     const ready = !!st.hasToken;
@@ -61,7 +61,7 @@
 
   // 执行调度工具：一律提交给侧车，且一律是「待确认」——模型可以安排，但不能让主动行为自己生效
   async function runScheduleTool(name, args) {
-    const S = IR.Sidecar;
+    const SC = IR.Sidecar;
     const a = args || {};
     if (!SC || !SC.isOnline()) {
       return '[调度失败] 本地服务没有在运行。请告诉用户：先在「设置 → 本地服务」里启动它，否则没法定时主动联系。';
@@ -127,7 +127,7 @@
   /* ---- 设置分区：安全项读写（真源在侧车 config.json，这里只是编辑界面） ---- */
 
   async function loadFeatureConfig() {
-    if (!A.sidecarReady()) { renderSidecarStatus(); return; }
+    if (!A.sidecarReady()) { A.renderSidecarStatus(); return; }
     try {
       const r = await IR.Sidecar.getConfig();
       const c = (r && r.config) || {};
@@ -611,7 +611,7 @@
       row('主题', p.args.subject);
       row('正文', p.args.body);
     } else {
-      row('金额', yuan(p.args.amountCents));
+      row('金额', A.yuan(p.args.amountCents));
       row('商户', p.args.merchant || '（未填）');
       row('品类', p.args.category || '（未填）');
       row('商品', (p.args.items || []).map(i => i && i.name).filter(Boolean).join('、') || '（未填）');
@@ -655,7 +655,7 @@
   async function confirmProposal(entry) {
     const p = entry && entry.proposal;
     if (!p) return;
-    if (p.status !== 'pending') { renderChat(); return; }   // 幂等：重复点击不再执行
+    if (p.status !== 'pending') { A.renderChat(); return; }   // 幂等：重复点击不再执行
     if (!IR.Proposals.isActionable(p, Date.now())) {
       IR.Proposals.markExpired(p);
       saveAll(); A.renderChat();
@@ -704,7 +704,7 @@
   // 拒绝：不执行任何发送 / 扣款；已有 intent / 草稿时由 Proposals.deny 负责清理
   async function denyProposal(entry) {
     const p = entry && entry.proposal;
-    if (!p || (p.status !== 'pending' && p.status !== 'executing')) { renderChat(); return; }
+    if (!p || (p.status !== 'pending' && p.status !== 'executing')) { A.renderChat(); return; }
     try { await IR.Proposals.deny(p, IR.Sidecar); } catch (_) {}
     A.pushLog({ type: 'tool', tool: 'proposal', summary: proposalResultSummary(p) });
     saveAll();
