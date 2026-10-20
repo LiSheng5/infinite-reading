@@ -88,164 +88,14 @@
 
   /* ---------------- 模型能力（T-M-1 / §4.13） ---------------- */
 
-  function capChat() {
-    try { return Cap && Cap.find ? Cap.find('chat', S.settings.chat.model) : null; } catch (_) { return null; }
-  }
-  function capImage() {
-    try { return Cap && Cap.find ? Cap.find('image', S.settings.image.model) : null; } catch (_) { return null; }
-  }
-
   // 有效上下文窗口：用户手填优先，其次登记表；0 = 未知（压缩退回条数兜底）
-  function chatContextWindow() {
-    const manual = +S.settings.chat.contextWindow || 0;
-    if (manual > 0) return manual;
-    const cap = capChat();
-    return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
-  }
-
-  function sizeRatioLabel(s) {
-    const m = String(s).match(/^(\d+)\s*[x×]\s*(\d+)$/);
-    if (!m) return '';
-    let a = +m[1], b = +m[2];
-    const gcd = (x, y) => y ? gcd(y, x % y) : x;
-    const g = gcd(a, b) || 1;
-    a /= g; b /= g;
-    if (a > 20 || b > 20) return '';
-    return '（' + a + ':' + b + '）';
-  }
-
-  function pickSizeForAspect(sizes, aspect, w, h) {
-    let target = 16 / 9;
-    if (IMAGE_ASPECTS[aspect]) { target = IMAGE_ASPECTS[aspect][0] / IMAGE_ASPECTS[aspect][1]; }
-    else if (aspect === 'custom' && w > 0 && h > 0) { target = w / h; }
-    let best = sizes[0], bestD = Infinity;
-    for (const s of sizes) {
-      const m = String(s).match(/^(\d+)\s*[x×]\s*(\d+)$/);
-      if (!m) continue;
-      const d = Math.abs(Math.log((+m[1] / +m[2]) / target));
-      if (d < bestD) { bestD = d; best = s; }
-    }
-    return best;
-  }
-
-  const LEVEL_LABELS = { low: '低（low）', medium: '中（medium）', high: '高（high）', max: '最大（max）' };
 
   // 手填尺寸时显示宽/高输入（预填档位模式下由档位决定，隐藏）
-  function showImageWh(show) {
-    $('#row-image-wh').classList.toggle('hidden', !show);
-    $('#s-image-width').disabled = !show;
-    $('#s-image-height').disabled = !show;
-  }
 
   // 设置面板：按模型能力显隐参数（思考档位 / 尺寸 / 质量 / 上下文窗口提示）
-  function renderCapabilityFields() {
-    // —— 对话模型 ——
-    const cap = capChat();
-    const t = cap && cap.thinking;
-    const thinkWrap = $('#wrap-chat-thinking');
-    if (t && t.kind !== 'none') {
-      thinkWrap.classList.remove('hidden');
-      const opts = [['default', '默认（不下发）']];
-      if (t.kind === 'toggle') {
-        opts.push(['on', '开启思考']);
-        if ((t.values || []).indexOf('disabled') >= 0) opts.push(['off', '关闭思考']);
-      } else if (t.kind === 'levels') {
-        (t.values || []).forEach(v => opts.push([v, LEVEL_LABELS[v] || v]));
-        if (t.toggleParam) opts.push(['off', '关闭思考' + (t.alwaysOn ? '（该模型常开，不生效）' : '')]);
-      }
-      const cur = opts.some(o => o[0] === S.settings.chat.thinking) ? S.settings.chat.thinking : 'default';
-      const sel = $('#s-chat-thinking');
-      sel.innerHTML = opts.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('');
-      sel.value = cur;
-      S.settings.chat.thinking = cur;
-    } else {
-      thinkWrap.classList.add('hidden');
-      S.settings.chat.thinking = 'default';
-    }
-    const ctxInput = $('#s-chat-ctx');
-    ctxInput.value = (+S.settings.chat.contextWindow > 0) ? +S.settings.chat.contextWindow : '';
-    ctxInput.placeholder = (cap && +cap.contextWindow > 0)
-      ? (+cap.contextWindow + '（自动，按登记表）')
-      : '不知道就留空（回退按条数压缩）';
-    const parts = [];
-    if (cap) {
-      parts.push('预填参考：' + cap.model + (Cap.summarize ? '（' + Cap.summarize('chat', cap) + '）' : ''));
-      if (cap.deprecated) parts.push('⚠ 该模型名可能已弃用，可改填新的');
-    } else {
-      parts.push('参数全部手填即可，不影响使用：上下文容量可在服务商「模型广场 / 文档」查到，不知道就留空（回退按条数压缩）；思考档位等厂商参数写进上面的「自定义请求参数」');
-    }
-    $('#s-chat-cap').textContent = parts.join(' · ');
-
-    // —— 生图模型 ——
-    const icap = capImage();
-    const sizes = (icap && icap.image && Array.isArray(icap.image.sizes)) ? icap.image.sizes : [];
-    const sizeWrap = $('#wrap-image-size'), aspectWrap = $('#wrap-image-aspect');
-    const whRow = $('#row-image-wh'), qWrap = $('#wrap-image-quality');
-    if (sizes.length) {
-      sizeWrap.classList.remove('hidden');
-      aspectWrap.classList.add('hidden');
-      const sel = $('#s-image-size');
-      sel.innerHTML = sizes.map(s => '<option value="' + s + '">' + s + sizeRatioLabel(s) + '</option>').join('')
-        + '<option value="__custom__">自定义尺寸…（手填宽高）</option>';
-      const cur = sizes.indexOf(S.settings.image.size) >= 0
-        ? S.settings.image.size
-        : (S.settings.image.size === '__custom__'
-          ? '__custom__'
-          : pickSizeForAspect(sizes, S.settings.image.aspect, +S.settings.image.width, +S.settings.image.height));
-      sel.value = cur;
-      S.settings.image.size = cur;
-      showImageWh(cur === '__custom__');
-      const qs = (icap.image.quality || []);
-      if (qs.length) {
-        qWrap.classList.remove('hidden');
-        const qsel = $('#s-image-quality');
-        qsel.innerHTML = ['<option value="">默认</option>'].concat(qs.map(q => '<option value="' + q + '">' + q + '</option>')).join('');
-        qsel.value = qs.indexOf(S.settings.image.quality) >= 0 ? S.settings.image.quality : '';
-        S.settings.image.quality = qsel.value;
-      } else {
-        qWrap.classList.add('hidden');
-        delete S.settings.image.quality;
-      }
-    } else {
-      sizeWrap.classList.add('hidden');
-      aspectWrap.classList.remove('hidden');
-      whRow.classList.remove('hidden');
-      qWrap.classList.add('hidden');
-      delete S.settings.image.size;
-      delete S.settings.image.quality;
-    }
-  }
 
   // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
   // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
-  function setStageArt(src) {
-    const bd = $('#stage-backdrop');
-    if (!bd) return;
-    if (!src) {
-      bd.classList.remove('show');
-      bd.style.backgroundImage = '';
-      return;
-    }
-    bd.style.backgroundImage = 'url(' + JSON.stringify(src) + ')';
-    bd.classList.add('show');
-  }
-
-  function thumb(dataUrl, maxW) {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, (maxW || 560) / img.width);
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(img.width * scale);
-        cv.height = Math.round(img.height * scale);
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        try { resolve(cv.toDataURL('image/jpeg', 0.7)); }
-        catch (_) { resolve(null); }
-      };
-      img.onerror = () => resolve(null);
-      img.src = dataUrl;
-    });
-  }
 
   /* ---------------- 原图（Blob）：存 IndexedDB，取显示地址 ---------------- */
 
@@ -1103,13 +953,13 @@
   function importContextWindow() {
     if (S.importModelMode === 'draft') {
       const sub = S.settings.draft || {};
-      if (!sub.provider && !sub.model) return chatContextWindow();
+      if (!sub.provider && !sub.model) return A.chatContextWindow();
       try {
         const w = Cap && Cap.contextWindowOf ? Cap.contextWindowOf(sub.model || S.settings.chat.model, sub.provider) : null;
         return w || 0;
       } catch (_) { return 0; }
     }
-    return chatContextWindow();
+    return A.chatContextWindow();
   }
 
   // 粘贴框下方的一行提示：整理模型 + 窗口 + 这次会一次调用还是 map-reduce（返回 plan 供调用方复用）
@@ -1826,7 +1676,7 @@
   // 模型压缩（C-B 双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底
   async function runSmartCompress() {
     if (!S.story || !scribeUsable()) return null;
-    const plan = IR.Context.planCompression(S.story, { contextWindow: chatContextWindow() });
+    const plan = IR.Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
     if (!plan) return null;
     const cfg = resolveSub('scribe');
     const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
@@ -1904,7 +1754,7 @@
       try {
         comp = IR.Context.compressStory(S.story, {
           summarize: IR.Context.localSummarize,
-          contextWindow: chatContextWindow(),   // T-M-1：登记表 / 手填容量 → 70% 阈值
+          contextWindow: A.chatContextWindow(),   // T-M-1：登记表 / 手填容量 → 70% 阈值
         });
       } catch (_) { comp = null; }
       if (comp) S.story.log.push({ type: 'tool', tool: 'compress', summary: comp.compressedTurns + ' 幕压入摘要栈', ts: Date.now() });
@@ -2917,7 +2767,7 @@
     if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(S.story.mode, toolOpts);
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
-    asmOpts.contextWindow = chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
+    asmOpts.contextWindow = A.chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
     // P1-5（2026-10-14）：组装前先查预算，超了就地用本地摘要先压再组——此前是「先组后压」
     //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
@@ -3678,7 +3528,7 @@
       aspect: cfgImg.aspect || '', width: cfgImg.width, height: cfgImg.height,
       styleCardId: S.story.styleCard ? (S.story.styleCard.id + '@' + (S.story.styleCard.version || 1)) : undefined,
     };
-    scene.thumb = await thumb(src);
+    scene.thumb = await A.thumb(src);
     // 原图以 Blob 存 IndexedDB（不再把 base64 塞进档案）；档案里只留一个引用键
     scene.imageId = await storeOriginal(scene.id, src, {
       model: scene.model, size: scene.size, width: scene.width, height: scene.height, prompt: scene.prompt,
@@ -3701,7 +3551,7 @@
     }
     if (onPath) {   // 不在当前分支 → 不动舞台 / 世界侧状态，也不泄漏进当前视图
       S.story.lastBg = scene.id;
-      setStageArt(sceneSrc(scene) || src);
+      A.setStageArt(sceneSrc(scene) || src);
       updateRollingStyle(scene);           // §4.10 C-F：每次出图后自动更新（本地规则，不依赖模型）
       refreshRollingStyleByModel(scene);   // 真实模式：书记员顺手刷新；失败保留本地结果
     }
@@ -4798,7 +4648,7 @@
     const onEnd = () => {
       img.removeEventListener('animationend', onEnd);
       stageImageIdle(img);
-      setStageArt(src);   // 交叉淡入结束后才换模糊底（旧底一直垫着，不闪空白）
+      A.setStageArt(src);   // 交叉淡入结束后才换模糊底（旧底一直垫着，不闪空白）
     };
     img.addEventListener('animationend', onEnd);
   }
@@ -4813,7 +4663,7 @@
       img.classList.remove('has-art');
       stageImageIdle(img);
       empty.classList.remove('hidden');
-      setStageArt('');
+      A.setStageArt('');
       if (cap) cap.textContent = '';
       return;
     }
@@ -4830,7 +4680,7 @@
       if (token !== stageLoadToken) return;
       img.src = src;
       img.classList.add('has-art');   // Ken Burns（仅 rich）挂在 has-art 上
-      if (level === 'off') { stageImageIdle(img); setStageArt(src); return; }
+      if (level === 'off') { stageImageIdle(img); A.setStageArt(src); return; }
       // 同场景的缩略图 → 原图升级走 blur-up（filter，全站唯一一处）；换画走交叉淡入
       stagePlaySwap(img, src, upgrading ? 'blur-up' : 'fade-swap');
     };
@@ -5120,7 +4970,7 @@
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
     if ($('#s-ui-motion')) $('#s-ui-motion').value = ['auto', 'off', 'standard', 'rich'].indexOf(sui.motion) >= 0 ? sui.motion : 'auto';
     document.querySelectorAll('input[name="s-trigger"]').forEach(r => { r.checked = r.value === S.settings.trigger; });
-    renderCapabilityFields();
+    A.renderCapabilityFields();
     renderStoryPanels();
     renderInjectHint();
     renderSavepoints();
@@ -5853,16 +5703,16 @@
       S.settings.chat.model = $('#s-chat-model').value.trim();
       if (cap && +cap.contextWindow > 0) S.settings.chat.contextWindow = 0; // 交回登记表自动值
       if (!cap || !cap.thinking || cap.thinking.kind === 'none') S.settings.chat.thinking = 'default';
-      renderCapabilityFields();
+      A.renderCapabilityFields();
     });
     $('#s-image-model').addEventListener('change', () => {
       S.settings.image.model = $('#s-image-model').value.trim();
-      renderCapabilityFields();
+      A.renderCapabilityFields();
     });
     // 选了「自定义尺寸…」就亮出宽高输入（预填档位模式下隐藏）
     $('#s-image-size').addEventListener('change', () => {
       S.settings.image.size = $('#s-image-size').value;
-      showImageWh(S.settings.image.size === '__custom__');
+      A.showImageWh(S.settings.image.size === '__custom__');
     });
     // 自建确认弹窗（irConfirm）：确定 / 取消 / 关闭 / 回车
     $('#cf-ok').onclick = () => closeConfirm(confirmValue());
@@ -5966,4 +5816,5 @@
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
+  A.reg({ closeImportText, closeCardEditor, closeWorkbench, closeAnchor });
 })();
