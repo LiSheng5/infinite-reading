@@ -26,3 +26,5 @@ _note-preview.html
 
 # 手动验收证据（截图 / 报告 / 网络日志 / DOM 快照）：不进仓库
 acceptance/
+
+acceptance/
