@@ -170,7 +170,7 @@
     const note = withKeys ? '（含 API Key，请妥善保管）' : '（不含 API Key）';
 
     if (!withSrc) {
-      download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
+      A.download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
       markBackedUp();
       renderStoragePanel();
       toast('已导出全部备份：' + pack.stories.length + ' 个故事' + note, false, true);
@@ -186,7 +186,7 @@
       });
       if (!zip.count) {
         // 一张原图都没取到：多半是 v0.2 时代的老故事只存了缩略图（那时原图还没有单独存放）
-        download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
+        A.download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
         markBackedUp();
         renderStoragePanel();
         toast('本地没有原图可打包（旧故事可能只存了缩略图），已改为导出不含原图的 .irbackup.json', false, true);

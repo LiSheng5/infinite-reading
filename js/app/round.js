@@ -12,7 +12,7 @@
     const feedback = [];
     const recallScopes = [];
     for (const c of calls) {
-      applyToolCall({ function: { name: c.name, arguments: c.raw && c.raw.function ? c.raw.function.arguments : undefined } });
+      A.applyToolCall({ function: { name: c.name, arguments: c.raw && c.raw.function ? c.raw.function.arguments : undefined } });
       if (IR.Context.isRecallTool(c.name)) {
         recallScopes.push(IR.Context.RECALL_TOOL_SCOPE[c.name]);
       } else if (c.name === 'request_image') {
@@ -275,7 +275,7 @@
   async function finishNarration(streamed) {
     if (streamed) {
       // UI-1 §4.2：流结束把逐段淡入的 span 整体合并成单个文本节点
-      finishLiveDelta(S.liveEl || $('#chat-scroll').querySelector('.bubble-live'));
+      A.finishLiveDelta(S.liveEl || $('#chat-scroll').querySelector('.bubble-live'));
       S.live = null;
       return;
     }

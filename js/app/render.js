@@ -432,7 +432,7 @@
       setStageImage(null, '');
       return;
     }
-    setStageImage(currentScene(), sceneSrc(currentScene()));
+    setStageImage(currentScene(), A.sceneSrc(currentScene()));
   }
 
   // Ken Burns 离屏暂停（data-paused 由 CSS 统一管）：图片不可见时停掉循环

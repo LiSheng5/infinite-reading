@@ -9,7 +9,7 @@
   const { $, Store, DEMO, MODE_LABELS, IMAGE_ASPECTS, applyMotion, toast, irConfirm, fmtTime, saveAll, miniBtn } = A;
 
   function syncSettingsToForm() {
-    renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
+    A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
     // 可选本地服务：这里只同步「怎么连它」（端口 + token）；额度 / 白名单等安全项由侧车 config.json 提供
     const sc = S.settings.sidecar || {};
     if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || 4319;
@@ -159,7 +159,7 @@
     const t = document.querySelector('input[name="s-trigger"]:checked');
     S.settings.trigger = t ? t.value : 'choice';
     saveAll();
-    if (S.story) { applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
+    if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== S.settings.showReasoning) A.renderChat();   // 思考链开关即时生效
   }
 
