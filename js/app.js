@@ -565,169 +565,22 @@
    * 统一编辑器：自建 = 空白表单；导入 = SillyTavern V2/V3 PNG（只兼容格式，不复制内容）；改完即生效。
    * rp 开局 = 选（建 / 导入）一张角色卡；开场白作为首条旁白；示例对话喂给模型学口吻。 */
 
-  let cardEditor = null;   // { mode: 'new'|'edit', source, onCancel }
-
-  function openCardEditor(opts) {
-    opts = opts || {};
-    const mode = opts.mode === 'new' ? 'new' : 'edit';
-    const card = opts.card || ((mode === 'edit' && S.story && S.story.characterCard) || IR.RoleCard.emptyCard());
-    cardEditor = { mode: mode, source: card.source || 'custom', onCancel: opts.onCancel || null };
-    fillCardForm(card);
-    $('#card-modal-title').textContent = mode === 'new' ? '选一张角色卡（扮演开局）' : '角色卡';
-    $('#card-source-hint').textContent = '来源：' + IR.RoleCard.sourceLabel(card)
-      + (mode === 'new' ? '。可以空白自建，也可以导入你自己的 SillyTavern V2/V3 PNG 卡；导入后可随意改。' : '（改完即生效，下一回合开始用新卡）');
-    $('#btn-rc-save').textContent = mode === 'new' ? '用这张卡开局' : '保存角色卡';
-    openModal('modal-card');
-  }
-
-  function closeCardEditor(cancel) {
-    const cb = cardEditor && cardEditor.onCancel;
-    closeModal('modal-card');
-    cardEditor = null;
-    if (cancel && cb) cb();
-  }
-
-  function fillCardForm(card) {
-    const c = IR.RoleCard.normalize(card);
-    if (cardEditor) cardEditor.source = c.source;
-    $('#rc-name').value = c.name;
-    $('#rc-appearance').value = c.appearance;
-    $('#rc-personality').value = c.personality;
-    $('#rc-scene').value = c.scene;
-    $('#rc-opening').value = c.opening;
-    $('#rc-example').value = c.exampleDialogue;
-    $('#rc-note').value = c.systemNote;
-    $('#rc-sync-world').checked = true;
-  }
-
-  function readCardForm() {
-    return IR.RoleCard.normalize({
-      name: $('#rc-name').value,
-      appearance: $('#rc-appearance').value,
-      personality: $('#rc-personality').value,
-      scene: $('#rc-scene').value,
-      opening: $('#rc-opening').value,
-      exampleDialogue: $('#rc-example').value,
-      systemNote: $('#rc-note').value,
-      source: (cardEditor && cardEditor.source) || 'custom',
-      updatedAt: Date.now(),
-    });
-  }
-
-  function saveCardFromEditor() {
-    if (!cardEditor) return;
-    const card = readCardForm();
-    if (!card.name) { toast('先给角色起个名字吧', true); return; }
-    const syncWorld = $('#rc-sync-world').checked;
-    if (cardEditor.mode === 'new') {
-      closeModal('modal-card');
-      cardEditor = null;
-      startStoryFromCard(card, syncWorld);
-      return;
-    }
-    if (!S.story) { closeCardEditor(false); return; }
-    S.story.characterCard = card;
-    if (syncWorld) syncWorldCharacter(card);
-    saveAll();
-    renderStoryPanels();
-    renderProfilePanel();
-    closeCardEditor(false);
-    toast('角色卡已保存，改完即生效');
-  }
-
-  function importCardFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      let card = null;
-      try { card = IR.RoleCard.parsePNG(new Uint8Array(reader.result)); } catch (_) { card = null; }
-      if (!card) { toast('没能从这张 PNG 里读到角色卡：支持 SillyTavern V2 / V3 内嵌 JSON 的卡', true, true); return; }
-      fillCardForm(card);
-      toast('已读入角色卡「' + card.name + '」（' + IR.RoleCard.sourceLabel(card) + '），可以随意改，改完保存', false, true);
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
   // 卡 → 世界卡人物条目（personality / speech 对接，§4.12）；用户手改过的字段按 mergeWorld 规则保护
-  function syncWorldCharacter(card) {
-    if (!S.story || !card) return;
-    const entry = IR.RoleCard.worldCharacter(card);
-    if (!entry) return;
-    S.story.world = S.story.world || Store.defaultWorld();
-    IR.Context.mergeWorld(S.story.world, { characters: [entry] });
-  }
 
   // 开场白 = rp 首条旁白（不花一次 AI 调用；§4.12）
-  function pushCardOpening(card) {
-    const text = String((card && card.opening) || '').trim();
-    if (!S.story || !text) return;
-    S.story.log.push({ type: 'narration', text: text, versions: [text], activeVersion: 0, ts: Date.now() });
-  }
-
-  function startStoryFromCard(card, syncWorld) {
-    const s = Store.newStory({
-      title: card.name || ('扮演 · ' + fmtTime(Date.now())),
-      premise: rpPremise(card),
-      mode: 'rp',
-      characterCard: card,
-    });
-    if (syncWorld) {
-      const entry = IR.RoleCard.worldCharacter(card);
-      if (entry) IR.Context.mergeWorld(s.world, { characters: [entry] });
-    }
-    S.story = s;
-    enterGame(true, { deferOpening: true });   // rp 不做开局锚定（P4）；开场白直接进日志
-    pushCardOpening(card);
-    saveAll();
-    renderChat();
-    toast('已登场：' + (card.name || '角色') + '。开场白是角色卡写的，接下来就由你们演。', false, true);
-  }
 
   /* ---------------- 用户画像（R13 / §4.12 / T-P7-2） ----------------
    * 开关默认全关、可按模式单独开或全开；范围 global（ir:user-profile）/ per-story 用户自选。
    * 收集：真实模式由书记员校对时顺手提取；失败退回本地确定性规则（只认「我…」句式）。
    * 注入：每轮只带与当前话题相关的 Top-N + 常驻一行摘要（assembleAI1 的 opts.profile，见 callAI1）。 */
 
-  function profileOn() {
-    const up = S.settings.userProfile || {};
-    return IR.Context.profileEnabledFor(up.enabled, (S.story && S.story.mode) || 'choice');
-  }
-
   // 当前生效的画像条目（按 scope 取全局或本档）；关开关 / 没故事 → 空
-  function activeProfileEntries() {
-    if (!S.story || !profileOn()) return [];
-    return ((S.settings.userProfile || {}).scope === 'global')
-      ? Store.loadUserProfile()
-      : (S.story.userProfile || []);
-  }
 
   // 写入画像：关开关即停止收集；合并去重（同文只留最新），不设条数上限（§4.12 存储无上限）
-  function applyProfileEntries(list) {
-    if (!S.story || !profileOn() || !Array.isArray(list) || !list.length) return 0;
-    const inc = IR.Context.normalizeProfile(list);
-    if (!inc.length) return 0;
-    if ((S.settings.userProfile || {}).scope === 'global') {
-      Store.saveUserProfile(IR.Context.mergeProfile(Store.loadUserProfile(), inc));
-    } else {
-      S.story.userProfile = IR.Context.mergeProfile(S.story.userProfile || [], inc);
-    }
-    return inc.length;
-  }
 
   // 失败兜底：只看玩家最后说的一句（确定性规则）
-  function collectProfileLocal() {
-    const last = [...((S.story && S.story.log) || [])].reverse().find(e => e.type === 'player' || e.type === 'choice');
-    if (!last) return;
-    const got = IR.Context.localProfileExtract(last.text);
-    if (got.length) { applyProfileEntries(got); saveAll(); }
-  }
 
   // 书记员输入里的画像指示：开没开都说清楚，省得模型乱输出
-  function scribeProfileHint() {
-    return profileOn()
-      ? '[用户画像] 请提取：玩家值得长期记住的信息（每轮最多 3 条，同类只留最新；没有就省略 profile）。'
-      : '[用户画像] 未开启：不要输出 profile 字段。';
-  }
 
   /* ================= 开局向导（T-P2-3 / §4.8） ================= */
 
@@ -923,7 +776,7 @@
       if (args.world && typeof args.world === 'object') IR.Context.mergeWorld(S.story.world, args.world);
       if (args.relationship) IR.Context.mergeWorld(S.story.world, { relationship: args.relationship });
       // 画像条目按开关 / 范围写入（关开关即停止收集，§4.12）
-      if (Array.isArray(args.profile)) applyProfileEntries(args.profile);
+      if (Array.isArray(args.profile)) A.applyProfileEntries(args.profile);
       summary = args.text ? ('更新记忆：' + args.text) : '更新记忆';
     } else if (name === 'recall_world_state') summary = '查阅了世界状态卡';
     else if (name === 'recall_style_card') summary = '查阅了视觉设定卡';
@@ -970,7 +823,7 @@
             content: '[当前世界卡]\n' + IR.Context.worldCardText(S.story.world)
               + '\n\n[最近剧情]\n' + (recent || '（无）')
               + '\n\n[玩家最近说过的话]\n' + (said || '（无）')   // R13：画像提取的来源
-              + '\n\n' + scribeProfileHint(),
+              + '\n\n' + A.scribeProfileHint(),
           },
         ]);
         result = parseScribe(raw);
@@ -979,7 +832,7 @@
     if (!result) result = IR.Context.localScribe(S.story.world);
     // 书记员是整卡重写（最终仲裁）：允许空数组清空
     if (result.world) IR.Context.mergeWorld(S.story.world, result.world, { allowEmpty: true });
-    if (result.profile && result.profile.length) applyProfileEntries(result.profile);   // R13：顺手提取的画像
+    if (result.profile && result.profile.length) A.applyProfileEntries(result.profile);   // R13：顺手提取的画像
     S.story.world.scribeAt = Date.now();
     S.story.log.push({ type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() });
   }
@@ -1062,7 +915,7 @@
     S.story.messages = S.story.messages.slice(plan.candidate.length);
     IR.Context.trimSummaries(S.story.summaries, IR.Context.DEFAULT_MAX_SUMMARIES);
     if (parsed.world) IR.Context.mergeWorld(S.story.world, parsed.world, { allowEmpty: true });
-    if (parsed.profile && parsed.profile.length) applyProfileEntries(parsed.profile);   // R13
+    if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   // R13
     S.story.world.scribeAt = Date.now();
     S.story.log.push({
       type: 'tool', tool: 'scribe',
@@ -1137,7 +990,7 @@
       }
     }
     // R13 用户画像：真实模式由书记员顺手提取（上面两条路径）；失败退回本地规则
-    if (profileOn() && !scribeUsable()) collectProfileLocal();
+    if (A.profileOn() && !scribeUsable()) A.collectProfileLocal();
     saveAll();
     renderChat();
     if (!$('#modal-settings').classList.contains('hidden')) renderStoryPanels();
@@ -2138,7 +1991,7 @@
     const asmOpts = Object.assign({}, opts);
     if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(S.story.mode, toolOpts);
     if (forceInject) asmOpts.forceInject = true;
-    asmOpts.profile = activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
+    asmOpts.profile = A.activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
     asmOpts.contextWindow = A.chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
     // P1-5（2026-10-14）：组装前先查预算，超了就地用本地摘要先压再组——此前是「先组后压」
     //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
@@ -4704,7 +4557,7 @@
       applyLayout();
       syncKindSwitch();
       renderChat();
-      openCardEditor({
+      A.openCardEditor({
         mode: 'edit',
         onCancel: () => {
           S.story.mode = prev;
@@ -4970,17 +4823,17 @@
     $('#btn-inject-memory').onclick = toggleInjectMemory;
 
     // —— 角色卡（R13 / T-P7-1） ——
-    $('#btn-edit-card').onclick = () => { if (!S.story) { toast('先打开一个故事'); return; } openCardEditor({ mode: 'edit' }); };
-    $('#btn-close-card').onclick = () => closeCardEditor(true);
-    $('#btn-rc-cancel').onclick = () => closeCardEditor(true);
-    $('#btn-rc-save').onclick = saveCardFromEditor;
+    $('#btn-edit-card').onclick = () => { if (!S.story) { toast('先打开一个故事'); return; } A.openCardEditor({ mode: 'edit' }); };
+    $('#btn-close-card').onclick = () => A.closeCardEditor(true);
+    $('#btn-rc-cancel').onclick = () => A.closeCardEditor(true);
+    $('#btn-rc-save').onclick = A.saveCardFromEditor;
     $('#btn-rc-import').onclick = () => $('#file-card').click();
     $('#file-card').onchange = e => {
       importCardFile(e.target.files && e.target.files[0]);
       e.target.value = '';
     };
     $('#modal-card').addEventListener('click', e => {
-      if (e.target === $('#modal-card')) closeCardEditor(true);
+      if (e.target === $('#modal-card')) A.closeCardEditor(true);
     });
 
     // —— 用户画像（R13 / T-P7-2） ——
@@ -5188,5 +5041,5 @@
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
-  A.reg({ storeOriginal, showShelf, renderShelf, downloadBlob, download, closeCardEditor, openWizard, sidecarReady, renderSidecarStatus, loadFeatureConfig, runOpening, closeWorkbench, openAnchor, closeAnchor, renderStage, renderThumbs, enterGame, syncSettingsToForm });
+  A.reg({ storeOriginal, showShelf, renderShelf, downloadBlob, download, openWizard, sidecarReady, renderSidecarStatus, loadFeatureConfig, runOpening, closeWorkbench, openAnchor, closeAnchor, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
 })();
