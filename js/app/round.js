@@ -250,6 +250,7 @@
       A.maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
       await A.postTurn();
       IR.Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
+      A.maybeAutoTitle();                          // UI-2 §3.3：seal 后异步起标题，不占 busy、不阻塞下一次发送
       if (agentMsg && meta.fireId) await A.ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
       S.live = null;
@@ -321,6 +322,7 @@
       S.turnAnchor.nodeId = node.id;                 // §3.A.4：锚点补 nodeId
       await A.postTurn();
       IR.Tree.seal(S.story, node.id);                // 必须在 postTurn 之后（§10）
+      A.maybeAutoTitle();                           // UI-2 §3.3：开局回合同样触发自动标题
       if (S.turnPaintedByTool) S.turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
       else if (S.story.mode === 'chat' || S.story.mode === 'rp') { /* §3.E.3：对话 / 扮演没有时机出图 */ }
       else if (S.settings.trigger !== 'manual') A.enqueueImage(reply.scene_summary, node.id);

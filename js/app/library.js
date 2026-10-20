@@ -279,7 +279,7 @@
     $('#screen-start').classList.add('hidden');
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.remove('hidden');
-    renderShelf();
+    A.renderShelf();   // UI-2：会话列表（js/app/shelf.js）
   }
 
   // 开始页（应用入口）：三个模式先看介绍、点一张选中，再按「开始」
@@ -345,67 +345,8 @@
     A.enterGame(false);
   }
 
-  function renderShelf() {
-    const grid = $('#shelf-grid');
-    grid.innerHTML = '';
-    const index = Store.listStories();
-    $('#shelf-empty').classList.toggle('hidden', index.length > 0);
-    for (const it of index) {
-      const st = Store.loadStory(it.id) || {};
-      const card = document.createElement('div');
-      card.className = 'story-card';
-
-      const thumbEl = document.createElement('div');
-      thumbEl.className = 'story-thumb' + (it.thumb ? '' : ' empty');
-      if (it.thumb) thumbEl.style.backgroundImage = 'url("' + it.thumb + '")';
-      card.appendChild(thumbEl);
-
-      const body = document.createElement('div');
-      body.className = 'story-body';
-      const name = document.createElement('div');
-      name.className = 'story-name';
-      name.textContent = it.title || '未命名故事';
-      const meta = document.createElement('div');
-      meta.className = 'story-meta';
-      meta.textContent = '[' + (MODE_LABELS[st.mode] || '剧情') + '] 第 ' + (st.turn || 0) + ' 回合 · ' + fmtTime(it.updatedAt);
-      body.appendChild(name); body.appendChild(meta);
-      card.appendChild(body);
-
-      const actions = document.createElement('div');
-      actions.className = 'story-actions';
-      actions.appendChild(miniBtn('继续', () => openStory(it.id)));
-      actions.appendChild(miniBtn('改名', async () => {
-        const t = await irConfirm('给这个故事起个新标题', {
-          title: '改名', input: true, value: it.title || '未命名故事', okText: '保存',
-        });
-        if (t == null) return;
-        const s2 = Store.loadStory(it.id);
-        if (!s2) return;
-        s2.title = String(t).trim() || s2.title;
-        Store.saveStory(s2);
-        renderShelf();
-      }));
-      actions.appendChild(miniBtn('导出', () => openExport(it.id)));
-      actions.appendChild(miniBtn('删除', async () => {
-        if (!await irConfirm('删除「' + (it.title || '未命名故事') + '」？此操作不可恢复。', { title: '删除故事', okText: '删除' })) return;
-        Store.deleteStory(it.id);
-        renderShelf();
-        toast('已删除');
-      }));
-      card.appendChild(actions);
-      grid.appendChild(card);
-    }
-  }
-
-  function openStory(id) {
-    const s = Store.loadStory(id);
-    if (!s) { toast('没有找到这个存档', true); return; }
-    S.story = s;
-    S.story.savepoints = S.story.savepoints || [];
-    S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
-    Store.setCurrentId(S.story.id);
-    A.enterGame(false);
-  }
+  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 js/app/shelf.js（UI-2）：
+     renderShelf 只读索引；openStory(id, opts) 支持滚动到命中消息（§3.7）。 */
 
   /* ================= 导入 / 导出（T-P2-4 / §4.11） ================= */
 
@@ -495,5 +436,5 @@
     toast(withSrc && !hasSrc ? '已导出（原图已不在本地，仅带缩略图 + 提示词）' : '已导出：' + safeTitle + '.irstory.json', false, true);
   }
 
-  A.reg({ storeOriginal, sceneSrc, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, startDemo, continueLast, renderShelf, downloadBlob, download, doExport });
+  A.reg({ storeOriginal, sceneSrc, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, startDemo, continueLast, openExport, downloadBlob, download, doExport });
 })();

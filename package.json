@@ -1,6 +1,6 @@
 {
   "name": "infinite-reading",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "description": "无限阅读 · ∞ Reading —— 一本「读不完」的 AI 视觉小说（纯前端、零构建、零依赖）",
   "license": "MIT",
@@ -17,7 +17,8 @@
     "sidecar": "node sidecar/server.mjs",
     "eval": "node eval/run.js",
     "eval:demo": "node eval/demo-smoke.js",
-    "test": "node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/motion-test.js && node eval/run.js && node eval/tree-test.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs",
+    "test": "node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/motion-test.js && node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/run.js && node eval/tree-test.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs",
+    "test:shelf": "node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js",
     "check:contrast": "node tools/contrast-check.mjs",
     "check:tokens": "node eval/tokens-test.js",
     "test:motion": "node eval/motion-test.js",

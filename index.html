@@ -16,7 +16,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.7.1">
+<link rel="stylesheet" href="css/style.css?v=0.8.0">
 </head>
 <body>
 <div id="app">
@@ -52,28 +52,38 @@
     </div>
   </section>
 
-  <!-- ========== 故事书架（§7 / T-P2-1） ========== -->
+  <!-- ========== 书架（UI-2）：会话列表 + 搜索 + 新建弹层 ========== -->
   <section id="screen-shelf" class="screen hidden">
     <div class="shelf-wrap">
       <header class="shelf-head">
-        <div>
-          <h1 class="title">无限阅读</h1>
-          <p class="subtitle">我的书架</p>
+        <h1 class="shelf-title">书架</h1>
+        <div class="shelf-search">
+          <input id="shelf-search" class="shelf-search-input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="搜索标题与正文…（/ 或 Ctrl+K）" aria-label="搜索对话"
+                 role="combobox" aria-expanded="false" aria-controls="shelf-results" aria-activedescendant="">
+          <button id="shelf-search-clear" class="hud-btn hidden" title="清空搜索" aria-label="清空搜索">✕</button>
         </div>
         <div class="shelf-actions">
-          <button id="btn-new-story" class="btn primary">＋ 新故事</button>
-          <button id="btn-import" class="btn">↑ 导入</button>
-          <button id="btn-import-text" class="btn">粘贴文本导入</button>
-          <button id="btn-shelf-settings" class="btn">⚙ 模型设置</button>
-          <button id="btn-shelf-home" class="btn ghost">← 首页</button>
+          <button id="btn-new-story" class="btn primary">＋ 新建</button>
+          <button id="btn-import" class="btn ghost" title="导入 .irstory.json / .irbackup.json / .zip">↑ 导入</button>
+          <button id="btn-import-text" class="btn ghost" title="粘贴文本导入">文本导入</button>
+          <button id="btn-shelf-settings" class="btn ghost" title="模型设置">⚙ 设置</button>
+          <button id="btn-shelf-home" class="btn ghost" title="回到首页">← 首页</button>
         </div>
       </header>
 
-      <div id="shelf-empty" class="shelf-empty">
-        <p>还没有故事。</p>
-        <p class="hint">点「＋ 新故事」开始；也可以把 <b>.irstory.json</b> / <b>.irbackup.json</b> / <b>.zip</b>（带原图的备份包）文件拖进这个窗口导入。</p>
+      <div id="shelf-list" class="shelf-list" role="listbox" aria-label="对话列表"></div>
+      <div id="shelf-results" class="shelf-results hidden" role="listbox" aria-label="搜索结果"></div>
+
+      <div id="shelf-empty" class="shelf-empty hidden">
+        <p class="shelf-empty-text">还没有对话。点「＋ 新建」开始第一段。</p>
+        <button id="btn-empty-new" class="btn primary empty-new">＋ 新建</button>
+        <p class="hint">也可以把 <b>.irstory.json</b> / <b>.irbackup.json</b> / <b>.zip</b>（带原图的备份包）文件拖进这个窗口导入。</p>
       </div>
-      <div id="shelf-grid" class="shelf-grid"></div>
+      <div id="shelf-search-empty" class="shelf-empty hidden">
+        <p class="shelf-empty-text">没有找到匹配「<span id="shelf-search-term"></span>」的对话。</p>
+        <p class="hint">换个词试试：标题与正文（含所有分支）都会被搜到。</p>
+      </div>
 
       <p class="shelf-foot">数据只保存在你的浏览器里 · 退出即自动存档</p>
     </div>
@@ -952,47 +962,50 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.7.1"></script>
-<script src="js/context.js?v=0.7.1"></script>
+<script src="js/providers.js?v=0.8.0"></script>
+<script src="js/context.js?v=0.8.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.7.1"></script>
+<script src="js/tree.js?v=0.8.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.7.1"></script>
-<script src="js/store.js?v=0.7.1"></script>
-<script src="js/modelCapabilities.js?v=0.7.1"></script>
-<script src="js/roleCard.js?v=0.7.1"></script>
+<script src="js/storage.js?v=0.8.0"></script>
+<script src="js/store.js?v=0.8.0"></script>
+<script src="js/modelCapabilities.js?v=0.8.0"></script>
+<script src="js/roleCard.js?v=0.8.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.7.1"></script>
+<script src="js/demo.js?v=0.8.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.7.1"></script>
+<script src="js/zip.js?v=0.8.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.7.1"></script>
+<script src="js/sidecar.js?v=0.8.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.7.1"></script>
+<script src="js/features.js?v=0.8.0"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.7.1"></script>
+<script src="js/paintQueue.js?v=0.8.0"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.7.1"></script>
+<script src="js/proposals.js?v=0.8.0"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.7.1"></script>
+<script src="js/motion.js?v=0.8.0"></script>
+<script src="js/titles.js?v=0.8.0"></script>
+<script src="js/search.js?v=0.8.0"></script>
 <!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.7.1"></script>
-<script src="js/app/models.js?v=0.7.1"></script>
-<script src="js/app/library.js?v=0.7.1"></script>
-<script src="js/app/backup.js?v=0.7.1"></script>
-<script src="js/app/importer.js?v=0.7.1"></script>
-<script src="js/app/cards.js?v=0.7.1"></script>
-<script src="js/app/wizard.js?v=0.7.1"></script>
-<script src="js/app/sidecar.js?v=0.7.1"></script>
-<script src="js/app/features.js?v=0.7.1"></script>
-<script src="js/app/styleanchor.js?v=0.7.1"></script>
-<script src="js/app/painter.js?v=0.7.1"></script>
-<script src="js/app/turn.js?v=0.7.1"></script>
-<script src="js/app/round.js?v=0.7.1"></script>
-<script src="js/app/render.js?v=0.7.1"></script>
-<script src="js/app/settings.js?v=0.7.1"></script>
-<script src="js/app.js?v=0.7.1"></script>
+<script src="js/app/core.js?v=0.8.0"></script>
+<script src="js/app/models.js?v=0.8.0"></script>
+<script src="js/app/library.js?v=0.8.0"></script>
+<script src="js/app/shelf.js?v=0.8.0"></script>
+<script src="js/app/backup.js?v=0.8.0"></script>
+<script src="js/app/importer.js?v=0.8.0"></script>
+<script src="js/app/cards.js?v=0.8.0"></script>
+<script src="js/app/wizard.js?v=0.8.0"></script>
+<script src="js/app/sidecar.js?v=0.8.0"></script>
+<script src="js/app/features.js?v=0.8.0"></script>
+<script src="js/app/styleanchor.js?v=0.8.0"></script>
+<script src="js/app/painter.js?v=0.8.0"></script>
+<script src="js/app/turn.js?v=0.8.0"></script>
+<script src="js/app/round.js?v=0.8.0"></script>
+<script src="js/app/render.js?v=0.8.0"></script>
+<script src="js/app/settings.js?v=0.8.0"></script>
+<script src="js/app.js?v=0.8.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.7.1"></script>
+<script src="js/pwa.js?v=0.8.0"></script>
 </body>
 </html>

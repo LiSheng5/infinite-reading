@@ -29,6 +29,7 @@
     });
     $('#btn-shelf-settings').onclick = A.openSettings;
     $('#btn-shelf-home').onclick = A.showStart;
+    A.initShelf();   // UI-2：搜索框 / 键盘 / 空状态按钮（js/app/shelf.js）
     $('#btn-import').onclick = () => $('#file-import').click();
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 

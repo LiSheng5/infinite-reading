@@ -595,6 +595,7 @@
       S.turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
       await postTurn();
       IR.Tree.seal(S.story, node.id);
+      A.maybeAutoTitle();   // UI-2 §3.3：重试回合 seal 后同样触发自动标题
       saveAll();
     } catch (e) {
       // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）

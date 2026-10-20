@@ -157,7 +157,7 @@
 
   function startStoryFromCard(card, syncWorld) {
     const s = Store.newStory({
-      title: card.name || ('扮演 · ' + fmtTime(Date.now())),
+      title: '新对话',           // UI-2 §3.2：扮演新对话初始标题「新对话」，之后自动起标题（titleAuto 默认 true）
       premise: rpPremise(card),
       mode: 'rp',
       characterCard: card,
