@@ -781,173 +781,19 @@
 
   /* ---- 侧车连接状态与主动消息投递 ---- */
 
-  function sidecarReady() {
-    const S = IR.Sidecar;
-    return !!(SC && typeof SC.isOnline === 'function' && SC.isOnline() && SC.status().hasToken);
-  }
-
-  function sidecarOffHint() {
-    return '需要启动本地服务：在项目目录运行 node sidecar/server.mjs，再把终端打印的 token 填到「设置 → 本地服务」。';
-  }
-
-  function renderSidecarStatus() {
-    const S = IR.Sidecar;
-    const st = SC ? SC.status() : { online: false, hasToken: false, features: {}, lastError: '' };
-    const el = $('#sidecar-state');
-    if (el) {
-      el.textContent = st.online
-        ? (st.hasToken ? '本地服务在线' : '本地服务在线（还没填 token）')
-        : ('未启动' + (st.lastError ? '：' + st.lastError : ''));
-      el.className = 'sidecar-state ' + (st.online ? 'on' : 'off');
-    }
-    // 三个功能分区：没连上 / 没 token 就整体灰显（安全项真源在侧车，读不到就别给假象）
-    const ready = !!(st.online && st.hasToken);
-    for (const id of ['#fs-email', '#fs-schedule', '#fs-payment']) {
-      const fs = $(id);
-      if (fs) fs.classList.toggle('feature-off', !ready);
-    }
-    renderFeatureBar();
-  }
-
   // 邮件 / 定时主动 / 代下单只在「对话 / 扮演」模式可用：剧情模式里既不能出现，
   // 也不能被触发（入口函数自己也再挡一次，不依赖界面是否渲染）。
-  function featuresAllowed() {
-    return !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
-  }
 
   // 局内功能入口：只有「对话 / 扮演」模式才有「＋」菜单；本地服务没启动时菜单项灰显
-  function renderFeatureBar() {
-    const plus = $('#btn-more-actions');
-    const menu = $('#feature-menu');
-    const state = $('#feature-bar-state');
-    if (!plus || !menu) return;
-    const allowed = featuresAllowed();
-    plus.classList.toggle('hidden', !allowed);
-    if (!allowed) {
-      menu.classList.add('hidden');
-      plus.setAttribute('aria-expanded', 'false');
-      return;
-    }
-    const S = IR.Sidecar;
-    const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
-    const ready = !!(st.online && st.hasToken);
-    // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更，见 CHANGELOG）
-    const isChat = !!(S.story && S.story.mode === 'chat');
-    const emBtn = $('#btn-feat-email');
-    if (emBtn) emBtn.classList.toggle('hidden', !isChat);
-    const pmBtn = $('#btn-feat-payment');
-    if (pmBtn) pmBtn.classList.toggle('hidden', !isChat);
-    for (const sel of ['#btn-feat-email', '#btn-feat-schedule', '#btn-feat-payment']) {
-      const b = $(sel);
-      if (!b || b.classList.contains('hidden')) continue;
-      b.disabled = !ready;
-      b.title = ready ? '' : sidecarOffHint();
-    }
-    if (state) {
-      if (!st.online) state.textContent = '本地服务未启动：写邮件 / 定时主动 / 代下单需要先启动本地服务。';
-      else if (!st.hasToken) state.textContent = '本地服务在线，但还没填 token（设置 → 本地服务）。';
-      else {
-        const names = { email: '邮件', schedule: '定时主动', payment: '购物支付' };
-        const on = ['email', 'schedule', 'payment'].filter(k => st.features && st.features[k]).map(k => names[k]);
-        state.textContent = on.length ? ('已开启：' + on.join('、')) : '都还没在设置里开启。';
-      }
-    }
-  }
 
   /* ---------- 下拉菜单（顶栏「⋯」/ 输入区「＋」） ---------- */
-  function closeMenus(except) {
-    for (const menu of document.querySelectorAll('.menu')) {
-      if (menu === except) continue;
-      menu.classList.add('hidden');
-    }
-    for (const btn of document.querySelectorAll('[aria-expanded="true"]')) {
-      if (except && btn.getAttribute('aria-controls') === except.id) continue;
-      btn.setAttribute('aria-expanded', 'false');
-    }
-  }
-
-  function toggleMenu(btn, menu) {
-    if (!btn || !menu) return;
-    const willOpen = menu.classList.contains('hidden');
-    closeMenus(willOpen ? menu : null);
-    menu.classList.toggle('hidden', !willOpen);
-    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-    if (willOpen && menu === $('#feature-menu')) renderFeatureBar();
-  }
-
-  function yuan(cents) { return (Math.floor(Number(cents) || 0) / 100).toFixed(2) + ' 元'; }
-
-  function irDownloadText(filename, text) {
-    try {
-      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
-  }
 
   // 页面打开 / 重新上线时补跑：把侧车里排队的触达捞回来（页面关着时侧车只入队，不打扰）
-  async function pullProactive() {
-    const S = IR.Sidecar;
-    const F = IR.Features;
-    if (!SC || !F || !SC.isOnline() || !SC.status().hasToken) return;
-    try {
-      const list = await SC.listPending();
-      for (const p of list) {
-        if (p.channel && S.story && p.channel !== S.story.id) continue;   // 指定了别的会话就跳过
-        F.accept({ fireId: p.id, prompt: p.prompt, name: p.name, reason: p.reason });
-      }
-    } catch (_) { /* 拉不到就等下一次 */ }
-  }
-
-  async function ackProactive(fireId) {
-    const S = IR.Sidecar;
-    if (!SC || !fireId) return;
-    try { await SC.ackPending(fireId); } catch (_) {}
-  }
-
-  function initFeatures() {
-    const F = IR.Features;
-    if (!F) return;
-    F.attach({
-      // 什么时候能把主动消息送进回合流程：不忙、有故事、是对话 / 扮演模式、且在线
-      canDeliver: () => !S.busy && !!S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')
-        && (typeof navigator === 'undefined' || navigator.onLine !== false),
-      deliver: async payload => {
-        if (!payload || !payload.prompt) return;
-        await sendPlayerAction(payload.prompt, false, {
-          kind: 'agent',
-          triggerName: payload.name || '',
-          reason: payload.reason || '',
-          fireId: payload.fireId || '',
-        });
-      },
-    });
-  }
-
-  function initSidecar() {
-    const S = IR.Sidecar;
-    if (!SC) return;
-    SC.configure(S.settings.sidecar || {});
-    SC.on('state', () => {
-      renderSidecarStatus();
-      if (SC.isOnline() && SC.status().hasToken) { pullProactive(); loadFeatureConfig(); }
-    });
-    SC.on('fire', payload => { if (IR.Features) IR.Features.accept(payload); });
-    SC.on('changed', () => { if (typeof renderTriggerList === 'function') { try { renderTriggerList(); } catch (_) {} } });
-    SC.start();
-    renderSidecarStatus();
-    pullProactive();
-    if (sidecarReady()) loadFeatureConfig();
-  }
 
   /* ---- 设置分区：安全项读写（真源在侧车 config.json，这里只是编辑界面） ---- */
 
   async function loadFeatureConfig() {
-    if (!sidecarReady()) { renderSidecarStatus(); return; }
+    if (!A.sidecarReady()) { renderSidecarStatus(); return; }
     try {
       const r = await IR.Sidecar.getConfig();
       const c = (r && r.config) || {};
@@ -988,7 +834,7 @@
   }
 
   async function saveFeatureConfig() {
-    if (!sidecarReady()) return;
+    if (!A.sidecarReady()) return;
     const lines = sel => { const el = $(sel); return el ? el.value.split('\n').map(s => s.trim()).filter(Boolean) : []; };
     const num = sel => { const el = $(sel); return el ? (Math.max(0, Math.floor(Number(el.value) || 0))) : 0; };
     const quiet = [];
@@ -1033,7 +879,7 @@
       await IR.Sidecar.putConfig(patch);
       $('#s-email-resendkey').value = '';
       toast('功能设置已写入本地服务');
-      renderSidecarStatus();
+      A.renderSidecarStatus();
       renderTriggerList();
     } catch (e) {
       toast('写入本地服务失败：' + ((e && e.message) || e), true, true);
@@ -1046,8 +892,8 @@
     const box = $('#trigger-list');
     if (!box) return;
     const sum = $('#trigger-summary');
-    if (!sidecarReady()) {
-      box.textContent = sidecarOffHint();
+    if (!A.sidecarReady()) {
+      box.textContent = A.sidecarOffHint();
       if (sum) sum.textContent = '调度已暂停：本地服务未启动';
       return;
     }
@@ -1117,7 +963,7 @@
   async function renderEmailAudit() {
     const box = $('#email-audit');
     if (!box) return;
-    if (!sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
+    if (!A.sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
     try {
       const r = await IR.Sidecar.emailAudit(20);
       const list = (r && r.audit) || [];
@@ -1138,7 +984,7 @@
   async function renderEmailDrafts() {
     const box = $('#email-drafts');
     if (!box) return;
-    if (!sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
+    if (!A.sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
     try {
       const list = await IR.Sidecar.emailSentDrafts();
       box.innerHTML = '';
@@ -1189,8 +1035,8 @@
 
   function openEmailModal() {
     // v0.6.0：「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
-    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
+    if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#email-status');
     if (el) {
@@ -1237,14 +1083,14 @@
     const box = $('#pay-ledger');
     const sum = $('#pay-summary');
     if (!box) return;
-    if (!sidecarReady()) { box.textContent = sidecarOffHint(); if (sum) sum.textContent = ''; return; }
+    if (!A.sidecarReady()) { box.textContent = A.sidecarOffHint(); if (sum) sum.textContent = ''; return; }
     try {
       const r = await IR.Sidecar.paymentTransactions(20);
       const list = (r && r.transactions) || [];
       const s = await IR.Sidecar.paymentSummary('');
       if (sum && s && s.summary) {
-        sum.textContent = '今日已用 ' + yuan(s.summary.spent.daily) + ' · 本月 ' + yuan(s.summary.spent.monthly)
-          + ' · 每日剩余 ' + yuan(s.summary.remaining.daily);
+        sum.textContent = '今日已用 ' + A.yuan(s.summary.spent.daily) + ' · 本月 ' + A.yuan(s.summary.spent.monthly)
+          + ' · 每日剩余 ' + A.yuan(s.summary.remaining.daily);
       }
       box.innerHTML = '';
       if (!list.length) {
@@ -1261,7 +1107,7 @@
         main.className = 't-main';
         const head = document.createElement('div');
         head.className = 't-name';
-        head.textContent = yuan(t.amountCents) + ' · ' + (t.merchant || '（未填商户）');
+        head.textContent = A.yuan(t.amountCents) + ' · ' + (t.merchant || '（未填商户）');
         const pill = document.createElement('span');
         pill.className = 'status-pill' + (t.status === 'denied' ? ' denied' : (t.status === 'pending' ? ' pending' : ''));
         pill.textContent = t.status + (t.code ? ' / ' + t.code : '');
@@ -1281,7 +1127,7 @@
         rec.onclick = async () => {
           try {
             const rr = await IR.Sidecar.paymentReceipt(t.intentId);
-            if (rr && rr.receipt) irDownloadText('收据-' + t.intentId + '.txt', rr.receipt.text);
+            if (rr && rr.receipt) A.irDownloadText('收据-' + t.intentId + '.txt', rr.receipt.text);
           } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
         };
         acts.appendChild(rec);
@@ -1305,8 +1151,8 @@
 
   function openPaymentModal() {
     // v0.6.0：「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
-    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
+    if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = IR.Sidecar.status();
     const el = $('#pay-status');
     if (el) {
@@ -1341,12 +1187,12 @@
         const lines = [
           '需要你确认这一笔：',
           '',
-          '金额：' + yuan(amountCents),
+          '金额：' + A.yuan(amountCents),
           '商户：' + (merchant || '（未填）'),
           '品类：' + (category || '（未填）'),
         ];
         if (itemsText) lines.push('商品：' + itemsText);
-        lines.push('', '每日剩余：' + yuan(rem.daily || 0) + ' · 每月剩余：' + yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+        lines.push('', '每日剩余：' + A.yuan(rem.daily || 0) + ' · 每月剩余：' + A.yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
         const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
         const rr = ok ? await IR.Sidecar.paymentApprove(r.intentId) : await IR.Sidecar.paymentDeny(r.intentId);
         out.textContent = ok
@@ -1407,7 +1253,7 @@
     if (kind === 'email') {
       return '[已提交，待用户确认] 邮件给 ' + p.args.to + '，主题「' + p.args.subject + '」；用户在界面确认前不会发送。不要说已经发出。';
     }
-    return '[已提交，待用户确认] 下单 ' + yuan(p.args.amountCents) + '（' + (p.args.merchant || '未填商户') + '）；用户确认前不会扣款。不要说已经付款。';
+    return '[已提交，待用户确认] 下单 ' + A.yuan(p.args.amountCents) + '（' + (p.args.merchant || '未填商户') + '）；用户确认前不会扣款。不要说已经付款。';
   }
 
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发（§4.5）
@@ -1622,7 +1468,7 @@
       maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
       await postTurn();
       IR.Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
-      if (agentMsg && meta.fireId) await ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
+      if (agentMsg && meta.fireId) await A.ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
       S.live = null;
       S.turnAnchor.dead = true;   // §3.A.4：失败 / 停止——本回合排队中与在途的工具出图丢弃
@@ -2903,7 +2749,7 @@
     // 选项：默认收在输入区上方的「💡 灵感」里；settings.ui.choices = always 时内联在旁白下
     renderChoices();
 
-    renderFeatureBar();
+    A.renderFeatureBar();
     scrollChatBottom();
   }
 
@@ -3120,7 +2966,7 @@
       saveAll(); renderChat();
       return;
     }
-    if (!sidecarReady()) { toast(sidecarOffHint(), true, true); return; }
+    if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     let res = null;
     try {
       res = await IR.Proposals.confirm(p, IR.Sidecar, Date.now());
@@ -3136,13 +2982,13 @@
       const lines = [
         '需要你确认这一笔：',
         '',
-        '金额：' + yuan(a.amountCents),
+        '金额：' + A.yuan(a.amountCents),
         '商户：' + (a.merchant || '（未填）'),
         '品类：' + (a.category || '（未填）'),
       ];
       const items = (a.items || []).map(i => i && i.name).filter(Boolean).join('、');
       if (items) lines.push('商品：' + items);
-      lines.push('', '每日剩余：' + yuan(rem.daily || 0) + ' · 每月剩余：' + yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+      lines.push('', '每日剩余：' + A.yuan(rem.daily || 0) + ' · 每月剩余：' + A.yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
       const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
       if (ok) {
         try { await IR.Proposals.approveSecond(p, IR.Sidecar); } catch (err) {
@@ -3174,7 +3020,7 @@
     if (!p) return '提案状态未知';
     const what = p.kind === 'email'
       ? ('邮件提案（给 ' + p.args.to + '）')
-      : ('下单提案（' + yuan(p.args.amountCents) + ' · ' + (p.args.merchant || '未填商户') + '）');
+      : ('下单提案（' + A.yuan(p.args.amountCents) + ' · ' + (p.args.merchant || '未填商户') + '）');
     if (p.status === 'done') return what + (p.kind === 'email' ? '：已发送' : '：已完成');
     if (p.status === 'denied') return what + '：已拒绝，未执行';
     if (p.status === 'expired') return what + '：已过期，未执行';
@@ -3567,7 +3413,7 @@
     $('#screen-shelf').classList.add('hidden');
     $('#screen-game').classList.remove('hidden');
     $('#screen-game').classList.remove('stage-strip', 'text-hidden');
-    closeMenus();
+    A.closeMenus();
     S.immersiveTextHidden = false;
     $('#hud-title').textContent = S.story.title;
     $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
@@ -4139,12 +3985,12 @@
     $('#btn-immersive-exit').onclick = e => { if (e) e.stopPropagation(); exitImmersive(); };
 
     // 顶栏「⋯」/ 输入区「＋」：打开前先刷新菜单项状态
-    $('#btn-hud-more').onclick = e => { e.stopPropagation(); toggleMenu($('#btn-hud-more'), $('#hud-more-menu')); };
-    $('#btn-more-actions').onclick = e => { e.stopPropagation(); toggleMenu($('#btn-more-actions'), $('#feature-menu')); };
+    $('#btn-hud-more').onclick = e => { e.stopPropagation(); A.toggleMenu($('#btn-hud-more'), $('#hud-more-menu')); };
+    $('#btn-more-actions').onclick = e => { e.stopPropagation(); A.toggleMenu($('#btn-more-actions'), $('#feature-menu')); };
     document.addEventListener('click', e => {
       if (e.target.closest && e.target.closest('.menu-item')) { closeMenus(); return; }
       if (e.target.closest && e.target.closest('.menu, .hud-more, .menu-wrap')) return;
-      closeMenus();
+      A.closeMenus();
     });
 
     // 舞台点击：沉浸态显示 / 隐藏文字；堆叠态收起 / 展开成细条
@@ -4311,7 +4157,7 @@
       applyFormToSettings();
       closeModal('modal-settings');
       toast('设置已保存');
-      if (sidecarReady()) saveFeatureConfig();    // 安全项真源在侧车：单独同步一次
+      if (A.sidecarReady()) saveFeatureConfig();    // 安全项真源在侧车：单独同步一次
     };
 
     // —— 可选本地服务：探测 / 功能入口 / 安排与台账 ——
@@ -4342,9 +4188,9 @@
     if (featPay) featPay.onclick = openPaymentModal;
     const featSched = $('#btn-feat-schedule');
     if (featSched) featSched.onclick = () => {
-      if (!featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
+      if (!A.featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
       openModal('modal-settings');
-      if (sidecarReady()) loadFeatureConfig();
+      if (A.sidecarReady()) loadFeatureConfig();
       const fs = $('#fs-schedule');
       if (fs && fs.scrollIntoView) fs.scrollIntoView({ block: 'start' });
     };
@@ -4474,12 +4320,12 @@
     watchStageVisibility();           // Ken Burns 离屏暂停
     bind();
     syncSettingsToForm();
-    initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
+    A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
     if (DEMO) {
       // 演示模式保持零外联：把本地服务换成一整套内存 mock，界面链路照样跑通
       if (IR.Demo && IR.Demo.installSidecarMock) IR.Demo.installSidecarMock();
     }
-    initSidecar();                    // 探测本地服务；离线则三功能保持禁用
+    A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
     if (DEMO) A.startDemo();            // 演示模式直接开演（跳过开始页与试画锚定）
     else A.showStart();                 // 入口 = 开始页（v0.1 原样）
     A.renderShelf();
@@ -4499,5 +4345,5 @@
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
-  A.reg({ sidecarReady, renderSidecarStatus, closeMenus, loadFeatureConfig, runOpening, choicesFromHead, closeWorkbench, openAnchor, closeAnchor, scrollChatBottom, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
+  A.reg({ loadFeatureConfig, renderTriggerList, sendPlayerAction, runOpening, choicesFromHead, closeWorkbench, openAnchor, closeAnchor, scrollChatBottom, renderChat, renderStage, renderThumbs, enterGame, syncSettingsToForm, renderStoryPanels, renderProfilePanel });
 })();
