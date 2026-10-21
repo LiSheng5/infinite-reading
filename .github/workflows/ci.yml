@@ -72,6 +72,10 @@ jobs:
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
+      # 分支树布局（js/treeLayout.js，UI-4）：泳道打包 / 折叠 / 标签 / 确定性 / 2000 节点耗时
+      - name: 分支树布局（node eval/treelayout-test.js）
+        run: node eval/treelayout-test.js
+
       # UI-3 设置分层纯逻辑（js/prefs.js + store 迁移 / 导出剥凭证）+ 设置控件 id 搬家护栏
       - name: 设置分层（node eval/prefs-test.js + settings-ids-test.js）
         run: |

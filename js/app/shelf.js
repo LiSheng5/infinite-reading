@@ -188,6 +188,12 @@
     };
     add('重命名', () => renameStory(it.id));
     add('重新生成标题', () => regenTitle(it.id));
+    // UI-4 §4.1：书架行「⋯」→「分支」：先打开该对话再叠分支页
+    add('分支', () => {
+      if (S.story && S.story.id === it.id) { A.openBranch({}); return; }
+      openStory(it.id);
+      A.openBranch({});
+    });
     add('导出', () => { if (A.openExport) A.openExport(it.id); });
     add('删除', () => removeStory(it.id));
     row.appendChild(menu);
@@ -453,7 +459,7 @@
       row.appendChild(snip);
     }
 
-    const openIt = () => openStory(hit.id, { nid: (hit.hits && hit.hits[0] && hit.hits[0].nid) || null });
+    const openIt = () => openStory(hit.id, { focusNodeId: (hit.hits && hit.hits[0] && hit.hits[0].nid) || null });
     row.addEventListener('click', openIt);
     row.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); openIt(); }
@@ -500,10 +506,13 @@
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     Store.setCurrentId(S.story.id);
     A.enterGame(false);
-    if (opts && opts.nid) scrollToHit(opts.nid);
+    // UI-4 §6：focusNodeId（兼容 UI-2 的 opts.nid）——搜索结果直接跳到命中的节点
+    const focus = (opts && (opts.focusNodeId || opts.nid)) || null;
+    if (focus) scrollToHit(focus);
   }
 
-  // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮；否则 toast（不挪 head，§3.7）
+  // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮（UI-2 已做）；
+  // 否则 → 打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续，§6）
   function scrollToHit(nid) {
     setTimeout(() => {
       const sel = '#chat-scroll [data-nid="' + escAttr(nid) + '"]';
@@ -514,7 +523,7 @@
         void el.offsetWidth;
         el.classList.add('hit-flash');
       } else {
-        toast('该处在较早历史或其他分支，分支页上线后可直接跳转');
+        A.openBranch({ selectId: nid });
       }
     }, 80);   // 等 enterGame 把聊天区渲染出来
   }

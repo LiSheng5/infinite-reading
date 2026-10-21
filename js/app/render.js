@@ -76,6 +76,7 @@
     A.resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
     const box = $('#chat-scroll');
     box.innerHTML = '';
+    A.updateHistoryBar();   // UI-4 §5：历史位置提示条跟着 head 走（head 有孩子就亮）
     if (!S.story) return;
     const log = S.story.log || [];
 

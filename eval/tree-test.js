@@ -24,6 +24,8 @@
  *      saveStory / loadStory 往返、imageIdsOf / knownImageIds 计入全树图集（用例 7 / 8）；
  *  18. 迁移补测（用例 6）：末条旁白 versions>1 展开成兄弟（meta.approx）、
  *      旧存档点 sp.turn → nodeId 映射、幂等（连跑两次深相等）。
+ *  19. UI-4 §8 增补：站在非叶子继续 = 新分支（commit 以 head 为 parent）、
+ *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏。
  *
  * 用法：node eval/tree-test.js
  */
@@ -600,6 +602,142 @@ function headTo(story, nodeId) {
   check('切回 activeVersion：落回 B 版，选项跟着回来', !!h2 && h2.id === t.head
     && s.log[s.log.length - 1].text === '第 2 幕旁白（B 版）'
     && eq(JSON.parse(s.messages[s.messages.length - 1].content).choices, ['选项二']));
+}
+
+/* ---------------- 19. UI-4 §8 增补：任意节点继续 / 分叉 ---------------- */
+
+// 19.1 站在非叶子节点继续 = 新分支（§2.1）
+{
+  const s = newStory();
+  const n1 = playTurn(s, { text: '行动一', narration: '第一幕', world: { time: '第一天' }, summariesPush: '摘要一' });
+  const n2 = playTurn(s, { text: '行动二', narration: '第二幕', world: { time: '第二天' }, summariesPush: '摘要二' });
+  const n3 = playTurn(s, { text: '行动三', narration: '第三幕', world: { time: '第三天' }, summariesPush: '摘要三' });
+
+  const kidsBefore = n2.children.slice();
+  const n3Before = JSON.stringify(s.tree.nodes[n3.id]);
+  T.switchTo(s, n2.id);
+  check('§2.1 switchTo 到非叶子不下探：head 就落在 n2', s.tree.head === n2.id);
+
+  const n4 = playTurn(s, { text: '行动四', narration: '第四幕', world: { time: '第四天' }, summariesPush: '摘要四' });
+  check('§2.1 非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）',
+    n2.children.length === kidsBefore.length + 1 && n2.children[n2.children.length - 1] === n4.id,
+    n2.children.join(','));
+  check('§2.1 parent.active 指向新节点', n2.active === n4.id);
+  check('§2.1 原有孩子与其子树不变', JSON.stringify(s.tree.nodes[n3.id]) === n3Before
+    && s.tree.nodes[n3.id].parent === n2.id);
+
+  // 19.2 forkBefore（§2.3）
+  const r = T.forkBefore(s, n3.id);
+  check('§2.3 forkBefore：head 落到 parent', !!r.ok && s.tree.head === n2.id);
+  check('§2.3 forkBefore：返回的 action 与原节点一致',
+    r.ok && r.action.text === '行动三' && r.action.kind === 'do' && r.action.type === 'player',
+    r.ok ? JSON.stringify(r.action) : r.reason);
+  const rootRes = T.forkBefore(s, s.tree.root);
+  check('§2.3 forkBefore：根节点返回 ok:false', rootRes.ok === false && !!rootRes.reason);
+  const missingRes = T.forkBefore(s, 'nope');
+  check('§2.3 forkBefore：未知节点返回 ok:false', missingRes.ok === false);
+}
+
+// 19.3 开局节点不可改写（§2.3）
+{
+  const s = newStory();
+  const o1 = playTurn(s, {
+    actionType: 'opening', text: '（故事开场。请描写第一幕，把玩家带进场景。）', narration: '开场旁白',
+  });
+  const res = T.forkBefore(s, o1.id);
+  check('§2.3 forkBefore：开局节点返回 ok:false', res.ok === false && !!res.reason, res.reason);
+  check('§2.3 forkBefore：开局节点拒绝时不动 head', s.tree.head === o1.id);
+}
+
+// 19.4 latestLeaf（§2.2）
+{
+  const s = newStory();
+  const p1 = playTurn(s, { text: 'P1', narration: 'n1' });
+  const p2 = playTurn(s, { text: 'P2', narration: 'n2' });
+  const p2b = retryTurn(s, { text: 'P2b', narration: 'n2b' });   // p2 的兄弟
+
+  T.switchTo(s, p2.id);
+  const p3 = playTurn(s, { text: 'P3', narration: 'n3' });       // p2 续写 → p3
+  check('§2.2 latestLeaf：沿 active 下探到叶子', T.latestLeaf(s, p1.id).id === p3.id,
+    T.latestLeaf(s, p1.id).id);
+  check('§2.2 latestLeaf：叶子就是自己', T.latestLeaf(s, p3.id).id === p3.id);
+  s.tree.nodes[p1.id].active = null;
+  check('§2.2 latestLeaf：无 active 时取最后一个孩子', T.latestLeaf(s, p1.id).id === p2b.id,
+    T.latestLeaf(s, p1.id).id);
+  check('§2.2 latestLeaf：未知节点返回 null', T.latestLeaf(s, 'nope') == null);
+}
+
+// 19.5 canResume（§2.4）
+{
+  const s = newStory();
+  const c1 = playTurn(s, { text: 'C1', narration: 'c1' });
+  const c2 = playTurn(s, { text: 'C2', narration: 'c2' });
+  check('§2.4 canResume：正常节点 → true', T.canResume(s, c1.id) === true && T.canResume(s, c2.id) === true);
+  s.tree.nodes[c1.id].sid = null;
+  check('§2.4 canResume：sid === null → false', T.canResume(s, c1.id) === false);
+  check('§2.4 canResume：未知节点 → false', T.canResume(s, 'nope') === false);
+  check('§2.4 canResume：直接传节点对象也认', T.canResume(s.tree.nodes[c1.id]) === false
+    && T.canResume(s.tree.nodes[c2.id]) === true);
+  // 旧档迁移：早期回合 sid 全是 null（用例 8 的形状）
+  const old = newStory();
+  old.log = [
+    { type: 'player', text: '旧一', kind: 'do', ts: 1 },
+    { type: 'narration', text: '旧旁白一', versions: ['旧旁白一'], activeVersion: 0, ts: 2 },
+    { type: 'player', text: '旧二', kind: 'do', ts: 3 },
+    { type: 'narration', text: '旧旁白二', versions: ['旧旁白二'], activeVersion: 0, ts: 4 },
+  ];
+  old.messages = [
+    { role: 'user', content: '[玩家行动]（做）旧一' },
+    { role: 'assistant', content: JSON.stringify({ narration: '旧旁白一', choices: [] }) },
+    { role: 'user', content: '[玩家行动]（做）旧二' },
+    { role: 'assistant', content: JSON.stringify({ narration: '旧旁白二', choices: [] }) },
+  ];
+  old.turn = 2;
+  const t = T.ensure(old);
+  const chain = T.pathOf(old, t.head);
+  const early = t.nodes[chain[1]];
+  check('§2.4 迁移旧档：早期回合被 canResume 拦住（sid === null）',
+    early.sid == null && T.canResume(old, early.id) === false && T.canResume(old, t.head) === true);
+}
+
+// 19.6 历史位置发送完整序列（begin → commit → seal）后投影无旧分支泄漏（§8.5）
+{
+  const s = newStory();
+  const q1 = playTurn(s, { text: '旧一', narration: '旧旁白一', world: { time: '旧时间' }, summariesPush: '旧摘要一' });
+  const q2 = playTurn(s, { text: '旧二', narration: '旧旁白二', world: { time: '旧时间二' }, summariesPush: '旧摘要二' });
+  const q3 = playTurn(s, { text: '旧三', narration: '旧旁白三', world: { time: '旧时间三' }, summariesPush: '旧摘要三' });
+
+  T.switchTo(s, q1.id);
+  const mark = T.begin(s);
+  s.log.push({ type: 'player', text: '新一', kind: 'do', ts: 10 });
+  const um = { role: 'user', content: '[玩家行动]（做）新一' };
+  const am = { role: 'assistant', content: JSON.stringify({ narration: '新旁白一', choices: [] }) };
+  s.turn += 1;
+  s.log.push({ type: 'narration', text: '新旁白一', versions: ['新旁白一'], activeVersion: 0, ts: 11 });
+  s.messages.push(um, am);
+  s.world.time = '新时间';
+  s.summaries.push('新摘要');
+  const qn = T.commit(s, {
+    action: { type: 'player', text: '新一', kind: 'do', sent: '（做）新一' },
+    userMsg: um, assistantMsg: am, logMark: mark.logMark,
+  });
+  T.seal(s, qn.id);
+  T.project(s);
+
+  check('§8.5 新节点是 q1 的新孩子、与 q2 成兄弟',
+    q1.children.length === 2 && q1.children[1] === qn.id && q1.active === qn.id);
+  check('§8.5 log 只含新路径内容（无旧二 / 旧三）',
+    s.log.some(e => e.text === '新旁白一') && s.log.some(e => e.text === '旧旁白一')
+    && !s.log.some(e => e.text === '旧旁白二') && !s.log.some(e => e.text === '旧旁白三'));
+  check('§8.5 messages 只含新路径窗口（无旧旁白二）',
+    s.messages.some(m => m.content.indexOf('新旁白一') >= 0)
+    && !s.messages.some(m => m.content.indexOf('旧旁白二') >= 0)
+    && s.messages.length === 4);
+  check('§8.5 world / summaries 是新分支的',
+    s.world.time === '新时间' && s.summaries.indexOf('新摘要') >= 0
+    && s.summaries.indexOf('旧摘要二') < 0 && s.summaries.indexOf('旧摘要三') < 0);
+  check('§8.5 旧分支节点仍在树上（q2 / q3 不丢）',
+    !!s.tree.nodes[q2.id] && !!s.tree.nodes[q3.id] && s.tree.nodes[q2.id].parent === q1.id);
 }
 
 /* ---------------- 汇总 ---------------- */
