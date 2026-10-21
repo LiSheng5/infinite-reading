@@ -386,6 +386,7 @@
       entries: entries,
       sealed: false,
       turn: +story.turn || 0,
+      meta: opts.meta || {},   // UI-3 §3.3：meta.model 记本回合模型名（无密钥 / URL）
     });
     node.scenes = scenesFor(story, node.entries);
     // narration 条目写上 nid：UI 靠它找兄弟（§4.1）
@@ -423,6 +424,16 @@
   }
 
   /* ---------------- 投影（§3）：树是真源，其余都是派生物 ---------------- */
+
+  // 手改世界卡 / 摘要栈等「派生数据」后调用：把 head 的内联状态换成当前值。
+  // 否则下一次 project（进入故事 / 切分支）会用旧快照把手改回滚掉。
+  function resyncState(story) {
+    const tree = ensure(story);
+    const head = tree.nodes[tree.head];
+    if (!head) return null;
+    head.sid = internState(tree, stateOf(story), head.parent ? tree.nodes[head.parent].sid : null);
+    return head.sid;
+  }
 
   function project(story) {
     const tree = ensure(story);
@@ -593,7 +604,7 @@
   global.IR = Object.assign(global.IR || {}, {
     Tree: {
       TREE_V, LOG_WINDOW, SCENE_WINDOW,
-      ensure, begin, commit, seal, project, pathOf,
+      ensure, begin, commit, seal, project, pathOf, resyncState,
       siblings, switchSibling, switchTo, pushLate, imageIdsOf,
     },
   });

@@ -187,6 +187,10 @@
 
     A.bindSplitter();
 
+    // —— UI-3：本对话设置面板 / 模型库 / 全局设置分组导航 ——
+    A.bindPrefsUI();
+    A.initSettingsNav();
+
     // —— 向导 ——
     $('#btn-close-wizard').onclick = () => $('#modal-wizard').classList.add('hidden');
     $('#btn-wz-cancel').onclick = () => $('#modal-wizard').classList.add('hidden');

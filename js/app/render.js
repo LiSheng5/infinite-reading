@@ -86,7 +86,7 @@
     // 流式 / 打字机中的临时旁白（思考链先流、正文后到，§4.5）
     if (S.live) {
       // 没有思考内容就不渲染折叠条（空白的「思考链」看着像坏了）
-      if (S.settings.showReasoning && String(S.live.reasoning || '').trim()) {
+      if (IR.Prefs.effective(S.settings, S.story, 'showReasoning') && String(S.live.reasoning || '').trim()) {
         S.liveReasonEl = reasonLiveBlock(S.live.reasoning, S.liveReasonOpen);
         if (S.liveReasonCollapsed) S.liveReasonEl.classList.add('collapsed');
         box.appendChild(S.liveReasonEl);
@@ -119,7 +119,7 @@
     const badge = $('#inspiration-count');
     const canShow = !S.busy && !S.live && !!S.story && S.story.mode === 'choice'
       && Array.isArray(S.currentChoices) && S.currentChoices.length > 0;
-    const inline = (S.settings.ui && S.settings.ui.choices) === 'always';
+    const inline = IR.Prefs.effective(S.settings, S.story, 'choices') === 'always';
 
     // 内联（always）：放在聊天记录的末尾（旁白下面；后面若又出了图，也不会被插队）
     if (canShow && inline) {
@@ -326,7 +326,7 @@
     body.textContent = e.text || '';
     d.appendChild(body);
     // 思考链（R9）：旁白上方的可折叠块，showReasoning 可关；空内容不渲染
-    if (e.type === 'narration' && S.settings.showReasoning && String(e.reasoning || '').trim()) {
+    if (e.type === 'narration' && IR.Prefs.effective(S.settings, S.story, 'showReasoning') && String(e.reasoning || '').trim()) {
       d.insertBefore(reasonBlock(e.reasoning, false), d.firstChild);
     }
 
@@ -475,16 +475,34 @@
     }
   }
 
-  /* ================= 渲染：布局状态（P2 的统一入口） =================
+  /* ================= 渲染：布局状态（P2 的统一入口 · UI-3 §3.5 分层） =================
    * 所有排版只由 #screen-game 的 data-layout 决定：
    *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
-   * 比例 / 收起 / 选项显示都存在 settings.ui（全局），story.ui 只记输入类型。 */
+   * 有效值 = story.prefs.ui 覆盖 → settings.ui 全局默认；story.ui 只记输入类型。 */
 
   const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
+  // 字号 / 宽度 / 密度（§3.5）：三档映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
+  const FONT_SCALE = { sm: 0.92, md: 1, lg: 1.12 };
+  const CONTENT_W = { narrow: '620px', standard: '760px', wide: '920px' };
+  const DENSITY = { compact: 0.82, standard: 1 };
 
   function uiState() {
     if (!S.settings.ui || typeof S.settings.ui !== 'object') S.settings.ui = Store.defaultSettings().ui;
     return S.settings.ui;
+  }
+
+  // 有效 UI（只读合并快照）：本对话覆盖 → 全局默认（UI-3 §3.5）
+  function effectiveUi() {
+    return IR.Prefs.effective(S.settings, S.story, 'ui');
+  }
+
+  // 写回：本对话已覆盖的键写 story.prefs.ui，未覆盖的写全局 settings.ui
+  function writeUi(patch) {
+    const prefsUi = (S.story && S.story.prefs && S.story.prefs.ui) || null;
+    for (const k of Object.keys(patch)) {
+      if (prefsUi && Object.prototype.hasOwnProperty.call(prefsUi, k)) prefsUi[k] = patch[k];
+      else uiState()[k] = patch[k];
+    }
   }
 
   function autoLayout() {
@@ -494,7 +512,7 @@
   function effectiveLayout() {
     // v0.6.0：chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
     if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return 'chat';
-    const ui = uiState();
+    const ui = effectiveUi();
     if (ui.layout === 'immersive') return 'immersive';
     if (ui.layout === 'split' || ui.layout === 'stack') return ui.layout;
     return autoLayout();
@@ -513,9 +531,9 @@
   }
 
   function setLayout(next) {
-    const ui = uiState();
-    ui.layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
-    if (ui.layout !== 'immersive') S.immersiveTextHidden = false;
+    const layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
+    writeUi({ layout: layout });
+    if (layout !== 'immersive') S.immersiveTextHidden = false;
     applyLayout();
     persistSettings();
   }
@@ -523,10 +541,14 @@
   function applyLayout() {
     const el = $('#screen-game');
     if (!el) return;
-    const ui = uiState();
+    const ui = effectiveUi();
     const layout = effectiveLayout();
     el.dataset.layout = layout;
     el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
+    // UI-3 §3.5：字号 / 宽度 / 密度 → CSS 变量（令牌驱动；chat / rp 的内容区吃这三个变量）
+    el.style.setProperty('--font-scale', String(FONT_SCALE[ui.fontScale] != null ? FONT_SCALE[ui.fontScale] : 1));
+    el.style.setProperty('--content-w', CONTENT_W[ui.width] || CONTENT_W.standard);
+    el.style.setProperty('--density', String(DENSITY[ui.density] != null ? DENSITY[ui.density] : 1));
     el.classList.toggle('no-image', !!ui.imageCollapsed && layout !== 'immersive');
     el.classList.toggle('text-hidden', !!S.immersiveTextHidden);
     if (layout !== 'stack') { el.classList.remove('stage-strip', 'kb-open'); }
@@ -543,9 +565,8 @@
   // 画面（收起 / 展开舞台）：沉浸态下等同于退出沉浸
   function toggleStagePanel() {
     if (!S.story) return;
-    const ui = uiState();
     if (isImmersive()) { setLayout('auto'); return; }
-    ui.imageCollapsed = !ui.imageCollapsed;
+    writeUi({ imageCollapsed: !effectiveUi().imageCollapsed });
     applyLayout();
     persistSettings();
   }
@@ -574,7 +595,7 @@
       const rect = $('#game-layout').getBoundingClientRect();
       const p = (clientX - rect.left) / Math.max(1, rect.width);
       // 每栏最小约 28%
-      uiState().splitRatio = Math.max(0.28, Math.min(0.72, p));
+      writeUi({ splitRatio: Math.max(0.28, Math.min(0.72, p)) });
       applyLayout();
       if (touch && touch.preventDefault) touch.preventDefault();
     };
@@ -594,7 +615,7 @@
     window.addEventListener('touchend', stop);
     // 双击分隔条恢复 1:1
     sp.addEventListener('dblclick', () => {
-      uiState().splitRatio = 0.5;
+      writeUi({ splitRatio: 0.5 });
       applyLayout();
       persistSettings();
     });
@@ -617,6 +638,7 @@
       IR.Tree.project(S.story);
     } catch (e) { console.warn('IR.Tree 初始化失败（按存档原样继续）：', e); }
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
+    A.renderStoryPrefs();   // UI-3 §7：切换对话整体重绘本对话设置面板（不残留上一个对话的值）
     $('#screen-start').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
     $('#screen-game').classList.remove('hidden');

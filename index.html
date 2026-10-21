@@ -16,7 +16,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.8.0">
+<link rel="stylesheet" href="css/style.css?v=0.9.0">
 </head>
 <body>
 <div id="app">
@@ -111,7 +111,8 @@
             <button id="btn-savepoint" class="menu-item" type="button" role="menuitem">打一个存档点</button>
             <button id="btn-hud-new" class="menu-item" type="button" role="menuitem">开一个新故事</button>
             <button id="btn-manual-gen" class="menu-item" type="button" role="menuitem">为当前场景作画</button>
-            <button id="btn-settings" class="menu-item" type="button" role="menuitem">模型设置</button>
+            <button id="btn-story-prefs" class="menu-item" type="button" role="menuitem">本对话设置</button>
+            <button id="btn-settings" class="menu-item" type="button" role="menuitem">全局设置</button>
           </div>
         </div>
       </div>
@@ -485,6 +486,21 @@
 
         <p class="hint">任意兼容 OpenAI 格式的接口都能用（云端 / 本地）：Base URL 可从下拉里选常见服务商、也能自己填；模型名与参数由你填——不预置模型名，省得跟着厂商变动一直维护。</p>
 
+        <!-- UI-3 §4.1：左侧分组导航 + 右侧分组面板（窄屏 = 列表 → 详情下钻）。
+             每个 fieldset 由 js/app/prefsui.js 归入分组面板，控件 id 一个不变。 -->
+        <div class="set-shell" id="set-shell">
+          <nav class="set-nav" id="set-nav" aria-label="设置分组">
+            <button type="button" class="set-nav-item" data-group="g-models">模型库</button>
+            <button type="button" class="set-nav-item" data-group="g-subs">辅助模型</button>
+            <button type="button" class="set-nav-item" data-group="g-image">生图与画风</button>
+            <button type="button" class="set-nav-item" data-group="g-tools">工具与服务</button>
+            <button type="button" class="set-nav-item" data-group="g-data">数据</button>
+            <button type="button" class="set-nav-item" data-group="g-look">外观</button>
+            <button type="button" class="set-nav-item" data-group="g-story">当前故事</button>
+          </nav>
+          <div class="set-panels" id="set-panels">
+            <button type="button" id="set-back" class="btn ghost set-back hidden">← 返回</button>
+
         <fieldset>
           <legend>剧情对话模型（AI1 · 旁白与角色）</legend>
           <div class="grid2">
@@ -505,6 +521,40 @@
           <div class="row-inline test-row">
             <button id="btn-test-chat" class="mini-btn">⚡ 测试连接</button>
             <span class="hint test-state" id="test-chat-state">用当前输入框里的地址与 Key 试连一次（只探测，不生成内容）。</span>
+          </div>
+        </fieldset>
+
+        <!-- UI-3 §3.1 模型库：可选的多套主模型；每个对话可在「本对话设置」里选自己的模型 -->
+        <fieldset id="fs-profiles">
+          <legend>模型库（每个对话可单独选）</legend>
+          <p class="hint">这里存的是几套「主模型」配置。每个对话可以在「⋯ → 本对话设置」里选自己的模型；不选就跟随上面的默认主模型。<b>对话存档 / 导出里只记模型的引用名，绝不带 API Key 与接口地址</b>（故事会被导出、分享）。</p>
+          <div id="mp-list" class="mono-list"></div>
+          <div class="row-inline">
+            <button id="mp-add" class="btn">＋ 新增模型</button>
+            <span class="hint" id="mp-state"></span>
+          </div>
+          <div id="mp-editor" class="panel-block hidden">
+            <p class="hint" id="mp-title">新增模型</p>
+            <div class="grid2">
+              <label>名称（自己认得出就行）<input id="mp-name" type="text" placeholder="例如：便宜的 / 聪明的"></label>
+              <label>模型<input id="mp-model" type="text" placeholder="填你的模型名"></label>
+            </div>
+            <div class="grid2">
+              <label>接口地址 Base URL<input id="mp-base" type="text" list="dl-base-url" placeholder="https://…（留空 = 沿用默认主模型）"></label>
+              <label>温度（0~2）<input id="mp-temp" type="number" step="0.1" min="0" max="2" placeholder="0.9"></label>
+            </div>
+            <label>API Key<input id="mp-key" type="password" placeholder="留空 = 沿用默认主模型；已保存的 Key 不回显"></label>
+            <p class="hint" id="mp-key-state"></p>
+            <label class="check hidden" id="mp-copy-key-wrap"><input id="mp-copy-key" type="checkbox" checked> 复制时带上原模型的 API Key（不勾 = 只复制其它字段）</label>
+            <div class="grid2">
+              <label>上下文窗口（token · 0 = 未填）<input id="mp-ctx" type="number" min="0" step="1000" placeholder="不知道就留空"></label>
+              <label>思考档位<input id="mp-thinking" type="text" placeholder="default（不下发）"></label>
+            </div>
+            <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="mp-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
+            <div class="row-inline">
+              <button id="mp-save" class="btn primary">保存这个模型</button>
+              <button id="mp-cancel" class="btn ghost">取消</button>
+            </div>
           </div>
         </fieldset>
 
@@ -670,6 +720,28 @@
                 <option value="off">关</option>
                 <option value="standard">标准</option>
                 <option value="rich">丰富</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>字号默认（扮演 / 智能体）
+              <select id="s-ui-font">
+                <option value="sm">小</option>
+                <option value="md">中</option>
+                <option value="lg">大</option>
+              </select>
+            </label>
+            <label>内容宽度默认（扮演 / 智能体）
+              <select id="s-ui-width">
+                <option value="narrow">窄</option>
+                <option value="standard">标准</option>
+                <option value="wide">宽</option>
+              </select>
+            </label>
+            <label>密度默认（扮演 / 智能体）
+              <select id="s-ui-density">
+                <option value="compact">紧凑</option>
+                <option value="standard">标准</option>
               </select>
             </label>
           </div>
@@ -870,12 +942,25 @@
         <div class="danger-row">
           <button id="btn-clear-save" class="btn danger">清空本地存档与设置</button>
         </div>
+
+          </div><!-- /.set-panels -->
+        </div><!-- /.set-shell -->
       </div>
       <div class="modal-foot">
         <button id="btn-save-settings" class="btn primary">保存</button>
       </div>
     </div>
   </div>
+
+  <!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ========== -->
+  <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">
+    <div class="prefs-head">
+      <h3>本对话设置</h3>
+      <button id="prefs-close" class="hud-btn" title="关闭">✕</button>
+    </div>
+    <div class="prefs-body" id="prefs-body"></div>
+    <p class="hint prefs-foot" id="prefs-note">改动只影响当前对话，随时点「重置」回到全局默认；换模型从下一条消息起生效。</p>
+  </aside>
 
   <!-- ========== 通用确认 / 输入弹窗 ==========
        替代原生 confirm / prompt：内嵌预览（沙箱 iframe）会静默忽略原生弹窗、
@@ -962,50 +1047,52 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.8.0"></script>
-<script src="js/context.js?v=0.8.0"></script>
+<script src="js/providers.js?v=0.9.0"></script>
+<script src="js/prefs.js?v=0.9.0"></script>
+<script src="js/context.js?v=0.9.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.8.0"></script>
+<script src="js/tree.js?v=0.9.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.8.0"></script>
-<script src="js/store.js?v=0.8.0"></script>
-<script src="js/modelCapabilities.js?v=0.8.0"></script>
-<script src="js/roleCard.js?v=0.8.0"></script>
+<script src="js/storage.js?v=0.9.0"></script>
+<script src="js/store.js?v=0.9.0"></script>
+<script src="js/modelCapabilities.js?v=0.9.0"></script>
+<script src="js/roleCard.js?v=0.9.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.8.0"></script>
+<script src="js/demo.js?v=0.9.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.8.0"></script>
+<script src="js/zip.js?v=0.9.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.8.0"></script>
+<script src="js/sidecar.js?v=0.9.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.8.0"></script>
+<script src="js/features.js?v=0.9.0"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.8.0"></script>
+<script src="js/paintQueue.js?v=0.9.0"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.8.0"></script>
+<script src="js/proposals.js?v=0.9.0"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.8.0"></script>
-<script src="js/titles.js?v=0.8.0"></script>
-<script src="js/search.js?v=0.8.0"></script>
+<script src="js/motion.js?v=0.9.0"></script>
+<script src="js/titles.js?v=0.9.0"></script>
+<script src="js/search.js?v=0.9.0"></script>
 <!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.8.0"></script>
-<script src="js/app/models.js?v=0.8.0"></script>
-<script src="js/app/library.js?v=0.8.0"></script>
-<script src="js/app/shelf.js?v=0.8.0"></script>
-<script src="js/app/backup.js?v=0.8.0"></script>
-<script src="js/app/importer.js?v=0.8.0"></script>
-<script src="js/app/cards.js?v=0.8.0"></script>
-<script src="js/app/wizard.js?v=0.8.0"></script>
-<script src="js/app/sidecar.js?v=0.8.0"></script>
-<script src="js/app/features.js?v=0.8.0"></script>
-<script src="js/app/styleanchor.js?v=0.8.0"></script>
-<script src="js/app/painter.js?v=0.8.0"></script>
-<script src="js/app/turn.js?v=0.8.0"></script>
-<script src="js/app/round.js?v=0.8.0"></script>
-<script src="js/app/render.js?v=0.8.0"></script>
-<script src="js/app/settings.js?v=0.8.0"></script>
-<script src="js/app.js?v=0.8.0"></script>
+<script src="js/app/core.js?v=0.9.0"></script>
+<script src="js/app/models.js?v=0.9.0"></script>
+<script src="js/app/library.js?v=0.9.0"></script>
+<script src="js/app/shelf.js?v=0.9.0"></script>
+<script src="js/app/backup.js?v=0.9.0"></script>
+<script src="js/app/importer.js?v=0.9.0"></script>
+<script src="js/app/cards.js?v=0.9.0"></script>
+<script src="js/app/wizard.js?v=0.9.0"></script>
+<script src="js/app/sidecar.js?v=0.9.0"></script>
+<script src="js/app/features.js?v=0.9.0"></script>
+<script src="js/app/styleanchor.js?v=0.9.0"></script>
+<script src="js/app/painter.js?v=0.9.0"></script>
+<script src="js/app/turn.js?v=0.9.0"></script>
+<script src="js/app/round.js?v=0.9.0"></script>
+<script src="js/app/render.js?v=0.9.0"></script>
+<script src="js/app/settings.js?v=0.9.0"></script>
+<script src="js/app/prefsui.js?v=0.9.0"></script>
+<script src="js/app.js?v=0.9.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.8.0"></script>
+<script src="js/pwa.js?v=0.9.0"></script>
 </body>
 </html>

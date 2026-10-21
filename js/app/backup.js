@@ -113,10 +113,12 @@
   }
 
   // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
+  // UI-3：模型库 profiles[] 同样走这把刀（默认不带 Key 的语义不变，只是覆盖新增的 profiles）
   function buildBackupPack(stripKeys) {
     const s = clone(S.settings);
     if (stripKeys) {
       ['chat', 'painter', 'scribe', 'draft', 'image'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
+      if (Array.isArray(s.profiles)) s.profiles.forEach(p => { if (p) p.apiKey = ''; });
     }
     return {
       format: 'ir-backup', schema: 1, app: '无限阅读 v0.4',
@@ -279,9 +281,11 @@
 
   function openSettings() {
     if (DEMO) toast('演示模式：这里的设置改了也不会生效（演示不联网、不写盘）。去掉地址栏的 ?demo=1 重新打开，就可以接入真模型了。', false, true);
+    A.closeStoryPrefs();   // UI-3：全局设置与本对话设置互斥（避免面板叠在弹窗上）
     A.syncSettingsToForm();
     renderStoragePanel();
     openModal('modal-settings');
+    A.initSettingsNav();   // UI-3 §4.1：分组导航态（窄屏列表 / 桌面左导航）
     A.renderSidecarStatus();
     if (A.sidecarReady()) A.loadFeatureConfig();   // 打开设置时刷新一次安全项（真源在侧车）
   }
@@ -375,6 +379,9 @@
       thumb: im.thumb || null, src: im.src || null, ts: Date.now(),
     }));
     st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
+    // UI-3 §3.4：本对话偏好随包导入（只有 profileId + 显示用标签；凭证在导出侧已剥）。
+    // 本机没有该 profile 时 resolveChatCfg 自动回退默认，本对话设置面板会提示。
+    if (obj.prefs && typeof obj.prefs === 'object') st.prefs = Store.sanitizePrefsSafe(obj.prefs);
     st.tree = obj.tree ? clone(obj.tree) : null;   // full 包带的分支树（§5⑧）
     IR.Tree.ensure(st);                            // 导入后建 / 校验树（无树旧包 → 线性链）
     Store.saveStory(st);

@@ -296,7 +296,8 @@
     if (S.turnPaintedByTool) { S.turnPaintedByTool = false; return; }
     // §3.E.3：对话 / 扮演没有「时机出图」——图只来自模型调用工具或手动按钮（默认行为改动，见 CHANGELOG）
     if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return;
-    const mode = S.settings.trigger;
+    // UI-3：出图时机取有效值（story.prefs.trigger → 全局 settings.trigger）
+    const mode = IR.Prefs.effective(S.settings, S.story, 'trigger');
     let want = false;
     if (mode === 'every') want = true;
     else if (mode === 'choice' && (S.lastActionWasChoice || isOpen || S.story.turn === 1)) want = true;
@@ -591,6 +592,7 @@
       const node = IR.Tree.commit(S.story, {
         action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+        meta: { model: S.turnModel || '' },   // UI-3 §3.3：重试同样记模型名
       });
       S.turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
       await postTurn();

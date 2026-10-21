@@ -223,6 +223,8 @@
         aiTasks: true,       // 书记员兼任「压缩摘要 + 滚动风格摘要」；调用失败自动走本地规则
       }),
       draft: defaultSubModel(),                                // 开局向导起草
+      // UI-3 模型库（§3.1）：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
+      profiles: [],
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '' },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
       // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
@@ -232,6 +234,10 @@
         imageCollapsed: false,   // 舞台收起（聊天占满）
         choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
         motion: 'auto',          // 动效强度（UI-1）：auto | off | standard | rich
+        // UI-3 §3.5：扮演 / 智能体的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
+        fontScale: 'md',         // sm | md | lg
+        width: 'standard',       // narrow | standard | wide
+        density: 'standard',     // compact | standard
       },
       showReasoning: true,
       toolsEnabled: 'on',
@@ -248,6 +254,21 @@
     };
   }
 
+  // UI-3 §3.1 模型库（profiles）迁移：幂等；已有数据原样保留，只保证每条有字符串 id
+  function migrateProfiles(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    const seen = Object.create(null);
+    for (const p of raw) {
+      if (!p || typeof p !== 'object') continue;         // 坏条目直接丢
+      const id = (typeof p.id === 'string' && p.id.trim()) ? p.id.trim().slice(0, 64) : genId('pf');
+      if (seen[id]) continue;                            // 防重 id（保留先到的）
+      seen[id] = true;
+      out.push(Object.assign({}, p, { id: id }));
+    }
+    return out;
+  }
+
   // v0.1 / 任意旧设置 → v0.2（幂等）
   function migrateSettings(raw) {
     const d = defaultSettings();
@@ -260,7 +281,11 @@
       draft: Object.assign({}, d.draft, raw.draft || {}),
       image: Object.assign({}, d.image, raw.image || {}),
       userProfile: Object.assign({}, d.userProfile, raw.userProfile || {}, {
-        enabled: Object.assign({}, d.userProfile.enabled, (raw.userProfile && raw.userProfile.enabled) || {}),
+        // 'all' 是合法写法（= 三个模式全开）：必须原样保留；只有对象才做深合并
+        //（修：此前 Object.assign({}, 默认, 'all') 会把字符串拆成 0/1/2 索引键，刷新后三个勾全丢）
+        enabled: ((raw.userProfile && raw.userProfile.enabled) === 'all')
+          ? 'all'
+          : Object.assign({}, d.userProfile.enabled, (raw.userProfile && raw.userProfile.enabled) || {}),
       }),
       showReasoning: ('showReasoning' in raw) ? !!raw.showReasoning : d.showReasoning,
       toolsEnabled: raw.toolsEnabled === 'off' ? 'off' : 'on',
@@ -285,7 +310,14 @@
       choices: rawUi.choices === 'always' ? 'always' : 'tray',
       // 动效强度（UI-1）：auto | off | standard | rich，非法值当 auto（幂等）
       motion: ['auto', 'off', 'standard', 'rich'].indexOf(rawUi.motion) >= 0 ? rawUi.motion : 'auto',
+      // UI-3 §3.5：字号 / 宽度 / 密度默认（令牌驱动；非法值回默认）
+      fontScale: ['sm', 'md', 'lg'].indexOf(rawUi.fontScale) >= 0 ? rawUi.fontScale : d.ui.fontScale,
+      width: ['narrow', 'standard', 'wide'].indexOf(rawUi.width) >= 0 ? rawUi.width : d.ui.width,
+      density: ['compact', 'standard'].indexOf(rawUi.density) >= 0 ? rawUi.density : d.ui.density,
     };
+
+    // UI-3 §3.1 模型库：幂等补 profiles；已有条目原样保留（只保证有字符串 id）
+    out.profiles = migrateProfiles(raw.profiles);
 
     out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;
     out.scribe.every = (raw.scribe && +raw.scribe.every) ? +raw.scribe.every : 10;
@@ -397,6 +429,20 @@
     if (!out.world.scene && out.lastSceneSummary) out.world.scene = out.lastSceneSummary;
     // 分支树原样透传（schema v3）：这里不校验、不依赖 IR.Tree——合法性与降级重建由 IR.Tree.ensure 负责
     if (raw.tree) out.tree = raw.tree;
+    // UI-3 §3.2 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的旧档不报错
+    if (raw.prefs && typeof raw.prefs === 'object') {
+      out.prefs = sanitizePrefsSafe(raw.prefs);
+    }
+    return out;
+  }
+
+  // prefs 清洗统一入口：IR.Prefs 缺位时的兜底（只放行白名单键，安全上只会更严）
+  function sanitizePrefsSafe(raw) {
+    const P = (global.IR && global.IR.Prefs) || null;
+    if (P && typeof P.sanitizePrefs === 'function') return P.sanitizePrefs(raw);
+    const out = {};
+    if (typeof raw.profileId === 'string' && raw.profileId) out.profileId = raw.profileId.trim().slice(0, 64);
+    if (typeof raw.profileLabel === 'string' && raw.profileLabel) out.profileLabel = raw.profileLabel.trim().slice(0, 120);
     return out;
   }
 
@@ -545,7 +591,7 @@
   }
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
   function serializeStory(story) {
-    return Object.assign({}, story, {
+    const out = Object.assign({}, story, {
       log: (story.log || []).slice(-120).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
       scenes: (story.scenes || []).slice(-12).map(s => ({
         id: s.id, alt: s.alt, prompt: s.prompt, promptRaw: s.promptRaw || '',
@@ -558,6 +604,44 @@
       })),
       savepoints: (story.savepoints || []).slice(-5),   // 存档点最多保留 5 个
     });
+    // UI-3 §3.2/§3.4：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
+    if (story.prefs && typeof story.prefs === 'object') out.prefs = sanitizePrefsSafe(story.prefs);
+    else delete out.prefs;
+    return out;
+  }
+
+  /* ---------------- 导出包（UI-3 §3.4：剥凭证 + 附 profileLabel） ----------------
+   * 纯函数：images 由调用方（library.js）从 IndexedDB 取回后传入。
+   * 安全红线：prefs 只带 profileId（不透明 id）与 profileLabel（仅显示）；
+   * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
+  function buildStoryPack(st, kind, images, settings) {
+    const P = (global.IR && global.IR.Prefs) || null;
+    const pack = {
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.4',
+      title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
+      world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
+      characterCard: st.characterCard || null,
+      createdAt: st.createdAt, updatedAt: st.updatedAt,
+      images: images || [],
+    };
+    if (kind === 'full') {
+      pack.log = st.log || [];
+      pack.messages = st.messages || [];
+      pack.summaries = st.summaries || [];
+      pack.painterThread = st.painterThread || [];
+      pack.userProfile = st.userProfile || [];
+      pack.turn = st.turn || 0;
+      pack.lastSceneSummary = st.lastSceneSummary || '';
+      pack.tree = st.tree || null;   // 分支树（§5⑧）：full 包带整棵树，导入后 ensure 复原分支
+    }
+    const prefs = P && typeof P.exportPrefs === 'function'
+      ? P.exportPrefs(st, settings)
+      : (st.prefs && typeof st.prefs.profileId === 'string' && st.prefs.profileId
+        ? { profileId: st.prefs.profileId, profileLabel: st.prefs.profileLabel || '' }
+        : null);
+    if (prefs) pack.prefs = prefs;
+    // 兜底剥凭证：整棵树（含 log / tree / world）任意层级的凭证形键名一律去掉
+    return P && typeof P.stripSecrets === 'function' ? P.stripSecrets(pack) : pack;
   }
   function saveStory(story) {
     if (!story || !story.id) return false;
@@ -851,7 +935,8 @@
       SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi,
-      migrateSettings, migrateStory, serializeStory,
+      migrateSettings, migrateProfiles, migrateStory, serializeStory,
+      buildStoryPack, sanitizePrefsSafe,
       newStory,
       loadSettings, saveSettings,
       listStories, loadStory, saveStory, deleteStory, storyThumb,
