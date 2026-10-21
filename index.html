@@ -16,7 +16,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.9.0">
+<link rel="stylesheet" href="css/style.css?v=0.10.0">
 </head>
 <body>
 <div id="app">
@@ -109,6 +109,7 @@
           <button id="btn-hud-more" class="hud-btn hud-icon" title="更多" aria-haspopup="menu" aria-expanded="false">⋯</button>
           <div id="hud-more-menu" class="menu hidden" role="menu">
             <button id="btn-savepoint" class="menu-item" type="button" role="menuitem">打一个存档点</button>
+            <button id="btn-branch" class="menu-item" type="button" role="menuitem">分支</button>
             <button id="btn-hud-new" class="menu-item" type="button" role="menuitem">开一个新故事</button>
             <button id="btn-manual-gen" class="menu-item" type="button" role="menuitem">为当前场景作画</button>
             <button id="btn-story-prefs" class="menu-item" type="button" role="menuitem">本对话设置</button>
@@ -143,6 +144,11 @@
               </div>
             </div>
           </div>
+          <!-- 历史位置提示条（UI-4 §5）：head 不是叶子时提醒「继续发送会创建新分支」 -->
+          <div id="history-bar" class="history-bar hidden" role="status" aria-live="polite">
+            <span id="history-bar-text"></span>
+            <button id="btn-history-latest" class="history-jump" type="button">回到最新</button>
+          </div>
           <div class="input-row">
             <div id="kind-switch" class="seg" role="group" aria-label="输入类型">
               <button class="seg-btn active" data-kind="do" type="button" title="做：你的行动">做</button>
@@ -176,6 +182,44 @@
       </div>
     </div>
   </section>
+
+  <!-- ========== 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉 ========== -->
+  <div id="branch-page" class="branch-page hidden" role="dialog" aria-modal="true" aria-label="分支视图">
+    <header class="branch-top">
+      <button id="btn-branch-back" class="btn" type="button">← 返回对话</button>
+      <h2 id="branch-title" class="branch-title"></h2>
+      <div class="branch-tools">
+        <button id="btn-branch-zoom-out" class="hud-btn hud-icon" type="button" title="缩小" aria-label="缩小">−</button>
+        <button id="btn-branch-zoom-in" class="hud-btn hud-icon" type="button" title="放大" aria-label="放大">＋</button>
+        <button id="btn-branch-center" class="btn" type="button" title="居中并选中当前回合">回到当前</button>
+        <button id="btn-branch-expand-all" class="btn" type="button" aria-pressed="false">展开全部折叠</button>
+      </div>
+    </header>
+    <div class="branch-body">
+      <div id="branch-canvas" class="branch-canvas">
+        <!-- SVG 一律 createElementNS 构造，不用 innerHTML -->
+        <svg id="branch-svg" role="tree" aria-label="分支树" tabindex="0"></svg>
+      </div>
+      <aside id="branch-panel" class="branch-panel hidden" aria-label="节点详情">
+        <div class="branch-panel-head">
+          <div id="bp-turn" class="bp-turn"></div>
+          <button id="btn-bp-close" class="hud-btn hud-icon" type="button" title="关闭面板" aria-label="关闭面板">✕</button>
+        </div>
+        <div class="branch-panel-body">
+          <div class="bp-field"><div class="bp-label">玩家行动</div><div id="bp-action" class="bp-text"></div></div>
+          <div class="bp-field"><div class="bp-label">AI 回复</div><div id="bp-reply" class="bp-text"></div></div>
+          <div class="bp-field"><div class="bp-label">时间</div><div id="bp-time" class="bp-text"></div></div>
+          <div class="bp-field"><div class="bp-label">模型</div><div id="bp-model" class="bp-text"></div></div>
+          <p id="bp-warn" class="bp-warn hidden"></p>
+        </div>
+        <div class="branch-panel-actions">
+          <button id="btn-bp-resume" class="btn primary" type="button">回到这里并从此继续</button>
+          <button id="btn-bp-fork" class="btn" type="button">改我说的，从这之前分叉</button>
+          <button id="btn-bp-latest" class="btn" type="button">切到这条分支的最新处</button>
+        </div>
+      </aside>
+    </div>
+  </div>
 
   <!-- ========== 新故事 · 选模式（§4.8） ========== -->
   <div id="modal-new" class="modal hidden">
@@ -1047,52 +1091,55 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.9.0"></script>
-<script src="js/prefs.js?v=0.9.0"></script>
-<script src="js/context.js?v=0.9.0"></script>
+<script src="js/providers.js?v=0.10.0"></script>
+<script src="js/prefs.js?v=0.10.0"></script>
+<script src="js/context.js?v=0.10.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.9.0"></script>
+<script src="js/tree.js?v=0.10.0"></script>
+<!-- 分支树布局（分支页画布几何：泳道 / 折叠 / 标签，纯逻辑 Node 可测）：必须在 app.js 之前 -->
+<script src="js/treeLayout.js?v=0.10.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.9.0"></script>
-<script src="js/store.js?v=0.9.0"></script>
-<script src="js/modelCapabilities.js?v=0.9.0"></script>
-<script src="js/roleCard.js?v=0.9.0"></script>
+<script src="js/storage.js?v=0.10.0"></script>
+<script src="js/store.js?v=0.10.0"></script>
+<script src="js/modelCapabilities.js?v=0.10.0"></script>
+<script src="js/roleCard.js?v=0.10.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.9.0"></script>
+<script src="js/demo.js?v=0.10.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.9.0"></script>
+<script src="js/zip.js?v=0.10.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.9.0"></script>
+<script src="js/sidecar.js?v=0.10.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.9.0"></script>
+<script src="js/features.js?v=0.10.0"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.9.0"></script>
+<script src="js/paintQueue.js?v=0.10.0"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.9.0"></script>
+<script src="js/proposals.js?v=0.10.0"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.9.0"></script>
-<script src="js/titles.js?v=0.9.0"></script>
-<script src="js/search.js?v=0.9.0"></script>
+<script src="js/motion.js?v=0.10.0"></script>
+<script src="js/titles.js?v=0.10.0"></script>
+<script src="js/search.js?v=0.10.0"></script>
 <!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.9.0"></script>
-<script src="js/app/models.js?v=0.9.0"></script>
-<script src="js/app/library.js?v=0.9.0"></script>
-<script src="js/app/shelf.js?v=0.9.0"></script>
-<script src="js/app/backup.js?v=0.9.0"></script>
-<script src="js/app/importer.js?v=0.9.0"></script>
-<script src="js/app/cards.js?v=0.9.0"></script>
-<script src="js/app/wizard.js?v=0.9.0"></script>
-<script src="js/app/sidecar.js?v=0.9.0"></script>
-<script src="js/app/features.js?v=0.9.0"></script>
-<script src="js/app/styleanchor.js?v=0.9.0"></script>
-<script src="js/app/painter.js?v=0.9.0"></script>
-<script src="js/app/turn.js?v=0.9.0"></script>
-<script src="js/app/round.js?v=0.9.0"></script>
-<script src="js/app/render.js?v=0.9.0"></script>
-<script src="js/app/settings.js?v=0.9.0"></script>
-<script src="js/app/prefsui.js?v=0.9.0"></script>
-<script src="js/app.js?v=0.9.0"></script>
+<script src="js/app/core.js?v=0.10.0"></script>
+<script src="js/app/branch.js?v=0.10.0"></script>
+<script src="js/app/models.js?v=0.10.0"></script>
+<script src="js/app/library.js?v=0.10.0"></script>
+<script src="js/app/shelf.js?v=0.10.0"></script>
+<script src="js/app/backup.js?v=0.10.0"></script>
+<script src="js/app/importer.js?v=0.10.0"></script>
+<script src="js/app/cards.js?v=0.10.0"></script>
+<script src="js/app/wizard.js?v=0.10.0"></script>
+<script src="js/app/sidecar.js?v=0.10.0"></script>
+<script src="js/app/features.js?v=0.10.0"></script>
+<script src="js/app/styleanchor.js?v=0.10.0"></script>
+<script src="js/app/painter.js?v=0.10.0"></script>
+<script src="js/app/turn.js?v=0.10.0"></script>
+<script src="js/app/round.js?v=0.10.0"></script>
+<script src="js/app/render.js?v=0.10.0"></script>
+<script src="js/app/settings.js?v=0.10.0"></script>
+<script src="js/app/prefsui.js?v=0.10.0"></script>
+<script src="js/app.js?v=0.10.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.9.0"></script>
+<script src="js/pwa.js?v=0.10.0"></script>
 </body>
 </html>

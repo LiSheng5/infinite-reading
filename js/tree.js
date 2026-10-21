@@ -17,6 +17,9 @@
  *   siblings(story, nodeId)  某节点的兄弟 id 列表（含自身，按创建序）；无父 → [nodeId]
  *   switchSibling(story, nodeId, dir)  切兄弟（dir = -1 | +1），沿 active 下探到叶子后投影
  *   switchTo(story, nodeId)  直接落到某节点（存档点回档，§4.6），投影 + active 记忆对齐
+ *   latestLeaf(story, nodeId)  沿 active 下探到叶子（descend 的公开版，UI-4 §2.2）
+ *   forkBefore(story, nodeId)  落到该回合发生之前（= parent），返回原玩家行动（UI-4 §2.3）
+ *   canResume(story, nodeId)  该节点能否作为「继续 / 分叉」的落点（sid 未知则不行，UI-4 §2.4）
  *   pushLate(story, nodeId, entry|scene)  晚到条目 / 画面（§4.4）：写节点；在路径上再同步进投影
  *   imageIdsOf(tree)         全树（含非当前分支）引用到的原图 id
  *
@@ -370,7 +373,9 @@
     return { logMark: (story.log || []).length };
   }
 
-  // 回合成功：落一个 turn 节点（parent = 当前 head），head 前移
+  // 回合成功：落一个 turn 节点（parent = 当前 head），head 前移。
+  // UI-4 §2.1：head 停在非叶子节点（switchTo 回到历史位置后再发送）时同样以它为 parent——
+  // 新节点追加到该节点 children 末尾并更新 parent.active，天然产生一条新分支（测试固定）。
   function commit(story, opts) {
     opts = opts || {};
     const tree = ensure(story);
@@ -546,6 +551,46 @@
     return node;
   }
 
+  /* ---------------- UI-4 §2：任意节点继续 / 分叉 ---------------- */
+
+  // §2.2：沿 active 下探到叶子（descend 的公开版本，纯读不改）；无 active 时取最后一个孩子
+  function latestLeaf(story, nodeId) {
+    const tree = story && story.tree;
+    if (!tree || !tree.nodes) return null;
+    return descend(tree, nodeId == null ? tree.head : nodeId);
+  }
+
+  // §2.3：站在「这一回合发生之前」= 把 head 落到 node.parent，供「改我说的」预填原话后分叉。
+  // 根节点（没有 parent）与开局节点（action.type === 'opening'）不可改写 → { ok:false, reason }。
+  function forkBefore(story, nodeId) {
+    const tree = ensure(story);
+    const node = tree && tree.nodes[nodeId];
+    if (!node) return { ok: false, reason: '节点不存在' };
+    if (!node.parent || !tree.nodes[node.parent]) return { ok: false, reason: '开局之前没有可分叉的位置' };
+    if (node.action && node.action.type === 'opening') return { ok: false, reason: '开局回合不能改写' };
+    switchTo(story, node.parent);
+    const a = normalizeAction(node.action, node.userMsg);
+    return {
+      ok: true,
+      action: {
+        type: (node.action && node.action.type) || 'player',
+        text: a.text, kind: a.kind, sent: a.sent,
+      },
+    };
+  }
+
+  // §2.4（纯函数）：sid === null（旧档迁移来的早期回合，状态未知）→ 只能看，不能落到这里继续。
+  // project 对 sid === null 会保持当前状态不动，落到这种节点世界卡 / 摘要就是错的（§9）。
+  // 兼容两种调用：canResume(story, nodeId) / canResume(node)。
+  function canResume(story, nodeId) {
+    let node = null;
+    if (story && typeof story === 'object') {
+      if (nodeId == null && story.kind && Array.isArray(story.children)) node = story;
+      else if (story.tree && story.tree.nodes) node = story.tree.nodes[nodeId] || null;
+    }
+    return !!(node && node.sid != null);
+  }
+
   /* ---------------- 晚到的条目 / 画面（§4.4） ---------------- */
 
   // entry（有 type）→ node.entries；scene（无 type）→ node.scenes（收成不含 src 的同口径形状）。
@@ -605,7 +650,8 @@
     Tree: {
       TREE_V, LOG_WINDOW, SCENE_WINDOW,
       ensure, begin, commit, seal, project, pathOf, resyncState,
-      siblings, switchSibling, switchTo, pushLate, imageIdsOf,
+      siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
+      pushLate, imageIdsOf,
     },
   });
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

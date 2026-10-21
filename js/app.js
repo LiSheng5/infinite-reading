@@ -191,6 +191,9 @@
     A.bindPrefsUI();
     A.initSettingsNav();
 
+    // —— UI-4：分支页（顶栏「⋯」→「分支」/ 书架行菜单 / 历史位置提示条） ——
+    A.initBranch();
+
     // —— 向导 ——
     $('#btn-close-wizard').onclick = () => $('#modal-wizard').classList.add('hidden');
     $('#btn-wz-cancel').onclick = () => $('#modal-wizard').classList.add('hidden');

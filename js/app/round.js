@@ -368,5 +368,19 @@
     S.story.log.push(entry);
   }
 
-  A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog });
+  // UI-4 §5：输入框预填接口（只为 forkBefore「改我说的」用）——不触发发送。
+  // 剧情 / 扮演还原「做 / 说 / 导演」选择；智能体（chat）没有这组语义，只填文本。
+  function setComposerText(text, kind) {
+    const inp = $('#player-input');
+    if (inp) inp.value = String(text == null ? '' : text);
+    if (S.story && S.story.mode !== 'chat') {
+      S.story.ui = S.story.ui || {};
+      S.story.ui.kind = (kind === 'say' || kind === 'direct') ? kind : 'do';
+      A.syncKindSwitch();
+      saveAll();
+    }
+    if (inp && inp.focus) inp.focus();
+  }
+
+  A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText });
 })();

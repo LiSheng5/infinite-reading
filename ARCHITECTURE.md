@@ -22,7 +22,8 @@
 |---|---|---|---|
 | `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders`（空，预留） |
 | `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
-| `js/tree.js` | `IR.Tree` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换 | `ensure`、`begin` / `commit` / `seal`、`project`、`switchSibling` / `switchTo`、`pushLate`、`imageIdsOf` |
+| `js/tree.js` | `IR.Tree` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换；UI-4：任意节点继续 / 分叉 | `ensure`、`begin` / `commit` / `seal`、`project`、`switchSibling` / `switchTo`、`latestLeaf` / `forkBefore` / `canResume`、`pushLate`、`imageIdsOf` |
+| `js/treeLayout.js` | `IR.TreeLayout` | 分支页画布几何（**纯逻辑**，Node 可 `require`，UI-4）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出 | `compute`、`pointsToD` |
 | `js/storage.js` | `IR.Storage` | IndexedDB 适配器（**唯一碰 IndexedDB 的地方**）：开库 + 增删改查，`available=false` 时上层自然退回 localStorage | `available`、`get` / `put` / `del` / `keys` / `entries`、`estimate` |
 | `js/store.js` | `IR.Store` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步 | `boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
 | `js/modelCapabilities.js` | `IR.ModelCapabilities` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
@@ -31,10 +32,12 @@
 | `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
 | `js/app.js` | 无（组合根） | 事件绑定 + 启动（`bind` / `init` / boot IIFE），只接线不写业务；消费下面所有 `js/app/*` | `bind`、`init` |
-| `js/app/*.js`（16 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
+| `js/app/*.js`（18 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
-| `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
+| `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成 / UI-4 继续与分叉，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
+| `eval/treelayout-test.js` | 无（Node 脚本） | 分支树布局测试（泳道 / 折叠 / 标签 / 确定性 / 2000 节点耗时，UI-4） | `check`、`mkTree` |
+| `tools/make-big-tree.mjs` | 无（Node 脚本） | 生成 ~800 节点、多层嵌套分叉的可导入 `.irstory.json`（分支页性能验收） | `addNode`、`spine` |
 | `js/sidecar.js` | `IR.Sidecar` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `js/app/sidecar.js` 的 `initFeatures` 注册） | `attach`、`accept`、`drain` |
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
@@ -48,7 +51,7 @@
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → prefs.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
+providers.js → prefs.js → context.js → tree.js → treeLayout.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
 `prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
@@ -83,6 +86,7 @@ providers.js → prefs.js → context.js → tree.js → storage.js → store.js
 | `js/app/render.js` | 聊天记录、画面面板、布局、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`applyLayout`、`closeLightbox` |
 | `js/app/settings.js` | 设置界面、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
 | `js/app/prefsui.js` | UI-3 设置分层界面：全局设置分组导航（桌面左导航 / 窄屏下钻）、模型库管理、本对话设置面板（右侧停靠 / 窄屏底部弹层） | `initSettingsNav`、`renderModelProfiles`、`renderStoryPrefs`、`openStoryPrefs` |
+| `js/app/branch.js` | UI-4 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作、历史位置提示条 | `initBranch`、`openBranch`、`closeBranch`、`updateHistoryBar` |
 | `js/app.js`（保留） | 组合根：事件绑定 + 启动 | `bind`、`init` |
 
 **三条约定**（经典脚本没有 import，靠 `IR.App` 松耦合）：
@@ -194,6 +198,20 @@ providers.js → prefs.js → context.js → tree.js → storage.js → store.js
 
 **安全红线（密钥）**：模型库与 `settings.*` 里的 apiKey 只存在本地全局设置；故事存档 / 导出包 / 分享包**绝不出现** `apiKey / key / token / baseUrl` 字段——`buildStoryPack`（`store.js`）整包过 `IR.Prefs.stripSecrets`，`prefs` 只带 `profileId + profileLabel`。整库备份 `.irbackup.json` **含 `settings`**（含 profiles）；默认剥掉全部 apiKey（勾「备份里也带上 API Key」才保留），行为不变、只是剥除范围覆盖新增的 `profiles[]`。
 
+### 4.5 分支语义第二期与分支页（UI-4，v0.10.0）
+
+**继续即分叉**：`commit` 的 parent 恒为**当前 `head`**——`switchTo` 回到历史位置（head 落在非叶子节点）后发送，新节点就追加到该节点 `children` 末尾并更新 `parent.active`，天然产生一条新分支（`eval/tree-test.js` 用例 19.1 固定）。提示条只看 `head.children.length > 0`（主动消息 / `pushLate` 不会改变它）。
+
+**三个新 API**（`js/tree.js`）：
+
+- `latestLeaf(story, nodeId)`：沿 `active` 下探到叶子（内部 `descend` 的公开版）；「切到这条分支的最新处」「回到最新」都用它。
+- `forkBefore(story, nodeId)`：`switchTo(node.parent)`（站在这一回合发生之前），返回 `{ok, action:{type,text,kind,sent}}` 供输入框预填（`setComposerText(text, kind)`，不触发发送）；根节点与开局节点（`action.type === 'opening'`）返回 `{ok:false, reason}`。
+- `canResume(story, nodeId)`（纯函数）：节点 `sid === null`（旧档迁移来的早期回合，状态未知）→ `false`。`project` 对 `sid === null` 保持当前状态不动，所以**所有会落到这类节点的继续 / 分叉入口都要拦**（面板按钮置灰，落点含「改我说的」的 parent）。
+
+**分支页（`js/app/branch.js` + `js/treeLayout.js`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 直接开分支页选中该节点（**不**自动 `switchTo`）。
+
+**动效预算**（走 UI-1 令牌）：rich = 边按深度描边生长（封顶 ~600ms）+ 节点弹簧弹出（WAAPI，只动 `transform` / `opacity`，新节点「长出来」）+ **流光只挂 `pathEdgeD` 合成的一条 path** + head 呼吸 + 选中脉冲（循环动画恰好 3 条）；standard = 整体淡入；off = 无。`data-paused` 全局暂停循环；>400 节点视口裁剪（只建可见行附近的 SVG 元素）。
+
 ## 5. 关键不变量（改动时别碰坏）
 
 | 不变量 | 位置 | 为什么 |
@@ -227,6 +245,9 @@ providers.js → prefs.js → context.js → tree.js → storage.js → store.js
 | **主模型配置走 `resolveChatCfg`**（UI-3 §3.3） | `js/prefs.js`：`resolveChatCfg`；`js/app/models.js`：`chatCfg` / `chatContextWindow`；`js/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / thinking / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
 | **工具集 = 全局可用性 ∩ `prefs.tools`**（UI-3 §3.3） | `js/app/round.js`：`callAI1` 的 `toolAllowed` 过滤；`js/prefs.js`：`toolCategory` | 对话里可单独关掉「下单 / 邮件 / …」，默认跟随全局；其它对话不受影响 |
 | **手改派生数据后 `resyncState`** | `js/tree.js`：`resyncState`；`js/app/settings.js`：`saveWorldFromForm` | 树是真源、`project` 会用 head 的内联状态覆盖 `world / summaries / …`——手改世界卡后必须把 head 的状态换成当前值，否则下次进故事 / 切分支会把编辑回滚掉 |
+| **打开分支页只读树**（UI-4 §9） | `js/app/branch.js`：`openBranch` | 分支页渲染**不得** `ensure` 写盘 / 改 `active` / `project`——只有面板操作经 `Tree.switchTo` / `forkBefore` 改树 |
+| **`canResume` 拦住 `sid === null` 的落点**（UI-4 §2.4/§9） | `js/tree.js`：`canResume`；`js/app/branch.js`：`renderPanel` / `opResume` / `opFork` | `project` 对 `sid === null` 保持当前状态——落到这种节点世界卡 / 摘要是错的；「改我说的」的落点是 **parent**，同样要过 `canResume` |
+| **分支页流光只挂一条 path**（UI-4 §4.5） | `js/app/branch.js`：`render`（`pathEdgeD`）；`css/style.css`：`.branch-flow` | 循环动画预算 ≤ 3（流光 / head 呼吸 / 选中脉冲），每条边单独加动画会炸掉预算 |
 
 ### 5.1 设计令牌与动效等级（UI-1）
 
@@ -244,7 +265,9 @@ providers.js → prefs.js → context.js → tree.js → storage.js → store.js
 
 **本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。
 
-**暂停与预算**：`visibilitychange` 写 `html[data-paused]`，CSS 暂停一切循环动画；同屏循环动画 ≤ 3 个（`#busy-line` + Ken Burns + 环境光）；`will-change` 只在动画进行时临时加、结束移除。
+**分支页动效（UI-4 §4.5）**：rich = 边按深度描边生长（`stroke-dashoffset`，总时长封顶 ~600ms）+ 节点弹簧弹出（新节点单独「长出来」）+ 当前路径流光（**只挂 `pathEdgeD` 合成的一条 path**）+ head 呼吸环 + 选中 / 悬停脉冲环；standard = 整体淡入、无循环；off = 无动画。
+
+**暂停与预算**：`visibilitychange` 写 `html[data-paused]`，CSS 暂停一切循环动画；同屏循环动画 ≤ 3 个（阅读页：`#busy-line` + Ken Burns + 环境光；分支页：流光 + head 呼吸 + 选中脉冲，且流光只有 1 条 path）；`will-change` 只在动画进行时临时加、结束移除。
 
 ## 6. 上下文策略速览
 

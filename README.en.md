@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.9.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.10.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
