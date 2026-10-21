@@ -730,15 +730,6 @@ mark {
 .hud-left { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .hud-actions { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
 .hud-left > .hud-btn, .hud-left > .mode-chip { flex: 0 0 auto; }
-.story-title {
-  font-family: var(--font-body);
-  font-size: 15px;
-  letter-spacing: .04em;
-  color: var(--ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 34vw; min-width: 0;
-  padding: 0 2px;
-}
 .mode-chip {
   font-family: var(--font-ui);
   font-size: 11px;
@@ -770,6 +761,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
 .menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 .menu-item {
   display: block; width: 100%;
+  min-height: 40px;   /* P-1 §9：可点区域 ≥ 40px（含「为当前场景作画」入口；触屏仍放大到 44px） */
   text-align: left;
   font-size: 13px;
   color: var(--ink);
@@ -1047,6 +1039,17 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
 .reason-live.collapsed .reason-text { margin-top: 2px; }
 .reason-live.open .reason-panel { max-height: 42vh; }
 
+/* 剧情模式空档：开场引导（P-2：进入故事不自动生成第一幕，点按钮才开始） */
+.opening-hint {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.opening-hint-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.opening-hint .hint { margin: 0; }
+
 /* 选项：默认走「💡 灵感」托盘；always 模式才内联在旁白下 */
 .choices-inline { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .choice-btn {
@@ -1249,6 +1252,12 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   font-size: 13px;
   letter-spacing: .24em;
 }
+/* 舞台空状态引导（P-1 §3.4）：出现时淡入（走动效等级：off 不动，standard / rich 同一档淡入）；
+   有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
+html[data-motion="standard"] .stage-empty,
+html[data-motion="rich"] .stage-empty {
+  animation: fadeIn var(--dur-base) var(--ease-out) both;
+}
 .stage-pill { position: absolute; top: 12px; left: 12px; z-index: 4; }
 .stage-actions {
   position: absolute; right: 10px; top: 10px;
@@ -1260,7 +1269,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
 .stage-wrap:hover .stage-actions,
 .stage-wrap:focus-within .stage-actions { opacity: 1; }
 .stage-btn {
-  width: 34px; height: 34px;
+  width: 40px; height: 40px;   /* P-1 §9：可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 15px;
   color: var(--ink);
@@ -1274,7 +1283,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
 .stage-btn:hover { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
 .stage-exit {
   position: absolute; left: 10px; top: 10px; z-index: 5;
-  width: 34px; height: 34px;
+  width: 40px; height: 40px;
   display: none;
   color: var(--ink);
   background: var(--stage-btn-bg);
@@ -1739,7 +1748,6 @@ label input.inline-num {
 /* ==================== 窄屏 / 触屏 ==================== */
 @media (max-width: 900px) {
   .hud { padding: 0 8px; gap: 4px; }
-  .story-title { max-width: 30vw; font-size: 14px; }
   .hud-btn { padding: 0 8px; }
   .chat-scroll { padding: 20px 16px 14px; gap: 18px; }
   .bubble { font-size: 17px; line-height: 1.95; }
@@ -1760,7 +1768,6 @@ label input.inline-num {
   .tray-btn { max-width: 70vw; }
 }
 @media (max-width: 480px) {
-  .story-title { max-width: 24vw; }
   .hud-text { font-size: 12px; padding: 0 5px; }
   .mode-chip { font-size: 10px; padding: 0 6px; }
   .bubble { font-size: 16.5px; }

@@ -96,7 +96,6 @@
     settings: Store.loadSettings(),
     story: null,              // 进行中的故事
     busy: false,              // AI1 回合进行中
-    lastActionWasChoice: false,
     currentChoices: [],       // 最新一轮的选项（choice 模式：默认收在「灵感」里）
     choicesTrayOpen: false,   // 选项托盘是否展开（每轮重置）
     live: null,               // 流式 / 打字机中的临时旁白 { text, reasoning }
@@ -111,7 +110,6 @@
     lastSaveWarnAt: 0,
     importJob: null,          // { raw, plan, result, busy, err }
     importModelMode: 'follow',    // follow | draft
-    turnPaintedByTool: false,
     turnAnchor: { nodeId: null, dead: false },
     pw: null,                 // 画师工作台 { sceneId, prompt, promptRaw, alt, busy }
     immersiveTextHidden: false,

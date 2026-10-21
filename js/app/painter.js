@@ -10,8 +10,9 @@
 
 
   /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） =================
-   * v0.5.1（§3.B）：时机出图 / 工具出图 / 手动 / 工作台重画全走同一条串行队列 IR.PaintQueue，
-   * 画师构思也在队列里跑（不与队列外的构思并发）；request_image 已异步化、不卡回合（§3.A）。 */
+   * v0.5.1（§3.B）：出图全走同一条串行队列 IR.PaintQueue，画师构思也在队列里跑
+   *（不与队列外的构思并发）；request_image 已异步化、不卡回合（§3.A）。
+   * P-1（v0.11.0）：时机出图已删除——剧情模式只剩手动 🎨 / 工作台重画，外加 chat / rp 的工具直出。 */
 
   const paintQ = IR.PaintQueue.create({ onChange: function () { renderGenPill(); } });
 
@@ -76,13 +77,12 @@
     });
   }
 
-  // request_image 入队（§3.A）：立刻返回、不等图；任务带回合锚点，完成后落回「它所属的回合」
+  // request_image 入队（§3.A）：立刻返回、不等图；任务带回合锚点，完成后落回「它所属的回合」。
+  // P-1（§3.3）：只剩 chat / rp 的直出分支（模型自己写提示词，不经画师）——剧情模式的工具已停用，
+  // 原 direct === false 的画师分支已删除；剧情的手动作画走 enqueueImage（画师构思仍在 runPaintTask 一处）。
   function submitToolPaint(args) {
     const storyId = S.story && S.story.id;
-    const mode = S.story && S.story.mode;
     const a = args || {};
-    // §3.E：对话 / 扮演直出（模型自己写提示词，不经画师）；剧情模式保持画师构思
-    const direct = mode === 'chat' || mode === 'rp';
     const rawPrompt = String(a.prompt || '').trim() || String(a.subject || '').trim();
     const sceneRef = rawPrompt
       || (S.story && S.story.lastSceneSummary)
@@ -96,7 +96,7 @@
       run: () => runPaintTask({
         storyId: storyId,
         anchor: anchor,
-        directPrompt: direct ? (rawPrompt || (S.story && S.story.lastSceneSummary) || 'atmospheric scene') : '',
+        directPrompt: rawPrompt || (S.story && S.story.lastSceneSummary) || 'atmospheric scene',
         promptRaw: rawPrompt || undefined,
         sceneRef: sceneRef,
         altHint: String(a.alt || a.subject || '').trim(),
@@ -106,6 +106,7 @@
 
   // 作画任务体（§3.B）：合并原 runToolPaint / generateScene 的重复流程——
   //   构思（directPrompt 缺省时走画师；画师不可用 / 失败用场景描述兜底）→ 组 prompt → runPaint 出图写回
+  // 「构思 → 出图」集中在这里一处（P-1 §2 非目标的预留点：以后要分叉工具 / 视频只改这里）。
   // opts: { storyId, nodeId, anchor, directPrompt, promptRaw, sceneRef, altHint, supersedesEntry, supersedesScene, params }
   async function runPaintTask(opts) {
     if (!S.story) return null;
@@ -117,13 +118,13 @@
     const styleText = styleSuffixText();
     let promptRaw, prompt, alt;
     if (opts.directPrompt) {
-      // 直出（§3.E）：提示词是模型写的，不请画师
+      // 直出（§3.E）：提示词是模型写的，不请画师（chat / rp 的工具出图 / 工作台按提示词重画）
       promptRaw = opts.promptRaw || opts.directPrompt;
       prompt = composePrompt(opts.directPrompt, styleText);
       alt = opts.altHint || opts.sceneRef || '';
       setGenPill('AI 作画中…');
     } else {
-      // —— 画师子代理：把剧情写成绘画提示词 ——（剧情模式的工具出图 / 时机出图 / 手动）
+      // —— 画师子代理：把剧情写成绘画提示词 ——（手动 🎨 / 时机出图已删）
       const sceneRef = opts.sceneRef
         || S.story.lastSceneSummary || String(S.story.premise || '').split('\n')[0] || 'story scene';
       setGenPill('AI 画师构思中…');
@@ -144,7 +145,8 @@
     });
   }
 
-  // 时机出图（§4.7）：节点在任务创建时记下（§4.4），同一条队列串行
+  // 手动出图（P-1 §3.4：剧情 / 扮演 / 智能体唯一的自动画入口只剩用户点 🎨）：
+  // 节点在任务创建时记下（§4.4），同一条队列串行；画师构思 → 出图仍集中在 runPaintTask
   function enqueueImage(sceneSummary, nodeId, key) {
     const storyId = S.story && S.story.id;   // 记住「为谁画的」：等图期间换档也不写错故事
     const nid = nodeId || A.treeHeadNodeId();   // 与 nodeId 一样在任务创建时记下（§4.4）

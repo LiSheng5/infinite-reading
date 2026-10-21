@@ -39,14 +39,12 @@ function baseSettings() {
 console.log('[1] effective：覆盖 / 跟随 / 各键独立');
 {
   const s = baseSettings();
-  // 缺省跟随全局
-  eq(P.effective(s, { prefs: {} }, 'trigger'), 'choice', '无 prefs 时 trigger 跟随全局');
+  // 缺省跟随全局（P-1 v0.11.0：trigger（出图时机）已下线，effective 不再有该键）
   eq(P.effective(s, { prefs: {} }, 'choices'), 'tray', '无 prefs 时 choices 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'showReasoning'), true, '无 prefs 时 showReasoning 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'ui.fontScale'), 'md', '无 prefs 时字号跟随全局默认');
   // story.prefs 覆盖全局
-  const story = { prefs: { trigger: 'manual', choices: 'always', showReasoning: false, ui: { fontScale: 'lg', layout: 'split' }, tools: { email: false } } };
-  eq(P.effective(s, story, 'trigger'), 'manual', 'prefs.trigger 覆盖全局');
+  const story = { prefs: { choices: 'always', showReasoning: false, ui: { fontScale: 'lg', layout: 'split' }, tools: { email: false } } };
   eq(P.effective(s, story, 'choices'), 'always', 'prefs.choices 覆盖全局');
   eq(P.effective(s, story, 'showReasoning'), false, 'prefs.showReasoning 覆盖全局');
   eq(P.effective(s, story, 'ui.fontScale'), 'lg', 'prefs.ui.fontScale 覆盖全局');
@@ -99,9 +97,10 @@ console.log('[3] visibleFor：三种模式的可见控件集合');
   const choice = P.visibleFor('choice');
   const rp = P.visibleFor('rp');
   const chat = P.visibleFor('chat');
-  ok(choice.has('model') && choice.has('trigger') && choice.has('choices') && choice.has('layout') && choice.has('showReasoning'),
-    '剧情：模型 / 出图时机 / 选项显示 / 布局 / 思考过程');
+  ok(choice.has('model') && choice.has('choices') && choice.has('layout') && choice.has('showReasoning'),
+    '剧情：模型 / 选项显示 / 布局 / 思考过程');
   ok(choice.has('style') && choice.has('mode'), '剧情：画风入口 + 推进模式');
+  ok(!choice.has('trigger'), '剧情：不含出图时机（P-1 下线）');
   ok(!choice.has('tools') && !choice.has('schedule'), '剧情：不含工具开关 / 定时主动开关');
   ok(chat.has('model') && chat.has('tools') && chat.has('layout') && chat.has('showReasoning'), '智能体：模型 / 工具开关 / 布局 / 思考过程');
   ok(!chat.has('trigger') && !chat.has('choices'), '智能体：不含出图时机 / 选项显示');
@@ -135,7 +134,15 @@ console.log('[4] sanitizePrefs：丢未知键 / 剥凭证 / profileId 校验');
   ok(!('evil' in clean.ui), 'ui 深层未知键丢弃（连同其中的 baseUrl / key）');
   ok(!('fontScale' in clean.ui) || clean.ui.fontScale !== 'huge', 'ui.fontScale 非法值丢弃');
   eq(clean.ui.splitRatio, 0.72, 'ui.splitRatio 夹到 0.72');
-  eq(clean.trigger, 'manual', '合法 trigger 保留');
+  // P-1（v0.11.0）：trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
+  ok(!('trigger' in clean), 'trigger 不在白名单 → 被丢弃（旧包导入不报错）');
+  {
+    let threw = false;
+    let dropped = null;
+    try { dropped = P.sanitizePrefs({ trigger: 'manual', profileId: 'p1' }); } catch (_) { threw = true; }
+    ok(!threw && dropped && !('trigger' in dropped) && dropped.profileId === 'p1',
+      '旧包带 trigger 导入 → 被丢弃、不报错（其余键正常）');
+  }
 
   const badId = P.sanitizePrefs({ profileId: 123, trigger: 'manual' });
   ok(!('profileId' in badId), 'profileId 非字符串被丢弃');

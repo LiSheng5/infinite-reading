@@ -7,7 +7,8 @@
  *
  *  - reply：与真实 AI1 输出同构（narration / choices / scene_change / scene_summary）
  *  - world：AI1「自报」的世界卡增量，评测时浅合并进 story.world
- *  - tool_calls：模拟工具调用回包（recall_world_state / request_image / update_memory）
+ *  - tool_calls：模拟工具调用回包（recall_world_state / update_memory；P-1 起剧情场景不再依赖
+ *    request_image——作画只剩按钮触发，工具调用与出图解耦）
  *  - probes：5 类探针（角色名 / 时间设定 / 伏笔原话 / 地点细节 / 玩家自己说过的事），
  *            在第 10 / 20 / 30 回合插入「追问回合」，供 eval 判定组装后的上下文命中率。
  * 剧情：伏笔「挑便宜的就走」「灯灭之前，别回头」埋下并在后期回收；含场景切换与玩家事实。
@@ -152,7 +153,7 @@
           choices: ['捡起那张旧照片', '假装没看见', '叫他过来一起看'],
           scene_change: false,
           scene_summary: '便利店货架底部的缝隙，露出一张叠起的旧照片',
-          tool_calls: [{ id: 'call-image-1', type: 'function', function: { name: 'request_image', arguments: '{"subject":"货架底下的旧照片"}' }, result: { image: { alt: '货架底部缝隙里的一张旧照片', prompt: 'a folded old photograph wedged under a convenience store shelf, dim warm light' } } }],
+          tool_calls: [{ id: 'call-recall-2', type: 'function', function: { name: 'recall_world_state', arguments: '{}' }, result: { place: '雨夜便利店', time: '凌晨两点多', characters: ['周叙'], threads: ['挑便宜的就走', '货架底下的旧照片'] } }],
         },
       },
       {

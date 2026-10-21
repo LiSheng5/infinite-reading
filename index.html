@@ -16,7 +16,7 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.10.0">
+<link rel="stylesheet" href="css/style.css?v=0.11.0">
 </head>
 <body>
 <div id="app">
@@ -97,7 +97,6 @@
       <div class="hud-left">
         <button id="btn-back-home" class="hud-btn hud-icon" title="返回首页（自动存档）">←</button>
         <button id="btn-hud-shelf" class="hud-btn hud-text" title="我的书架">书架</button>
-        <span id="hud-title" class="story-title"></span>
         <span id="hud-mode" class="mode-chip"></span>
         <!-- 离线演示模式标识（?demo=1）：点它=去掉查询参数，回到可配置真模型的普通模式 -->
         <a id="demo-chip" class="mode-chip demo-chip hidden" href="?"
@@ -168,7 +167,7 @@
           <!-- 底层：当前图的模糊放大副本；上层：完整的图（contain）+ 暗角 -->
           <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
           <img id="stage-img" class="stage-img hidden" alt="">
-          <div id="stage-empty" class="stage-empty">画面会在这里展开</div>
+          <div id="stage-empty" class="stage-empty">点 🎨 为当前场景画一张</div>
           <span id="gen-status" class="pill stage-pill hidden"></span>
           <div class="stage-actions">
             <button id="btn-stage-painter" class="stage-btn" title="画师工作台（看 / 改这张图的提示词）">✎</button>
@@ -706,6 +705,17 @@
         </fieldset>
 
         <fieldset>
+          <legend>生视频模型（预留 · 暂不出视频）</legend>
+          <div class="grid2">
+            <label>接口地址 Base URL<input id="s-video-base" type="text" list="dl-base-url" placeholder="https://…（可灵 / Vidu 等的接口地址，也可自己填）"></label>
+            <label>模型<input id="s-video-model" type="text" placeholder="填你的生视频模型名"></label>
+          </div>
+          <label>API Key<input id="s-video-key" type="password" placeholder="sk-…"></label>
+          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-video-params" type="text" placeholder="duration=5, mode=std"></label>
+          <p class="hint">这一组会照常保存，但<b>视频生成适配器还没接入</b>（<code>js/providers.js</code> 的 <code>VideoProviders</code> 目前为空）：现在填了也不会产生视频。等适配器接上后，剧情模式沿用同一套触发方式，不用再改这里。</p>
+        </fieldset>
+
+        <fieldset>
           <legend>画风</legend>
           <div class="grid2">
             <label>画风预设（未锚定时的兜底）
@@ -730,16 +740,6 @@
             </div>
             <p class="hint" id="rolling-style-text"></p>
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>出图时机</legend>
-          <div class="radio-col">
-            <label class="check"><input type="radio" name="s-trigger" value="every"> 每轮对话后 —— AI1 每回复一次就重画，最沉浸，消耗也最大</label>
-            <label class="check"><input type="radio" name="s-trigger" value="choice"> 做出选择后 —— 玩家点选项进入新剧情时才重画，最像传统视觉小说（推荐）</label>
-            <label class="check"><input type="radio" name="s-trigger" value="manual"> 仅手动 —— 只有点「作画」才生成，最省钱</label>
-          </div>
-          <p class="hint">任何时机下都可以随时点右上角「作画」手动补一张。</p>
         </fieldset>
 
         <fieldset>
@@ -841,7 +841,7 @@
             </div>
             <label>画面参考（喂给画师）<input id="w-scene" type="text"></label>
             <label>伏笔（每行一条）<textarea id="w-threads" rows="3" spellcheck="false"></textarea></label>
-            <label>人物（名字｜在场／离场｜性格｜说话方式｜备注，每行一个）<textarea id="w-characters" rows="3" spellcheck="false"></textarea></label>
+            <label>人物（名字｜在场／离场｜性格｜说话方式｜备注，每行一个）<textarea id="w-characters" rows="3" spellcheck="false" placeholder="还没填也可以：剧情里出现的人物会在书记员校对时自动补上，随时能改"></textarea></label>
             <label>关系·阶段<input id="w-rel-stage" type="text"></label>
             <label>关系·纽带（每行一条；书记员随校对维护，也可手改）<textarea id="w-rel-bonds" rows="2" spellcheck="false"></textarea></label>
             <label>关系·备注<input id="w-rel-notes" type="text"></label>
@@ -1091,55 +1091,55 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.10.0"></script>
-<script src="js/prefs.js?v=0.10.0"></script>
-<script src="js/context.js?v=0.10.0"></script>
+<script src="js/providers.js?v=0.11.0"></script>
+<script src="js/prefs.js?v=0.11.0"></script>
+<script src="js/context.js?v=0.11.0"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.10.0"></script>
+<script src="js/tree.js?v=0.11.0"></script>
 <!-- 分支树布局（分支页画布几何：泳道 / 折叠 / 标签，纯逻辑 Node 可测）：必须在 app.js 之前 -->
-<script src="js/treeLayout.js?v=0.10.0"></script>
+<script src="js/treeLayout.js?v=0.11.0"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.10.0"></script>
-<script src="js/store.js?v=0.10.0"></script>
-<script src="js/modelCapabilities.js?v=0.10.0"></script>
-<script src="js/roleCard.js?v=0.10.0"></script>
+<script src="js/storage.js?v=0.11.0"></script>
+<script src="js/store.js?v=0.11.0"></script>
+<script src="js/modelCapabilities.js?v=0.11.0"></script>
+<script src="js/roleCard.js?v=0.11.0"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.10.0"></script>
+<script src="js/demo.js?v=0.11.0"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.10.0"></script>
+<script src="js/zip.js?v=0.11.0"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.10.0"></script>
+<script src="js/sidecar.js?v=0.11.0"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.10.0"></script>
+<script src="js/features.js?v=0.11.0"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.10.0"></script>
+<script src="js/paintQueue.js?v=0.11.0"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.10.0"></script>
+<script src="js/proposals.js?v=0.11.0"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.10.0"></script>
-<script src="js/titles.js?v=0.10.0"></script>
-<script src="js/search.js?v=0.10.0"></script>
+<script src="js/motion.js?v=0.11.0"></script>
+<script src="js/titles.js?v=0.11.0"></script>
+<script src="js/search.js?v=0.11.0"></script>
 <!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.10.0"></script>
-<script src="js/app/branch.js?v=0.10.0"></script>
-<script src="js/app/models.js?v=0.10.0"></script>
-<script src="js/app/library.js?v=0.10.0"></script>
-<script src="js/app/shelf.js?v=0.10.0"></script>
-<script src="js/app/backup.js?v=0.10.0"></script>
-<script src="js/app/importer.js?v=0.10.0"></script>
-<script src="js/app/cards.js?v=0.10.0"></script>
-<script src="js/app/wizard.js?v=0.10.0"></script>
-<script src="js/app/sidecar.js?v=0.10.0"></script>
-<script src="js/app/features.js?v=0.10.0"></script>
-<script src="js/app/styleanchor.js?v=0.10.0"></script>
-<script src="js/app/painter.js?v=0.10.0"></script>
-<script src="js/app/turn.js?v=0.10.0"></script>
-<script src="js/app/round.js?v=0.10.0"></script>
-<script src="js/app/render.js?v=0.10.0"></script>
-<script src="js/app/settings.js?v=0.10.0"></script>
-<script src="js/app/prefsui.js?v=0.10.0"></script>
-<script src="js/app.js?v=0.10.0"></script>
+<script src="js/app/core.js?v=0.11.0"></script>
+<script src="js/app/branch.js?v=0.11.0"></script>
+<script src="js/app/models.js?v=0.11.0"></script>
+<script src="js/app/library.js?v=0.11.0"></script>
+<script src="js/app/shelf.js?v=0.11.0"></script>
+<script src="js/app/backup.js?v=0.11.0"></script>
+<script src="js/app/importer.js?v=0.11.0"></script>
+<script src="js/app/cards.js?v=0.11.0"></script>
+<script src="js/app/wizard.js?v=0.11.0"></script>
+<script src="js/app/sidecar.js?v=0.11.0"></script>
+<script src="js/app/features.js?v=0.11.0"></script>
+<script src="js/app/styleanchor.js?v=0.11.0"></script>
+<script src="js/app/painter.js?v=0.11.0"></script>
+<script src="js/app/turn.js?v=0.11.0"></script>
+<script src="js/app/round.js?v=0.11.0"></script>
+<script src="js/app/render.js?v=0.11.0"></script>
+<script src="js/app/settings.js?v=0.11.0"></script>
+<script src="js/app/prefsui.js?v=0.11.0"></script>
+<script src="js/app.js?v=0.11.0"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.10.0"></script>
+<script src="js/pwa.js?v=0.11.0"></script>
 </body>
 </html>

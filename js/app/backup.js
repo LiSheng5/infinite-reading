@@ -117,7 +117,7 @@
   function buildBackupPack(stripKeys) {
     const s = clone(S.settings);
     if (stripKeys) {
-      ['chat', 'painter', 'scribe', 'draft', 'image'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
+      ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
       if (Array.isArray(s.profiles)) s.profiles.forEach(p => { if (p) p.apiKey = ''; });
     }
     return {
@@ -232,7 +232,7 @@
       const prev = S.settings;
       S.settings = Store.migrateSettings(obj.settings);
       // 备份可能刻意不带 Key：别把现有 Key 覆盖成空
-      ['chat', 'painter', 'scribe', 'draft', 'image'].forEach(k => {
+      ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => {
         if (S.settings[k] && !S.settings[k].apiKey && prev[k] && prev[k].apiKey) S.settings[k].apiKey = prev[k].apiKey;
       });
       persistSettings();

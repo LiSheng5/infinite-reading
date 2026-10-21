@@ -84,6 +84,9 @@
       box.appendChild(bubbleFor(e, i));
     });
 
+    // 剧情模式空档：不自动跑开场，显示「开始第一幕」按钮（点了才花一次调用）
+    renderOpeningHint(box);
+
     // 流式 / 打字机中的临时旁白（思考链先流、正文后到，§4.5）
     if (S.live) {
       // 没有思考内容就不渲染折叠条（空白的「思考链」看着像坏了）
@@ -112,6 +115,38 @@
 
     A.renderFeatureBar();
     scrollChatBottom();
+  }
+
+  // 剧情模式空档的开场引导：进入故事不自动生成（省一次调用），由用户点按钮才开始第一幕
+  function renderOpeningHint(box) {
+    if (!box || !S.story || S.busy || S.live) return;
+    if (S.story.mode !== 'choice') return;
+    if ((S.story.log || []).length) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'opening-hint';
+
+    const title = document.createElement('p');
+    title.className = 'opening-hint-title';
+    title.textContent = '设定已就绪，第一幕还没开始。';
+
+    const desc = document.createElement('p');
+    desc.className = 'hint';
+    desc.textContent = '点下面按钮让 AI 按设定写第一幕（会调用一次模型）；也可以直接在输入框里写下你的第一个行动。';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn primary';
+    btn.textContent = '▶ 开始第一幕';
+    btn.onclick = () => {
+      if (S.busy) { toast('正在生成中，等这一步结束'); return; }
+      A.runOpening();
+    };
+
+    wrap.appendChild(title);
+    wrap.appendChild(desc);
+    wrap.appendChild(btn);
+    box.appendChild(wrap);
   }
 
   function renderChoices() {
@@ -646,7 +681,6 @@
     $('#screen-game').classList.remove('stage-strip', 'text-hidden');
     A.closeMenus();
     S.immersiveTextHidden = false;
-    $('#hud-title').textContent = S.story.title;
     $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
     A.syncKindSwitch();
     S.choicesTrayOpen = false;
@@ -658,14 +692,13 @@
       S.currentChoices = A.choicesFromHead();
       renderChat();
       saveAll();
-      // deferOpening：先走试画锚定（P4），锚定结束（锁定/跳过）后再开场
-      if (!opts.deferOpening) A.runOpening();
+      // P-2：进入故事不再自动生成第一幕（省一次调用）；空档由 renderChat 的
+      //      「开始第一幕」按钮触发。试画锚定（P4）关闭后同样只回到这个按钮。
     } else {
       S.currentChoices = A.choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
       renderNarrationToolsAfterLoad();
       saveAll();
-      // 空档补开场（例：锚定向导还没走完就刷新了页面）
-      if (!(S.story.log || []).length && !(S.story.messages || []).length) A.runOpening();
+      // 空档（例：锚定向导还没走完就刷新了页面）同样交给「开始第一幕」按钮
     }
   }
 

@@ -111,16 +111,17 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
        │    └─ 若有 tool_calls → handleToolCalls → applyToolCall
        │         ├─ update_memory  → mergeWorld / 写 userProfile / 落一条 {type:'tool'} 留痕
        │         ├─ recall_*       → 重发一次（召回内容并入本轮 user 前缀注入）
-       │         └─ request_image  → submitToolPaint → paintQueue.enqueue（**立刻返回**，不等图）
-       │                              └─ 后台任务：runPaintTask →（剧情模式：painterCompose →
-       │                                 assemblePainter → 画师子代理写提示词；chat / rp：模型已直出
-       │                                 prompt，跳过画师）→ runPaint
+       │         └─ request_image（仅 chat / rp，P-1 起剧情模式无此工具）
+       │              ├─ chat / rp：submitToolPaint → paintQueue.enqueue（**立刻返回**，不等图）
+       │              │    └─ 后台任务：runPaintTask（直出 prompt，跳过画师）→ runPaint
+       │              └─ choice（旧历史诱导模型调了）：按「该工具不可用」回传重发，
+       │                 不入队、不报错、不弹 toast（P-1 §3.3）
        ├─ 归档：story.messages.push(user + assistant)、pushNarrationEntry、absorbReply
        ├─ renderChat
        ├─ Tree.commit → turnAnchor.nodeId = node.id；失败 / 停止分支 → turnAnchor.dead = true
-       ├─ maybeEnqueueImage(reply,false,node.id)   ← 按 settings.trigger 决定是否出图（chat / rp 短路）
-       │    └─ enqueueImage → paintQueue.enqueue → runPaintTask → painterCompose → runPaint
        └─ await postTurn()   ← runSmartCompress（70% 阈值压缩）+ runScribe（书记员校准世界卡）
+          ※ 回合结束不再自动出图（P-1：maybeEnqueueImage / 开局出图分支已删除）——
+            图只来自用户点 🎨（enqueueImage → runPaintTask → painterCompose → runPaint）或工作台重画
 
 后台作画（队列里的 runPaintTask）：
   构思（画师 / 模型直出）→ 组 prompt → IR.ImageProviders[...].generate(cfg, prompt)   ← 唯一的生图网络出口
@@ -131,8 +132,9 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 要点：
 
 - **对话与生图彻底分离**：两个 `Base URL` / `Key` / 模型名各自独立（设置面板里是两组配置）。
-- **出图不卡回合**（v0.5.1）：`request_image` 提交进**同一条作画队列**（`IR.PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
-- **画师是子代理，且只属于剧情模式**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**对话 / 扮演的工具出图不经画师**（§3.E）：模型自己写 `prompt` 直出。
+- **剧情模式的作画只能由用户触发（P-1，v0.11.0）**：时机出图（`settings.trigger` 的每轮 / 选择后）与开局自动出图已删除，「出图时机」设置整体下线（`settings.trigger` / `story.prefs.trigger` 停止读写，旧值原样留在存档里）；剧情模型也不再下发 `request_image`（工具清单与工具说明里都没有它，模型若照旧历史调了按「该工具不可用」回传）。唯一入口 = 🎨（`#btn-stage-gen` / `#btn-manual-gen`）与画师工作台重画；舞台无图时显示引导「点 🎨 为当前场景画一张」。
+- **出图不卡回合**（v0.5.1）：`request_image`（chat / rp 直出变体）提交进**同一条作画队列**（`IR.PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
+- **画师是子代理，隔离上下文、用完即弃**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**scene 模式的输入只有固定几块（P-1 §4）**：`PAINTER_SYSTEM` + `[画风锚]`（设定卡优先）+ `[最近两张图]` + `[最近剧情]`（最近 `PAINTER_RECENT_TURNS = 3` 回合的「玩家行动 + 旁白」，玩家行动带（做）/（说）/（导演）标记、每条截断 200 字）+ `[画面参考]` / `[画风要求]`；**不得出现**更早对话、世界卡全文、摘要栈、剧情规则提示词、用户画像（`eval/painter-context-test.js` 固定）。**对话 / 扮演的工具出图不经画师**（§3.E）：模型自己写 `prompt` 直出；工作台对话（chat 模式）保持 `recall_recent_plot` 不动。
 - **「停止」只管聊天回合**（v0.5.1）：`chatAbortCtrl` 只有聊天回合的请求写它；`painterCompose` / 生图不再挂上来，后台作画不被停止中断（超时沿用适配器自己的）。
 - **出图任务带 `storyId`**：写入前核对，避免切故事后把图贴到别的档上。
 - **临时例外（§3.F）**：对话 / 扮演的「手动作画」按钮本期仍走「画师优先、不可用则场景描述兜底」——工具被关 / 模型不吃 tools 时它是唯一出图入口，而 chat / rp 的 `lastSceneSummary` 只是旁白截断、不适合当提示词。等智能体模式改版（画布去掉、工具为主）时整体处理。
@@ -153,7 +155,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 | 键 | 内容 |
 |---|---|
-| `ir:settings` | 模型配置、出图时机、界面开关等 |
+| `ir:settings` | 模型配置、界面开关等（出图时机 `trigger` 已下线，v0.11.0） |
 | `ir:story-index` | 书架索引：`{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`（UI-2 §3.1；`snippet` 每次 `saveStory` 重算；旧索引条目由 `Store.ensureIndexComplete` 幂等补齐） |
 | `ir:current` | 上次打开的故事 id |
 | `ir:user-profile` | 跨故事的玩家画像条目 |
@@ -189,7 +191,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`trigger`、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs.trigger` 随 `PREF_KEYS` 去掉，导入旧包按未知键丢弃。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `IR.Prefs.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
 **主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `IR.Prefs.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`thinking` / `extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
@@ -220,9 +222,10 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | **`reasoning` 不进请求体** | `context.js`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `context.js`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
-| **工具结果按语义分流** | `js/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image` 已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
-| **同轮去重**：工具已出图则跳过时机出图 | `S.turnPaintedByTool`（`IR.App.state`）、`js/app/turn.js`：`maybeEnqueueImage` | 一回合只画一张；v0.5.1 起在**提交任务时**置位（出图早已异步完成，事后置位去重会失效） |
-| **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`js/app/painter.js`：`paintQ` / `runPaintTask` | 时机 / 工具 / 手动 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写） |
+| **工具结果按语义分流** | `js/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（chat / rp）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
+| **剧情作画只能点按钮**（P-1，v0.11.0） | `js/app/round.js`（删 `maybeEnqueueImage` 与开局出图）、`js/context.js`：`toolsForMode('choice')` 无 `request_image` | 回合结束 / 开局不再自动出图，`S.turnPaintedByTool` 已随去重需求一起删除；省掉没要求时的画师构思 + 生图开销 |
+| **画师上下文隔离规则**（P-1 §4） | `context.js`：`assemblePainter`（scene）/ `recentTurnLines`、`PAINTER_RECENT_TURNS` / `PAINTER_RECENT_LINE_CHARS` | 画师每次调用只看固定几块（画风锚 / 最近两张图 / 最近 3 回合剧情 / 画面参考）；更早对话、世界卡、摘要栈、剧情规则、画像一律不进（`eval/painter-context-test.js` 固定） |
+| **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`js/app/painter.js`：`paintQ` / `runPaintTask` | 手动 / 工具 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写）；「构思 → 出图」集中在 `runPaintTask` 一处 |
 | **回合锚点 `turnAnchor`** | `S.turnAnchor`（`IR.App.state`）；`js/app/round.js` / `turn.js` 的 commit / catch、`js/app/painter.js` 的 `runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
 | **「停止」只中断聊天回合** | `S.chatAbortCtrl`（`IR.App.state`）只有 `js/app/turn.js` 的 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `js/app/turn.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |

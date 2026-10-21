@@ -51,7 +51,9 @@ const REQUIRED_IDS = [
 ];
 
 // radio 组用 name 标识（不是 id）；同样冻结。
-const REQUIRED_NAMES = ['s-trigger'];
+// P-1（v0.11.0）：出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除（任务书 §3.2），
+// 清单里不再有它——剧情模式作画只剩 🎨 按钮触发，这里同步冻结清单变化。
+const REQUIRED_NAMES = [];
 
 function settingsSection(html) {
   const start = html.indexOf('id="modal-settings"');

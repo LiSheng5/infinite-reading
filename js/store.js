@@ -192,6 +192,64 @@
     };
   }
 
+  // 从「故事设定」文本里抽出能直接进世界卡的部分（纯本地规则，不花 API）。
+  // 只认「键：值」行（世界 / 背景 / 时间 / 伏笔…），已有值的字段不覆盖——
+  // 目的是让新建的剧情故事不是一张空白记忆卡，同时不替用户编造内容。
+  function seedWorldFromPremise(story, text) {
+    if (!story) return story;
+    const w = story.world || (story.world = defaultWorld());
+    const src = String(text || story.premise || '');
+    const pick = re => {
+      let out = '';
+      src.split(/\r?\n/).forEach(line => {
+        const m = String(line).match(re);
+        if (!out && m && m[1]) out = m[1].trim();
+      });
+      return out;
+    };
+    const worldText = pick(/^(?:世界|世界设定|背景|舞台|setting|world)\s*[:：]\s*(.+)$/i);
+    const timeText = pick(/^(?:时间|时代|time)\s*[:：]\s*(.+)$/i);
+    const threadText = pick(/^(?:伏笔|线索|threads?)\s*[:：]\s*(.+)$/i);
+    if (worldText && !w.scene) w.scene = worldText.slice(0, 200);
+    if (worldText && !w.place) {
+      const first = worldText.split(/[，,。；;、]/)[0].trim();
+      if (first) w.place = first.slice(0, 24);
+    }
+    if (timeText && !w.time) w.time = timeText.slice(0, 40);
+    if (threadText && !(w.threads || []).length) {
+      w.threads = threadText.split(/[；;、]/).map(s => s.trim()).filter(Boolean).slice(0, 6);
+    }
+
+    // 关系备注：设定里的「你的角色 / AI 扮演」两行原样落到关系备注，关系区不再是空的
+    const roleText = pick(/^(?:你的角色|玩家角色|我的角色|player)\s*[:：]\s*(.+)$/i);
+    const aiText = pick(/^(?:AI\s*扮演|ai\s*扮演|旁白)\s*[:：]\s*(.+)$/i);
+    w.relationship = w.relationship || { stage: '', bonds: [], notes: '' };
+    if (!w.relationship.notes && (roleText || aiText)) {
+      w.relationship.notes = [
+        roleText ? '你：' + roleText : '',
+        aiText ? 'AI 扮演：' + aiText : '',
+      ].filter(Boolean).join('；').slice(0, 200);
+    }
+
+    // 人物：只认明确的「人物：名字｜性格｜说话方式」行（可多行 / 分号分隔），不猜
+    if (!(w.characters || []).length) {
+      const rows = [];
+      src.split(/\r?\n/).forEach(line => {
+        const m = String(line).match(/^(?:人物|出场人物|角色|characters?)\s*[:：]\s*(.+)$/i);
+        if (m) rows.push(m[1]);
+      });
+      const list = rows.join('；').split(/[；;]/).map(s => s.trim()).filter(Boolean).slice(0, 12)
+        .map(item => {
+          const p = item.split(/[｜|]/).map(s => s.trim());
+          if (!p[0]) return null;
+          return { name: p[0].slice(0, 20), presence: '在场', personality: (p[1] || '').slice(0, 80), speech: (p[2] || '').slice(0, 80), note: '', noteLocked: false };
+        })
+        .filter(Boolean);
+      if (list.length) w.characters = list;
+    }
+    return story;
+  }
+
   function defaultRollingStyle() {
     return { style: '', scenes: '', wardrobe: '', updatedAt: 0 };
   }
@@ -226,6 +284,9 @@
       // UI-3 模型库（§3.1）：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '' },
+      // 生视频（预留）：适配器尚未接入（js/providers.js 的 VideoProviders 为空），
+      // 但配置照常保存，等适配器接上就能直接用，不用再改设置结构。
+      video: { provider: 'openai-videos', baseUrl: '', apiKey: '', model: '', extraParams: '' },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
       // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
       ui: {
@@ -244,7 +305,7 @@
       noTools: [],            // P5-1 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
       stylePreset: 'anime',   // P4 视觉设定卡之前的兜底画风
       styleCustom: '',
-      trigger: 'choice',      // every | choice | manual（第十二轮砍掉 ai 判断）
+      // P-1（v0.11.0）：出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
       // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
       // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
       sidecar: { port: 4319, token: '' },
@@ -280,6 +341,7 @@
       scribe: Object.assign({}, d.scribe, raw.scribe || {}),
       draft: Object.assign({}, d.draft, raw.draft || {}),
       image: Object.assign({}, d.image, raw.image || {}),
+      video: Object.assign({}, d.video, raw.video || {}),
       userProfile: Object.assign({}, d.userProfile, raw.userProfile || {}, {
         // 'all' 是合法写法（= 三个模式全开）：必须原样保留；只有对象才做深合并
         //（修：此前 Object.assign({}, 默认, 'all') 会把字符串拆成 0/1/2 索引键，刷新后三个勾全丢）
@@ -294,10 +356,10 @@
         : [],
       stylePreset: raw.stylePreset || d.stylePreset,
       styleCustom: raw.styleCustom || '',
-      trigger: ['every', 'choice', 'manual'].indexOf(raw.trigger) >= 0
-        ? raw.trigger
-        : (raw.trigger === 'ai' ? 'every' : d.trigger), // v0.1 的 'ai' 已废 → 退回 every
+      // P-1（v0.11.0）：trigger（出图时机）停止读写——defaultSettings 不再写它，
+      // 旧值原样留在存档里（不读、不删），与 split / showImage 旧字段同一处理方式
     };
+    if (raw && typeof raw === 'object' && 'trigger' in raw) out.trigger = raw.trigger;
 
     // 界面布局（P2，新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
     const rawUi = (raw.ui && typeof raw.ui === 'object') ? raw.ui : {};
@@ -345,6 +407,8 @@
     out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
     if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
     if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
+    out.video.provider = 'openai-videos';
+    if (typeof out.video.extraParams !== 'string' && !(out.video.extraParams && typeof out.video.extraParams === 'object')) out.video.extraParams = '';
 
     // v0.1 的 image.size 字符串 → aspect/width/height（R8）
     if (raw.image && raw.image.size && !raw.image.aspect) {
@@ -934,7 +998,7 @@
     Store: {
       SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
-      defaultWorld, defaultRollingStyle, defaultSettings, defaultUi,
+      defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
       migrateSettings, migrateProfiles, migrateStory, serializeStory,
       buildStoryPack, sanitizePrefsSafe,
       newStory,

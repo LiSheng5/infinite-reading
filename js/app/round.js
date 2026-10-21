@@ -11,13 +11,23 @@
   async function handleToolCalls(calls) {
     const feedback = [];
     const recallScopes = [];
+    let toolUnavailable = false;
+    // §3.E：chat / rp 的 request_image 是直出变体；剧情模式没有作画工具（P-1 §3.3）
+    const directPaint = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
     for (const c of calls) {
-      A.applyToolCall({ function: { name: c.name, arguments: c.raw && c.raw.function ? c.raw.function.arguments : undefined } });
+      const rawCall = { function: { name: c.name, arguments: c.raw && c.raw.function ? c.raw.function.arguments : undefined } };
+      if (c.name === 'request_image' && !directPaint) {
+        // P-1（§3.3）：剧情模式不下发 request_image；模型照旧历史调了（或不听话）按「该工具不可用」回传——
+        // 不入队、不报错、不弹 toast，也不留「排队生图」的假留痕
+        toolUnavailable = true;
+        feedback.push('[该工具不可用] request_image 在剧情模式已停用：画面由用户点「作画」生成。当作没调用过这次调用，正文里不要说已经画好或正在画。');
+        continue;
+      }
+      A.applyToolCall(rawCall);
       if (IR.Context.isRecallTool(c.name)) {
         recallScopes.push(IR.Context.RECALL_TOOL_SCOPE[c.name]);
       } else if (c.name === 'request_image') {
         // §3.A：不再 await——任务进作画队列立刻返回，图在后台出、完成后落回本回合
-        S.turnPaintedByTool = true;   // §3.A.3：提交即置位（原来是出图完成后）
         A.submitToolPaint(c.args);
         feedback.push('[已排队生图]\n画面：' + A.imageBrief(c.args)
           + '\n（图会稍后自动出现在聊天里。正文里可以自然提一句，但不要声称图已经画好，也不要说「工具」「系统」。）');
@@ -31,7 +41,11 @@
       }
     }
     A.renderChat();
-    return { recallScopes: recallScopes.filter((s, i) => recallScopes.indexOf(s) === i), feedback: feedback };
+    return {
+      recallScopes: recallScopes.filter((s, i) => recallScopes.indexOf(s) === i),
+      feedback: feedback,
+      toolUnavailable: toolUnavailable,
+    };
   }
 
   // email_propose / payment_propose → 建提案（红线 1/2/3）：
@@ -47,7 +61,6 @@
     S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
     const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
 
-    S.turnPaintedByTool = false;   // 本轮工具出图标记（§4.7 去重用）
     S.turnAnchor = { nodeId: null, dead: false };   // §3.A.4：本回合锚点，工具出图任务提交时带上
     // C-E 启发式注入（T-P5-3）：玩家输入命中世界卡 / 伏笔实体词 → 本轮自动带上对应条目（与工具召回并行）。
     // 只在「新回合」留痕（重试不重复记），条目本身由 assembleAI1 注入，用户可在留痕面板看到：静默忽略工具时也照带。
@@ -124,19 +137,20 @@
     calls = calls.slice(0, IR.Context.MAX_TOOL_CALLS_PER_TURN);
     reply1.tool_calls = [];   // 已经处理过：避免 absorbReply 再记一次留痕
 
-    const effect = calls.length ? await handleToolCalls(calls) : { recallScopes: [], feedback: [] };
+    const effect = calls.length ? await handleToolCalls(calls) : { recallScopes: [], feedback: [], toolUnavailable: false };
 
     /* P0-2（2026-10-14）：「写了正文 + 调了工具」不再是工具结果的死角。
      * 此前仅当 noProse 才重发注入——流式下 content 与 tool_calls 同包出现完全可能：
      * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）。
      * 按工具语义分流（§3.A.2）：
      *  - recall_*：模型需要的信息 → 调了就注入重发；
-     *  - request_image：已异步化，模型写了正文就不重发（省一次调用）——「已排队」的
+     *  - request_image（chat / rp 直出）：已异步化，模型写了正文就不重发（省一次调用）——「已排队」的
      *    feedback 只在 noProse 重发时随包注入；
+     *  - request_image（剧情模式，P-1 §3.3）：工具已停用，「该工具不可用」是模型要收到的回传 → 调了就重发；
      *  - update_memory / schedule_*：fire-and-forget 的事后动作 → 仅 noProse 时重发（原行为）。
      * 重发永不带工具（§4.5，结构上防循环）；重发不可用而第一版有正文时回退第一版。 */
     const noProse = !reply1.narration || (reply1.parseFailed && reply1.looksJson);
-    const needsFeedback = effect.recallScopes.length > 0;
+    const needsFeedback = effect.recallScopes.length > 0 || effect.toolUnavailable;
     if (toolsOn && calls.length && (noProse || needsFeedback)) {
       if (noProse) reasoning = '';   // 纯工具回合的思考链不对应最终旁白，丢掉
       // 重发沿用本轮组装选项（含 R13 画像），但不下发工具清单
@@ -226,7 +240,6 @@
     const sentAction = kind ? withKindMarker(action, kind) : action;
     S.busy = true;
     S.stopRequested = false; S.chatAbortCtrl = null;   // P0-1：每回合复位停止标记
-    S.lastActionWasChoice = !!isChoice;
     S.currentChoices = [];
     S.choicesTrayOpen = false;
     setSendButtonsBusy(true);   // P0-1：busy 期间发送按钮变身「停止」
@@ -261,7 +274,6 @@
         meta: { model: S.turnModel || '' },
       });
       S.turnAnchor.nodeId = node.id;                // §3.A.4：锚点补 nodeId，后台出图任务写回时落位
-      A.maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
       await A.postTurn();
       IR.Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
       A.maybeAutoTitle();                          // UI-2 §3.3：seal 后异步起标题，不占 busy、不阻塞下一次发送
@@ -338,10 +350,8 @@
       await A.postTurn();
       IR.Tree.seal(S.story, node.id);                // 必须在 postTurn 之后（§10）
       A.maybeAutoTitle();                           // UI-2 §3.3：开局回合同样触发自动标题
-      if (S.turnPaintedByTool) S.turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
-      else if (S.story.mode === 'chat' || S.story.mode === 'rp') { /* §3.E.3：对话 / 扮演没有时机出图 */ }
-      else if (IR.Prefs.effective(S.settings, S.story, 'trigger') !== 'manual') A.enqueueImage(reply.scene_summary, node.id);
-      else toast('已开局。想看画面随时点右上角「作画」。');
+      // P-1（§3.1）：开局不再自动出图——图只来自用户点 🎨（作画）/ 工作台重画
+      toast('已开局。想看画面随时点右上角「作画」。');
       saveAll();
     } catch (e) {
       S.live = null;

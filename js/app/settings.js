@@ -39,6 +39,11 @@
     $('#s-image-model').value = S.settings.image.model;
     $('#s-image-key').value = S.settings.image.apiKey;
     $('#s-image-params').value = typeof S.settings.image.extraParams === 'string' ? S.settings.image.extraParams : '';
+    const vd = S.settings.video || {};
+    $('#s-video-base').value = vd.baseUrl || '';
+    $('#s-video-model').value = vd.model || '';
+    $('#s-video-key').value = vd.apiKey || '';
+    $('#s-video-params').value = typeof vd.extraParams === 'string' ? vd.extraParams : '';
     $('#s-image-aspect').value = S.settings.image.aspect || '16:9';
     $('#s-image-width').value = S.settings.image.width || 1280;
     $('#s-image-height').value = S.settings.image.height || 720;
@@ -65,7 +70,6 @@
     if ($('#s-ui-font')) $('#s-ui-font').value = ['sm', 'md', 'lg'].indexOf(sui.fontScale) >= 0 ? sui.fontScale : 'md';
     if ($('#s-ui-width')) $('#s-ui-width').value = ['narrow', 'standard', 'wide'].indexOf(sui.width) >= 0 ? sui.width : 'standard';
     if ($('#s-ui-density')) $('#s-ui-density').value = ['compact', 'standard'].indexOf(sui.density) >= 0 ? sui.density : 'standard';
-    document.querySelectorAll('input[name="s-trigger"]').forEach(r => { r.checked = r.value === S.settings.trigger; });
     A.renderCapabilityFields();
     A.renderModelProfiles();   // UI-3：模型库列表（模型设置 · 模型库）
     renderStoryPanels();
@@ -129,6 +133,13 @@
     S.settings.image.width = parseInt($('#s-image-width').value, 10) || 1280;
     S.settings.image.height = parseInt($('#s-image-height').value, 10) || 720;
     S.settings.image.extraParams = $('#s-image-params').value.trim();
+
+    S.settings.video = S.settings.video || {};
+    S.settings.video.provider = 'openai-videos';
+    S.settings.video.baseUrl = $('#s-video-base').value.trim();
+    S.settings.video.model = $('#s-video-model').value.trim();
+    S.settings.video.apiKey = $('#s-video-key').value.trim();
+    S.settings.video.extraParams = $('#s-video-params').value.trim();
     if (!$('#wrap-image-size').classList.contains('hidden')) S.settings.image.size = $('#s-image-size').value;
     else delete S.settings.image.size;
     if (!$('#wrap-image-quality').classList.contains('hidden')) S.settings.image.quality = $('#s-image-quality').value;
@@ -174,8 +185,6 @@
     S.settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
-    const t = document.querySelector('input[name="s-trigger"]:checked');
-    S.settings.trigger = t ? t.value : 'choice';
     saveAll();
     if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== S.settings.showReasoning) A.renderChat();   // 思考链开关即时生效

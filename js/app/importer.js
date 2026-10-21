@@ -296,7 +296,7 @@
     closeModal('modal-import-text');
     S.importJob = null;
     A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.runOpening });   // §4.11：建新档 → 试画锚定出画风候选图 → 开场
+    A.openAnchor({ onDone: A.renderChat });   // §4.11：建新档 → 试画锚定；开场由用户点「开始第一幕」
   }
 
   A.reg({ importPlanHint, openImportText, closeImportText, runImportText, startFromImport });
