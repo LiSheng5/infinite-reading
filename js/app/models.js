@@ -69,12 +69,24 @@
     try { return Cap && Cap.find ? Cap.find('image', S.settings.image.model) : null; } catch (_) { return null; }
   }
 
+  // 有效主模型配置（UI-3 §3.3）：story.prefs.profileId → 模型库；缺省 / 找不到 → 默认主模型。
+  // 所有发给主模型的请求与派生量（contextWindow / thinking / extraParams / noTools 键）都走它，
+  // 不再直接读 S.settings.chat。
+  function chatCfg() {
+    const P = IR.Prefs;
+    if (P && typeof P.resolveChatCfg === 'function') return P.resolveChatCfg(S.settings, S.story).cfg;
+    return S.settings.chat;
+  }
+
   // 有效上下文窗口：用户手填优先，其次登记表；0 = 未知（压缩退回条数兜底）
   function chatContextWindow() {
-    const manual = +S.settings.chat.contextWindow || 0;
+    const cfg = chatCfg();
+    const manual = +cfg.contextWindow || 0;
     if (manual > 0) return manual;
-    const cap = capChat();
-    return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
+    try {
+      const cap = Cap && Cap.find ? Cap.find('chat', cfg.model) : null;
+      return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
+    } catch (_) { return 0; }
   }
 
   function sizeRatioLabel(s) {
@@ -221,5 +233,5 @@
     });
   }
 
-  A.reg({ chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
+  A.reg({ chatCfg, chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
 })();

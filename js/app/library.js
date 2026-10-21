@@ -276,6 +276,7 @@
     S.busy = false;
     S.live = null;
     A.closeMenus();
+    A.closeStoryPrefs();   // UI-3：离开对话就收起本对话设置面板（不残留上一个对话的值）
     $('#screen-start').classList.add('hidden');
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.remove('hidden');
@@ -291,6 +292,7 @@
     S.live = null;
     A.closeMenus();
     A.closeWorkbench();
+    A.closeStoryPrefs();   // UI-3
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
     $('#screen-start').classList.remove('hidden');
@@ -376,25 +378,9 @@
       }
       images.push(im);
     }
-    const pack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.4',
-      title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
-      world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
-      characterCard: st.characterCard || null,
-      createdAt: st.createdAt, updatedAt: st.updatedAt,
-      images: images,
-    };
-    if (kind === 'full') {
-      pack.log = st.log || [];
-      pack.messages = st.messages || [];
-      pack.summaries = st.summaries || [];
-      pack.painterThread = st.painterThread || [];
-      pack.userProfile = st.userProfile || [];
-      pack.turn = st.turn || 0;
-      pack.lastSceneSummary = st.lastSceneSummary || '';
-      pack.tree = st.tree || null;   // 分支树（§5⑧）：full 包带整棵树，导入后 ensure 复原分支
-    }
-    return pack;
+    // UI-3 §3.4：组装走 Store.buildStoryPack——整包剥凭证（apiKey / baseUrl 等），
+    // prefs 只带 profileId（不透明 id）+ profileLabel（仅显示）；settings 永不进导出包。
+    return Store.buildStoryPack(st, kind, images, S.settings);
   }
 
   function downloadBlob(filename, blob) {

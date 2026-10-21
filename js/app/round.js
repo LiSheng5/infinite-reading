@@ -41,7 +41,10 @@
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发（§4.5）
   async function callAI1(playerAction, opts) {
     opts = opts || {};
-    const cfg = S.settings.chat;
+    // UI-3 §3.3：主模型配置一律走 resolveChatCfg（本对话 profile → 模型库；缺省 = 默认主模型）
+    const resolved = IR.Prefs.resolveChatCfg(S.settings, S.story);
+    const cfg = resolved.cfg;
+    S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
     const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
 
     S.turnPaintedByTool = false;   // 本轮工具出图标记（§4.7 去重用）
@@ -67,15 +70,24 @@
     A.renderChat();
     S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
 
+    // UI-3 §3.3：工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）
+    const prefsTools = IR.Prefs.effective(S.settings, S.story, 'tools');
+    const toolAllowed = (t) => prefsTools[IR.Prefs.toolCategory(t.function.name)] !== false;
     const toolsOn = opts.tools !== false && !opts.recall
       && S.settings.toolsEnabled !== 'off' && !A.noToolsFor(cfg);
     // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
-    const schedTools = toolsOn && A.scheduleToolsAvailable();
+    const schedTools = toolsOn && prefsTools.schedule !== false && A.scheduleToolsAvailable();
     // 邮件 / 下单（提案制）只在智能体（chat）+ 对应 feature 开启时追加（红线 7；toolsForMode 内部再挡一次模式）
     const propTools = toolsOn ? A.proposalToolsAvailable() : { email: false, payment: false };
-    const toolOpts = { schedule: schedTools, email: propTools.email, payment: propTools.payment };
+    const toolOpts = {
+      schedule: schedTools,
+      email: propTools.email && prefsTools.email !== false,
+      payment: propTools.payment && prefsTools.payment !== false,
+    };
     const asmOpts = Object.assign({}, opts);
-    if (toolsOn) asmOpts.tools = IR.Context.toolNamesForMode(S.story.mode, toolOpts);
+    if (toolsOn) {
+      asmOpts.tools = IR.Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed).map(t => t.function.name);
+    }
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = A.activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
     asmOpts.contextWindow = A.chatContextWindow();   // P1-3：组装窗口按 token 动态装（context.js fitWindow）
@@ -84,13 +96,13 @@
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
     try {
       const cw = asmOpts.contextWindow;
-      if (cw > 0 && IR.Context.estimateContextTokens(S.story, playerAction, asmOpts) > Math.floor(cw * IR.Context.COMPRESS_RATIO)) {
+      if (cw > 0 && IR.Context.estimateContextTokens(S.story, playerAction, asmOpts) > IR.Context.compressThreshold(cw)) {
         IR.Context.compressStory(S.story, { summarize: IR.Context.localSummarize, contextWindow: cw });
       }
     } catch (_) { /* 压缩失败不拦回合：最坏按原样发 */ }
     const messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
     const cfgTools = toolsOn
-      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(S.story.mode, toolOpts) })
+      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed) })
       : cfg;
 
     let streamedCalls = [];
@@ -239,12 +251,14 @@
       S.currentChoices = reply.choices;
       A.renderChat();
       // §4.1 回合落节点：entries = log.slice(logMark)，head 前移；失败 / 停止不建节点
+      // UI-3 §3.3：meta.model 记下本回合实际用的模型名（不含任何密钥 / URL），分支页可显示
       const node = IR.Tree.commit(S.story, {
         action: {
           type: agentMsg ? 'agent' : (isChoice ? 'choice' : 'player'),
           text: action, kind: kind || null, sent: sentAction,
         },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+        meta: { model: S.turnModel || '' },
       });
       S.turnAnchor.nodeId = node.id;                // §3.A.4：锚点补 nodeId，后台出图任务写回时落位
       A.maybeEnqueueImage(reply, false, node.id);   // nodeId 随任务走（§4.4）
@@ -318,6 +332,7 @@
       const node = IR.Tree.commit(S.story, {
         action: { type: 'opening', text: OPENING_ACTION, kind: null, sent: OPENING_ACTION },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
+        meta: { model: S.turnModel || '' },   // UI-3 §3.3
       });
       S.turnAnchor.nodeId = node.id;                 // §3.A.4：锚点补 nodeId
       await A.postTurn();
@@ -325,7 +340,7 @@
       A.maybeAutoTitle();                           // UI-2 §3.3：开局回合同样触发自动标题
       if (S.turnPaintedByTool) S.turnPaintedByTool = false;                        // 开局这一轮工具已出图 → 不再时机出图
       else if (S.story.mode === 'chat' || S.story.mode === 'rp') { /* §3.E.3：对话 / 扮演没有时机出图 */ }
-      else if (S.settings.trigger !== 'manual') A.enqueueImage(reply.scene_summary, node.id);
+      else if (IR.Prefs.effective(S.settings, S.story, 'trigger') !== 'manual') A.enqueueImage(reply.scene_summary, node.id);
       else toast('已开局。想看画面随时点右上角「作画」。');
       saveAll();
     } catch (e) {

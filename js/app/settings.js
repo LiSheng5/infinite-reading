@@ -61,8 +61,13 @@
     if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
     if ($('#s-ui-motion')) $('#s-ui-motion').value = ['auto', 'off', 'standard', 'rich'].indexOf(sui.motion) >= 0 ? sui.motion : 'auto';
+    // UI-3 §4.1 外观：字号 / 宽度 / 密度默认（扮演 / 智能体；本对话可覆盖）
+    if ($('#s-ui-font')) $('#s-ui-font').value = ['sm', 'md', 'lg'].indexOf(sui.fontScale) >= 0 ? sui.fontScale : 'md';
+    if ($('#s-ui-width')) $('#s-ui-width').value = ['narrow', 'standard', 'wide'].indexOf(sui.width) >= 0 ? sui.width : 'standard';
+    if ($('#s-ui-density')) $('#s-ui-density').value = ['compact', 'standard'].indexOf(sui.density) >= 0 ? sui.density : 'standard';
     document.querySelectorAll('input[name="s-trigger"]').forEach(r => { r.checked = r.value === S.settings.trigger; });
     A.renderCapabilityFields();
+    A.renderModelProfiles();   // UI-3：模型库列表（模型设置 · 模型库）
     renderStoryPanels();
     renderInjectHint();
     A.renderSavepoints();
@@ -149,6 +154,19 @@
       const mv = $('#s-ui-motion').value;
       S.settings.ui.motion = ['auto', 'off', 'standard', 'rich'].indexOf(mv) >= 0 ? mv : 'auto';
       applyMotion();   // 动效强度即时生效
+    }
+    // UI-3 §4.1：字号 / 宽度 / 密度默认（非法值回默认）
+    if ($('#s-ui-font')) {
+      const fv = $('#s-ui-font').value;
+      S.settings.ui.fontScale = ['sm', 'md', 'lg'].indexOf(fv) >= 0 ? fv : 'md';
+    }
+    if ($('#s-ui-width')) {
+      const wv = $('#s-ui-width').value;
+      S.settings.ui.width = ['narrow', 'standard', 'wide'].indexOf(wv) >= 0 ? wv : 'standard';
+    }
+    if ($('#s-ui-density')) {
+      const dv = $('#s-ui-density').value;
+      S.settings.ui.density = ['compact', 'standard'].indexOf(dv) >= 0 ? dv : 'standard';
     }
 
     const prevShowReasoning = S.settings.showReasoning;
@@ -327,6 +345,8 @@
       notes: $('#w-rel-notes').value.trim(),
     });
     w.updatedAt = Date.now();
+    // 手改的派生数据要同步进 head 的内联状态，否则下次 project（刷新 / 切分支）会回滚这次编辑
+    try { IR.Tree.resyncState(S.story); } catch (_) { /* 树还没建好时忽略 */ }
     saveAll();
     renderStoryPanels();
     toast('世界卡已保存，下一回合生效');

@@ -40,6 +40,7 @@
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `js/motion.js` | `IR.Motion` | 动效强度解析（**纯逻辑**，Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，不碰 DOM | `resolve` |
+| `js/prefs.js` | `IR.Prefs` | 本对话偏好（UI-3 设置分层，**纯逻辑**，Node 可 `require`）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析（profileId → 模型库）、各模式可见控件、导出剥凭证；不碰 DOM / 存储 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
 | `js/titles.js` | `IR.Titles` | 自动标题（**纯逻辑**，UI-2 §3.3）：触发判定、给小模型的 prompt、输出清洗、本地兜底、写回护栏；不碰 DOM / 网络 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
 | `js/search.js` | `IR.Search` | 全文搜索（**纯逻辑**，UI-2 §3.4）：标题 + 全部分支节点的子串检索（NFKC / 小写 / 折叠空白，AND 多词），片段带 `ranges`（**输出零 HTML**）；内存索引 `Map(id → doc)` 不持久化 | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
@@ -47,10 +48,10 @@
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
+providers.js → prefs.js → context.js → tree.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
-`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -81,6 +82,7 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | `js/app/styleanchor.js` | 画风锚定（R3 / §5） | `openAnchor`、`runAnchorBatch`、`anchorLock` |
 | `js/app/render.js` | 聊天记录、画面面板、布局、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`applyLayout`、`closeLightbox` |
 | `js/app/settings.js` | 设置界面、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
+| `js/app/prefsui.js` | UI-3 设置分层界面：全局设置分组导航（桌面左导航 / 窄屏下钻）、模型库管理、本对话设置面板（右侧停靠 / 窄屏底部弹层） | `initSettingsNav`、`renderModelProfiles`、`renderStoryPrefs`、`openStoryPrefs` |
 | `js/app.js`（保留） | 组合根：事件绑定 + 启动 | `bind`、`init` |
 
 **三条约定**（经典脚本没有 import，靠 `IR.App` 松耦合）：
@@ -158,12 +160,13 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 
 ### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
-顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
+顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
 
 - `titleAuto` / `titleGen`（UI-2 §3.2/§3.3）：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn === 1`（第一次）与 `turn === 6`（第二次），失败不计次。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
 - `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
+- `prefs`（本对话偏好，UI-3 §3.2，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`trigger`、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `IR.Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。
 - `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`IR.Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `IR.Tree.ensure` 幂等迁移成线性链（末条旁白 `versions > 1` 展开成兄弟、旧存档点按 `sp.turn` 映射 `nodeId`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。
 - 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级（`migrateStory` 原样透传 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
@@ -177,6 +180,19 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | `.irbackup.zip` | `buildBackupZip` / `doBackupAll`（勾选「带上原图」） | 同一个包里两样东西：`ir-backup.json`（同上，`schema:2` 多一份 `images:[{id, path, type, size}]` 清单）+ `images/0001.png…`（原图按二进制原样存放，**不转 base64**） |
 
 导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。`.zip` 由 `handleImportFile` 先判扩展名 → `importZipFile` 解包取 `ir-backup.json`，再走同一条 `applyBackupImport(obj, entries)`，原图按清单写回 IndexedDB。
+
+### 4.4 设置分层与模型库（UI-3，v0.9.0）
+
+**两层设置**：
+
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`trigger`、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。
+- **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `IR.Prefs.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
+
+**主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `IR.Prefs.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`thinking` / `extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
+
+**工具集**：下发 = 全局可用性（`toolsEnabled` / `noTools` / 侧车 feature）∩ `IR.Prefs.effective(settings, story, 'tools')`（按 `IR.Prefs.toolCategory` 把工具名映射到 `image / memory / schedule / email / payment` 五个开关，缺省跟随全局）。
+
+**安全红线（密钥）**：模型库与 `settings.*` 里的 apiKey 只存在本地全局设置；故事存档 / 导出包 / 分享包**绝不出现** `apiKey / key / token / baseUrl` 字段——`buildStoryPack`（`store.js`）整包过 `IR.Prefs.stripSecrets`，`prefs` 只带 `profileId + profileLabel`。整库备份 `.irbackup.json` **含 `settings`**（含 profiles）；默认剥掉全部 apiKey（勾「备份里也带上 API Key」才保留），行为不变、只是剥除范围覆盖新增的 `profiles[]`。
 
 ## 5. 关键不变量（改动时别碰坏）
 
@@ -206,6 +222,11 @@ providers.js → context.js → tree.js → storage.js → store.js → modelCap
 | **自动标题写回护栏**（UI-2 §3.3） | `js/titles.js`：`applyTitle(story, id, title)`；触发在 `js/app/round.js` / `turn.js` 的 `seal` 之后、编排在 `js/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
 | **搜索输出零 HTML、高亮只走 ranges**（UI-2 §3.4/§3.5） | `js/search.js`：`query`（片段 + ranges）；`js/app/shelf.js`：`appendHighlighted`（`createElement('mark')` + `textContent`） | 查询结果只有纯文本与 `[start,end]` 下标；UI 高亮不得拼 `innerHTML`（对抗内容如 `<script>` 原样保留为文本）。搜索文档遍历**全部分支节点**；内存索引不持久化，首次聚焦搜索框惰性构建（分批 ~5 个故事让出主线程），`saveStory` 防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除 |
 | **书架只读索引**（UI-2 §3.1） | `js/store.js`：索引条目 `{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`、`ensureIndexComplete`；`js/app/shelf.js`：`renderShelf` | `renderShelf` 不再对每个故事 `loadStory`；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `ensureIndexComplete` 按需补齐并整体回写一次（幂等）；空标题只显示兜底文案、**不回写存档** |
+
+| **故事与导出里绝不带密钥**（UI-3 §3.4） | `js/prefs.js`：`sanitizePrefs` / `stripSecrets` / `exportPrefs`；`js/store.js`：`migrateStory` / `serializeStory` / `buildStoryPack` | 故事会被导出 / 分享 / 备份：`story.prefs` 只存 `profileId`（不透明引用）与 `profileLabel`（显示用）；导出包整包剥 `apiKey / key / token / baseUrl`（任意嵌套层级），`eval/prefs-test.js` 有可执行断言 |
+| **主模型配置走 `resolveChatCfg`**（UI-3 §3.3） | `js/prefs.js`：`resolveChatCfg`；`js/app/models.js`：`chatCfg` / `chatContextWindow`；`js/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / thinking / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
+| **工具集 = 全局可用性 ∩ `prefs.tools`**（UI-3 §3.3） | `js/app/round.js`：`callAI1` 的 `toolAllowed` 过滤；`js/prefs.js`：`toolCategory` | 对话里可单独关掉「下单 / 邮件 / …」，默认跟随全局；其它对话不受影响 |
+| **手改派生数据后 `resyncState`** | `js/tree.js`：`resyncState`；`js/app/settings.js`：`saveWorldFromForm` | 树是真源、`project` 会用 head 的内联状态覆盖 `world / summaries / …`——手改世界卡后必须把 head 的状态换成当前值，否则下次进故事 / 切分支会把编辑回滚掉 |
 
 ### 5.1 设计令牌与动效等级（UI-1）
 

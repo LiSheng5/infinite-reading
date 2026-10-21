@@ -460,6 +460,7 @@
     for (const k of ['painter', 'scribe', 'draft']) {
       if (s[k]) s[k] = Object.assign({}, s[k], { provider: '', baseUrl: '', apiKey: '', model: '' });
     }
+    s.profiles = [];                        // UI-3：演示不带模型库（profileId 找不到 → 回退演示适配器，绝不外联）
     s.toolsEnabled = 'off';                 // 演示不走工具，行为完全确定
     return s;
   }

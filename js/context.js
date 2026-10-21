@@ -912,6 +912,14 @@
    * @param {object} [opts] { keepMessages, maxMessages, maxSummaries, summarize, contextWindow }
    * @returns {null|{compressedTurns, messagesRemoved, summaries}}
    */
+  // 压缩阈值（纯函数，UI-3 §6-8）：contextWindow × 70%；0 = 容量未知（回退按条数压缩）。
+  // 有效 contextWindow 来自 resolveChatCfg 的 cfg（模型库 profile 可各不相同）。
+  function compressThreshold(contextWindow) {
+    const cw = +contextWindow;
+    if (!Number.isFinite(cw) || cw <= 0) return 0;
+    return Math.floor(cw * COMPRESS_RATIO);
+  }
+
   // 压缩判定与切分（纯函数，同步）：返回 { candidate, groups } 或 null。
   // 运行时（app.js）用它决定「交给书记员模型压」还是「本地兜底压」，评测也走它，避免两份判定。
   function planCompression(story, opts) {
@@ -922,7 +930,7 @@
     let overBudget = false;
     const cw = +opts.contextWindow;
     if (Number.isFinite(cw) && cw > 0) {
-      const threshold = Math.floor(cw * COMPRESS_RATIO);
+      const threshold = compressThreshold(cw);
       overBudget = estimateContextTokens(story, '') > threshold;
     }
     if (story.messages.length <= max && !overBudget) return null;
@@ -1536,7 +1544,7 @@
     assembleImporter, splitImportChunks, planImport, planImportMerge,
     estimateTokens, playerContent,
     topThreads, buildSummaryLine, worldCardText, mergeWorld, localScribe,
-    sceneSlot, localSummarize, mergeSummaries, planCompression, trimSummaries, compressStory,
+    sceneSlot, localSummarize, mergeSummaries, compressThreshold, planCompression, trimSummaries, compressStory,
     assembleAI1, messagesToText, estimateContextTokens,
   };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

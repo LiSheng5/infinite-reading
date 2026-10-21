@@ -1861,3 +1861,125 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 .pay-result .ok { color: var(--accent); }
 .pay-result .warn { color: var(--danger); }
 
+/* ==================== UI-3 设置分层：全局设置分组导航（§4.1） ==================== */
+#modal-settings .modal-card { width: min(880px, 96vw); }
+.set-shell { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 18px; align-items: start; }
+.set-nav { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
+.set-nav-item {
+  text-align: left; padding: 10px 12px; min-height: 40px;
+  border: 1px solid var(--line-soft); background: var(--field-bg);
+  color: var(--ink-dim); border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: translateX(2px); }
+.set-nav-item.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-deep); }
+.set-panels { min-width: 0; }
+.set-panel { animation: fadeIn var(--dur-slow) var(--ease-out) both; }
+.set-panel-title {
+  font-family: var(--font-note); font-size: 15px; font-weight: 400;
+  letter-spacing: .14em; color: var(--ink-dim); margin: 2px 0 12px;
+}
+.set-back { margin-bottom: 12px; }
+html[data-motion="off"] .set-nav-item:hover { transform: none; }
+html[data-motion="off"] .set-panel { animation: none; }
+
+/* 模型库（§3.1）：列表行 + 编辑块 */
+#fs-profiles .mono-row { gap: 8px; flex-wrap: wrap; }
+#mp-editor { border: 1px dashed var(--line); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; }
+#mp-editor .row-inline { margin-top: 10px; }
+
+/* ==================== UI-3 本对话设置面板（§4.2） ==================== */
+.story-prefs {
+  position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 0; bottom: 0;
+  width: min(360px, 92vw);
+  background: var(--surface); border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-2); z-index: 25;   /* 在内容之上、弹窗（.modal z-index 30）之下 */
+  display: flex; flex-direction: column;
+  animation: prefsIn var(--dur-base) var(--ease-spring) both;
+}
+@keyframes prefsIn { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+.prefs-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+.prefs-head h3 {
+  font-family: var(--font-note); font-size: 16px; font-weight: 400;
+  letter-spacing: .12em; color: var(--ink);
+}
+.prefs-body {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.prefs-foot { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); }
+.prefs-row {
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  background: var(--fieldset-tint); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.prefs-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prefs-label { font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; color: var(--ink); }
+.prefs-badge { margin-left: auto; font-family: var(--font-ui); font-size: 11px; letter-spacing: .06em; color: var(--ink-faint); }
+.prefs-badge.over { color: var(--accent-deep); }
+.prefs-row select, .prefs-row input[type="text"], .prefs-row input[type="number"] {
+  width: 100%; min-height: 40px; box-sizing: border-box;
+}
+.prefs-row input[type="range"] { width: 100%; }
+.prefs-row .check { min-height: 40px; display: flex; align-items: center; }
+.prefs-row .hint.warn { color: var(--danger-deep); }
+.prefs-row .mini-btn { min-height: 32px; }
+
+/* 停靠面板：桌面 / 笔记本让出右侧宽度，不遮挡输入区（A.6）。
+   让位是布局变化，不做过渡（UI-1 令牌护栏：transition 不动重排属性）；面板自身的滑入用 transform。 */
+@media (min-width: 721px) {
+  #screen-game.prefs-open { margin-right: min(360px, 92vw); }
+}
+/* 窄屏触控目标不小于 40px（A.6） */
+@media (max-width: 720px) {
+  .hud-btn { min-width: 40px; min-height: 40px; }
+  .story-prefs .hud-btn { min-width: 40px; min-height: 40px; }
+  .modal select, .modal input[type="text"], .modal input[type="number"],
+  .modal input[type="password"], .modal textarea, .modal .btn, .modal .mini-btn {
+    min-height: 40px; box-sizing: border-box;
+  }
+  .set-back { min-height: 40px; }
+}
+
+/* 窄屏：底部弹层（同 UI-2 的下钻手势感） */
+@media (max-width: 720px) {
+  .set-shell { grid-template-columns: 1fr; gap: 0; }
+  .set-shell:not(.detail) .set-panels { display: none; }
+  .set-shell.detail .set-nav { display: none; }
+  .set-nav-item { width: 100%; }
+  .story-prefs {
+    top: auto; left: 0; right: 0; bottom: 0; width: auto;
+    max-height: 76vh; border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius) var(--radius) 0 0;
+    animation: prefsUp var(--dur-base) var(--ease-spring) both;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  @keyframes prefsUp { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+html[data-motion="off"] .story-prefs { animation: none; }
+
+/* ==================== UI-3 §3.5：字号 / 内容宽度 / 密度令牌 ==================== */
+#screen-game { --font-scale: 1; --content-w: 760px; --density: 1; }
+/* 智能体 / 扮演：内容列宽度吃 --content-w（居中） */
+#screen-game[data-layout="chat"] .chat-scroll {
+  padding-left: max(16px, calc((100% - var(--content-w, 760px)) / 2));
+  padding-right: max(16px, calc((100% - var(--content-w, 760px)) / 2));
+  gap: calc(22px * var(--density, 1));
+}
+/* 字号：气泡正文按 --font-scale 缩放（基准 17px，窄屏 16.5px） */
+#screen-game .chat-scroll .bubble { font-size: calc(17px * var(--font-scale, 1)); line-height: 1.95; }
+@media (max-width: 480px) {
+  #screen-game .chat-scroll .bubble { font-size: calc(16.5px * var(--font-scale, 1)); }
+}
+/* 密度：气泡间距同时缩（剧情 / 智能体 / 扮演统一） */
+#screen-game .chat-scroll { gap: calc(22px * var(--density, 1)); }
+@media (max-width: 900px) {
+  #screen-game .chat-scroll { gap: calc(18px * var(--density, 1)); }
+}
+
