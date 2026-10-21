@@ -320,8 +320,9 @@
     const premise = $('#setup-premise').value.trim() || DEFAULT_SETUP;
     const title = (premise.split('\n')[0] || '').replace(/^标题[:：]\s*/, '').slice(0, 40) || '未命名故事';
     S.story = Store.newStory({ premise, title, mode: 'choice' });
+    Store.seedWorldFromPremise(S.story, premise);   // 设定里的「世界 / 时间 / 伏笔」直接进记忆卡，不空白
     A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.runOpening });   // §5：开局第一幕即进入试画引导（可跳过）
+    A.openAnchor({ onDone: A.renderChat });   // §5：试画引导可跳过；关闭后回到「开始第一幕」按钮
   }
 
   /* 离线演示（?demo=1）：内置剧本 + 本地占位图，直接开局。

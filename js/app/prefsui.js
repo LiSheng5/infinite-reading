@@ -21,6 +21,7 @@
     [/书记员/, 'g-subs'],
     [/起草模型/, 'g-subs'],
     [/生图模型/, 'g-image'],
+    [/生视频模型/, 'g-image'],
     [/画风/, 'g-image'],
     [/出图时机/, 'g-image'],
     [/生成过程/, 'g-tools'],
@@ -432,7 +433,7 @@
   // 写完 prefs 后的即时生效：布局 / 渲染 / 提示
   function applyPrefsSideEffects(path) {
     if (!path || path.indexOf('ui') === 0) A.applyLayout();
-    if (!path || path === 'choices' || path === 'showReasoning' || path === 'trigger') A.renderChat();
+    if (!path || path === 'choices' || path === 'showReasoning') A.renderChat();
   }
 
   function modelRow() {
@@ -477,16 +478,6 @@
       wrap.appendChild(note);
       return wrap;
     }, '对话存档里只记模型引用名，不含 API Key 与接口地址（导出 / 分享安全）。');
-  }
-
-  function triggerRow() {
-    return prefRow('trigger', '出图时机', () => sel([
-      ['every', '每轮对话后'],
-      ['choice', '做出选择后（推荐）'],
-      ['manual', '仅手动'],
-    ], P().effective(S.settings, S.story, 'trigger'), (v) => {
-      setPref('trigger', v); saveAll(); renderStoryPrefs();
-    }, 'p-trigger'), '任何时机下都能点右上角「作画」手动补一张。');
   }
 
   function choicesRow() {
@@ -700,7 +691,6 @@
     body.appendChild(head);
 
     if (visible.has('model')) body.appendChild(modelRow());
-    if (visible.has('trigger')) body.appendChild(triggerRow());
     if (visible.has('style')) body.appendChild(styleRow());
     if (visible.has('mode')) body.appendChild(modeRow());
     if (visible.has('choices')) body.appendChild(choicesRow());

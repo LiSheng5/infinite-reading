@@ -15,13 +15,13 @@
   /* ---------------- 白名单 ---------------- */
 
   // story.prefs 的顶层键（未知键一律丢弃）
-  const PREF_KEYS = ['profileId', 'profileLabel', 'trigger', 'choices', 'showReasoning', 'tools', 'ui'];
+  // P-1（v0.11.0）：trigger（出图时机）整体下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错
+  const PREF_KEYS = ['profileId', 'profileLabel', 'choices', 'showReasoning', 'tools', 'ui'];
   // 工具开关键（仅智能体用；true = 跟随全局可用性，false = 本对话关掉）
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
   // 页面布局键（§3.5）
   const UI_KEYS = ['layout', 'splitRatio', 'imageCollapsed', 'fontScale', 'width', 'density'];
 
-  const TRIGGER_VALUES = ['every', 'choice', 'manual'];
   const CHOICES_VALUES = ['tray', 'always'];
   const LAYOUT_VALUES = ['auto', 'split', 'stack', 'immersive'];
   const FONT_VALUES = ['sm', 'md', 'lg'];
@@ -96,7 +96,6 @@
     if (typeof src.profileLabel === 'string' && src.profileLabel.trim()) {
       out.profileLabel = src.profileLabel.trim().slice(0, 120);   // 仅作显示，不含密钥
     }
-    if (TRIGGER_VALUES.indexOf(src.trigger) >= 0) out.trigger = src.trigger;
     if (CHOICES_VALUES.indexOf(src.choices) >= 0) out.choices = src.choices;
     if (typeof src.showReasoning === 'boolean') out.showReasoning = src.showReasoning;
     const tools = sanitizeTools(src.tools);
@@ -112,7 +111,6 @@
     const s = settings || {};
     const ui = (s.ui && isPlainObject(s.ui)) ? s.ui : {};
     switch (key) {
-      case 'trigger': return TRIGGER_VALUES.indexOf(s.trigger) >= 0 ? s.trigger : 'choice';
       case 'choices': return s.ui && s.ui.choices === 'always' ? 'always' : 'tray';
       case 'showReasoning': return s.showReasoning !== false;
       case 'tools': {
@@ -137,7 +135,6 @@
     const p = (story && isPlainObject(story.prefs)) ? story.prefs : {};
     switch (key) {
       case 'profileId': return (typeof p.profileId === 'string' && p.profileId) ? p.profileId : undefined;
-      case 'trigger': return TRIGGER_VALUES.indexOf(p.trigger) >= 0 ? p.trigger : undefined;
       case 'choices': return CHOICES_VALUES.indexOf(p.choices) >= 0 ? p.choices : undefined;
       case 'showReasoning': return typeof p.showReasoning === 'boolean' ? p.showReasoning : undefined;
       case 'tools': {
@@ -268,7 +265,6 @@
 
   // 控件 id 集合（面板按集合渲染）：
   //   model         模型（下拉：跟随默认 + 模型库）
-  //   trigger       出图时机（仅剧情）
   //   style         画风入口（仅剧情：跳到全局画风 / 视觉设定卡）
   //   mode          推进模式（仅剧情，只读展示入口）
   //   choices       选项显示（仅剧情）
@@ -277,8 +273,9 @@
   //   schedule      定时主动开关（仅扮演：单开关，不是工具组）
   //   characterCard 角色卡入口（仅扮演）
   //   layout        页面布局（剧情：四布局 + 比例 + 舞台收起；扮演 / 智能体：字号 / 宽度 / 密度）
+  // P-1（v0.11.0）：trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
   const VISIBLE_FOR = {
-    choice: ['model', 'trigger', 'style', 'mode', 'choices', 'showReasoning', 'layout'],
+    choice: ['model', 'style', 'mode', 'choices', 'showReasoning', 'layout'],
     rp: ['model', 'characterCard', 'showReasoning', 'schedule', 'layout'],
     chat: ['model', 'tools', 'showReasoning', 'layout'],
   };

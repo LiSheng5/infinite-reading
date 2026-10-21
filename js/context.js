@@ -42,6 +42,11 @@
   const WINDOW_MAX_MESSAGES = 40;         // 动态组装窗口上限
   const WINDOW_TOKEN_RATIO = 0.5;         // 最近消息最多吃窗口的一半（另一半给系统块/注入/输出）
 
+  /* P-1（§4）：画师 scene 模式的「最近剧情」窗口——只带最近 N 回合的「玩家行动 + 旁白」，
+   * 单条截断 200 字；更早的对话 / 世界卡 / 摘要栈 / 画像一律不进画师上下文（用完即弃）。 */
+  const PAINTER_RECENT_TURNS = 3;
+  const PAINTER_RECENT_LINE_CHARS = 200;
+
   /* ---------------- 系统提示词（按模式，§3.1 / §4.8） ----------------
    * 剧情模式（choice）：中文字段 JSON 契约（v0.3）；
    * 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出（2026-10-07 定案，见下）。 */
@@ -55,7 +60,7 @@
     COMMON_OPEN,
     '',
     '每次回复必须且只能输出一个 JSON 对象（禁止 markdown 代码块、禁止多余文字）：',
-    '{"旁白":"旁白与对白，2~4 句中文，可包含角色对白（用「」）","人物":[{"名字":"角色名","在场":"在场或离场","性格":"性格","说话方式":"说话方式"}],"地点":"当前地点","时间":"当前时间","伏笔":["尚未回收的伏笔，一句话一条"],"画面":"当前画面内容，中文一句话，供画师作画参考","场景切换":false,"选项":["短选项1","短选项2","短选项3"]}',
+    '{"旁白":"旁白与对白，2~4 句中文，可包含角色对白（用「」）","人物":[{"名字":"角色名","在场":"在场或离场","性格":"性格","说话方式":"说话方式"}],"地点":"当前地点","时间":"当前时间","伏笔":["尚未回收的伏笔，一句话一条"],"画面":"当前画面内容，中文一句话","场景切换":false,"选项":["短选项1","短选项2","短选项3"]}',
     '',
     '规则：',
     KIND_MARK_HINT,
@@ -102,12 +107,15 @@
 
   /* ---------------- 画师子代理（§3.2：隔离上下文，用完即弃） ----------------
    *   [system]  PAINTER_SYSTEM（导演判断：画场景还是人物、构图、氛围）
-   *   [system]  视觉设定卡全文（锚，每次必带；未锚定时带滚动风格摘要代替；都没有时「（未锚定，自由发挥）」）
-   *   [context] 最近 2 张图的 prompt + alt（防重复）
-   *   [context] 最近 3 条旁白
+   *   [system]  [画风锚]：设定卡全文（未锚定时带滚动风格摘要代替；都没有时「（未锚定，自由发挥）」）
+   *   [context] [最近两张图]：最近 2 张图的 prompt + alt（防重复）
+   *   [context] [最近剧情]：scene 模式 = 最近 PAINTER_RECENT_TURNS 回合的「玩家行动 + 旁白」（§4，
+   *             玩家行动带（做）/（说）/（导演）标记、每条截断 PAINTER_RECENT_LINE_CHARS 字）；
+   *             chat（工作台）模式保持最近 3 条旁白不动
    *   [tools]   recall_recent_plot() —— 仅画师工作台对话时可用，返回最近 10 条完整记录
-   *   [user]    [画面参考] world.scene ／ 工作台对话时为用户的话
-   * 子代理每次调用独立、用完即弃，不进 AI1 对话历史。
+   *   [user]    [画面参考] world.scene ／ [画风要求] ／ 工作台对话时为用户的话
+   * 子代理每次调用独立、用完即弃，不进 AI1 对话历史。scene 模式不得出现更早对话、世界卡全文、
+   * 摘要栈、剧情规则提示词、用户画像、记忆条目（测试见 eval/painter-context-test.js）。
    */
 
   const PAINTER_SYSTEM = [
@@ -179,23 +187,9 @@
     },
   };
 
-  const REQUEST_IMAGE_TOOL = {
-    type: 'function',
-    function: {
-      name: 'request_image',
-      description: '请画师为当前场景作画：玩家说想看画面（「画一张」「给我看看」）或出现值得定格的一刻时调用。客户端会转给画师子代理写提示词并出图，结果回传给你。',
-      parameters: {
-        type: 'object',
-        properties: {
-          subject: { type: 'string', description: '一句话说明要画什么（中文，写清谁 / 在哪 / 什么动作 / 什么氛围）' },
-        },
-        required: ['subject'],
-      },
-    },
-  };
-
   // 对话 / 扮演的直出变体（§3.E）：模型自己写生图提示词，不转画师子代理。
-  // 工具名不变（frontend-smoke 对工具名集合的断言继续成立）；只有参数与措辞不同。
+  // P-1（v0.11.0）：剧情模式不再下发 request_image（作画只能点按钮），画师变体 REQUEST_IMAGE_TOOL 已删除；
+  // chat / rp 的直出变体保持不变（工具名仍是 request_image，frontend-smoke 对工具名集合的断言继续成立）。
   const REQUEST_IMAGE_DIRECT_TOOL = {
     type: 'function',
     function: {
@@ -242,9 +236,10 @@
   const TOOLS_RECALL = [RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL];
   const TOOL_NAMES_RECALL = TOOLS_RECALL.map(t => t.function.name);
 
-  // AI1 全量工具（召回 + 作画 + 写记忆），P5-1 一起下发。
-  // 剧情模式走画师变体（subject）；对话 / 扮演走直出变体（prompt），工具名集合不变（§3.E）
-  const TOOLS_AI1 = TOOLS_RECALL.concat([REQUEST_IMAGE_TOOL, UPDATE_MEMORY_TOOL]);
+  // AI1 全量工具（召回 + 写记忆），P5-1 一起下发。
+  // P-1（v0.11.0）：剧情模式不再有 request_image——作画只能由用户点 🎨 触发（§3.3）；
+  // 对话 / 扮演走直出变体（prompt），工具名不变（§3.E）
+  const TOOLS_AI1 = TOOLS_RECALL.concat([UPDATE_MEMORY_TOOL]);
   const TOOLS_AI1_DIRECT = TOOLS_RECALL.concat([REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL]);
   const TOOL_NAMES_AI1 = TOOLS_AI1.map(t => t.function.name);
   const MAX_TOOL_CALLS_PER_TURN = 2;   // §4.5 每轮上限 2 次
@@ -406,8 +401,9 @@
     '这只是提案：用户在界面上确认后才会下单扣款，确认前不要说「已经付款」「已经买好」。',
   ].join('');
 
-  // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度 / 邮件 / 下单工具）。
-  // chat / rp 的 request_image 用直出变体（模型自己写提示词、不请画师，§3.E）；choice 保持画师变体。
+  // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度 / 邮件 / 下单 / 作画工具）。
+  // P-1（v0.11.0）：choice 不含 request_image（剧情作画只能点按钮，§3.3）；
+  // chat / rp 的 request_image 用直出变体（模型自己写提示词、不请画师，§3.E）。
   // 邮件 / 下单是高风险副作用动作：只在 chat（智能体）下发——rp / choice 即便传了 true 也不给。
   function toolsForMode(mode, opts) {
     opts = opts || {};
@@ -425,13 +421,21 @@
     return toolsForMode(mode, opts).map(t => t.function.name);
   }
 
-  // 调用策略只留一两句，进系统提示词；不向玩家暴露「工具」概念（§4.5）
-  const TOOL_POLICY_TEXT = [
-    '工具（只在必要时用，不要每轮都调，一轮最多 2 次）：',
-    '不确定地点 / 时间 / 在场人物 / 前情 / 伏笔时先调 recall_world_state；要写人物外貌、服饰或画面细节时先调 recall_style_card；',
-    '玩家想看画面或出现值得定格的一刻时调 request_image；玩家明确要求记住某事、或出现需要长期记住的设定时调 update_memory（玩家自己的个人信息写 profile，世界与关系写 world）。',
-    '拿到结果后直接继续剧情，不要在回复里提「工具」「召回」「函数」这类字眼。',
-  ].join('');
+  // 调用策略只留一两句，进系统提示词；不向玩家暴露「工具」概念（§4.5）。
+  // P-1（§3.3）：request_image 的措辞按 tools 动态拼装——工具清单里没有它（剧情模式）就一个字不提，
+  // 剧情模式的工具说明里不再出现「调 request_image / 请画师作画」字样。
+  const TOOL_POLICY_IMAGE = '玩家想看画面或出现值得定格的一刻时调 request_image；';
+  function toolPolicyText(tools) {
+    const hasImage = Array.isArray(tools) && tools.indexOf('request_image') >= 0;
+    return [
+      '工具（只在必要时用，不要每轮都调，一轮最多 2 次）：',
+      '不确定地点 / 时间 / 在场人物 / 前情 / 伏笔时先调 recall_world_state；要写人物外貌、服饰或画面细节时先调 recall_style_card；',
+      hasImage ? TOOL_POLICY_IMAGE : '',
+      '玩家明确要求记住某事、或出现需要长期记住的设定时调 update_memory（玩家自己的个人信息写 profile，世界与关系写 world）。',
+      '拿到结果后直接继续剧情，不要在回复里提「工具」「召回」「函数」这类字眼。',
+    ].filter(Boolean).join('');
+  }
+  const TOOL_POLICY_TEXT = toolPolicyText([]);   // 无作画工具的基础版（剧情模式口径）
 
   // 工具名 → 召回内容标识
   const RECALL_TOOL_SCOPE = { recall_world_state: 'world', recall_style_card: 'style' };
@@ -510,6 +514,45 @@
       out.push('· ' + String(e.text).slice(0, 120));
     }
     return out.reverse();
+  }
+
+  // P-1（§4）：画师 scene 模式的「最近剧情」——最近 N 回合的「玩家行动 + 旁白」，按时间顺序。
+  // 玩家行动保留（做）/（说）/（导演）类型标记，每条截断 PAINTER_RECENT_LINE_CHARS 字；
+  // N 回合之前的对话、世界卡、摘要栈、画像一律不带（画师上下文隔离规则，Node 可测）。
+  const PAINTER_KIND_MARKS = { do: '（做）', say: '（说）', direct: '（导演）' };
+  function recentTurnLines(story, n) {
+    const keep = (n > 0) ? n : PAINTER_RECENT_TURNS;
+    const log = (story && story.log) || [];
+    const clip = (s) => {
+      const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+      return t.length > PAINTER_RECENT_LINE_CHARS ? t.slice(0, PAINTER_RECENT_LINE_CHARS) : t;
+    };
+    // 从后往前按「旁白收口」切回合：一条旁白 = 一回合的结尾，紧邻它之前的玩家行动归这一回合
+    const turns = [];
+    let cur = null;
+    for (let i = log.length - 1; i >= 0; i--) {
+      const e = log[i];
+      if (!e) continue;
+      if (e.type === 'narration' && e.text) {
+        if (cur) {
+          turns.push(cur);
+          if (turns.length >= keep) { cur = null; break; }
+        }
+        cur = { narration: e.text, action: '', mark: '' };
+      } else if (cur && !cur.action && (e.type === 'player' || e.type === 'choice') && e.text) {
+        cur.action = clip(e.text);
+        cur.mark = PAINTER_KIND_MARKS[e.kind] || PAINTER_KIND_MARKS.do;
+        if (/^（(?:做|说|导演)）/.test(cur.action)) cur.mark = '';   // 文本里已有标记就别再加一层
+      }
+    }
+    if (cur && turns.length < keep) turns.push(cur);
+    turns.reverse();
+    const out = [];
+    for (const t of turns) {
+      if (t.action) out.push('· ' + t.mark + t.action);
+      out.push('· ' + clip(t.narration));
+    }
+    return out;
   }
 
   // recall_recent_plot 的返回：最近 n 条完整记录（原文）
@@ -597,7 +640,9 @@
     out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) });
     const imgs = recentImageLines(story, 2);
     if (imgs.length) out.push({ role: 'system', content: '[最近两张图]\n' + imgs.join('\n') });
-    const narr = recentNarrationLines(story, 3);
+    // [最近剧情]：scene 模式按 §4 只带最近 PAINTER_RECENT_TURNS 回合的「玩家行动 + 旁白」（P-1）；
+    // chat（工作台）模式保持最近 3 条旁白不动（§4 不动范围，另有 recall_recent_plot）
+    const narr = chatMode ? recentNarrationLines(story, 3) : recentTurnLines(story, PAINTER_RECENT_TURNS);
     if (narr.length) out.push({ role: 'system', content: '[最近剧情]\n' + narr.join('\n') });
     if (chatMode) {
       if (opts.currentPrompt || opts.currentAlt) {
@@ -1444,7 +1489,7 @@
     const summaries = ((story && story.summaries) || []).filter(Boolean);
     if (summaries.length) out.push({ role: 'system', content: '[前情摘要]\n' + summaries.join('\n') });
     if (Array.isArray(opts.tools) && opts.tools.length) {
-      let block = '[可用工具] ' + opts.tools.join(' / ') + '\n' + TOOL_POLICY_TEXT;
+      let block = '[可用工具] ' + opts.tools.join(' / ') + '\n' + toolPolicyText(opts.tools);
       if (opts.tools.indexOf('schedule_once') >= 0) block += '\n' + SCHEDULE_POLICY_TEXT;
       if (opts.tools.indexOf('email_propose') >= 0) block += '\n' + EMAIL_POLICY_TEXT;
       if (opts.tools.indexOf('payment_propose') >= 0) block += '\n' + PAYMENT_POLICY_TEXT;
@@ -1523,14 +1568,15 @@
     PAINTER_SYSTEM, PAINTER_CHAT_SYSTEM, PAINTER_STYLES_SYSTEM, PAINTER_CARD_SYSTEM,
     RECALL_RECENT_PLOT_TOOL, storySettingText,
     RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL, TOOLS_RECALL, TOOL_NAMES_RECALL,
-    REQUEST_IMAGE_TOOL, REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL,
+    REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL,
     TOOLS_AI1, TOOLS_AI1_DIRECT, TOOL_NAMES_AI1, MAX_TOOL_CALLS_PER_TURN,
     SCHEDULE_TOOLS, TOOL_NAMES_SCHEDULE, SCHEDULE_POLICY_TEXT, toolsForMode, toolNamesForMode, isScheduleTool,
     EMAIL_TOOLS, PAYMENT_TOOLS, TOOL_NAMES_PROPOSAL, EMAIL_POLICY_TEXT, PAYMENT_POLICY_TEXT,
     isProposalTool, stripKindMarker, KIND_MARK_HINT_SHORT,
-    TOOL_POLICY_TEXT, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
+    TOOL_POLICY_TEXT, TOOL_POLICY_IMAGE, toolPolicyText, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
     styleCardText, rollingStyleText, painterAnchorText,
-    recentImageLines, recentNarrationLines, recentPlotText, assemblePainter,
+    PAINTER_RECENT_TURNS, PAINTER_RECENT_LINE_CHARS,
+    recentImageLines, recentNarrationLines, recentTurnLines, recentPlotText, assemblePainter,
     ENTITY_MIN_MATCH, NAME_MIN_MATCH, HEURISTIC_MAX_ENTRIES, HEURISTIC_MAX_CHARS,
     longestCommonSubstring, matchEntityTerms, heuristicBlock,
     CHAR_CARD_MAX_CHARS, CARD_OPENING_MAX_CHARS, CARD_EXAMPLE_MAX_CHARS, RELATIONSHIP_MAX_CHARS,

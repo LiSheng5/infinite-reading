@@ -135,15 +135,16 @@ async function main() {
       chatOn.indexOf('schedule_once') >= 0 && chatOn.indexOf('cancel_trigger') >= 0, chatOn.join(','));
     check('门控：后端没开调度 → 不下发调度工具', chatOff.indexOf('schedule_once') < 0);
     check('门控：扮演模式同样可用', rpOn.indexOf('schedule_cron') >= 0);
-    check('门控：原有工具一个不少',
+    check('门控：chat / rp 仍有 request_image / update_memory；剧情模式少了 request_image（P-1）',
       chatOn.indexOf('request_image') >= 0 && chatOn.indexOf('update_memory') >= 0
-      && chatOff.length === choiceNames.length, chatOff.length + ' vs ' + choiceNames.length);
+      && choiceNames.indexOf('update_memory') >= 0 && choiceNames.indexOf('request_image') < 0,
+      chatOn.join(',') + ' vs ' + choiceNames.join(','));
     check('isScheduleTool 判定正确',
       Ctx.isScheduleTool('schedule_once') === true && Ctx.isScheduleTool('request_image') === false);
     check('调度工具共 5 个', Ctx.TOOL_NAMES_SCHEDULE.length === 5, Ctx.TOOL_NAMES_SCHEDULE.join(','));
     check('工具总量仍受每轮上限约束（常量存在）', Ctx.MAX_TOOL_CALLS_PER_TURN === 2);
 
-    // request_image 变体分流（任务书 §3.E）：chat / rp 直出（prompt 必填）、choice 仍是画师（subject）
+    // request_image 变体分流（任务书 §3.E + P-1 §3.3）：chat / rp 直出（prompt 必填）；choice 已无此工具
     const toolOf = (list, name) => list.filter(t => t.function.name === name)[0];
     const imgOf = mode => toolOf(Ctx.toolsForMode(mode, { schedule: false }), 'request_image');
     const chImg = imgOf('chat'), rpImg = imgOf('rp'), chChoiceImg = imgOf('choice');
@@ -154,12 +155,18 @@ async function main() {
       JSON.stringify(Object.keys(propsOf(chImg))));
     check('request_image：扮演模式同为直出变体（含 prompt 且必填）',
       !!rpImg && !!propsOf(rpImg).prompt && reqOf(rpImg).indexOf('prompt') >= 0);
-    check('request_image：剧情模式仍是画师变体（subject 必填）',
-      !!chChoiceImg && !!propsOf(chChoiceImg).subject && reqOf(chChoiceImg).indexOf('subject') >= 0
-      && !propsOf(chChoiceImg).prompt, JSON.stringify(Object.keys(propsOf(chChoiceImg))));
-    check('工具名集合不变（chat / rp / choice 一致）',
-      chatOff.join(',') === choiceNames.join(',') && namesOf(Ctx.toolsForMode('rp', { schedule: false })).join(',') === choiceNames.join(','),
+    check('request_image：剧情模式工具名集合不含它（P-1：作画只能点按钮）',
+      !chChoiceImg && choiceNames.indexOf('request_image') < 0 && choiceNames.indexOf('update_memory') >= 0,
       choiceNames.join(','));
+    check('工具名集合：chat / rp 一致；choice = chat 去掉 request_image',
+      chatOff.join(',') === namesOf(Ctx.toolsForMode('rp', { schedule: false })).join(',')
+      && choiceNames.join(',') === chatOff.filter(n => n !== 'request_image').join(','),
+      choiceNames.join(','));
+    check('工具说明：choice 的 [可用工具] 措辞不含 request_image（P-1 §3.3）',
+      Ctx.toolPolicyText(Ctx.toolNamesForMode('choice', {})).indexOf('request_image') < 0
+      && Ctx.toolPolicyText(Ctx.toolNamesForMode('chat', {})).indexOf('request_image') >= 0, 'ok');
+    check('剧情系统提示词不再出现「请画师作画 / 供画师作画参考」措辞',
+      Ctx.systemForMode('choice').indexOf('请画师') < 0 && Ctx.systemForMode('choice').indexOf('画师作画') < 0, 'ok');
   }
 
   /* 7b. 智能体（chat）工具集 / 系统提示 / stripKindMarker（任务书 §6 增补，v0.6.0） */

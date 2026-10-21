@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.10.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.11.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -65,15 +65,11 @@ cd infinite-reading
 > Only Base URLs are preset, never model names. Unsure parameters can be left empty or added to "custom request parameters" (`key=value`, merged into the request body as-is).
 > Default image size is `1280x720`; change it if your provider complains.
 
-## When images are generated
+## Drawing (on demand only)
 
-| Timing | Notes |
-|---|---|
-| After every turn | Most immersive, most expensive |
-| After a choice (default) | Closest to a classic visual novel |
-| Manual only | Cheapest |
+**Story mode no longer generates images automatically** (since v0.11.0 — not even at the opening): when you want a picture, click **🎨** on the stage (or **⋯ → Draw this scene**). The painter reads the last few turns, decides what to draw, and writes the image back to the current scene; clicking again for the same scene does not queue duplicates. The painter workbench ("redraw" / "force redraw by style card") works as before.
 
-In any mode you can also click **🎨 Add one** on the stage (or **⋯ → Draw this scene**) to add an image manually.
+In Agent / Role-play, images still come from the model calling the image tool itself (it writes the prompt), or from the same manual button.
 
 ## Optional: local sidecar service (email / proactive scheduling / delegated purchase)
 
@@ -125,9 +121,11 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 
 ```
 player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_change / world
-                   │  may call the request_image tool
+                   │
+                   │   image entry points: user clicks 🎨 (the only one in Story mode) /
+                   │   Agent & Role-play may call request_image with their own prompt
                    ▼
-            painter sub-agent ─► JSON: prompt_en / subject / alt
+            painter sub-agent ─► JSON: prompt_en / subject / alt (manual 🎨; direct calls skip it)
                    ▼
             ImageProvider (/images/generations)
                    ▼
@@ -144,7 +142,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `js/zip.js` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
 | `js/roleCard.js` | Character cards (SillyTavern PNG parsing) |
 | `js/modelCapabilities.js` | Model parameter registry (empty by default) |
-| `js/app.js` | State machine, image timing, settings, import/export |
+| `js/app.js` | State machine, settings, import/export (drawing is button-triggered only since v0.11.0) |
 | `js/demo.js` | Offline demo: registers the built-in script and placeholder-image adapters for `?demo=1` |
 | `js/sidecar.js` + `js/features.js` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `js/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |

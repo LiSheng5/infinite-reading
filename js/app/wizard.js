@@ -205,10 +205,11 @@
     s.world.characters = chars.map(c => ({
       name: c.name, presence: '在场', personality: c.personality, speech: c.speech, note: '', noteLocked: false,
     }));
+    Store.seedWorldFromPremise(s, premise);   // 画面参考 / 时间 / 伏笔等留空项按设定补上
     S.story = s;
     closeModal('modal-wizard');
     A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.runOpening });   // §12：剧情模式「向导 → 试画 → 开场」
+    A.openAnchor({ onDone: A.renderChat });   // §12：剧情模式「向导 → 试画」；开场由用户点「开始第一幕」
   }
 
   function createStoryImmediate(mode) {

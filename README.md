@@ -1,7 +1,7 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.10.0-blue.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.11.0-blue.svg)](CHANGELOG.md)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
@@ -67,15 +67,11 @@ cd infinite-reading
 > 只预置 Base URL，不预置模型名；没把握的参数可留空，或写进「自定义请求参数」（`key=value`，原样并入请求体）。
 > 生图尺寸默认 `1280x720`，服务商不支持时按报错改。
 
-## 出图时机
+## 作画（点按钮才动）
 
-| 时机 | 说明 |
-|---|---|
-| 每轮对话后 | 最沉浸，消耗最大 |
-| 做出选择后（默认） | 最像传统视觉小说 |
-| 仅手动 | 最省钱 |
+**剧情模式不再自动出图**（v0.11.0 起，开局也不出图）：想看画面时点舞台右上角「🎨」（或「⋯ → 为当前场景作画」），画师会按最近剧情构思一张并出图；同一幕重复点不会重复排队。画师工作台里的「按此重画 / 按设定卡强制重画」照旧可用。
 
-任何时机下都可点舞台右上角「🎨 补一张」（或「⋯ → 为当前场景作画」）手动补一张。
+对话 / 扮演模式的图仍来自模型自己调用生图工具（模型直出提示词），或同样的手动按钮。
 
 ## 可选：本地服务（邮件 / 定时主动 / 代下单）
 
@@ -139,9 +135,10 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 ```
 玩家行动 ─► AI1（剧情对话）─ JSON：narration / choices / scene_change / world
-                │  可调 request_image 工具
+                │
+                │   出图入口：用户点 🎨（剧情模式唯一入口）／ chat、扮演可调 request_image 直出提示词
                 ▼
-        画师子代理 ─ JSON：prompt_en / subject / alt
+        画师子代理 ─ JSON：prompt_en / subject / alt（手动 🎨 走这里；直出跳过）
                 ▼
         ImageProvider（/images/generations）
                 ▼
@@ -158,7 +155,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `js/zip.js` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
 | `js/roleCard.js` | 角色卡（SillyTavern PNG 解析） |
 | `js/modelCapabilities.js` | 模型参数登记表（默认留空） |
-| `js/app.js` | 状态机、出图时机、设置与存档 |
+| `js/app.js` | 状态机、设置与存档（作画只剩按钮触发，v0.11.0） |
 | `js/demo.js` | 离线演示：`?demo=1` 时注册「内置剧本」与「本地占位图」两个适配器 |
 | `js/sidecar.js` + `js/features.js` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `js/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |

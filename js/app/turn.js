@@ -291,19 +291,6 @@
     return m;
   }
 
-  function maybeEnqueueImage(reply, isOpen, nodeId) {
-    // 去重（§4.7）：本轮 AI1 已经用 request_image 出过图 → 时机出图跳过，同轮不画两张
-    if (S.turnPaintedByTool) { S.turnPaintedByTool = false; return; }
-    // §3.E.3：对话 / 扮演没有「时机出图」——图只来自模型调用工具或手动按钮（默认行为改动，见 CHANGELOG）
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return;
-    // UI-3：出图时机取有效值（story.prefs.trigger → 全局 settings.trigger）
-    const mode = IR.Prefs.effective(S.settings, S.story, 'trigger');
-    let want = false;
-    if (mode === 'every') want = true;
-    else if (mode === 'choice' && (S.lastActionWasChoice || isOpen || S.story.turn === 1)) want = true;
-    if (want) A.enqueueImage(reply.scene_summary, nodeId);
-  }
-
   // 流式清洗：从累积的 JSON 文本里抠出旁白可读部分
   function cleanStream(s) {
     return String(s)
@@ -660,5 +647,5 @@
     anim.oncancel = finish;
   }
 
-  A.reg({ parseAIReply, applyToolCall, absorbReply, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, maybeEnqueueImage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
+  A.reg({ parseAIReply, applyToolCall, absorbReply, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
 })();
