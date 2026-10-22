@@ -86,6 +86,27 @@ const cfg = {
     req.body.duration + '/' + req.body.resolution + '/' + req.body.ratio);
   check('extraParams：其它键原样并入', req.body.watermark === false, JSON.stringify(req.body.watermark));
 
+  /* ---------- 独立控件（cfg.duration / resolution / ratio）为基值，extraParams 覆盖其上 ---------- */
+  installFetch(() => jsonRes(200, { task_id: 't-2b' }));
+  await mm.submit(Object.assign({}, cfg, { duration: 10, resolution: '1080P', ratio: '4:3' }),
+    { prompt: 'x', mode: 't2v' });
+  req = calls[0];
+  check('独立控件：cfg.duration/resolution/ratio 进请求体', req.body.duration === 10
+    && req.body.resolution === '1080P' && req.body.ratio === '4:3',
+    req.body.duration + '/' + req.body.resolution + '/' + req.body.ratio);
+
+  installFetch(() => jsonRes(200, { task_id: 't-2c' }));
+  await mm.submit(Object.assign({}, cfg, { duration: 10, extraParams: 'duration=6' }),
+    { prompt: 'x', mode: 't2v' });
+  check('同名时自定义参数覆盖独立控件', calls[0].body.duration === 6, calls[0].body.duration);
+
+  installFetch(() => jsonRes(200, { task_id: 't-2d' }));
+  await mm.submit(Object.assign({}, cfg, { duration: 3, ratio: '9:16' }),
+    { prompt: 'x', mode: 'i2v', image: 'data:image/png;base64,AAA' });
+  check('独立控件：duration 夹回 4~15；i2v 比例仍强制 adaptive',
+    calls[0].body.duration === 4 && calls[0].body.ratio === 'adaptive',
+    calls[0].body.duration + '/' + calls[0].body.ratio);
+
   installFetch(() => jsonRes(200, { task_id: 't-3' }));
   await mm.submit(Object.assign({}, cfg, { extraParams: { duration: '5' } }), { prompt: 'x', mode: 't2v' });
   check('duration 必须以整数下发（"5" 经 coerce 变数字 5）',
