@@ -1356,6 +1356,20 @@ html[data-motion="rich"] .stage-empty {
   cursor: pointer;
 }
 .pw-video-thumb:hover { border-color: var(--accent-line); }
+
+/* 人物设定行编辑器（可增删行；替代「名字｜性格｜说话方式」竖线文本框） */
+.char-rows { display: flex; flex-direction: column; gap: 6px; }
+.char-head { display: flex; gap: 6px; }
+.char-head span {
+  flex: 1 1 0; min-width: 0;
+  font-family: var(--font-ui); font-size: 12px; letter-spacing: .08em;
+  color: var(--ink-dim);
+}
+.char-head span.char-del { flex: 0 0 auto; padding: 0 8px; }
+.char-row { display: flex; gap: 6px; align-items: center; }
+.char-row input { flex: 1 1 0; min-width: 0; }
+.char-row .char-del { flex: 0 0 auto; padding: 0 8px; }
+.char-add { align-self: flex-start; }
 .thumb-empty { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); align-self: center; letter-spacing: .08em; }
 
 /* ==================== 布局状态：只由 data-layout 决定 ==================== */

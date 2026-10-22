@@ -269,7 +269,11 @@
         <p class="hint" id="wz-draft-hint">起草模型可在模型设置里更换（默认跟随剧情模型）。草稿出来后再改成你自己的话即可。</p>
 
         <label>世界观<textarea id="wz-world" rows="3" spellcheck="false" placeholder="时代、地点、规则、气氛……"></textarea></label>
-        <label>主要人物（每行一个：名字｜性格｜说话方式）<textarea id="wz-characters" rows="3" spellcheck="false" placeholder="周叙｜话里有话、克制｜简短、喜欢反问"></textarea></label>
+        <div class="char-editor">
+          <label>主要人物（每人一行：姓名 / 性格 / 说话方式）</label>
+          <div id="wz-characters" class="char-rows"></div>
+          <button type="button" id="btn-wz-char-add" class="mini-btn char-add">+ 添加人物</button>
+        </div>
         <label>你的角色<textarea id="wz-role" rows="2" spellcheck="false" placeholder="你是谁、从哪来、想做什么……"></textarea></label>
         <label>风格基调（画面与文字的调子，之后用于试画锚定）<input id="wz-style" type="text" placeholder="克制的悬疑，冷色，雨夜霓虹"></label>
         <label>想看的发展（可选）<textarea id="wz-development" rows="2" spellcheck="false" placeholder="你希望故事朝哪个方向走……"></textarea></label>
@@ -322,7 +326,11 @@
             <label>时间<input id="it-time" type="text" spellcheck="false"></label>
           </div>
           <label>画面参考（喂给画师的一句话）<input id="it-scene" type="text" spellcheck="false"></label>
-          <label>人物（名字｜在场／离场｜性格｜说话方式，每行一个）<textarea id="it-characters" rows="4" spellcheck="false"></textarea></label>
+          <div class="char-editor">
+            <label>人物（每人一行：姓名 / 在场或离场 / 性格 / 说话方式）</label>
+            <div id="it-characters" class="char-rows"></div>
+            <button type="button" id="btn-it-char-add" class="mini-btn char-add">+ 添加人物</button>
+          </div>
           <label>伏笔（每行一条）<textarea id="it-threads" rows="3" spellcheck="false"></textarea></label>
           <label>画风关键词（英文逗号分隔，用于开局试画 4 张候选）<input id="it-style" type="text" spellcheck="false"></label>
           <p class="hint">确认后建新档并走试画锚定。「用户确认修改」这一步是设计里明确不能跳过的：导入文本是别人的内容，由你把关。</p>
@@ -892,7 +900,12 @@
             </div>
             <label>画面参考（喂给画师）<input id="w-scene" type="text"></label>
             <label>伏笔（每行一条）<textarea id="w-threads" rows="3" spellcheck="false"></textarea></label>
-            <label>人物（名字｜在场／离场｜性格｜说话方式｜备注，每行一个）<textarea id="w-characters" rows="3" spellcheck="false" placeholder="还没填也可以：剧情里出现的人物会在书记员校对时自动补上，随时能改"></textarea></label>
+            <div class="char-editor">
+              <label>人物（每人一行：姓名 / 在场或离场 / 性格 / 说话方式 / 备注）</label>
+              <div id="w-characters" class="char-rows"></div>
+              <button type="button" id="btn-w-char-add" class="mini-btn char-add">+ 添加人物</button>
+              <span class="hint">还没填也可以：剧情里出现的人物会在书记员校对时自动补上，随时能改</span>
+            </div>
             <label>关系·阶段<input id="w-rel-stage" type="text"></label>
             <label>关系·纽带（每行一条；书记员随校对维护，也可手改）<textarea id="w-rel-bonds" rows="2" spellcheck="false"></textarea></label>
             <label>关系·备注<input id="w-rel-notes" type="text"></label>
