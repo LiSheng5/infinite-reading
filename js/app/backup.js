@@ -140,8 +140,9 @@
   };
 
   async function buildBackupZip(pack, onProgress) {
-    // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份
-    const ids = Array.from(Store.knownImageIds());
+    // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份。
+    // §0：视频本体不进备份（体积），只留封面——封面在 scene / log 的 thumb 里随 json 走。
+    const ids = Array.from(Store.knownImageIds()).filter(id => !/^vid:/.test(String(id)));
     const files = [];
     const manifest = [];
     let bytes = 0;
@@ -376,6 +377,9 @@
     st.scenes = (obj.images || []).map((im, i) => ({
       id: im.id || ('sc-imp' + i), alt: im.alt || '', prompt: im.prompt || '', promptRaw: im.promptRaw || '',
       aspect: im.aspect || '', width: im.width || 0, height: im.height || 0,
+      // 视频条目：只随包带封面（videoOmitted），本体没导出——导入后显示「视频未随备份导出」
+      kind: im.kind || undefined, videoOmitted: im.videoOmitted || undefined,
+      mode: im.mode || undefined, duration: im.duration || undefined,
       thumb: im.thumb || null, src: im.src || null, ts: Date.now(),
     }));
     st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;

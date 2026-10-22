@@ -27,6 +27,9 @@ const REQUIRED_IDS = [
   'wrap-image-quality', 's-image-quality', 'row-image-wh', 's-image-width', 's-image-height',
   's-image-base', 's-image-model', 's-image-key', 's-image-params',
   'btn-test-image', 'test-image-state',
+  // v0.12.0（§9.5）：生视频模型面板收尾后的 id（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
+  's-video-base', 's-video-model', 's-video-key', 's-video-params',
+  'btn-test-video', 'test-video-state',
   's-style-preset', 's-style-custom', 'style-card-state', 'style-card-view', 'style-card-text',
   'btn-anchor-rerun', 'rolling-style-text',
   's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',

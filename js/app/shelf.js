@@ -499,6 +499,7 @@
   /* ================= 打开对话（§3.7） ================= */
 
   function openStory(id, opts) {
+    if (S.story && S.story.id !== id) A.stopVideoWaiting();   // §7：切故事停本地轮询（pending 留在原档）
     const s = Store.loadStory(id);
     if (!s) { toast('没有找到这个存档', true); return; }
     S.story = s;
@@ -506,6 +507,7 @@
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     Store.setCurrentId(S.story.id);
     A.enterGame(false);
+    A.resumePendingVideos();   // §7：回到该故事，续上未出结果的生视频任务（不重复提交）
     // UI-4 §6：focusNodeId（兼容 UI-2 的 opts.nid）——搜索结果直接跳到命中的节点
     const focus = (opts && (opts.focusNodeId || opts.nid)) || null;
     if (focus) scrollToHit(focus);

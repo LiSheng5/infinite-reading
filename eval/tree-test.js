@@ -423,6 +423,13 @@ function headTo(story, nodeId) {
   check('imageIdsOf：entry 与 scene 同图只算一次', ids.filter(x => x === 'imgA').length === 1, ids.join(','));
   check('非当前分支的图不进当前投影', s.log.every(e => e.imageId !== 'imgA') && s.scenes.every(x => x.imageId !== 'imgA'));
   check('imageIdsOf：空树 / 非法入参返回空', eq(T.imageIdsOf(null), []) && eq(T.imageIdsOf({}), []));
+
+  // §5③：videoId 同样要收（漏了会误删 / 残留视频）——含非当前分支
+  T.pushLate(s, n2.id, { type: 'video', id: 'vdA', videoId: 'vid:A', ts: 3 });
+  T.pushLate(s, n2.id, { id: 'vdA', videoId: 'vid:A', ts: 3 });
+  T.pushLate(s, sib.id, { type: 'video', id: 'vdB', videoId: 'vid:B', ts: 4 });
+  const vids = T.imageIdsOf(s.tree);
+  check('imageIdsOf：含视频 videoId（含非当前分支）', vids.indexOf('vid:A') >= 0 && vids.indexOf('vid:B') >= 0, vids.join(','));
 }
 
 // 15. siblings / switchSibling 边界（用例 10）
@@ -517,6 +524,56 @@ function headTo(story, nodeId) {
   check('imageIdsOf：无 tree 的旧档照旧只扫 log / scenes', (() => {
     const ids = S.imageIdsOf({ scenes: [{ imageId: 'imgC' }], log: [{ type: 'image', imageId: 'imgD' }] });
     return ids.indexOf('imgC') >= 0 && ids.indexOf('imgD') >= 0;
+  })());
+}
+
+// 17b. store：imageIdsOf / knownImageIds 计入 videoId（§5③，孤儿清理不误删视频）
+{
+  const s = newStory();
+  s.id = 'store-video';
+  const n1 = playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
+  const a = playTurn(s, { text: '行动 2', narration: 'A 版旁白', world: { place: 'A 线' } });
+  const b = retryTurn(s, { text: '行动 2', narration: 'B 版旁白', world: { place: 'B 线' } });
+  // 当前分支（B 线）两段视频（其中一段只在投影里）+ 非当前分支（A 线）一段视频
+  T.pushLate(s, b.id, { type: 'video', id: 'vdB', videoId: 'vid:B', ts: 1 });
+  T.pushLate(s, b.id, { id: 'vdB', videoId: 'vid:B', ts: 1 });
+  T.pushLate(s, a.id, { type: 'video', id: 'vdA', videoId: 'vid:A', ts: 2 });
+  T.pushLate(s, a.id, { id: 'vdA', videoId: 'vid:A', ts: 2 });
+  T.pushLate(s, b.id, { type: 'video', id: 'vdC', videoId: 'vid:C', ts: 3 });
+  T.pushLate(s, b.id, { id: 'vdC', kind: 'video', videoId: 'vid:C', mode: 'i2v', sourceSceneId: 'vdB', taskId: 'tk-1', ts: 3 });
+  T.project(s);
+  S.saveStory(s);   // knownImageIds 只看已保存的故事
+
+  const ids = S.imageIdsOf(S.serializeStory(s));
+  check('store imageIdsOf：scenes / log / tree 里的 videoId 都收',
+    ids.indexOf('vid:A') >= 0 && ids.indexOf('vid:B') >= 0 && ids.indexOf('vid:C') >= 0, ids.join(','));
+
+  const keep = S.knownImageIds();
+  check('knownImageIds：视频不被当孤儿（含非当前分支）',
+    keep.has('vid:A') && keep.has('vid:B') && keep.has('vid:C'), Array.from(keep).join(','));
+
+  check('serializeStory：视频 scene 字段白名单保留（§5①）', (() => {
+    const sc = (S.serializeStory(s).scenes || []).find(x => x.id === 'vdC');
+    return !!sc && sc.kind === 'video' && sc.videoId === 'vid:C'
+      && sc.mode === 'i2v' && sc.taskId === 'tk-1' && sc.sourceSceneId === 'vdB';
+  })());
+
+  check('pendingVideos：serializeStory / migrateStory 保留（§5⑤）', (() => {
+    s.pendingVideos = [{ taskId: 'tk1', mode: 'i2v', prompt: 'p', sourceSceneId: 'vdC', nodeId: n1.id, createdAt: 1 }];
+    const raw = S.serializeStory(s);
+    const back = S.migrateStory(raw);
+    return back.pendingVideos.length === 1 && back.pendingVideos[0].taskId === 'tk1';
+  })());
+
+  check('migrateStory：旧字段 poster / videoUrl 归一到 thumb / remoteUrl', (() => {
+    const old = S.migrateStory({
+      id: 'old-vd', title: 'x', mode: 'choice',
+      scenes: [{ id: 'vdOld', kind: 'video', poster: 'data:image/jpeg;base64,P', videoUrl: 'https://cdn/old.mp4', ts: 1 }],
+      log: [{ type: 'video', id: 'vdOld', poster: 'data:image/jpeg;base64,P', videoUrl: 'https://cdn/old.mp4', ts: 1 }],
+    });
+    const sc = old.scenes[0];
+    return sc.thumb === 'data:image/jpeg;base64,P' && sc.remoteUrl === 'https://cdn/old.mp4'
+      && old.log[0].thumb === 'data:image/jpeg;base64,P' && old.log[0].remoteUrl === 'https://cdn/old.mp4';
   })());
 }
 

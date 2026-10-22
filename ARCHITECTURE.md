@@ -2,8 +2,6 @@
 
 一句话：**一个不依赖构建、不依赖后端、不依赖任何第三方 JS 库的单页应用**——`index.html` + 若干 IIFE 模块，全部逻辑跑在浏览器里，数据存在 `IndexedDB`。
 
-设计稿（为什么这么设计）见 [`docs/DESIGN.md`](docs/DESIGN.md)；调研与竞品分析见 [`docs/NOTES.md`](docs/NOTES.md)。
-
 ---
 
 ## 1. 三条硬约束
@@ -20,7 +18,7 @@
 
 | 文件 | 命名空间 | 职责 | 代表函数 |
 |---|---|---|---|
-| `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders`（空，预留） |
+| `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders['minimax-video'].submit/poll/generate`（MiniMax V2） |
 | `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
 | `js/tree.js` | `IR.Tree` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换；UI-4：任意节点继续 / 分叉 | `ensure`、`begin` / `commit` / `seal`、`project`、`switchSibling` / `switchTo`、`latestLeaf` / `forkBefore` / `canResume`、`pushLate`、`imageIdsOf` |
 | `js/treeLayout.js` | `IR.TreeLayout` | 分支页画布几何（**纯逻辑**，Node 可 `require`，UI-4）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出 | `compute`、`pointsToD` |
@@ -81,7 +79,8 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | `js/app/round.js` | 回合编排（任务书模块表外新增）：`callAI1` / 玩家行动 / 开场 / 工具执行 / 旁白收尾 | `callAI1`、`sendPlayerAction`、`runOpening`、`finishNarration`、`pushLog` |
 | `js/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
 | `js/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
-| `js/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台 | `runPaintTask`、`enqueueImage`、`openWorkbench`、`redrawFromWorkbench` |
+| `js/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词（§6） | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench` |
+| `js/app/video.js` | 生视频（MiniMax V2，§7）：`videoQ` 独立串行队列、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB（`vid:<sceneId>`）→ 写回 story；`pendingVideos` 恢复轮询与取消 | `enqueueVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`cancelActiveVideo`、`videoSrc`、`renderWorkbenchVideo` |
 | `js/app/styleanchor.js` | 画风锚定（R3 / §5） | `openAnchor`、`runAnchorBatch`、`anchorLock` |
 | `js/app/render.js` | 聊天记录、画面面板、布局、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`applyLayout`、`closeLightbox` |
 | `js/app/settings.js` | 设置界面、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
@@ -231,7 +230,8 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `js/app/turn.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
 | **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `context.js`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
 | **不预置模型名与厂商参数** | `modelCapabilities.js`（表默认空）、`store.js` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
-| **换档保护** | `js/app/painter.js` / `turn.js`：生图 / 书记员结果写回前核对 `storyId` | 切换故事时不污染新档 |
+| **换档保护** | `js/app/painter.js` / `turn.js`：生图 / 书记员结果写回前核对 `storyId`；`js/app/video.js` 的轮询循环同样每次核对 | 切换故事时不污染新档，也不再等旧任务（视频任务转入 `pendingVideos` 待恢复，见下一行） |
+| **视频不进作画队列** | `js/app/video.js`：`videoQ = IR.PaintQueue.create()`（第二个实例）、`#video-status` 独立胶囊 | 视频 1~3 分钟且 run() 内整段轮询，绝不能堵出图；提交成功立刻写 `story.pendingVideos[]`，切档 / 刷新只停本地等待，回到该故事用 `poll` 续同一 `task_id`（不重复提交）；下载被拦走 `remoteUrl` 限时降级 |
 | **AI 文本一律 `textContent` 渲染** | `js/app/render.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
 | **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`js/app/*` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
 | **`seal` 必须在 `postTurn` 之后** | `js/app/round.js`：`sendPlayerAction`、`js/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
@@ -335,7 +335,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 ## 10. 想扩展的话
 
 - **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `js/app/*` 的业务逻辑。
-- **视频**：`IR.VideoProviders` 的约定是 `generate(cfg, {prompt, image}) -> {url}`（异步任务型 API 需自行轮询），目前为空。
+- **视频**：`IR.VideoProviders['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`js/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、上游只放行 MiniMax 两个域名、回包补 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。
 - **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口。当前是白底蓝强调浅色主题（UI-1）；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
 
@@ -344,7 +344,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 - **主库是 IndexedDB**（`js/storage.js` + `js/store.js`），容量由浏览器按磁盘空间分配，不再受 localStorage 约 5MB 限制；但这仍是**本机这个浏览器**的额度，且**不是无限大**——浏览器、设备剩余空间与存储策略都会影响它。旧版数据留在 localStorage 里作为回退快照，不再写入。
 - `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运（**IndexedDB 也按 origin 隔离**）。
 - 浏览器直连第三方 API 会被 CORS 拦，无法在纯前端层面解决。
-- API Key 明文存 IndexedDB（详见 [`SECURITY.md`](SECURITY.md)）。
+- API Key 明文存 IndexedDB（详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的「安全说明」）。
 
 ## 12. 可选本地服务（sidecar）
 

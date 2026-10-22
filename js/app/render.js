@@ -327,6 +327,45 @@
       return d;
     }
 
+    // 视频（§8）：聊天流里 56px 封面 + alt + ▶，点一下在舞台选中（同图片行）
+    if (e.type === 'video') {
+      const d = document.createElement('div');
+      d.className = 'bubble bubble-image';
+      const selectVideo = () => {
+        if (!S.story) return;
+        S.story.lastBg = e.id;
+        saveAll();
+        renderStage(); renderThumbs();
+      };
+      const cover = e.thumb || e.poster;
+      if (cover) {
+        const img = document.createElement('img');
+        img.src = cover; img.alt = e.alt || '场景视频封面';
+        img.title = '在右侧舞台播放这段视频';
+        img.onclick = selectVideo;
+        d.appendChild(img);
+      }
+      const row = document.createElement('div');
+      row.className = 'img-alt-row';
+      const cap = document.createElement('span');
+      cap.className = 'img-alt';
+      cap.textContent = '▶ ' + (e.alt || '场景视频') + (e.duration ? ' · ' + e.duration + 's' : '')
+        + (e.videoOmitted ? ' · 视频未随备份导出' : '');
+      cap.title = '点击在右侧舞台播放';
+      cap.onclick = selectVideo; row.appendChild(cap);
+      if (!e.videoId && e.remoteUrl) {
+        // 降级视频（§7）：链接限时有效，给「新标签页打开」入口
+        const open = document.createElement('button');
+        open.className = 'mini-btn'; open.type = 'button';
+        open.textContent = '新标签页打开';
+        open.title = '浏览器无法转存，链接限时有效';
+        open.onclick = () => { try { window.open(e.remoteUrl, '_blank', 'noopener'); } catch (_) {} };
+        row.appendChild(open);
+      }
+      d.appendChild(row);
+      return d;
+    }
+
     // 模型主动联系（调度触发）：样式同玩家气泡，另加一行轻量标注「谁 / 何时 / 为何找你」
     if (e.type === 'agent') {
       const d = document.createElement('div');
@@ -463,14 +502,58 @@
     pre.src = src;
   }
 
+  // 视频场景：video 元素接管舞台；文件未到先显示封面；动效 off 不自动播放、只显示封面（§8）
+  function setStageVideo(sc) {
+    const v = $('#stage-video');
+    if (!v) return;
+    if (!sc) {
+      try { v.pause(); } catch (_) {}
+      v.classList.add('hidden');
+      v.removeAttribute('src');
+      delete v.dataset.src;
+      return;
+    }
+    const src = A.videoSrc(sc);
+    const cover = sc.thumb || sc.poster || '';
+    $('#stage-img').classList.add('hidden');
+    $('#stage-empty').classList.add('hidden');
+    const cap = $('#stage-caption');
+    if (cap) cap.textContent = sc.alt || '';
+    if (!src) {
+      v.classList.add('hidden');
+      v.removeAttribute('src');
+      delete v.dataset.src;
+      if (cover) setStageImage(sc, cover);
+      return;
+    }
+    if (cover && v.getAttribute('poster') !== cover) v.setAttribute('poster', cover);
+    if (v.dataset.src !== src) {
+      v.dataset.src = src;
+      v.src = src;
+      try {   // 动效 off：只显示封面，等用户点 controls 播放
+        if (motionLevel() !== 'off') v.play().catch(() => {});
+        else v.pause();
+      } catch (_) {}
+    }
+    v.classList.remove('hidden');
+    A.setStageArt(cover || '');
+  }
+
   function renderStage() {
     const img = $('#stage-img');
     if (!img) return;
     if (!S.story) {
+      setStageVideo(null);
       setStageImage(null, '');
       return;
     }
-    setStageImage(currentScene(), A.sceneSrc(currentScene()));
+    const sc = currentScene();
+    if (sc && sc.kind === 'video') {
+      setStageVideo(sc);
+      return;
+    }
+    setStageVideo(null);
+    setStageImage(sc, A.sceneSrc(sc));
   }
 
   // Ken Burns 离屏暂停（data-paused 由 CSS 统一管）：图片不可见时停掉循环
@@ -499,15 +582,20 @@
     }
     for (const sc of scenes) {
       // 缩略条优先用小图（快）；小图缺失但原图在 IndexedDB 里时，等它异步取回来再显示
-      const src = sc.thumb || A.sceneSrc(sc);
+      // 视频场景用封面（thumb）；▶ 角标画在 .thumb-wrap 上（img 的 ::after 不渲染，§8）
+      const src = sc.kind === 'video' ? (sc.thumb || sc.poster || '') : (sc.thumb || A.sceneSrc(sc));
       if (!src) continue;
       const img = document.createElement('img');
-      img.className = 'thumb' + (S.story.lastBg === sc.id ? ' active' : '');
+      img.className = 'thumb' + (S.story.lastBg === sc.id ? ' active' : '') + (sc.kind === 'video' ? ' is-video' : '');
       img.src = src;
       img.alt = sc.alt || '场景缩略图';
       img.title = sc.alt || '';
       img.onclick = () => { S.story.lastBg = sc.id; saveAll(); renderStage(); renderThumbs(); };
-      strip.appendChild(img);
+      if (sc.kind !== 'video') { strip.appendChild(img); continue; }
+      const wrap = document.createElement('span');
+      wrap.className = 'thumb-wrap is-video';
+      wrap.appendChild(img);
+      strip.appendChild(wrap);
     }
   }
 

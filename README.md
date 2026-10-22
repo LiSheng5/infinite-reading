@@ -1,7 +1,7 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.0-blue.svg)](CHANGELOG.md)
+![version](https://img.shields.io/badge/version-0.12.0-blue.svg)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
@@ -12,7 +12,7 @@
 
 **纯前端 · 零构建 · 零依赖 · 无后端**：双击 `index.html` 就能玩，数据只存在你自己的浏览器里。
 
-**当前版本 v0.3** ｜ 文档：[架构](ARCHITECTURE.md) · [设计稿](docs/DESIGN.md) · [调研与规划](docs/NOTES.md) · [更新日志](CHANGELOG.md) · [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md) · [English](README.en.md)
+**当前版本 v0.12.0** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
 
 ## 特色
 
@@ -23,7 +23,7 @@
 - 📚 **玩得久**：故事书架、存档点、`.irstory.json` 导入导出、剧情文本导入
 - 🔌 **模型随便换**：对话与生图分离，兼容所有 OpenAI 格式接口（云端 / 本地，Base URL 自填）
 - 🎬 **离线演示**：加 `?demo=1` 就能在不配 Key、不联网的情况下走完整流程（内置剧本 + 本地占位图）
-- 🎬 **视频已留座**：适配器层预留 `VideoProviders`（可灵 / Vidu 等异步任务型 API），尚未实现
+- 🎬 **生视频（MiniMax）**：剧情模式舞台右上角「🎬」→「以当前图生成视频 / 按剧情文生视频」。画师把这一幕写成「动态提示词」，提交 MiniMax 异步任务（独立队列、每 10 秒轮询、不堵出图），完成后存进 IndexedDB 在舞台播放；中途刷新 / 切档回来自动续上同一个任务。走 MiniMax V2 接口（`MiniMax-H3` / `MiniMax-H3-Max`）。浏览器直连被 CORS 拦时，起 `node tools/video-proxy.mjs`（零依赖本地转发），接口地址填 `http://127.0.0.1:4320` 即可。
 
 ## 先看演示（零安装 · 零配置）
 
@@ -93,7 +93,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 定时主动 | 到点让 AI 主动来找你（一次性 / 固定间隔 / 日历表达式含时区）；触发器重启不丢；**免打扰时段与每日上限由你配置，模型改不了**；模型只能「提议」安排，需你确认才生效；可一键暂停 | 智能体 / 扮演 |
 | 购物支付 | AI **拿不到任何支付凭证**，只能提交购买意图（同样停在**提案卡**上），由本地服务在代码层强制策略（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、预算隔离）；超阈值弹窗给你确认；每笔台账可导出收据。本期只有「模拟支付」与「仅生成订单、由你在微信 / 支付宝里手动付款」 | 智能体 |
 
-安全与边界（详见 [`SECURITY.md`](SECURITY.md)）：
+安全与边界（详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的「安全说明」）：
 
 - 服务**只监听 `127.0.0.1`**（局域网 / 外网访问不到），除健康检查外都要 token；按「单进程」设计，重复启动会被拒绝。
 - 额度、白名单、免打扰时段、token 的**唯一真源是 `sidecar/data/config.json`**，它们不会回存到浏览器里——AI 也就无从改写。
@@ -147,7 +147,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 | 文件 | 作用 |
 |---|---|
-| `js/providers.js` | 适配器层：`ChatProviders` / `ImageProviders`；`VideoProviders` 已预留（`generate(cfg,{prompt,image}) -> {url}`） |
+| `js/providers.js` | 适配器层：`ChatProviders` / `ImageProviders` / `VideoProviders['minimax-video']`（MiniMax V2：`submit` / `poll` / `generate`） |
 | `js/context.js` | 上下文组装、压缩链、文本导入整理 |
 | `js/tree.js` | 分支树数据层：回合树是唯一真源（「↻ 重试」= 新增兄弟、‹ n/m › 切换），log / 世界卡等全是「根 → head」的投影 |
 | `js/storage.js` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
@@ -165,7 +165,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `eval/proposals-test.js` | 提案模块单测（假 sidecar：模型发起的邮件 / 下单只能产生提案、确认才执行、幂等 / 过期，Node 离线） |
 | `eval/zip-smoke.js` 等 | ZIP 冒烟与侧车 / 前端特性测试（`npm test` 一并跑） |
 | `sidecar/` | 可选本地服务（Node 进程）：邮件 / 定时主动 / 受限购物支付；只绑 `127.0.0.1` |
-| `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器（不属于运行时代码） |
+| `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器、生视频本地转发 `video-proxy.mjs`（不属于运行时代码） |
 
 模块职责、一回合的完整调用链、存储键位与备份格式、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -179,10 +179,13 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 **v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
 
+**v0.12 — 生视频（2026-10-22）**：**MiniMax V2 生视频**（图生 / 文生，画师写「动态提示词」）、独立视频队列（不堵出图）、提交前付费确认、刷新 / 切档自动续上任务、下载转存 IndexedDB + CORS / 空间不足降级限时链接、只存封面不进备份、演示模式置灰、全链路离线测试。
+
 **Backlog**
 - [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）
 - [ ] 图生图参考（人物一致性）
-- [ ] 视频生成（可灵 / Vidu）
+- [x] ~~视频生成（MiniMax）~~（已交付，见 v0.12）
+- [ ] 视频生成的更多渠道（可灵 / Vidu）与参考图/参考视频模式
 - [ ] 人物关系图
 - [ ] 画像 / 关系记忆加权检索
 - [ ] 角色卡增强字段（voice_samples / taboos / entity_synonyms）
@@ -198,6 +201,6 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 - **想改代码**：不用 `npm install`，改 `js/*.js` 刷新浏览器即可；动手前请先跑 `node eval/run.js`（离线、不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
-- **遇到问题**：安全相关请走私密渠道（见 [SECURITY.md](SECURITY.md)），其余请提 Issue（有模板）。
-- **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- **遇到问题**：安全相关请走私密渠道（见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「安全说明」），其余请提 Issue（有模板）。
+- **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「第三方资源与许可」。
 - **注意**：API Key 明文存在浏览器 `IndexedDB`，共享设备上请勿保存 Key；本项目不收集、不上传任何数据。

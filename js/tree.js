@@ -53,14 +53,23 @@
   /* ---------------- 基础形状 ---------------- */
 
   // 与 serializeStory 输出同口径的 sceneMeta（不含 src：原图走 images store）
+  // 视频场景字段（§5）：videoId / thumb（封面）/ sourceSceneId / mode / taskId / remoteUrl
   function sceneMetaOf(s) {
     return {
       id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '',
+      kind: s.kind || undefined,                       // 'video' = 视频场景
       aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
       styleCardId: s.styleCardId || undefined,
       supersededBy: s.supersededBy || undefined,
-      thumb: s.thumb || null,
+      thumb: s.thumb || s.poster || null,
       imageId: s.imageId || undefined,
+      videoId: s.videoId || undefined,
+      sourceSceneId: s.sourceSceneId || undefined,
+      mode: s.mode || undefined,
+      taskId: s.taskId || undefined,
+      remoteUrl: s.remoteUrl || s.videoUrl || undefined,
+      duration: s.duration || undefined, resolution: s.resolution || undefined,
+      ratio: s.ratio || undefined, model: s.model || undefined,
       ts: s.ts,
     };
   }
@@ -118,7 +127,7 @@
   function scenesFor(story, entries) {
     const ids = [];
     for (const e of (entries || [])) {
-      if (e && e.type === 'image' && e.id && ids.indexOf(e.id) < 0) ids.push(e.id);
+      if (e && (e.type === 'image' || e.type === 'video') && e.id && ids.indexOf(e.id) < 0) ids.push(e.id);
     }
     if (!ids.length) return [];
     const by = new Map();
@@ -640,8 +649,8 @@
     for (const id of Object.keys(tree.nodes)) {
       const n = tree.nodes[id];
       if (!n) continue;
-      for (const s of (n.scenes || [])) if (s) add(s.imageId);
-      for (const e of (n.entries || [])) if (e) add(e.imageId);
+      for (const s of (n.scenes || [])) if (s) { add(s.imageId); add(s.videoId); }
+      for (const e of (n.entries || [])) if (e) { add(e.imageId); add(e.videoId); }
     }
     return out;
   }

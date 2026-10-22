@@ -105,6 +105,23 @@
     };
     $('#btn-manual-gen').onclick = manualGenerate;
     $('#btn-stage-gen').onclick = e => { if (e) e.stopPropagation(); manualGenerate(); };
+    // 生视频（MiniMax，§8）：🎬 点开小菜单（以当前图生成 / 按剧情文生）；独立异步队列，不堵出图
+    const openVideoMenu = e => {
+      if (e) e.stopPropagation();
+      const item = $('#btn-video-i2v');
+      if (item) {
+        const sc = A.currentScene();
+        const noImg = !sc || A.isVideoScene(sc);
+        item.disabled = noImg;
+        item.title = noImg ? '还没有当前图：先画一张，或用「按剧情文生视频」' : '以当前画面为首帧做图生视频';
+      }
+      A.toggleMenu($('#btn-stage-video'), $('#video-menu'));
+    };
+    $('#btn-stage-video').onclick = openVideoMenu;
+    $('#btn-video-i2v').onclick = () => { A.closeMenus(); A.videoFromCurrentImage(); };
+    $('#btn-video-t2v').onclick = () => { A.closeMenus(); A.videoFromPlot(); };
+    $('#btn-manual-video').onclick = () => { if (S.story) A.generateVideo(); };
+    $('#btn-video-cancel').onclick = () => A.cancelActiveVideo();
     $('#btn-toggle-image').onclick = A.toggleStagePanel;
     $('#btn-stage-painter').onclick = e => { if (e) e.stopPropagation(); A.openWorkbench(null); };
     $('#btn-immersive').onclick = e => {
@@ -212,6 +229,7 @@
     $('#btn-pw-redraw').onclick = A.redrawFromWorkbench;
     $('#btn-pw-force').onclick = A.forceRedrawByCard;
     $('#btn-pw-send').onclick = A.painterThreadSend;
+    $('#btn-pw-video').onclick = A.pwVideoGenerate;   // 工作台「视频」区（§8）
     $('#pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') A.painterThreadSend(); });
     $('#btn-pw-reset').onclick = () => {
       if (!S.pw) return;
@@ -461,6 +479,7 @@
     if (DEMO) {
       // 演示模式保持零外联：把本地服务换成一整套内存 mock，界面链路照样跑通
       if (IR.Demo && IR.Demo.installSidecarMock) IR.Demo.installSidecarMock();
+      if (IR.Demo && IR.Demo.applyVideoGate) IR.Demo.applyVideoGate();   // 🎬 置灰（§8）
     }
     A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
     if (DEMO) A.startDemo();            // 演示模式直接开演（跳过开始页与试画锚定）

@@ -137,6 +137,23 @@
     '用户没要求改的地方尽量原样保留；不要输出与当前这张图无关的新场景。',
   ].join('\n');
 
+  // 视频动态提示词（§6）：把这一幕写成「视频提示词」。输出沿用现有 JSON 键（prompt_en / alt）。
+  // 图生（i2v）：只写「动起来的部分」（动作、运镜、氛围变化），可带 [pan] [zoom] [static] 镜头标记；
+  //              不重复描述画面里已有的静态外观。
+  // 文生（t2v）：完整画面 + 动作 + 运镜。
+  const PAINTER_VIDEO_SYSTEM = [
+    '你是视觉小说的「AI 画师导演」。现在要把这一幕做成一段短视频，由你写成「动态提示词」（video prompt）。',
+    '',
+    '只输出一个 JSON 对象（禁止多余文字）：',
+    '{"prompt_en":"English video prompt: what moves, camera work, atmosphere changes (may include [pan] [zoom] [static] camera tags)","alt":"中文一句话，说明这段视频拍了什么"}',
+    '',
+    '规则：',
+    '- prompt_en 用英文、具体，写「时间维度上的变化」：动作、运镜、氛围变化；可用 [pan] [zoom] [static] 这类镜头标记；',
+    '- 若给了「源画面」（图生视频）：画面内容以它为准，不要重复描述已有的静态外观（人物长相、服饰、陈设、构图），只写动起来的部分；',
+    '- 若没有源画面（文生视频）：写完整画面（主体、环境、光线）+ 动作与运镜；',
+    '- 不要出现任何文字、水印、签名的描述；alt 与 prompt 内容一致。',
+  ].join('\n');
+
   // P4 锚定：出 4 组画风关键词 + 试画提示词（风格基调为生成依据，§5）
   const PAINTER_STYLES_SYSTEM = [
     '你是视觉小说的「AI 画师导演」。现在为这部作品做开局画风锚定：给出 4 组风格明显不同的画风关键词，并为每组写一条试画提示词。',
@@ -583,6 +600,8 @@
    *   styleHint  画风要求兜底（settings 画风预设，未锚定卡时用）
    *   mode       'scene'（自动作画）| 'chat'（工作台对话）
    *              | 'styles'（锚定：出 4 组画风候选）| 'card'（锚定：起草设定卡）| 'cardchat'（锚定：说着改）
+   *              | 'video'（生视频的动态提示词，§6；子类型看 videoKind）
+   *   videoKind  'i2v'（图生：只写动起来的部分）| 't2v'（文生：完整画面 + 动作）
    *   userText   工作台 / 锚定对话里用户的话
    *   plot       工作台已召回最近记录（作为工具结果附上）
    *   tools      是否下发 recall_recent_plot 工具定义（仅工作台）
@@ -632,6 +651,28 @@
         out.push({ role: 'system', content: '[当前设定卡]\n' + JSON.stringify(opts.currentCard || {}, null, 1) });
         out.push({ role: 'user', content: String(opts.userText || '') });
       }
+      return out;
+    }
+
+    // 视频动态提示词（§6）：隔离规则不变——系统提示 + 画风锚 + 最近两张图 + 最近 3 回合剧情
+    if (mode === 'video') {
+      const out = [{ role: 'system', content: PAINTER_VIDEO_SYSTEM }];
+      out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) });
+      const vimgs = recentImageLines(story, 2);
+      if (vimgs.length) out.push({ role: 'system', content: '[最近两张图]\n' + vimgs.join('\n') });
+      const vturns = recentTurnLines(story, PAINTER_RECENT_TURNS);
+      if (vturns.length) out.push({ role: 'system', content: '[最近剧情]\n' + vturns.join('\n') });
+      const vkind = opts.videoKind === 'i2v' ? 'i2v' : 't2v';
+      const vbits = ['[视频类型] ' + (vkind === 'i2v' ? '图生（以「源画面」为首帧，只写动起来的部分）' : '文生（完整画面 + 动作）')];
+      if (vkind === 'i2v') {
+        // 图生：输入多带源图的 alt 与 promptRaw（§6）
+        if (opts.imageAlt) vbits.push('[源画面说明] ' + opts.imageAlt);
+        if (opts.imagePrompt) vbits.push('[源画面提示词] ' + opts.imagePrompt);
+      } else if (opts.sceneRef) {
+        vbits.push('[画面参考] ' + opts.sceneRef);
+      }
+      if (opts.styleHint) vbits.push('[画风要求] ' + opts.styleHint);
+      out.push({ role: 'user', content: vbits.join('\n') });
       return out;
     }
 
@@ -1566,6 +1607,7 @@
     WINDOW_MIN_MESSAGES, WINDOW_MAX_MESSAGES, WINDOW_TOKEN_RATIO, fitWindow,
     AI1_SYSTEM, systemForMode, RP_SYSTEM_FALLBACK,
     PAINTER_SYSTEM, PAINTER_CHAT_SYSTEM, PAINTER_STYLES_SYSTEM, PAINTER_CARD_SYSTEM,
+    PAINTER_VIDEO_SYSTEM,
     RECALL_RECENT_PLOT_TOOL, storySettingText,
     RECALL_WORLD_STATE_TOOL, RECALL_STYLE_CARD_TOOL, TOOLS_RECALL, TOOL_NAMES_RECALL,
     REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL,

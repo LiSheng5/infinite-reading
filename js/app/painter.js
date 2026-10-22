@@ -291,6 +291,41 @@
     return parsePainterReply(raw);
   }
 
+  /* 视频动态提示词（§6）：图生只写「动起来的部分」；文生完整画面 + 动作 + 画风后缀。
+   * 画师不可用 / 失败时兜底：图生用「源图 alt + subtle natural motion, slow camera push-in」；
+   * 文生用场景描述（与 runPaintTask 同口径：sceneRef → composePrompt + 画风后缀）。 */
+  async function painterVideoPrompt(opts) {
+    opts = opts || {};
+    const vkind = opts.videoKind === 'i2v' ? 'i2v' : 't2v';
+    const styleText = styleSuffixText();
+    const sceneRef = opts.sceneRef
+      || (S.story && S.story.lastSceneSummary)
+      || String((S.story && S.story.premise) || '').split('\n')[0] || 'story scene';
+    let a2 = null;
+    try {
+      a2 = await painterCompose({
+        mode: 'video', videoKind: vkind, sceneRef: sceneRef,
+        styleHint: vkind === 't2v' ? styleText : '',
+        imageAlt: opts.imageAlt || '', imagePrompt: opts.imagePrompt || '',
+      });
+    } catch (_) { a2 = null; }
+    if (a2 && a2.promptEn) {
+      const promptRaw = a2.promptEn;
+      // 文生把画风后缀压进最终 prompt（视觉设定卡优先）；图生只发动态提示词本体
+      const prompt = vkind === 't2v' ? composePrompt(promptRaw, styleText) : promptRaw;
+      return { prompt: prompt, promptRaw: promptRaw, alt: a2.alt || opts.altHint || sceneRef };
+    }
+    if (vkind === 'i2v') {
+      const alt = opts.imageAlt || opts.altHint || sceneRef;
+      return { prompt: alt + ', subtle natural motion, slow camera push-in', promptRaw: alt, alt: alt };
+    }
+    return {
+      prompt: composePrompt(sceneRef, styleText),
+      promptRaw: sceneRef,
+      alt: opts.altHint || sceneRef,
+    };
+  }
+
   // 出一张图：调生图适配器 → 落 scene / log（可标记被替代的旧图，§2 supersededBy）
   async function runPaint(opts) {
     if (!S.story) return null;
@@ -458,6 +493,7 @@
       fb.disabled = !hasCard || !!S.pw.busy;
       fb.title = hasCard ? '把视觉设定卡的画风与人物设定压进这张图重画' : '还没锚定视觉设定卡（先点「锚定画风」）';
     }
+    A.renderWorkbenchVideo();   // 「视频」区（§8）：本图已生成视频的预览
     renderPainterThread();
   }
 
@@ -653,5 +689,5 @@
     }
   }
 
-  A.reg({ paintQ, imageBrief, submitToolPaint, enqueueImage, styleSuffixText, composePrompt, openWorkbench, closeWorkbench, pwShowWh, painterThreadSend, redrawFromWorkbench, forceRedrawByCard });
+  A.reg({ paintQ, imageBrief, submitToolPaint, enqueueImage, styleSuffixText, composePrompt, painterVideoPrompt, openWorkbench, closeWorkbench, pwShowWh, painterThreadSend, redrawFromWorkbench, forceRedrawByCard });
 })();

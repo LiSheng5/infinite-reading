@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.0-blue.svg)](CHANGELOG.md)
+![version](https://img.shields.io/badge/version-0.12.0-blue.svg)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -11,7 +11,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 
 **Pure front-end · no build · no dependencies · no backend.** Double-click `index.html` and you are playing. All data stays in your own browser.
 
-**Current version: v0.3** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Design (zh)](docs/DESIGN.md) · [Research & plan (zh)](docs/NOTES.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [中文说明](README.md)
+**Current version: v0.12.0** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [中文说明](README.md)
 
 ## Features
 
@@ -22,7 +22,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 - 📚 **Made to last** — story shelf, save points, `.irstory.json` import/export, and import of raw story text.
 - 🔌 **Any model** — chat and image models are configured separately; any OpenAI-compatible endpoint works (cloud or local, set your own Base URL).
 - 🎬 **Offline demo** — append `?demo=1` to run the whole flow without a key or a network (built-in script + locally drawn placeholder images).
-- 🎬 **Room left for video** — the adapter layer already reserves `VideoProviders` (async task APIs such as Kling / Vidu); not implemented yet.
+- 🎬 **Video (MiniMax)** — the 🎬 button on the story stage opens a small menu: "video from current image" / "video from the plot". The painter writes a motion prompt, a MiniMax async task runs on its own queue (10s polling, never blocks image generation), and the finished MP4 is stored in IndexedDB and played on stage. Reload or switch stories mid-run and the same task is picked up again. Uses the MiniMax V2 API (`MiniMax-H3` / `MiniMax-H3-Max`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (a dependency-free local relay) and set the base URL to `http://127.0.0.1:4320`.
 
 ## Try it without any setup
 
@@ -87,7 +87,7 @@ node sidecar/server.mjs            # prints a token on first start
 | Proactive scheduling | Let the AI reach out on time (one-shot / fixed interval / cron with timezone); triggers survive restarts; **quiet hours and the daily cap live in the sidecar and cannot be changed by the model**; the model can only *propose* a trigger — you confirm it; one-click pause | Agent / Role-play |
 | Delegated purchase | The AI **never sees payment credentials**; it can only submit a purchase intent (again stopping at a **proposal card**), and the sidecar enforces policy in code (per-transaction / daily / monthly caps, merchant & category lists, cooldown, per-agent budgets). Above the threshold you get a confirmation dialog; the ledger is exportable as a receipt. This release only ships "mock" and "order only, you pay manually in your own payment app" | Agent |
 
-Safety boundaries (see `SECURITY.md` for details): the service binds **`127.0.0.1` only**, requires a local token, and refuses a second instance; the single source of truth for limits / allowlists / quiet hours / token is `sidecar/data/config.json`; the payment policy is there to **prevent mistakes and stay auditable, not to defend against you**; it **never automates or bypasses any payment app and never stores payment passwords**.
+Safety boundaries (see the "Security" section of `CONTRIBUTING.md` for details): the service binds **`127.0.0.1` only**, requires a local token, and refuses a second instance; the single source of truth for limits / allowlists / quiet hours / token is `sidecar/data/config.json`; the payment policy is there to **prevent mistakes and stay auditable, not to defend against you**; it **never automates or bypasses any payment app and never stores payment passwords**.
 
 ## Data and backup
 
@@ -134,7 +134,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 
 | File | Role |
 |---|---|
-| `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders`; `VideoProviders` reserved |
+| `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders` / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
 | `js/context.js` | Context assembly, compression chain, text import |
 | `js/tree.js` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
 | `js/storage.js` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
@@ -165,11 +165,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 **v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `js/zip.js`), and mobile polish (safe areas, 44px touch targets).
 
+**v0.12 — video generation (2026-10-22)**: **MiniMax V2 video** (image-to-video / text-to-video, painter writes the motion prompt), a dedicated video queue (never blocks image generation), a paid-task confirmation, automatic task resume after reload / story switch, MP4 stored in IndexedDB with a timed-link fallback when CORS or disk space blocks the download, covers-only backups, demo-mode gate, and a full offline test suite.
+
 **Backlog**
 
 - [ ] Local folder / cloud-drive sync (IndexedDB landed in v0.3)
 - [ ] Image-to-image reference (character consistency)
-- [ ] Video generation (Kling / Vidu)
+- [x] ~~Video generation (MiniMax)~~ (delivered in v0.12)
+- [ ] More video providers (Kling / Vidu) and reference-image / reference-video modes
 - [ ] Character relationship graph
 - [ ] Weighted retrieval for profile / relationship memory
 - [ ] Extra character-card fields (`voice_samples` / `taboos` / `entity_synonyms`)
@@ -185,6 +188,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 - **Code**: no `npm install` needed — edit `js/*.js`, refresh the browser. Please run `node eval/run.js` first (offline, no API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
-- **Security**: report privately per [SECURITY.md](SECURITY.md); everything else goes to Issues (templates provided).
-- **License**: [MIT](LICENSE). Third-party fonts and resources are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
+- **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Note**: API keys are stored in plain text in `IndexedDB` — don't save one on a shared device. The project collects and uploads nothing.

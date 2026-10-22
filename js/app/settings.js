@@ -135,10 +135,11 @@
     S.settings.image.extraParams = $('#s-image-params').value.trim();
 
     S.settings.video = S.settings.video || {};
-    S.settings.video.provider = 'openai-videos';
+    S.settings.video.provider = 'minimax-video';
     S.settings.video.baseUrl = $('#s-video-base').value.trim();
     S.settings.video.model = $('#s-video-model').value.trim();
     S.settings.video.apiKey = $('#s-video-key').value.trim();
+    // 时长 / 分辨率 / 比例走「自定义请求参数」（§0 假设 2），不设独立控件
     S.settings.video.extraParams = $('#s-video-params').value.trim();
     if (!$('#wrap-image-size').classList.contains('hidden')) S.settings.image.size = $('#s-image-size').value;
     else delete S.settings.image.size;
@@ -199,6 +200,7 @@
     scribe:  { kind: 'chat',  self: ['#s-scribe-base', '#s-scribe-key', '#s-scribe-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
     draft:   { kind: 'chat',  self: ['#s-draft-base', '#s-draft-key', '#s-draft-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
     image:   { kind: 'image', self: ['#s-image-base', '#s-image-key', '#s-image-model'] },
+    video:   { kind: 'video', self: ['#s-video-base', '#s-video-key', '#s-video-model'] },
   };
 
   function readTestCfg(t) {
@@ -216,7 +218,7 @@
     };
     return {
       cfg: {
-        provider: t.kind === 'image' ? 'openai-images' : 'openai-compatible',
+        provider: t.kind === 'image' ? 'openai-images' : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
         baseUrl: grab(0), apiKey: grab(1), model: grab(2),
       },
       inherited,
@@ -238,7 +240,9 @@
     const { cfg, inherited } = readTestCfg(t);
     const adapter = t.kind === 'image'
       ? (IR.ImageProviders[cfg.provider] || IR.ImageProviders['openai-images'])
-      : (IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible']);
+      : t.kind === 'video'
+        ? (IR.VideoProviders[cfg.provider] || IR.VideoProviders['minimax-video'])
+        : (IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible']);
     if (!adapter || typeof adapter.test !== 'function') { set('fail', '这个适配器不支持测试连接。'); return; }
 
     const oldText = btn ? btn.textContent : '';

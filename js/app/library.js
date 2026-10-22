@@ -341,11 +341,13 @@
   function continueLast() {
     const s = Store.loadCurrent() || (Store.listStories()[0] && Store.loadStory(Store.listStories()[0].id));
     if (!s) { toast('没有找到存档'); showShelf(); return; }
+    if (S.story && S.story.id !== s.id) A.stopVideoWaiting();   // §7：切故事停本地轮询
     S.story = s;
     S.story.savepoints = S.story.savepoints || [];
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     Store.setCurrentId(S.story.id);
     A.enterGame(false);
+    A.resumePendingVideos();   // §7：刷新 / 重开后续上生视频轮询
   }
 
   /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 js/app/shelf.js（UI-2）：
@@ -363,6 +365,15 @@
   async function buildExportPack(st, kind, withSrc) {
     const images = [];
     for (const s of (st.scenes || []).slice(-12)) {
+      // §0/§10：视频不随备份导出（体积）——只留封面，条目标 videoOmitted:true，导入后显示「视频未随备份导出」
+      if (s.kind === 'video') {
+        images.push({
+          id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '',
+          thumb: s.thumb || null, kind: 'video', videoOmitted: true,
+          mode: s.mode || undefined, duration: s.duration || undefined, ts: s.ts,
+        });
+        continue;
+      }
       // 带上 scene id：别人导入时才能把「图片」和聊天记录里的图片气泡对上号
       const im = { id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '', thumb: s.thumb || null };
       if (s.aspect) im.aspect = s.aspect;
