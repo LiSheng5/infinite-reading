@@ -75,11 +75,23 @@
 
   /* ================= 开局向导（T-P2-3 / §4.8） ================= */
 
+  // 人物设定独立控件（可增删行）：姓名 / 性格 / 说话方式，替代竖线文本框
+  let wzCharEd = null;
+  function wzChars() {
+    return wzCharEd || (wzCharEd = A.charEditor($('#wz-characters'), [
+      { key: 'name', label: '名字', placeholder: '如：周叙' },
+      { key: 'personality', label: '性格', placeholder: '如：话里有话、克制' },
+      { key: 'speech', label: '说话方式', placeholder: '如：简短、喜欢反问' },
+    ], $('#btn-wz-char-add')));
+  }
+
   function openWizard(prefill) {
     prefill = prefill || {};
     $('#wz-draft-input').value = prefill.topic || '';
     $('#wz-world').value = prefill.world || '';
-    $('#wz-characters').value = prefill.characters || '';
+    wzChars().set(typeof prefill.characters === 'string'
+      ? parseCharacterLines(prefill.characters)
+      : (prefill.characters || []));
     $('#wz-role').value = prefill.role || '';
     $('#wz-style').value = prefill.style || '';
     $('#wz-development').value = prefill.development || '';
@@ -138,9 +150,7 @@
 
   function fillWizard(d) {
     if (d.world) $('#wz-world').value = d.world;
-    if (d.characters && d.characters.length) {
-      $('#wz-characters').value = d.characters.map(c => [c.name, c.personality, c.speech].join('｜')).join('\n');
-    }
+    if (d.characters && d.characters.length) wzChars().set(d.characters);
     if (d.role) $('#wz-role').value = d.role;
     if (d.styleTone) $('#wz-style').value = d.styleTone;
     if (d.development) $('#wz-development').value = d.development;
@@ -189,7 +199,7 @@
   function startFromWizard() {
     const topic = $('#wz-draft-input').value.trim();
     const worldText = $('#wz-world').value.trim();
-    const chars = parseCharacterLines($('#wz-characters').value);
+    const chars = wzChars().get();
     const role = $('#wz-role').value.trim();
     const style = $('#wz-style').value.trim();
     const dev = $('#wz-development').value.trim();

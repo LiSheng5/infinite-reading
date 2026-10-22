@@ -475,7 +475,14 @@
           { method: 'GET', headers: videoHeaders(cfg, false) }
         );
       } catch (e) {
-        return { level: 'fail', message: friendlyNetwork(e) };
+        // MiniMax 不对浏览器开放跨域（响应不带 CORS 头）：提示走本地转发，别让人干猜
+        return {
+          level: 'fail',
+          message: friendlyNetwork(e)
+            + (e instanceof TypeError
+              ? '（MiniMax 不允许浏览器直连：先起本地转发 node tools/video-proxy.mjs，接口地址改填 http://127.0.0.1:4320）'
+              : ''),
+        };
       }
       if (res.ok) {
         return { level: 'ok', message: '连接成功：接口可达，Key 被接受。这里只读列任务，不会提交任务，所以不花钱。能否出视频要在第一次「🎬 出视频」时才算真正验证。' };
@@ -526,7 +533,7 @@
       } catch (e) {
         // 提交阶段 TypeError → 大概率是 CORS 预检被拦：明确提示，不重试（§4）
         if (e instanceof TypeError) {
-          throw new Error('该接口可能不允许浏览器直连（CORS）：提交请求被浏览器拦下了，这次没有产生费用。可换支持 CORS 的地址，或在本地服务（sidecar）下使用。');
+          throw new Error('该接口不允许浏览器直连（CORS）：提交请求被浏览器拦下了，这次没有产生费用。可起本地转发 node tools/video-proxy.mjs（接口地址改填 http://127.0.0.1:4320）后重试。');
         }
         throw e;
       }

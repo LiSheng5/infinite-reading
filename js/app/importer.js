@@ -192,6 +192,17 @@
     }).filter(Boolean);
   }
 
+  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式
+  let itCharEd = null;
+  function itChars() {
+    return itCharEd || (itCharEd = A.charEditor($('#it-characters'), [
+      { key: 'name', label: '名字', placeholder: '姓名' },
+      { key: 'presence', label: '在场 / 离场', placeholder: '在场' },
+      { key: 'personality', label: '性格', placeholder: '性格' },
+      { key: 'speech', label: '说话方式', placeholder: '说话方式' },
+    ], $('#btn-it-char-add')));
+  }
+
   function fillImportForm(res, plan) {
     $('#it-title').value = res.title || '';
     $('#it-premise').value = res.premise || '';
@@ -199,8 +210,7 @@
     $('#it-place').value = w.place || '';
     $('#it-time').value = w.time || '';
     $('#it-scene').value = w.scene || '';
-    $('#it-characters').value = (w.characters || [])
-      .map(c => [c.name, c.presence || '在场', c.personality || '', c.speech || ''].join('｜')).join('\n');
+    itChars().set(w.characters || []);
     $('#it-threads').value = (w.threads || []).join('\n');
     $('#it-style').value = (res.styleKeywords || []).join(', ');
     const used = (plan && plan.needsMap) ? (plan.chunks.length + ' 段 map-reduce') : '一次调用';
@@ -279,7 +289,10 @@
     if (!S.importJob || !S.importJob.result) { toast('先整理一遍再开局', true); return; }
     const title = ($('#it-title').value.trim() || '导入的故事').slice(0, 40);
     const premise = $('#it-premise').value.trim();
-    const chars = parseImportCharacters($('#it-characters').value);
+    const chars = itChars().get().map(c => ({
+      name: c.name, presence: c.presence || '在场', personality: c.personality || '',
+      speech: c.speech || '', note: '', noteLocked: false,
+    })).filter(c => c.name);
     const threads = $('#it-threads').value.split('\n').map(s => s.trim()).filter(Boolean);
     const style = $('#it-style').value.trim();
     if (!premise && !chars.length) {

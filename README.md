@@ -6,11 +6,7 @@
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
 
-> 有限的书页，无限的故事。
-
-一本「读不完」的 AI 视觉小说：你和 AI 即兴演出剧情，AI 画师为每一幕现场作画。
-
-**纯前端 · 零构建 · 零依赖 · 无后端**：双击 `index.html` 就能玩，数据只存在你自己的浏览器里。
+**在这里你可以体验与创作各种优秀且令人难忘的剧情，无论是什么样剧情都尽情的在这体验吧，包括你心中所想的世界**
 
 **当前版本 v0.12.0** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
 
@@ -20,7 +16,7 @@
 - 🎨 **AI 画师现场作画**：提示词可见可改，还能与画师对话改画
 - 🧭 **三种模式**：剧情 / 智能体（带工具的助手：画图、记事、定时、写邮件、下单，后两样要你确认）/ 角色扮演（角色卡 + 关系记忆 + 用户画像，兼容 SillyTavern V2/V3 卡）
 - 🧠 **记得住**：世界状态卡 + 按需召回 + 70% 自动压缩，长局不忘前情
-- 📚 **玩得久**：故事书架、存档点、`.irstory.json` 导入导出、剧情文本导入
+- 📚 **玩得久**：故事书架、存档分支、`.irstory.json` 导入导出、剧情文本导入
 - 🔌 **模型随便换**：对话与生图分离，兼容所有 OpenAI 格式接口（云端 / 本地，Base URL 自填）
 - 🎬 **离线演示**：加 `?demo=1` 就能在不配 Key、不联网的情况下走完整流程（内置剧本 + 本地占位图）
 - 🎬 **生视频（MiniMax）**：剧情模式舞台右上角「🎬」→「以当前图生成视频 / 按剧情文生视频」。画师把这一幕写成「动态提示词」，提交 MiniMax 异步任务（独立队列、每 10 秒轮询、不堵出图），完成后存进 IndexedDB 在舞台播放；中途刷新 / 切档回来自动续上同一个任务。走 MiniMax V2 接口（`MiniMax-H3` / `MiniMax-H3-Max`）。浏览器直连被 CORS 拦时，起 `node tools/video-proxy.mjs`（零依赖本地转发），接口地址填 `http://127.0.0.1:4320` 即可。
@@ -138,7 +134,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
                 │
                 │   出图入口：用户点 🎨（剧情模式唯一入口）／ chat、扮演可调 request_image 直出提示词
                 ▼
-        画师子代理 ─ JSON：prompt_en / subject / alt（手动 🎨 走这里；直出跳过）
+        画师代理 ─ JSON：prompt_en / subject / alt（手动 🎨 走这里；直出跳过）
                 ▼
         ImageProvider（/images/generations）
                 ▼

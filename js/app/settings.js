@@ -192,6 +192,15 @@
     S.settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
+    // 「当前故事」组（推进模式 / 世界状态卡）也要跟着主「保存」落盘：
+    // 否则只点底部「保存」时这两块的改动会被下次 renderStoryPanels 按旧值回填（看起来像「恢复默认」）。
+    // 注意顺序：先读出模式（存世界卡会重绘表单、把下拉框刷回旧值），再写世界卡，最后换模式。
+    if (S.story) {
+      const sel = $('#s-story-mode');
+      const m = sel ? sel.value : '';
+      saveWorldFromForm({ silent: true, ifChanged: true });
+      if (m && m !== (S.story.mode || 'choice')) onModeChange({ target: { value: m } });
+    }
     saveAll();
     if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== S.settings.showReasoning) A.renderChat();   // 思考链开关即时生效
@@ -300,6 +309,12 @@
     renderStylePanel();
     renderProfilePanel();
     renderCardPanel();
+    // 推进模式只对「当前故事」有意义：没开故事时禁用并回默认，避免改了不生效、重开又像「恢复默认」
+    const modeSel = $('#s-story-mode');
+    if (modeSel) {
+      modeSel.disabled = !has;
+      modeSel.value = has ? (S.story.mode || 'choice') : 'choice';
+    }
     $('#memory-empty').classList.toggle('hidden', has);
     $('#memory-panels').classList.toggle('hidden', !has);
     if (!has) return;
@@ -308,8 +323,7 @@
     $('#w-time').value = w.time || '';
     $('#w-scene').value = w.scene || '';
     $('#w-threads').value = (w.threads || []).join('\n');
-    $('#w-characters').value = (w.characters || [])
-      .map(c => [c.name || '', c.presence || '', c.personality || '', c.speech || '', c.note || ''].join('｜')).join('\n');
+    wCharEd().set(w.characters || []);   // 人物设定独立控件（可增删行）
     $('#w-rel-stage').value = (w.relationship || {}).stage || '';
     $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
     $('#w-rel-notes').value = (w.relationship || {}).notes || '';
@@ -323,7 +337,6 @@
       d.textContent = '· ' + (e.tool || '') + '：' + (e.summary || '');
       tl.appendChild(d);
     });
-    $('#s-story-mode').value = S.story.mode || 'choice';
   }
 
   // 角色卡状态（R13）：rp 常驻；切出 rp 时卡保留在存档里只是停用（§4.8）
@@ -340,8 +353,49 @@
       + (S.story.mode === 'rp' ? ' · 扮演中：每轮常驻，开场白已进场' : ' · 已保留：切到扮演模式即启用');
   }
 
-  function saveWorldFromForm() {
+  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
+  let wCharEdInst = null;
+  function wCharEd() {
+    return wCharEdInst || (wCharEdInst = A.charEditor($('#w-characters'), [
+      { key: 'name', label: '名字', placeholder: '姓名' },
+      { key: 'presence', label: '在场 / 离场', placeholder: '在场' },
+      { key: 'personality', label: '性格', placeholder: '性格' },
+      { key: 'speech', label: '说话方式', placeholder: '说话方式' },
+      { key: 'note', label: '备注', placeholder: '手改后书记员不覆盖' },
+    ], $('#btn-w-char-add')));
+  }
+
+  // 表单与当前世界卡是否不一致：modal「保存」用它决定要不要顺带落盘世界卡（没改就不写，避免误锁备注）
+  function worldFormChanged(w) {
+    w = w || {};
+    const rel = w.relationship || {};
+    const lines = v => String(v || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const rows = wCharEd().get().filter(p => p && p.name);
+    const cur = (w.characters || []).filter(c => c && c.name);
+    if ($('#w-place').value.trim() !== String(w.place || '')) return true;
+    if ($('#w-time').value.trim() !== String(w.time || '')) return true;
+    if ($('#w-scene').value.trim() !== String(w.scene || '')) return true;
+    if (JSON.stringify(lines($('#w-threads').value)) !== JSON.stringify(w.threads || [])) return true;
+    if ($('#w-rel-stage').value.trim() !== String(rel.stage || '')) return true;
+    if (JSON.stringify(lines($('#w-rel-bonds').value)) !== JSON.stringify(rel.bonds || [])) return true;
+    if ($('#w-rel-notes').value.trim() !== String(rel.notes || '')) return true;
+    if (rows.length !== cur.length) return true;
+    for (let i = 0; i < rows.length; i++) {
+      const a = rows[i], b = cur[i] || {};
+      // 与 saveWorldFromForm 的写回语义一致：presence 空则沿用旧值，不算改动
+      if (String(a.name) !== String(b.name || '')
+        || String(a.presence || b.presence || '') !== String(b.presence || '')
+        || String(a.personality || '') !== String(b.personality || '')
+        || String(a.speech || '') !== String(b.speech || '')
+        || String(a.note || '') !== String(b.note || '')) return true;
+    }
+    return false;
+  }
+
+  // opts：{ silent } 不弹提示（modal「保存」顺带落盘时用）；{ ifChanged } 仅当表单真的改过才写
+  function saveWorldFromForm(opts) {
     if (!S.story) return;
+    if (opts && opts.ifChanged && !worldFormChanged(S.story.world || {})) return;
     const w = S.story.world || (S.story.world = Store.defaultWorld());
     w.place = $('#w-place').value.trim();
     w.time = $('#w-time').value.trim();
@@ -349,13 +403,12 @@
     w.threads = $('#w-threads').value.split('\n').map(s => s.trim()).filter(Boolean);
     const prevByName = {};
     (w.characters || []).forEach(c => { if (c && c.name) prevByName[c.name] = c; });
-    w.characters = $('#w-characters').value.split('\n').map(line => {
-      const p = line.split('｜').map(s => s.trim());
-      if (!p[0]) return null;
-      const prev = prevByName[p[0]] || {};
+    w.characters = wCharEd().get().map(p => {
+      if (!p.name) return null;
+      const prev = prevByName[p.name] || {};
       return Object.assign({}, prev, {
-        name: p[0], presence: p[1] || prev.presence || '', personality: p[2] || '',
-        speech: p[3] || '', note: p[4] !== undefined ? p[4] : '', noteLocked: true,
+        name: p.name, presence: p.presence || prev.presence || '', personality: p.personality || '',
+        speech: p.speech || '', note: p.note !== undefined ? p.note : '', noteLocked: true,
       });
     }).filter(Boolean);
     w.relationship = Object.assign({ stage: '', bonds: [], notes: '' }, w.relationship || {}, {
@@ -368,7 +421,7 @@
     try { IR.Tree.resyncState(S.story); } catch (_) { /* 树还没建好时忽略 */ }
     saveAll();
     renderStoryPanels();
-    toast('世界卡已保存，下一回合生效');
+    if (!(opts && opts.silent)) toast('世界卡已保存，下一回合生效');
   }
 
   /* ---------- 🧠 注入记忆（§4.4 手动层；第十六轮定案：不用 tool_choice） ---------- */

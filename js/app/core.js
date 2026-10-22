@@ -408,6 +408,81 @@
     return b;
   }
 
+  /* 人物设定独立控件（可增删行）：替代「名字｜性格｜说话方式」一行一个的竖线文本框。
+   * container 渲染行（.char-row）；addBtn 可选（不传就自建「+ 添加人物」放容器后面）。
+   * fields: [{ key, label?, placeholder? }]，每行每字段一个输入框。
+   * 返回 { set(list), get(), add(vals) }：get() 滤掉全空行、不造字段外的值。 */
+  function charEditor(container, fields, addBtn) {
+    fields = fields || [];
+    // 表头：每个字段的可见名字（名字 / 性格 / 说话方式……），与输入框同列对齐
+    function makeHead() {
+      const head = document.createElement('div');
+      head.className = 'char-head';
+      fields.forEach(f => {
+        const s = document.createElement('span');
+        s.textContent = f.label || '';
+        head.appendChild(s);
+      });
+      const spacer = document.createElement('span');
+      spacer.className = 'char-del';
+      head.appendChild(spacer);
+      return head;
+    }
+    function makeRow(vals) {
+      const row = document.createElement('div');
+      row.className = 'char-row';
+      fields.forEach(f => {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.dataset.k = f.key;
+        inp.placeholder = f.placeholder || f.label || f.key;
+        inp.spellcheck = false;
+        inp.value = vals && vals[f.key] != null ? String(vals[f.key]) : '';
+        row.appendChild(inp);
+      });
+      row.appendChild(miniBtn('×', () => row.remove(), 'char-del'));
+      return row;
+    }
+    function rows() { return Array.prototype.slice.call(container.querySelectorAll('.char-row')); }
+    const api = {
+      set(list) {
+        container.textContent = '';
+        if (fields.some(f => f.label)) container.appendChild(makeHead());
+        (Array.isArray(list) ? list : []).forEach(v => container.appendChild(makeRow(v)));
+        if (!rows().length) container.appendChild(makeRow(null));   // 空表也给一行，看得见字段形状
+      },
+      get() {
+        return rows().map(row => {
+          const o = {};
+          let any = false;
+          Array.prototype.slice.call(row.querySelectorAll('input')).forEach(inp => {
+            const v = inp.value.trim();
+            if (v) any = true;
+            o[inp.dataset.k] = v;
+          });
+          return any ? o : null;
+        }).filter(Boolean);
+      },
+      add(vals) {
+        const r = makeRow(vals);
+        container.appendChild(r);
+        return r;
+      },
+    };
+    let btn = addBtn;
+    if (!btn) {
+      btn = miniBtn('+ 添加人物', null, 'char-add');
+      if (container.parentNode) container.parentNode.insertBefore(btn, container.nextSibling);
+    }
+    btn.onclick = () => {
+      const r = api.add(null);
+      const inp = r.querySelector('input');
+      if (inp) inp.focus();
+    };
+    if (!rows().length) api.set([]);   // 挂载即见表头 + 一行空行
+    return api;
+  }
+
   A.reg({
     $,
     Store,
@@ -438,6 +513,7 @@
     irConfirm,
     closeConfirm,
     confirmValue,
+    charEditor,
     MODAL_IDS,
     modalStack,
     openModal,
