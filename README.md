@@ -32,9 +32,6 @@ index.html?demo=1
 内置 10 回合剧本 + 本地占位图（canvas 现场画的），不联网、不花额度、不需要任何配置；
 剧情、选项、画师子代理、出图、画师工作台、存档、书架全都跑同一条真实链路，只是把「模型」换成了内置脚本。
 
-![离线演示模式（?demo=1）](docs/screenshot.png)
-
-- **在线 Demo**：`https://LiSheng5.github.io/infinite-reading/?demo=1`（仓库 Settings → Pages → Source 选「GitHub Actions」即启用，工作流已随仓库提供）
 - **一个文件带走**：`npm run bundle` 生成 `dist/ir.html`（约 530 KB，HTML/CSS/JS 全部内联），可以直接当附件发出去，双击就能玩
 - 想接真模型：去掉地址栏的 `?demo=1`（顶栏那个「🎬 演示」小胶囊就是入口），回首页点「⚙ 接入模型」即可。演示模式**不会写盘任何配置**，你原来的设置不会被弄脏。
 
