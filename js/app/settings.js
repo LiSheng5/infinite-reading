@@ -43,6 +43,9 @@
     $('#s-video-base').value = vd.baseUrl || '';
     $('#s-video-model').value = vd.model || '';
     $('#s-video-key').value = vd.apiKey || '';
+    $('#s-video-duration').value = vd.duration || 5;
+    $('#s-video-resolution').value = vd.resolution || '768P';
+    $('#s-video-ratio').value = vd.ratio || '16:9';
     $('#s-video-params').value = typeof vd.extraParams === 'string' ? vd.extraParams : '';
     $('#s-image-aspect').value = S.settings.image.aspect || '16:9';
     $('#s-image-width').value = S.settings.image.width || 1280;
@@ -139,7 +142,10 @@
     S.settings.video.baseUrl = $('#s-video-base').value.trim();
     S.settings.video.model = $('#s-video-model').value.trim();
     S.settings.video.apiKey = $('#s-video-key').value.trim();
-    // 时长 / 分辨率 / 比例走「自定义请求参数」（§0 假设 2），不设独立控件
+    // 独立控件填常用项；「自定义请求参数」是高级覆盖（同名 key 以它为准，providers 后合并）
+    S.settings.video.duration = Math.max(4, Math.min(15, parseInt($('#s-video-duration').value, 10) || 5));
+    S.settings.video.resolution = $('#s-video-resolution').value || '768P';
+    S.settings.video.ratio = $('#s-video-ratio').value || '16:9';
     S.settings.video.extraParams = $('#s-video-params').value.trim();
     if (!$('#wrap-image-size').classList.contains('hidden')) S.settings.image.size = $('#s-image-size').value;
     else delete S.settings.image.size;

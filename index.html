@@ -524,15 +524,12 @@
         <!-- Base URL 下拉候选：只列「接口地址」不列模型名（地址稳定、无需频繁维护；模型名自己填）。
              用 datalist，既能选也能手填；各字段以服务商官方文档为准，随时可改。 -->
         <datalist id="dl-base-url">
-          <option value="http://127.0.0.1:4320">本地转发 · tools/video-proxy.mjs（CORS 绕行）</option>
           <option value="https://open.bigmodel.cn/api/paas/v4">国内 · 智谱 GLM（BigModel，对话 + CogView 生图）</option>
           <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">国内 · 阿里云百炼 · 通义千问（OpenAI 兼容）</option>
           <option value="https://api.deepseek.com/v1">国内 · DeepSeek（仅对话）</option>
           <option value="https://ark.cn-beijing.volces.com/api/v3">国内 · 火山方舟 · 豆包</option>
           <option value="https://api.moonshot.cn/v1">国内 · 月之暗面 Kimi</option>
           <option value="https://api.siliconflow.cn/v1">国内 · 硅基流动 SiliconFlow（对话 + 生图）</option>
-          <option value="https://api.minimaxi.com">国内 · MiniMax（生视频 · V2）</option>
-          <option value="https://api.minimax.io">国外 · MiniMax（生视频 · V2）</option>
           <option value="https://api.hunyuan.cloud.tencent.com/v1">国内 · 腾讯混元</option>
           <option value="https://qianfan.baidubce.com/v2">国内 · 百度千帆</option>
           <option value="https://api.stepfun.com/v1">国内 · 阶跃星辰 StepFun</option>
@@ -729,13 +726,40 @@
 
         <fieldset>
           <legend>生视频模型（MiniMax）</legend>
+          <!-- 视频专用下拉：只列生视频相关的地址（对话 / 生图服务商见上面的 dl-base-url，各一处、不重复登记） -->
+          <datalist id="dl-video-base">
+            <option value="http://127.0.0.1:4320">本地转发 · tools/video-proxy.mjs（CORS 绕行）</option>
+            <option value="https://api.minimaxi.com">国内 · MiniMax（生视频 · V2）</option>
+            <option value="https://api.minimax.io">国外 · MiniMax（生视频 · V2）</option>
+          </datalist>
           <div class="grid2">
-            <label>接口地址 Base URL<input id="s-video-base" type="text" list="dl-base-url" placeholder="https://api.minimaxi.com 或 https://api.minimax.io（下拉里可选）"></label>
+            <label>接口地址 Base URL<input id="s-video-base" type="text" list="dl-video-base" placeholder="https://api.minimaxi.com 或 https://api.minimax.io（下拉里可选）"></label>
             <label>模型<input id="s-video-model" type="text" placeholder="填你的生视频模型名"></label>
           </div>
           <label>API Key<input id="s-video-key" type="password" placeholder="sk-…"></label>
-          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-video-params" type="text" placeholder="duration=5, resolution=768P, ratio=16:9"></label>
-          <p class="hint">MiniMax 生视频（V2 接口）：Base URL 填 <code>https://api.minimaxi.com</code>（国内）或 <code>https://api.minimax.io</code>（海外），模型名举例 <code>MiniMax-H3</code> / <code>MiniMax-H3-Max</code>。时长 / 分辨率 / 比例在「自定义请求参数」里填，例如 <code>duration=5, resolution=768P, ratio=16:9</code>（不填走默认：5 秒 / 768P / 16:9；图生视频的画幅由首帧决定）。视频是<b>异步任务</b>：提交后每 10 秒查一次，通常 1~3 分钟出结果；剧情模式舞台右上角「🎬」触发，<b>会按秒计费</b>。<b>浏览器直连被 CORS 拦</b>时先起本地转发 <code>node tools/video-proxy.mjs</code>，Base URL 改填 <code>http://127.0.0.1:4320</code>。</p>
+          <div class="grid2">
+            <label>时长（秒）<input id="s-video-duration" type="number" min="4" max="15" step="1" value="5"></label>
+            <label>分辨率
+              <select id="s-video-resolution">
+                <option value="480P">480P（最快）</option>
+                <option value="768P">768P</option>
+                <option value="1080P">1080P</option>
+                <option value="2K">2K</option>
+              </select>
+            </label>
+          </div>
+          <label>画面比例（图生视频无效：画幅由首帧决定）
+            <select id="s-video-ratio">
+              <option value="16:9">16:9 横屏</option>
+              <option value="9:16">9:16 竖屏</option>
+              <option value="1:1">1:1 方形</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="21:9">21:9</option>
+            </select>
+          </label>
+          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-video-params" type="text" placeholder="mode=std, watermark=false"></label>
+          <p class="hint">MiniMax 生视频（V2 接口）：Base URL 填 <code>https://api.minimaxi.com</code>（国内）或 <code>https://api.minimax.io</code>（海外），模型名举例 <code>MiniMax-H3</code> / <code>MiniMax-H3-Max</code>。这两个是<b>接口地址、不是网站</b>——浏览器直接打开看到 404 是正常的；拿 Key 请去网页控制台 <code>platform.minimaxi.com</code>（国内）/ <code>platform.minimax.io</code>（海外）。时长 / 分辨率 / 比例用上面的控件选（默认 5 秒 / 768P / 16:9）；「自定义请求参数」是高级覆盖——同名 key 以它为准，还可带 <code>mode=std</code> 等其它参数。图生视频的画幅由首帧决定（比例选择对它无效）。视频是<b>异步任务</b>：提交后每 10 秒查一次，通常 1~3 分钟出结果；剧情模式舞台右上角「🎬」触发，<b>会按秒计费</b>。<b>浏览器直连被 CORS 拦</b>时先起本地转发 <code>node tools/video-proxy.mjs</code>，Base URL 改填 <code>http://127.0.0.1:4320</code>。</p>
           <div class="row-inline test-row">
             <button id="btn-test-video" class="mini-btn">⚡ 测试连接</button>
             <span class="hint test-state" id="test-video-state">只读探测：不会提交任务，所以不花钱。</span>
