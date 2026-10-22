@@ -1259,6 +1259,17 @@ html[data-motion="rich"] .stage-empty {
   animation: fadeIn var(--dur-base) var(--ease-out) both;
 }
 .stage-pill { position: absolute; top: 12px; left: 12px; z-index: 4; }
+/* 视频生成进度：与作画胶囊错开一行，两个任务可以同时在跑 */
+.stage-pill-video { top: 48px; }
+.stage-video {
+  position: relative;
+  z-index: 1;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  display: block;
+  background: var(--ink);
+  border-radius: var(--radius);
+}
 .stage-actions {
   position: absolute; right: 10px; top: 10px;
   z-index: 4;
@@ -1313,6 +1324,38 @@ html[data-motion="rich"] .stage-empty {
 }
 .thumb:hover { opacity: 1; }
 .thumb.active { border-color: var(--accent); opacity: 1; }
+/* 视频缩略图：更实的描边 + 右下角 ▶ 角标（img 上没法画 ::after，包一层 .thumb-wrap） */
+.thumb.is-video { border-color: var(--line-strong); }
+.thumb.is-video.active { border-color: var(--accent); }
+.thumb-wrap { position: relative; flex: 0 0 auto; display: inline-flex; }
+.thumb-wrap.is-video::after {
+  content: '▶';
+  position: absolute; right: 3px; bottom: 2px;
+  font-size: 9px; line-height: 1;
+  color: var(--on-accent);
+  background: var(--stage-btn-bg);
+  border-radius: 3px;
+  padding: 2px 3px 2px 2px;
+  pointer-events: none;
+}
+/* 视频进度胶囊旁的「取消等待」（只停本地等待，云端可能已计费） */
+.video-cancel {
+  position: absolute; top: 48px; right: 12px; z-index: 5;
+  min-height: 28px;
+}
+/* 🎬 忙态：正在生成视频 */
+.stage-btn.busy { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
+/* 演示模式置灰（点击仍可弹提示） */
+.is-disabled { opacity: .5; cursor: not-allowed; }
+/* 画师工作台「视频」区 */
+.pw-video-list { display: flex; flex-direction: column; gap: 8px; }
+.pw-video-row { display: flex; align-items: center; gap: 10px; }
+.pw-video-thumb {
+  width: 96px; height: 54px; flex: 0 0 auto;
+  object-fit: cover; border-radius: 6px; border: 1px solid var(--line);
+  cursor: pointer;
+}
+.pw-video-thumb:hover { border-color: var(--accent-line); }
 .thumb-empty { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); align-self: center; letter-spacing: .08em; }
 
 /* ==================== 布局状态：只由 data-layout 决定 ==================== */

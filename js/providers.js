@@ -2,7 +2,7 @@
  * 无限阅读 · 适配器层
  * - ChatProviders：剧情对话（AI1）与画师提示词（AI2）共用的对话适配器
  * - ImageProviders：生图适配器（OpenAI 兼容 /images/generations，通用；模型名由用户自填）
- *   TODO(video)：生视频适配器（可灵 / Vidu 等，提交任务 → 轮询取结果）留待 backlog
+ * - VideoProviders：生视频适配器（MiniMax V2「minimax-video」：提交任务 → 轮询取 URL）
  *
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
  */
@@ -386,10 +386,241 @@
     },
   };
 
-  /* ---------------- 生视频适配器（预留） ----------------
-   * 真实服务商（可灵 / Vidu 等，提交任务 → 轮询取结果）留待 backlog；
-   * 约定接口：generate(cfg, { prompt, image }) -> { url }。 */
-  const VideoProviders = {};
+  /* ---------------- 生视频适配器（MiniMax V2，任务书 v0.12.0 §2/§4） ----------------
+   * 异步任务型，分步接口（恢复轮询要用）：
+   *   submit(cfg, { prompt, image?, mode }) → { taskId }
+   *   poll(cfg, taskId)                      → { status, url?, error? }
+   *     status ∈ queued | running | succeeded | failed | cancelled | expired
+   *   generate(cfg, req, hooks)              → { url, taskId, params }
+   *     = submit + 每 10 秒 poll；hooks.onTaskId(id)（提交成功立刻回调，用于落盘）、
+   *       hooks.onStatus(s)、hooks.signal（本地取消）。旧约定 generate(cfg, {prompt, image}) → {url} 保留。
+   * V1 旧接口（Hailuo-02 / video-01，/v1/video_generation + files/retrieve）是本期非目标，不实现。 */
+
+  const VIDEO_POLL_MS = 10000;                  // 官方示例轮询间隔 10 秒
+  const VIDEO_TOTAL_TIMEOUT_MS = 15 * 60 * 1000; // 总超时（一处可调）：默认 15 分钟
+  const VIDEO_POLL_MAX_NETFAIL = 3;             // 轮询连续网络错误上限（单次容忍）
+  const VIDEO_PROMPT_MAX = 7000;                // 提示词长度上限（字符）
+
+  function clampInt(v, min, max, dflt) {
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return dflt;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  /* 图片入参：先缩到长边 ≤ 1280、JPEG 0.9，再转 data URL（控制体积，避开 64 MB 上限）。
+   * Node（单测）里没有 document / Image：原样返回，不影响请求形状断言。 */
+  async function shrinkImageForUpload(dataUrl) {
+    const src = String(dataUrl || '');
+    if (!src) return '';
+    if (typeof document === 'undefined' || typeof Image === 'undefined') return src;
+    if (/^https?:\/\//i.test(src)) return src;   // 公网 URL 原样交服务端取
+    try {
+      const img = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('图片解码失败'));
+        im.src = src;
+      });
+      const w = img.naturalWidth || img.width || 0;
+      const h = img.naturalHeight || img.height || 0;
+      if (!w || !h) return src;
+      const scale = Math.max(w, h) > 1280 ? 1280 / Math.max(w, h) : 1;
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(w * scale));
+      cv.height = Math.max(1, Math.round(h * scale));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      return cv.toDataURL('image/jpeg', 0.9) || src;
+    } catch (_) { return src; }
+  }
+
+  function videoHeaders(cfg, json) {
+    const headers = {};
+    if (json) headers['Content-Type'] = 'application/json';
+    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+    return headers;
+  }
+
+  // 提交前的生效参数（默认 + 用户 extraParams 合并；供确认弹窗与留痕用，与 submit 同一套规则）
+  function videoEffectiveParams(cfg, mode) {
+    const body = {
+      model: String((cfg && cfg.model) || ''),
+      duration: clampInt(cfg && cfg.duration, 4, 15, 5),
+      resolution: String((cfg && cfg.resolution) || '768P'),
+      ratio: String((cfg && cfg.ratio) || '16:9'),
+    };
+    mergeExtraParams(body, cfg && cfg.extraParams);
+    body.duration = clampInt(body.duration, 4, 15, 5);
+    if (mode === 'i2v') body.ratio = 'adaptive';
+    else if (!body.ratio || body.ratio === 'adaptive') body.ratio = '16:9';
+    return { model: body.model, duration: body.duration, resolution: body.resolution, ratio: body.ratio };
+  }
+
+  const MiniMaxVideo = {
+    label: 'MiniMax 生视频（V2）',
+    // 总超时暴露一份（一处可调的常量；generate 另收 hooks.totalTimeoutMs 供测试收紧）
+    VIDEO_TOTAL_TIMEOUT_MS,
+
+    /* 「测试连接」（§2 只读探测）：GET /v2/query/video_generation?page_num=1&page_size=1 列任务，
+     * 绝不提交生成任务——所以不花钱。 */
+    async test(cfg) {
+      const bad = cfgProblem(cfg, true);
+      if (bad) return { level: 'fail', message: bad.replace('Base URL', '生视频接口地址').replace('模型名', '生视频模型名') };
+      if (!String(cfg.apiKey || '').trim()) return { level: 'fail', message: '还没填生视频 API Key。' };
+      let res;
+      try {
+        res = await fetchWithTimeout(
+          trimBase(cfg) + '/v2/query/video_generation?page_num=1&page_size=1',
+          { method: 'GET', headers: videoHeaders(cfg, false) }
+        );
+      } catch (e) {
+        return { level: 'fail', message: friendlyNetwork(e) };
+      }
+      if (res.ok) {
+        return { level: 'ok', message: '连接成功：接口可达，Key 被接受。这里只读列任务，不会提交任务，所以不花钱。能否出视频要在第一次「🎬 出视频」时才算真正验证。' };
+      }
+      let detail = '';
+      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      if (res.status === 401 || res.status === 403) {
+        return { level: 'fail', message: 'Key 被拒绝（HTTP ' + res.status + '）：检查 Key 是否复制完整、是否过期、是否有生视频权限。（接口原文：' + detail.slice(0, 120) + '）' };
+      }
+      return { level: 'warn', message: '地址可达，但探测请求没通过：' + friendlyStatus(res.status, detail) };
+    },
+
+    // 生效参数（确认弹窗写明「模型 / 时长 / 分辨率」用；与 submit 的合并规则同源）
+    params(cfg, mode) { return videoEffectiveParams(cfg, mode); },
+
+    async submit(cfg, opts) {
+      const bad = cfgProblem(cfg, true);
+      if (bad) throw new Error(bad.replace('Base URL', '生视频接口地址').replace('模型名', '生视频模型名'));
+      if (!String(cfg.apiKey || '').trim()) throw new Error('还没填生视频 API Key。');
+      const prompt = String((opts && opts.prompt) || '').trim();
+      if (!prompt) throw new Error('视频提示词是空的：先生成一幅画，或先写一句画面描述。');
+      const mode = (opts && opts.mode === 'i2v') ? 'i2v' : ((opts && opts.image) ? 'i2v' : 't2v');
+      const image = mode === 'i2v' ? await shrinkImageForUpload(String((opts && opts.image) || '')) : '';
+      if (mode === 'i2v' && !image) throw new Error('图生视频没有拿到首帧图。');
+
+      const p = videoEffectiveParams(cfg, mode);
+      const content = [{ type: 'text', text: prompt.slice(0, VIDEO_PROMPT_MAX) }];
+      if (image) content.push({ type: 'image_url', image_url: { url: image }, role: 'first_frame' });
+      const body = {
+        model: p.model,
+        content,
+        duration: p.duration,
+        resolution: p.resolution,
+        ratio: p.ratio,
+      };
+      // 手填参数最后合并、优先（§4）；随后强制执行协议硬规则：
+      // 图生一律 ratio:'adaptive'（忽略用户参数里的 ratio）；文生 ratio 必填且不能是 adaptive。
+      mergeExtraParams(body, cfg.extraParams);
+      body.duration = clampInt(body.duration, 4, 15, 5);
+      if (mode === 'i2v') body.ratio = 'adaptive';
+      else if (!body.ratio || body.ratio === 'adaptive') body.ratio = '16:9';
+
+      let res;
+      try {
+        res = await fetch(trimBase(cfg) + '/v2/video_generation', {
+          method: 'POST', headers: videoHeaders(cfg, true), body: JSON.stringify(body),
+        });
+      } catch (e) {
+        // 提交阶段 TypeError → 大概率是 CORS 预检被拦：明确提示，不重试（§4）
+        if (e instanceof TypeError) {
+          throw new Error('该接口可能不允许浏览器直连（CORS）：提交请求被浏览器拦下了，这次没有产生费用。可换支持 CORS 的地址，或在本地服务（sidecar）下使用。');
+        }
+        throw e;
+      }
+      if (!res.ok) throw new Error(await readError(res));
+      const data = await res.json();
+      const br = data.base_resp || {};
+      if (br.status_code && +br.status_code !== 0) {
+        throw new Error('MiniMax 拒绝了这次提交（' + br.status_code + '）：' + (br.status_msg || '没有说明'));
+      }
+      const taskId = data.task_id || (data.task && (data.task.id || data.task.task_id)) || '';
+      if (!taskId) throw new Error('MiniMax 没返回 task_id：' + JSON.stringify(data).slice(0, 200));
+      return { taskId: String(taskId) };
+    },
+
+    async poll(cfg, taskId) {
+      const headers = videoHeaders(cfg, false);
+      const res = await fetch(
+        trimBase(cfg) + '/v2/query/video_generation/' + encodeURIComponent(String(taskId)),
+        { method: 'GET', headers }
+      );
+      if (!res.ok) throw new Error(await readError(res));
+      const data = await res.json();
+      const br = data.base_resp || {};
+      if (br.status_code && +br.status_code !== 0) {
+        throw new Error('MiniMax 查询被拒（' + br.status_code + '）：' + (br.status_msg || '没有说明'));
+      }
+      const t = data.task || {};
+      const st = String(t.status || '').toLowerCase();
+      if (st === 'succeeded') {
+        const u = (t.content && t.content.url) || '';
+        if (!u) throw new Error('任务成功但没给视频地址。');
+        return { status: 'succeeded', url: u };
+      }
+      if (st === 'failed' || st === 'cancelled' || st === 'expired') {
+        const err = t.error || {};
+        const msg = String(err.message || '');
+        const code = (err.code != null && err.code !== '') ? String(err.code) : '';
+        // 带 task.error 原文（含 code / message，如 1026 = 内容敏感）
+        return {
+          status: st,
+          error: (msg || '任务' + st) + (code ? '（code ' + code + '）' : ''),
+        };
+      }
+      return { status: st || 'running' };   // queued / running
+    },
+
+    async generate(cfg, req, hooks) {
+      hooks = hooks || {};
+      const totalMs = Number(hooks.totalTimeoutMs) > 0 ? Number(hooks.totalTimeoutMs) : VIDEO_TOTAL_TIMEOUT_MS;
+      const pollMs = Number(hooks.pollMs) > 0 ? Number(hooks.pollMs) : VIDEO_POLL_MS;
+      const started = Date.now();
+      const aborted = () => !!(hooks.signal && hooks.signal.aborted);
+
+      const { taskId } = await this.submit(cfg, req);   // 提交失败不重试（TypeError 已带 CORS 提示）
+      if (hooks.onTaskId) { try { hooks.onTaskId(taskId); } catch (_) {} }
+
+      let netFails = 0;
+      for (;;) {
+        if (aborted()) {
+          const e = new Error('已停止本地等待（云端任务可能仍在计费）');
+          e.name = 'AbortError';
+          throw e;
+        }
+        if (Date.now() - started > totalMs) {
+          throw new Error('等了 ' + Math.round(totalMs / 60000) + ' 分钟还没出结果：任务可能还在跑（task_id ' + taskId + '），可在 MiniMax 控制台查看。');
+        }
+        let q;
+        try {
+          q = await this.poll(cfg, taskId);
+          netFails = 0;
+        } catch (e) {
+          // 轮询阶段：单次网络错误容忍，连续 3 次才判失败（§4）
+          netFails += 1;
+          if (netFails >= VIDEO_POLL_MAX_NETFAIL) throw e;
+          await sleepMs(pollMs);
+          continue;
+        }
+        if (hooks.onStatus) { try { hooks.onStatus(q.status, q); } catch (_) {} }
+        if (q.status === 'succeeded') {
+          return { url: q.url, taskId: taskId, params: videoEffectiveParams(cfg, (req && req.mode) || (req && req.image ? 'i2v' : 't2v')) };
+        }
+        if (q.status === 'failed' || q.status === 'cancelled' || q.status === 'expired') {
+          throw new Error(q.error || ('任务' + q.status));
+        }
+        await sleepMs(pollMs);
+      }
+    },
+  };
+
+  const VideoProviders = {
+    'minimax-video': MiniMaxVideo,
+    minimax: MiniMaxVideo,          // 旧值别名（migrateSettings 会迁成 minimax-video）
+    'openai-videos': MiniMaxVideo,  // 旧值别名（同上）
+  };
 
   global.IR = Object.assign(global.IR || {}, {
     ChatProviders,

@@ -4,7 +4,7 @@
  *   - index.html 里所有 ?v=…（CSS / JS 缓存击穿串）
  *   - package.json 的 version 字段
  *   - sw.js 里 Service Worker 的缓存名（ir-v…）
- *   - README.md / README.en.md 的版本徽章
+ *   - README.md / README.en.md 的版本徽章与「当前版本 vX」文字行
  *
  * 用法：
  *   node tools/sync-version.mjs           写入
@@ -47,9 +47,20 @@ const TARGETS = [
     replace: () => 'badge/version-' + version + '-blue',
   },
   {
+    // 徽章下方那行「当前版本 vX」文字（曾因不在同步范围停在 v0.3）
+    file: 'README.md',
+    find: () => /\*\*当前版本 v[0-9A-Za-z.\-]+\*\*/g,
+    replace: () => '**当前版本 v' + version + '**',
+  },
+  {
     file: 'README.en.md',
     find: () => /badge\/version-[0-9A-Za-z.\-]+-blue/g,
     replace: () => 'badge/version-' + version + '-blue',
+  },
+  {
+    file: 'README.en.md',
+    find: () => /\*\*Current version: v[0-9A-Za-z.\-]+\*\*/g,
+    replace: () => '**Current version: v' + version + '**',
   },
 ];
 

@@ -61,7 +61,7 @@
     const SC = IR.Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
-    // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更，见 CHANGELOG）
+    // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更）
     const isChat = !!(S.story && S.story.mode === 'chat');
     const emBtn = $('#btn-feat-email');
     if (emBtn) emBtn.classList.toggle('hidden', !isChat);

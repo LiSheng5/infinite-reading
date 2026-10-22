@@ -4,7 +4,7 @@
  * 为什么单独一层：白名单 / 额度 / 每日上限 / 免打扰时段 / token 这类**安全项**
  * 只存在这里（sidecar/data/config.json），是整个应用里它们唯一的真源。
  * 前端设置页只是它的「编辑界面」（经 HTTP API 读写），前端本地不保存这些值，
- * 模型更没有任何写入通道（见 ARCHITECTURE.md / SECURITY.md）。
+ * 模型更没有任何写入通道（见 ARCHITECTURE.md / CONTRIBUTING.md）。
  * 这与 SillyTavern（config.yaml + secrets.json）、Open WebUI（环境变量 + Admin Panel）、
  * LibreChat（.env > librechat.yaml > 面板）三家做法一致：安全项真源在服务端。
  *

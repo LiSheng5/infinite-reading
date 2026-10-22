@@ -201,9 +201,10 @@
 
   /* 自建 confirm / prompt（内嵌预览是沙箱 iframe，原生弹窗被静默忽略 →
      直接返回 false / null，表现为「点了没反应」，故不使用原生 confirm / prompt）。
-     irConfirm(msg, { title, okText, input, value, placeholder }) → Promise
+     irConfirm(msg, { title, okText, input, value, placeholder, checkbox }) → Promise
        无输入：确定 resolve(true)，取消 / 关闭 resolve(null)
-       有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null) */
+       有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null)
+       有 checkbox（勾选文案）：确定 resolve({ ok:true, checked })，取消 / 关闭 resolve(null) */
   let cfResolve = null;
   function irConfirm(message, opts) {
     opts = opts || {};
@@ -216,6 +217,15 @@
       const inp = $('#cf-input');
       inp.value = opts.value == null ? '' : String(opts.value);
       inp.placeholder = opts.placeholder || '';
+      const withCheck = !!opts.checkbox && !withInput;
+      const cw = $('#cf-check-wrap');
+      if (cw) {
+        cw.classList.toggle('hidden', !withCheck);
+        const cb = $('#cf-check');
+        if (cb) cb.checked = false;
+        const ct = $('#cf-check-text');
+        if (ct) ct.textContent = String(opts.checkbox || '');
+      }
       $('#cf-ok').textContent = opts.okText || '确定';
       openModal('modal-confirm');
       setTimeout(() => {
@@ -230,7 +240,13 @@
     if (r) r(value);
   }
   function confirmValue() {
-    return $('#cf-input-wrap').classList.contains('hidden') ? true : $('#cf-input').value;
+    if (!$('#cf-input-wrap').classList.contains('hidden')) return $('#cf-input').value;
+    const cw = $('#cf-check-wrap');
+    if (cw && !cw.classList.contains('hidden')) {
+      const cb = $('#cf-check');
+      return { ok: true, checked: !!(cb && cb.checked) };
+    }
+    return true;
   }
 
   /* ---------- 弹窗栈（P0-3） ----------

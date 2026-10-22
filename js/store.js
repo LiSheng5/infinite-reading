@@ -284,9 +284,11 @@
       // UI-3 模型库（§3.1）：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '' },
-      // 生视频（预留）：适配器尚未接入（js/providers.js 的 VideoProviders 为空），
-      // 但配置照常保存，等适配器接上就能直接用，不用再改设置结构。
-      video: { provider: 'openai-videos', baseUrl: '', apiKey: '', model: '', extraParams: '' },
+      // 生视频（MiniMax V2「minimax-video」）：异步任务。
+      // 时长 / 分辨率 / 比例走「自定义请求参数」extraParams（§0 假设 2），不设独立控件。
+      video: {
+        provider: 'minimax-video', baseUrl: '', apiKey: '', model: '', extraParams: '',
+      },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
       // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
       ui: {
@@ -407,8 +409,24 @@
     out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
     if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
     if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
-    out.video.provider = 'openai-videos';
+    // §5.7：生视频 provider 一律 'minimax-video'（'openai-videos' / 'minimax' 等旧值迁移）
+    out.video.provider = 'minimax-video';
     if (typeof out.video.extraParams !== 'string' && !(out.video.extraParams && typeof out.video.extraParams === 'object')) out.video.extraParams = '';
+    // 旧版设置页的 duration / resolution / ratio 控件已下线（§0 假设 2：走自定义请求参数）。
+    // 旧值不丢：还没写过 extraParams 的，把它们折进 extraParams（coerce 后仍是数字）。
+    {
+      const legacyBits = [];
+      const dv = raw.video || {};
+      const hasExtra = !!((typeof out.video.extraParams === 'string' && out.video.extraParams.trim())
+        || (out.video.extraParams && typeof out.video.extraParams === 'object' && Object.keys(out.video.extraParams).length));
+      if (!hasExtra) {
+        const dInt = parseInt(dv.duration, 10);
+        if (Number.isFinite(dInt) && dInt !== 5) legacyBits.push('duration=' + dInt);
+        if (dv.resolution && String(dv.resolution).toUpperCase() !== '768P') legacyBits.push('resolution=' + String(dv.resolution).toUpperCase());
+        if (dv.ratio && String(dv.ratio) !== '16:9') legacyBits.push('ratio=' + dv.ratio);
+        if (legacyBits.length) out.video.extraParams = legacyBits.join(', ');
+      }
+    }
 
     // v0.1 的 image.size 字符串 → aspect/width/height（R8）
     if (raw.image && raw.image.size && !raw.image.aspect) {
@@ -458,6 +476,7 @@
       scenes: [],                              // 已生成图片（含 thumb / prompt）
       lastBg: null,
       lastSceneSummary: '',
+      pendingVideos: [],                       // 已提交、未出结果的生视频任务（§5⑤）
     };
   }
 
@@ -487,12 +506,28 @@
     out.savepoints = Array.isArray(raw.savepoints) ? raw.savepoints : [];
     out.ui = Object.assign(defaultUi(), raw.ui || {});
     out.turn = raw.turn || 0;
-    out.scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
+    out.scenes = Array.isArray(raw.scenes) ? raw.scenes.map(normVideoFields) : [];
     out.lastBg = raw.lastBg || null;
     out.lastSceneSummary = raw.lastSceneSummary || '';
+    // §5⑤：已提交未出结果的生视频任务（重启 / 切档后恢复轮询用），原样保留
+    out.pendingVideos = Array.isArray(raw.pendingVideos)
+      ? raw.pendingVideos.filter(x => x && x.taskId)
+      : [];
     if (!out.world.scene && out.lastSceneSummary) out.world.scene = out.lastSceneSummary;
     // 分支树原样透传（schema v3）：这里不校验、不依赖 IR.Tree——合法性与降级重建由 IR.Tree.ensure 负责
-    if (raw.tree) out.tree = raw.tree;
+    // 视频字段归一同样扫一遍树里的 scenes / entries（§5③：漏了会留下两种字段名并存）
+    if (raw.tree) {
+      out.tree = raw.tree;
+      const tn = out.tree.nodes;
+      if (tn && typeof tn === 'object') {
+        Object.keys(tn).forEach(id => {
+          const n = tn[id];
+          if (!n) return;
+          (Array.isArray(n.scenes) ? n.scenes : []).forEach(normVideoFields);
+          (Array.isArray(n.entries) ? n.entries : []).forEach(normVideoFields);
+        });
+      }
+    }
     // UI-3 §3.2 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的旧档不报错
     if (raw.prefs && typeof raw.prefs === 'object') {
       out.prefs = sanitizePrefsSafe(raw.prefs);
@@ -510,8 +545,17 @@
     return out;
   }
 
+  // 视频条目字段归一（§5）：旧档的 poster / videoUrl 就是现在的 thumb / remoteUrl
+  function normVideoFields(o) {
+    if (!o || typeof o !== 'object') return o;
+    if (o.poster && !o.thumb) o.thumb = o.poster;
+    if (o.videoUrl && !o.remoteUrl) o.remoteUrl = o.videoUrl;
+    return o;
+  }
+
   function migrateLogEntry(e) {
     if (!e || typeof e !== 'object') return e;
+    normVideoFields(e);
     if (e.type === 'narration') {
       const versions = Array.isArray(e.versions) && e.versions.length ? e.versions : [e.text || ''];
       // 保留已有的 activeVersion（重复迁移/刷新后不丢当前版本）
@@ -648,22 +692,35 @@
     return listIndex().slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }
   function storyThumb(story) {
-    const imgs = (story.log || []).filter(e => e.type === 'image' && e.thumb);
-    if (imgs.length) return imgs[imgs.length - 1].thumb;
-    const sc = (story.scenes || []).filter(s => s && s.thumb);
-    return sc.length ? sc[sc.length - 1].thumb : null;
+    // 视频用封面（thumb）参与书架缩略图（旧档 poster 作兜底）
+    const imgs = (story.log || []).filter(e => (e.type === 'image' && e.thumb) || (e.type === 'video' && (e.thumb || e.poster)));
+    if (imgs.length) { const last = imgs[imgs.length - 1]; return last.thumb || last.poster; }
+    const sc = (story.scenes || []).filter(s => s && (s.thumb || s.poster));
+    if (!sc.length) return null;
+    const last = sc[sc.length - 1];
+    return last.thumb || last.poster;
   }
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
   function serializeStory(story) {
     const out = Object.assign({}, story, {
       log: (story.log || []).slice(-120).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
+      // scene 字段是白名单（§5①）：新字段不加会在这里被丢掉
       scenes: (story.scenes || []).slice(-12).map(s => ({
         id: s.id, alt: s.alt, prompt: s.prompt, promptRaw: s.promptRaw || '',
+        kind: s.kind || undefined,                 // 'video' = 视频场景（其余按图片处理）
         aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
         styleCardId: s.styleCardId || undefined,   // 每张图记录锚定版本（P4）
         supersededBy: s.supersededBy || undefined,
-        thumb: s.thumb || null,
+        thumb: s.thumb || s.poster || null,        // 图片缩略图 / 视频封面（JPEG dataURL）
         imageId: s.imageId || undefined,           // 原图在 IndexedDB images 里的键
+        // —— 视频场景（kind:'video'）字段（§5）——
+        videoId: s.videoId || undefined,           // 视频 Blob 键（vid:<sceneId>）
+        sourceSceneId: s.sourceSceneId || undefined, // 图生才有：首帧来自哪张图
+        mode: s.mode || undefined,                 // 'i2v' | 't2v'
+        taskId: s.taskId || undefined,             // 云端任务 id（续查用）
+        remoteUrl: s.remoteUrl || s.videoUrl || undefined, // 仅降级用（限时链接）
+        duration: s.duration || undefined, resolution: s.resolution || undefined,
+        ratio: s.ratio || undefined, model: s.model || undefined,
         ts: s.ts,
       })),
       savepoints: (story.savepoints || []).slice(-5),   // 存档点最多保留 5 个
@@ -689,7 +746,15 @@
       images: images || [],
     };
     if (kind === 'full') {
-      pack.log = st.log || [];
+      // §0/§10：视频条目只留封面 + 说明（videoOmitted），本体与限时链接都不进导出包
+      pack.log = (st.log || []).map(e => (e && e.type === 'video')
+        ? {
+          type: 'video', id: e.id, alt: e.alt || '', thumb: e.thumb || e.poster || null,
+          prompt: e.prompt || '', promptRaw: e.promptRaw || '', mode: e.mode || undefined,
+          model: e.model || undefined, duration: e.duration || undefined,
+          resolution: e.resolution || undefined, ts: e.ts, videoOmitted: true,
+        }
+        : e);
       pack.messages = st.messages || [];
       pack.summaries = st.summaries || [];
       pack.painterThread = st.painterThread || [];
@@ -844,8 +909,14 @@
   function imageIdsOf(rawStory) {
     const out = [];
     if (!rawStory || typeof rawStory !== 'object') return out;
-    (rawStory.scenes || []).forEach(s => { if (s && s.imageId) out.push(s.imageId); });
-    (rawStory.log || []).forEach(e => { if (e && e.type === 'image' && e.imageId) out.push(e.imageId); });
+    (rawStory.scenes || []).forEach(s => {
+      if (s && s.imageId) out.push(s.imageId);
+      if (s && s.videoId) out.push(s.videoId);
+    });
+    (rawStory.log || []).forEach(e => {
+      if (e && e.type === 'image' && e.imageId) out.push(e.imageId);
+      if (e && e.videoId) out.push(e.videoId);
+    });
     // 分支树里引用到的图也算（含非当前分支）：tree.nodes[*].scenes 与 entries 里的 imageId。
     // 漏掉就会在删除故事 /「清理孤儿原图」时**静默删掉别的分支的图**（任务书 §10）。
     // 直接按 tree 形状遍历，不依赖 IR.Tree（本层保持零依赖，eval 脚本 require 就能跑）。
@@ -854,8 +925,9 @@
       Object.keys(nodes).forEach(id => {
         const n = nodes[id];
         if (!n) return;
-        (Array.isArray(n.scenes) ? n.scenes : []).forEach(s => { if (s && s.imageId) out.push(s.imageId); });
-        (Array.isArray(n.entries) ? n.entries : []).forEach(e => { if (e && e.imageId) out.push(e.imageId); });
+        // videoId 同样要收（§5③）：漏了，「删除故事 / 清理孤儿原图」会误删或残留别的分支的视频
+        (Array.isArray(n.scenes) ? n.scenes : []).forEach(s => { if (s && s.imageId) out.push(s.imageId); if (s && s.videoId) out.push(s.videoId); });
+        (Array.isArray(n.entries) ? n.entries : []).forEach(e => { if (e && e.imageId) out.push(e.imageId); if (e && e.videoId) out.push(e.videoId); });
       });
     }
     return out;
@@ -911,6 +983,71 @@
   }
 
   function releaseImages(ids) { (ids || []).forEach(id => releaseImage(id)); }
+
+  /* ---------------- 视频（Blob，§5④） ----------------
+   * 与原图共用同一个 images store（键名 vid:<sceneId>，不升 DB 版本）。
+   * 不进 blobCache —— 会挤掉图片缓存、占内存；用独立的 1~2 条小缓存。
+   * trim 只丢「引用」、绝不 revoke：播放中的 objectURL 不得被回收（同原图的约定）。 */
+
+  const VIDEO_CACHE_MAX = 2;
+  const videoBlobCache = new Map();               // videoId → Blob
+  const videoUrlCache = new Map();                // videoId → objectURL
+
+  function trimVideoCache(map) {
+    while (map.size > VIDEO_CACHE_MAX) {
+      const oldest = map.keys().next().value;
+      map.delete(oldest);                          // 不 revoke：正在播的 <video> 还拿着这个 URL
+    }
+  }
+
+  function putVideo(id, blob, meta) {
+    if (!id || !blob) return false;
+    videoBlobCache.set(id, blob);
+    trimVideoCache(videoBlobCache);
+    if (!useIDB) return false;
+    track(Storage.put('images', id, { blob: blob, meta: meta || {}, at: Date.now() }).catch(persistFail));
+    return true;
+  }
+
+  async function getVideo(id) {
+    if (!id) return null;
+    const hot = touch(videoBlobCache, id);
+    if (hot !== undefined) return hot;
+    if (!useIDB) return null;
+    try {
+      const rec = await Storage.get('images', id);
+      const blob = (rec && rec.blob && typeof rec.blob.size === 'number') ? rec.blob : null;
+      if (blob) { videoBlobCache.set(id, blob); trimVideoCache(videoBlobCache); }
+      return blob;
+    } catch (e) { persistFail(e); return null; }
+  }
+
+  // 同步取 objectURL（渲染直接用）：命中缓存直接给；没有就后台取，取到后回调 setImageReadyHandler
+  function videoURL(id) {
+    if (!id) return null;
+    const hot = touch(videoUrlCache, id);
+    if (hot !== undefined) return hot;
+    if (!useIDB || loading.has(id)) return null;
+    loading.add(id);
+    getVideo(id).then(blob => {
+      loading.delete(id);
+      if (!blob) return;
+      let url = null;
+      try { url = URL.createObjectURL(blob); } catch (_) { return; }
+      videoUrlCache.set(id, url);
+      trimVideoCache(videoUrlCache);
+      if (onImageReadyFn) { try { onImageReadyFn(id); } catch (_) {} }
+    }).catch(() => { loading.delete(id); });
+    return null;
+  }
+
+  function releaseVideo(id) {
+    if (!id) return;
+    const u = videoUrlCache.get(id);
+    if (u) { try { URL.revokeObjectURL(u); } catch (_) {} videoUrlCache.delete(id); }
+    videoBlobCache.delete(id);
+    if (useIDB) track(Storage.del('images', id).catch(persistFail));
+  }
 
   async function listImageKeys() {
     if (!useIDB) return [];
@@ -1017,6 +1154,8 @@
       // 原图（Blob）
       imageIdsOf, putImage, getImage, imageURL, releaseImage, releaseImages,
       listImageKeys, knownImageIds,
+      // 视频（Blob，键名 vid:<sceneId>，§5④）
+      putVideo, getVideo, videoURL, releaseVideo,
     },
   });
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

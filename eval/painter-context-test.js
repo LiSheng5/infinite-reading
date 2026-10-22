@@ -177,7 +177,45 @@ console.log('[5] chat（工作台）模式保持不动：[最近剧情] 仍是�
     'chat 模式 [最近剧情] 保持旁白口径（不带玩家行动标记）');
 }
 
-console.log('[6] 静态断言：turn.js / round.js 不再调用 enqueueImage（含 maybeEnqueueImage）');
+console.log('[6] video 模式（§6）：隔离清单同 scene；图生带源画面、文生带画风要求');
+{
+  const story = buildStory();
+  // 图生（i2v）：只写动起来的部分——输入带源图 alt + promptRaw
+  const i2v = C.assemblePainter(story, {
+    mode: 'video', videoKind: 'i2v',
+    imageAlt: 'SRCALT特征串', imagePrompt: 'SRCPROMPT特征串',
+  });
+  const i2vAll = i2v.map(m => m.content).join('\n\n');
+  ok(i2v[0].content.indexOf('动态提示词') >= 0 || i2v[0].content === C.PAINTER_VIDEO_SYSTEM,
+    '首条 = PAINTER_VIDEO_SYSTEM');
+  ok(i2vAll.indexOf('SRCALT特征串') >= 0 && i2vAll.indexOf('SRCPROMPT特征串') >= 0,
+    'i2v 带源图 alt 与 promptRaw');
+  ok(i2vAll.indexOf('图生') >= 0, 'i2v 标注「图生」');
+  ok(i2vAll.indexOf('[画风锚]') >= 0 && i2vAll.indexOf('IMG1ALT') >= 0,
+    'i2v 同样带 [画风锚] + [最近两张图]');
+  const i2vPlot = blockOf(i2v, '[最近剧情]');
+  ok(i2vPlot.indexOf('T4ACTION') >= 0 && !/T[123](ACTION|NARR)/.test(i2vPlot),
+    'i2v [最近剧情] 只含最近 3 回合');
+  // 隔离清单与 scene 相同：世界卡 / 摘要栈 / 画像一律不进（§6 上下文隔离规则不变）
+  ok(i2vAll.indexOf('WORLDPLACE特征串') < 0 && i2vAll.indexOf('SUMMARYSTACK特征串') < 0
+    && i2vAll.indexOf('PROFILE特征串') < 0 && i2vAll.indexOf('每次回复必须且只能输出一个 JSON 对象') < 0,
+    'i2v 不含世界卡 / 摘要栈 / 画像 / 剧情规则');
+
+  // 文生（t2v）：完整画面 + 动作 + 画风后缀（styleHint）
+  const t2v = C.assemblePainter(story, {
+    mode: 'video', videoKind: 't2v',
+    sceneRef: 'T2VSCENEREF特征串', styleHint: 'T2VSTYLE特征串',
+  });
+  const t2vAll = t2v.map(m => m.content).join('\n\n');
+  ok(t2vAll.indexOf('文生') >= 0, 't2v 标注「文生」');
+  ok(t2vAll.indexOf('T2VSCENEREF特征串') >= 0, 't2v 带 [画面参考]');
+  ok(t2vAll.indexOf('T2VSTYLE特征串') >= 0, 't2v 带 [画风要求]（画风后缀）');
+  ok(t2vAll.indexOf('SRCALT特征串') < 0, 't2v 不带源画面块');
+  ok(t2vAll.indexOf('WORLDPLACE特征串') < 0 && t2vAll.indexOf('SUMMARYSTACK特征串') < 0,
+    't2v 同样遵守隔离清单');
+}
+
+console.log('[7] 静态断言：turn.js / round.js 不再调用 enqueueImage（含 maybeEnqueueImage）');
 {
   const read = (p) => fs.readFileSync(path.join(__dirname, '..', 'js', 'app', p), 'utf8');
   const turnSrc = read('turn.js');

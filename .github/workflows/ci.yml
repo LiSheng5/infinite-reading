@@ -86,6 +86,12 @@ jobs:
       - name: 画师上下文（node eval/painter-context-test.js）
         run: node eval/painter-context-test.js
 
+      # 生视频适配器（MiniMax v2 / v1 的请求形状与状态机，假 fetch，不联网、不花钱）
+      - name: 生视频适配器与队列（node eval/video-provider-test.js + videoqueue-test.js）
+        run: |
+          node eval/video-provider-test.js
+          node eval/videoqueue-test.js
+
       # UI-2：自动标题 / 全文搜索 / 书架索引（纯逻辑单测，不联网）
       - name: 书架三件套（node eval/titles-test.js + search-test.js + shelf-index-test.js）
         run: npm run test:shelf

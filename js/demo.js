@@ -469,10 +469,34 @@
     ai1CallNo = 0;
   }
 
+  // 演示模式不出视频（§8）：🎬 与视频入口置灰；点击弹「演示模式不出视频」。
+  // 按钮保持可点（点了才有说明），只改样式与 onclick，不动其它状态。
+  function applyVideoGate() {
+    const show = () => {
+      try {
+        const t = global.IR && global.IR.App && global.IR.App.toast;
+        if (t) t('演示模式不出视频');
+      } catch (_) {}
+    };
+    const ids = ['btn-stage-video', 'btn-manual-video', 'btn-video-i2v', 'btn-video-t2v', 'btn-pw-video', 'btn-video-cancel'];
+    for (const id of ids) {
+      const el = (global.document && global.document.getElementById) ? global.document.getElementById(id) : null;
+      if (!el) continue;
+      el.classList.add('is-disabled');
+      el.setAttribute('aria-disabled', 'true');
+      el.title = '演示模式不出视频';
+      el.onclick = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        show();
+      };
+    }
+  }
+
   const Demo = {
     enabled: enabled,
     applyTo: applyTo,
     reset: reset,
+    applyVideoGate: applyVideoGate,
     title: SCRIPT.title,
     premise: SCRIPT.premise,
     turnCount: SCRIPT.turns.length,
