@@ -3,6 +3,9 @@ node_modules/
 dist/
 *.log
 
+# Python 运行缓存（tools/serve.py 之类会顺手生成）
+__pycache__/
+
 # 编辑器 / IDE 与 AI 助手本地数据
 .codebuddy/
 .vscode/
@@ -25,6 +28,4 @@ sidecar/data/
 _note-preview.html
 
 # 手动验收证据（截图 / 报告 / 网络日志 / DOM 快照）：不进仓库
-acceptance/
-
 acceptance/
