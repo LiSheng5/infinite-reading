@@ -9,27 +9,15 @@
  *   - manual-order：只生成订单，由用户自己在微信 / 支付宝里手动付款，完成后再回来点「我已支付」。
  * 不实现任何对支付 App 的自动化或绕过，也不保存任何支付密码。
  */
-import crypto from 'node:crypto';
 import { evaluatePolicy, PAYMENT_CODES } from './payment-policy.mjs';
-
-function genId(prefix) { return prefix + Date.now().toString(36) + crypto.randomBytes(4).toString('hex'); }
-function safeJSON(text, fallback) {
-  try { const v = JSON.parse(text); return v == null ? fallback : v; } catch (_) { return fallback; }
-}
-function dayKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-function monthKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
+import { genId, safeJSON, dayRange, monthRange, num, fail } from './util.mjs';
+import { TX, COMMITTED_TX, sqlIn } from './statuses.mjs';
 
 export function createPaymentProviders() {
   return {
     mock: {
       label: '模拟支付（不真实扣款，只记账）',
-      async charge() { return { ok: true, ref: genId('mockpay-'), status: 'charged' }; },
+      async charge() { return { ok: true, ref: genId('mockpay-'), status: TX.CHARGED }; },
     },
 
     'manual-order': {
@@ -39,7 +27,7 @@ export function createPaymentProviders() {
         return {
           ok: true,
           ref: genId('order-'),
-          status: 'awaiting_payment',
+          status: TX.AWAITING_PAYMENT,
           payHint: '请手动付款 ' + amount + ' ' + order.currency + ' 给「' + order.merchant + '」（本程序不会自动操作任何支付 App）。付款完成后，回到这里点「我已支付」。',
         };
       },
@@ -54,7 +42,8 @@ export function createPayment(deps) {
   const providers = deps.providers || createPaymentProviders();
   const providerOf = cfg => providers[(cfg.payment && cfg.payment.provider) || 'mock'] || providers.mock;
 
-  const COMMITTED = "('approved','awaiting_payment','charged')";
+  // 已「占用额度」的状态组唯一口径在 statuses.mjs（COMMITTED_TX）：待确认的不算，避免空占额度
+  const COMMITTED = sqlIn(COMMITTED_TX);
 
   function toTx(r) {
     if (!r) return null;
@@ -69,6 +58,7 @@ export function createPayment(deps) {
       status: r.status,
       code: r.code || '',
       providerRef: r.provider_ref || '',
+      mandateId: r.mandate_id || '',
       createdAt: Number(r.created_at),
       approvedAt: r.approved_at == null ? null : Number(r.approved_at),
       chargedAt: r.charged_at == null ? null : Number(r.charged_at),
@@ -81,38 +71,42 @@ export function createPayment(deps) {
 
   function insertTx(row) {
     db.prepare(
-      'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, provider_ref, created_at, approved_at, charged_at) '
-      + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, provider_ref, mandate_id, created_at, approved_at, charged_at) '
+      + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(
       genId('tx'), row.intentId, row.agent, row.amountCents, row.currency, row.merchant, row.category,
-      JSON.stringify(row.items || []), row.status, row.code || '', row.providerRef || '',
+      JSON.stringify(row.items || []), row.status, row.code || '', row.providerRef || '', row.mandateId || '',
       row.createdAt, row.approvedAt == null ? null : row.approvedAt, row.chargedAt == null ? null : row.chargedAt
     );
   }
 
-  // 已「占用额度」的金额（待确认的不算，避免空占额度；已确认 / 待人工付款 / 已扣款都算）
+  // 已「占用额度」的金额（待确认的不算，避免空占额度；已确认 / 待人工付款 / 已扣款都算）。
+  // 金额字段一律 *Cents 后缀（审查 可维护性 #12）：单位就是「分」，别让人当元接。
+  // SQL 按时间范围 + SUM 聚合（审查 可维护性 #8），不再全表 SELECT 后 JS 过滤。
   function sums(agent, t0) {
-    const rows = db.prepare(
-      'SELECT amount_cents, agent, created_at FROM payment_transactions WHERE status IN ' + COMMITTED
-    ).all();
-    const dk = dayKey(t0);
-    const mk = monthKey(t0);
-    let daily = 0;
-    let monthly = 0;
-    let agentSum = 0;
-    for (const r of rows) {
-      const at = Number(r.created_at);
-      const amt = Number(r.amount_cents);
-      if (dayKey(at) === dk) daily += amt;
-      if (monthKey(at) === mk) monthly += amt;
-      if (agent && r.agent === agent) agentSum += amt;
+    const [d0, d1] = dayRange(t0);
+    const [m0, m1] = monthRange(t0);
+    const sumIn = (a, b) => {
+      const r = db.prepare(
+        'SELECT COALESCE(SUM(amount_cents),0) AS s FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND created_at >= ? AND created_at < ?'
+      ).get(a, b);
+      return Number(r && r.s) || 0;
+    };
+    const dailyCents = sumIn(d0, d1);
+    const monthlyCents = sumIn(m0, m1);
+    let agentCents = 0;
+    if (agent) {
+      const r = db.prepare(
+        'SELECT COALESCE(SUM(amount_cents),0) AS s FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND agent = ?'
+      ).get(String(agent));
+      agentCents = Number(r && r.s) || 0;
     }
-    return { daily: daily, monthly: monthly, agentSum: agentSum };
+    return { dailyCents: dailyCents, monthlyCents: monthlyCents, agentCents: agentCents };
   }
 
   function lastChargeAt() {
     const r = db.prepare(
-      "SELECT MAX(COALESCE(charged_at, created_at)) AS t FROM payment_transactions WHERE status IN ('awaiting_payment','charged')"
+      'SELECT MAX(COALESCE(charged_at, created_at)) AS t FROM payment_transactions WHERE status IN ' + sqlIn([TX.AWAITING_PAYMENT, TX.CHARGED])
     ).get();
     return (r && r.t) ? Number(r.t) : 0;
   }
@@ -121,9 +115,13 @@ export function createPayment(deps) {
 
   function createMandate(input) {
     const src = input || {};
+    const agent = String(src.agent || '').trim();
+    // 发起方是授权范围的核心身份（agent 由 mandate 映射到每笔交易）：不允许空名（审查 中危 #13）
+    // 业务失败走结构化返回（审查 可维护性 #7），不 throw
+    if (!agent) return fail('AGENT_REQUIRED');
     const m = {
       id: genId('md'),
-      agent: String(src.agent || '').trim(),
+      agent: agent,
       totalLimitCents: Math.max(0, Math.floor(Number(src.totalLimitCents) || 0)),
       currency: String(src.currency || 'CNY'),
       categories: Array.isArray(src.categories) ? src.categories.map(x => String(x)).slice(0, 50) : [],
@@ -155,19 +153,15 @@ export function createPayment(deps) {
     }));
   }
 
+  // 授权范围内已用额度：按 mandate_id 关联统计（审查 中危 #13——此前按 agent+周期近似，
+  // 同一 agent 开两份授权会互相串额度，改名还能换池）
   function mandateSpent(mandate, t0) {
     const rows = db.prepare(
-      'SELECT amount_cents, agent, created_at FROM payment_transactions WHERE status IN ' + COMMITTED
-    ).all();
-    let sum = 0;
-    for (const r of rows) {
-      const at = Number(r.created_at);
-      if (mandate.agent && r.agent !== mandate.agent) continue;
-      if (mandate.periodStart && at < mandate.periodStart) continue;
-      if (mandate.periodEnd && at > mandate.periodEnd) continue;
-      sum += Number(r.amount_cents);
-    }
-    return sum;
+      'SELECT amount_cents, mandate_id FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND mandate_id = ?'
+    ).all(String(mandate.id));
+    let sumCents = 0;
+    for (const r of rows) sumCents += Number(r.amount_cents);
+    return sumCents;
   }
 
   /* ---------------- 额度概览（给确认弹窗展示「剩余额度」） ---------------- */
@@ -177,28 +171,29 @@ export function createPayment(deps) {
     const p = cfg.payment || {};
     const t0 = now();
     const s = sums(String(agent || '').trim(), t0);
-    const num = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
-    const perTx = num(p.perTx);
-    const daily = num(p.daily);
-    const monthly = num(p.monthly);
+    // 配置键（config.json）保持 perTx / daily / monthly / autoApprove 不动（用户面文件格式），
+    // 但 summary 的输出值一律 *Cents 后缀——单位就是「分」（审查 可维护性 #12）
+    const perTxCents = num(p.perTx);
+    const dailyCents = num(p.daily);
+    const monthlyCents = num(p.monthly);
     const budgets = (p.budgets && typeof p.budgets === 'object') ? p.budgets : {};
-    const agentCap = agent && Object.prototype.hasOwnProperty.call(budgets, agent) ? num(budgets[agent]) : 0;
+    const agentCapCents = agent && Object.prototype.hasOwnProperty.call(budgets, agent) ? num(budgets[agent]) : 0;
     return {
       enabled: !!p.enabled,
       provider: p.provider || 'mock',
       currency: p.currency || 'CNY',
-      perTx: perTx,
-      daily: daily,
-      monthly: monthly,
-      autoApprove: num(p.autoApprove),
+      perTxCents: perTxCents,
+      dailyCents: dailyCents,
+      monthlyCents: monthlyCents,
+      autoApproveCents: num(p.autoApprove),
       cooldownMin: num(p.cooldownMin),
       merchantAllowlist: (p.merchantAllowlist || []).slice(),
       categoryBlocklist: (p.categoryBlocklist || []).slice(),
-      spent: { daily: s.daily, monthly: s.monthly, agent: s.agentSum },
+      spent: { dailyCents: s.dailyCents, monthlyCents: s.monthlyCents, agentCents: s.agentCents },
       remaining: {
-        daily: Math.max(0, daily - s.daily),
-        monthly: Math.max(0, monthly - s.monthly),
-        agent: agentCap ? Math.max(0, agentCap - s.agentSum) : 0,
+        dailyCents: Math.max(0, dailyCents - s.dailyCents),
+        monthlyCents: Math.max(0, monthlyCents - s.monthlyCents),
+        agentCents: agentCapCents ? Math.max(0, agentCapCents - s.agentCents) : 0,
       },
       lastChargeAt: lastChargeAt(),
     };
@@ -216,32 +211,35 @@ export function createPayment(deps) {
       const existing = getTx(key);
       if (existing) {
         return {
-          ok: existing.status !== 'denied', reused: true, intentId: existing.intentId,
+          ok: existing.status !== TX.DENIED, reused: true, intentId: existing.intentId,
           status: existing.status, code: existing.code, transaction: existing,
         };
       }
     }
 
     const t0 = now();
-    const agent = String(src.agent || '').trim();
     const amountCents = Math.floor(Number(src.amountCents));
     const merchant = String(src.merchant || '').slice(0, 200);
     const category = String(src.category || '').slice(0, 100);
     const items = Array.isArray(src.items) ? src.items.slice(0, 50) : [];
-    const currency = String(src.currency || (cfg.payment && cfg.payment.currency) || 'CNY');
+    // 币种强制等于配置币种（审查 中危 #13）：金额单位就是配置币种的「分」，请求体自报的币种不接受
+    const currency = (cfg.payment && cfg.payment.currency) || 'CNY';
+    if (src.currency && String(src.currency).trim().toUpperCase() !== currency) {
+      return { ok: false, code: 'CURRENCY_MISMATCH', message: '币种必须与本地配置一致（' + currency + '）。' };
+    }
+    // 三层授权第一层（长期授权范围）：agent 身份由 mandate 映射（服务端定，不采信请求体自报）
+    const mandateId = String(src.mandateId || '').trim();
+    const mandate = mandateId ? getMandate(mandateId) : null;
+    const agent = mandate ? mandate.agent : '';
     const intentId = key || genId('pi');
 
     // 先查额度再落库：中间没有 await，天然是「原子」的（单进程 Node）
     const s = sums(agent, t0);
-    const mandate = src.mandateId ? getMandate(src.mandateId) : null;
-    if (src.mandateId && !mandate) {
-      return { ok: false, code: 'MANDATE_NOT_FOUND', message: '找不到这个授权范围。' };
-    }
     const ctx = {
       config: cfg.payment || {},
-      spentDaily: s.daily,
-      spentMonthly: s.monthly,
-      spentAgent: s.agentSum,
+      spentDaily: s.dailyCents,
+      spentMonthly: s.monthlyCents,
+      spentAgent: s.agentCents,
       lastChargeAt: lastChargeAt(),
       now: t0,
       mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate, t0) }) : null,
@@ -250,11 +248,11 @@ export function createPayment(deps) {
 
     const base = {
       intentId: intentId, agent: agent, amountCents: amountCents, currency: currency,
-      merchant: merchant, category: category, items: items, createdAt: t0,
+      merchant: merchant, category: category, items: items, mandateId: mandate ? mandate.id : '', createdAt: t0,
     };
 
     if (verdict.decision === 'deny') {
-      insertTx(Object.assign({}, base, { status: 'denied', code: verdict.code }));
+      insertTx(Object.assign({}, base, { status: TX.DENIED, code: verdict.code }));
       return {
         ok: false, code: verdict.code, message: verdict.message, intentId: intentId,
         transaction: getTx(intentId),
@@ -262,10 +260,24 @@ export function createPayment(deps) {
       };
     }
 
-    if (verdict.decision === 'approval') {
-      insertTx(Object.assign({}, base, { status: 'pending', code: '' }));
+    // 授权范围缺失：策略过了也不放行——「三层授权」的第一层不可省略（审查 中危 #13）
+    if (!mandate) {
+      const code = mandateId ? 'MANDATE_NOT_FOUND' : 'MANDATE_REQUIRED';
+      insertTx(Object.assign({}, base, { status: TX.DENIED, code: code }));
       return {
-        ok: true, status: 'pending', needsApproval: true, intentId: intentId,
+        ok: false, code: code, intentId: intentId,
+        message: code === 'MANDATE_REQUIRED'
+          ? '下单必须挂在长期授权范围（mandate）上：请先签发授权。'
+          : '找不到这个授权范围。',
+        transaction: getTx(intentId),
+        summary: summary(agent),
+      };
+    }
+
+    if (verdict.decision === 'approval') {
+      insertTx(Object.assign({}, base, { status: TX.PENDING, code: '' }));
+      return {
+        ok: true, status: TX.PENDING, needsApproval: true, intentId: intentId,
         message: verdict.message,
         cart: { merchant: merchant, category: category, amountCents: amountCents, currency: currency, items: items },
         remaining: verdict.remaining || null,
@@ -274,7 +286,7 @@ export function createPayment(deps) {
     }
 
     // allow：直接放行并扣款
-    insertTx(Object.assign({}, base, { status: 'approved', approvedAt: t0 }));
+    insertTx(Object.assign({}, base, { status: TX.APPROVED, approvedAt: t0 }));
     const charged = await charge(intentId);
     return Object.assign({ needsApproval: false, summary: summary(agent) }, charged);
   }
@@ -282,9 +294,9 @@ export function createPayment(deps) {
   function approve(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare("UPDATE payment_transactions SET status='approved', approved_at=? WHERE intent_id=? AND status='pending'")
-      .run(now(), id);
-    if (info.changes > 0) return { ok: true, status: 'approved', transaction: getTx(id) };
+    const info = db.prepare('UPDATE payment_transactions SET status=?, approved_at=? WHERE intent_id=? AND status=?')
+      .run(TX.APPROVED, now(), id, TX.PENDING);
+    if (info.changes > 0) return { ok: true, status: TX.APPROVED, transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔已经不是待确认状态了。', transaction: tx };
   }
@@ -292,9 +304,9 @@ export function createPayment(deps) {
   function deny(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare("UPDATE payment_transactions SET status='denied', code='USER_REJECTED' WHERE intent_id=? AND status='pending'")
-      .run(id);
-    if (info.changes > 0) return { ok: true, status: 'denied', code: 'USER_REJECTED', transaction: getTx(id) };
+    const info = db.prepare('UPDATE payment_transactions SET status=?, code=? WHERE intent_id=? AND status=?')
+      .run(TX.DENIED, 'USER_REJECTED', id, TX.PENDING);
+    if (info.changes > 0) return { ok: true, status: TX.DENIED, code: 'USER_REJECTED', transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔已经不是待确认状态了。', transaction: tx };
   }
@@ -304,30 +316,60 @@ export function createPayment(deps) {
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
 
     // 同步抢占：只有把 approved 抢成 charging 的那一方才真正扣款（防重复扣款）
-    const claim = db.prepare("UPDATE payment_transactions SET status='charging' WHERE intent_id=? AND status='approved'").run(id);
+    const claim = db.prepare('UPDATE payment_transactions SET status=? WHERE intent_id=? AND status=?')
+      .run(TX.CHARGING, id, TX.APPROVED);
     if (claim.changes === 0) {
       const tx = getTx(id);
-      if (tx.status === 'pending') return { ok: false, code: 'NEEDS_APPROVAL', message: '这笔还没经过确认。', transaction: tx };
-      if (tx.status === 'charging') return { ok: false, code: 'INTENT_ALREADY_RESOLVED', message: '这笔正在处理中。', transaction: tx };
-      if (tx.status === 'denied') return { ok: false, code: tx.code || 'USER_REJECTED', message: '这笔已被拒绝。', transaction: tx };
+      if (tx.status === TX.PENDING) return { ok: false, code: 'NEEDS_APPROVAL', message: '这笔还没经过确认。', transaction: tx };
+      if (tx.status === TX.CHARGING) return { ok: false, code: 'INTENT_ALREADY_RESOLVED', message: '这笔正在处理中。', transaction: tx };
+      if (tx.status === TX.DENIED) return { ok: false, code: tx.code || 'USER_REJECTED', message: '这笔已被拒绝。', transaction: tx };
       return { ok: true, status: tx.status, reused: true, intentId: id, transaction: tx };
     }
 
     const tx = getTx(id);
     const cfg = getConfig();
+
+    // 扣款前用「当下」的额度再裁决一次（此处到 provider 调用前无 await，与上面的抢占一起是原子的）。
+    // purchase() 只在建单时裁决过一次：连续建 N 笔各自“刚好不超限”的 pending 再逐个批准，
+    // 就能把消费放大到 N×日/月/agent 额度——批准与扣款之间必须按最新额度复核。
+    // 用户已经批准过，所以 verdict=approval 视为放行，只有 deny 才拦。
+    const t0 = now();
+    const s = sums(tx.agent, t0);
+    const mandate = tx.mandateId ? getMandate(tx.mandateId) : null;
+    const verdict = evaluatePolicy(
+      { amountCents: tx.amountCents, merchant: tx.merchant, category: tx.category, agent: tx.agent },
+      {
+        config: cfg.payment || {},
+        spentDaily: s.dailyCents,
+        spentMonthly: s.monthlyCents,
+        spentAgent: s.agentCents,
+        lastChargeAt: lastChargeAt(),
+        now: t0,
+        // 授权范围同样按当下累计复核（本单是 charging 状态、不在 COMMITTED 里，不会重复计自己）
+        mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate, t0) }) : null,
+      }
+    );
+    if (verdict.decision === 'deny') {
+      db.prepare('UPDATE payment_transactions SET status=?, code=? WHERE intent_id=?').run(TX.DENIED, verdict.code, id);
+      return {
+        ok: false, code: verdict.code, message: verdict.message,
+        intentId: id, transaction: getTx(id), summary: summary(tx.agent),
+      };
+    }
+
     try {
       const out = await providerOf(cfg).charge(cfg, tx);
       const t1 = now();
-      if (out && out.status === 'awaiting_payment') {
-        db.prepare("UPDATE payment_transactions SET status='awaiting_payment', provider_ref=? WHERE intent_id=?")
-          .run(out.ref || '', id);
+      if (out && out.status === TX.AWAITING_PAYMENT) {
+        db.prepare('UPDATE payment_transactions SET status=?, provider_ref=? WHERE intent_id=?')
+          .run(TX.AWAITING_PAYMENT, out.ref || '', id);
       } else {
-        db.prepare("UPDATE payment_transactions SET status='charged', charged_at=?, provider_ref=? WHERE intent_id=?")
-          .run(t1, (out && out.ref) || '', id);
+        db.prepare('UPDATE payment_transactions SET status=?, charged_at=?, provider_ref=? WHERE intent_id=?')
+          .run(TX.CHARGED, t1, (out && out.ref) || '', id);
       }
       return {
         ok: true,
-        status: (out && out.status) || 'charged',
+        status: (out && out.status) || TX.CHARGED,
         intentId: id,
         provider: (cfg.payment && cfg.payment.provider) || 'mock',
         order: out || null,
@@ -335,7 +377,7 @@ export function createPayment(deps) {
       };
     } catch (err) {
       // 失败回滚到「已确认」，用户下一条还可以重试；不吞掉原因
-      db.prepare("UPDATE payment_transactions SET status='approved', code='PROVIDER_ERROR' WHERE intent_id=?").run(id);
+      db.prepare('UPDATE payment_transactions SET status=?, code=? WHERE intent_id=?').run(TX.APPROVED, 'PROVIDER_ERROR', id);
       return { ok: false, code: 'PROVIDER_ERROR', message: String((err && err.message) || err), intentId: id, transaction: getTx(id) };
     }
   }
@@ -344,9 +386,9 @@ export function createPayment(deps) {
   function markPaid(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare("UPDATE payment_transactions SET status='charged', charged_at=? WHERE intent_id=? AND status='awaiting_payment'")
-      .run(now(), id);
-    if (info.changes > 0) return { ok: true, status: 'charged', transaction: getTx(id) };
+    const info = db.prepare('UPDATE payment_transactions SET status=?, charged_at=? WHERE intent_id=? AND status=?')
+      .run(TX.CHARGED, now(), id, TX.AWAITING_PAYMENT);
+    if (info.changes > 0) return { ok: true, status: TX.CHARGED, transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔不是「等待付款」状态。', transaction: tx };
   }
@@ -388,10 +430,10 @@ export function createPayment(deps) {
     return {
       enabled: !!p.enabled,
       provider: p.provider || 'mock',
-      spentTodayCents: s.daily,
-      spentMonthCents: s.monthly,
-      pendingApprovals: db.prepare("SELECT COUNT(*) AS n FROM payment_transactions WHERE status='pending'").get().n,
-      awaitingPayment: db.prepare("SELECT COUNT(*) AS n FROM payment_transactions WHERE status='awaiting_payment'").get().n,
+      spentTodayCents: s.dailyCents,
+      spentMonthCents: s.monthlyCents,
+      pendingApprovals: db.prepare('SELECT COUNT(*) AS n FROM payment_transactions WHERE status=?').get(TX.PENDING).n,
+      awaitingPayment: db.prepare('SELECT COUNT(*) AS n FROM payment_transactions WHERE status=?').get(TX.AWAITING_PAYMENT).n,
     };
   }
 
@@ -409,7 +451,6 @@ export function createPayment(deps) {
     summary,
     stats,
     createMandate,
-    getMandate,
     listMandates,
   };
 }

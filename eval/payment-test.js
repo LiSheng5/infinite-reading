@@ -118,7 +118,7 @@ async function main() {
   check('错误码表齐全（10 项）', PAYMENT_CODES.length >= 10, PAYMENT_CODES.join(','));
   check('剩余额度随金额递减（给确认弹窗用）', (() => {
     const v = evalWith(policyCfg({ daily: 1000, monthly: 5000 }), { amountCents: 400 }, { spentDaily: 100 });
-    return v.remaining && v.remaining.daily === 500 && v.remaining.monthly === 4600;
+    return v.remaining && v.remaining.dailyCents === 500 && v.remaining.monthlyCents === 4600;
   })());
 
   /* ---------------- 网关：台账 / 确认 / 扣款 ---------------- */
@@ -129,9 +129,18 @@ async function main() {
     return { db: db, cfg: cfg, pay: createPayment({ db: db, getConfig: () => cfg, now: () => VNOW, providers: providers }) };
   }
 
+  // 统一造一份长期授权（三层授权第一层，审查 中危 #13 起 mandate 强制）；
+  // totalLimitCents=0 = 不限总额，由单笔 / 日 / 月限额管
+  function mkMandate(pay, over) {
+    return pay.createMandate(Object.assign({
+      agent: 'a', totalLimitCents: 0, currency: 'CNY', categories: [], periodStart: 0, periodEnd: 0,
+    }, over || {}));
+  }
+
   {
     const { pay } = fresh({ perTx: 0 });
-    const r = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', agent: 'a' });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: md.id });
     check('网关：额度 0 → 拒绝并落台账',
       r.ok === false && r.code === 'AMOUNT_EXCEEDS_LIMIT' && pay.listTransactions().length === 1
       && pay.listTransactions()[0].status === 'denied', JSON.stringify(r));
@@ -139,12 +148,13 @@ async function main() {
 
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 0 });
-    const r = await pay.purchase({ amountCents: 3000, merchant: '书店', category: '图书', agent: 'a', items: [{ name: '书', qty: 1 }] });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 3000, merchant: '书店', category: '图书', mandateId: md.id, items: [{ name: '书', qty: 1 }] });
     check('网关：超免确认阈值 → 待人工确认',
       r.ok === true && r.status === 'pending' && r.needsApproval === true, JSON.stringify(r).slice(0, 200));
     check('网关：待确认的单据带商品/金额/商户（给弹窗展示）',
       r.cart && r.cart.merchant === '书店' && r.cart.amountCents === 3000 && r.cart.items.length === 1);
-    check('网关：待确认单据不算「已占用额度」', pay.summary('a').spent.daily === 0, JSON.stringify(pay.summary('a').spent));
+    check('网关：待确认单据不算「已占用额度」', pay.summary('a').spent.dailyCents === 0, JSON.stringify(pay.summary('a').spent));
 
     const denied = pay.deny(r.intentId, { actor: 'user' });
     check('网关：用户拒绝 → USER_REJECTED',
@@ -153,12 +163,13 @@ async function main() {
 
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 0 });
-    const r = await pay.purchase({ amountCents: 3000, merchant: '书店', category: '图书', agent: 'a' });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 3000, merchant: '书店', category: '图书', mandateId: md.id });
     const ap = pay.approve(r.intentId, { actor: 'user' });
     check('网关：用户确认 → approved', ap.ok === true && ap.status === 'approved', JSON.stringify(ap).slice(0, 160));
     const ch = await pay.charge(r.intentId);
     check('网关：扣款成功（mock）→ charged', ch.ok === true && ch.status === 'charged', JSON.stringify(ch).slice(0, 160));
-    check('网关：确认后额度被占用', pay.summary('a').spent.daily === 3000, JSON.stringify(pay.summary('a').spent));
+    check('网关：确认后额度被占用', pay.summary('a').spent.dailyCents === 3000, JSON.stringify(pay.summary('a').spent));
     check('网关：重复确认 → INTENT_ALREADY_RESOLVED',
       pay.approve(r.intentId, { actor: 'user' }).code === 'INTENT_ALREADY_RESOLVED');
     const again = await pay.charge(r.intentId);
@@ -167,9 +178,10 @@ async function main() {
 
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 500 });
-    const r = await pay.purchase({ amountCents: 300, merchant: 'M', category: 'C', agent: 'a', intentId: 'idem-1' });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 300, merchant: 'M', category: 'C', mandateId: md.id, intentId: 'idem-1' });
     check('网关：小额免确认 → 自动扣款', r.ok === true && r.status === 'charged' && !r.needsApproval, JSON.stringify(r).slice(0, 200));
-    const r2 = await pay.purchase({ amountCents: 300, merchant: 'M', category: 'C', agent: 'a', intentId: 'idem-1' });
+    const r2 = await pay.purchase({ amountCents: 300, merchant: 'M', category: 'C', mandateId: md.id, intentId: 'idem-1' });
     check('网关：幂等键重复提交 → 复用同一单据，不重复扣款',
       r2.reused === true && pay.listTransactions().length === 1, JSON.stringify(r2).slice(0, 160));
   }
@@ -186,7 +198,8 @@ async function main() {
       'manual-order': createPaymentProviders()['manual-order'],
     };
     const { pay } = fresh({ provider: 'counting', perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 0 }, providers);
-    const r = await pay.purchase({ amountCents: 1000, merchant: 'M', category: 'C', agent: 'a' });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 1000, merchant: 'M', category: 'C', mandateId: md.id });
     pay.approve(r.intentId, { actor: 'user' });
     const both = await Promise.all([pay.charge(r.intentId), pay.charge(r.intentId)]);
     check('网关：并发 charge 只真正扣款一次', calls === 1, 'calls=' + calls);
@@ -199,7 +212,8 @@ async function main() {
       mock: createPaymentProviders().mock,
     };
     const { pay } = fresh({ provider: 'manual-order', perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 0 }, providers);
-    const r = await pay.purchase({ amountCents: 8888, merchant: '小店', category: '生活', agent: 'a' });
+    const md = mkMandate(pay);
+    const r = await pay.purchase({ amountCents: 8888, merchant: '小店', category: '生活', mandateId: md.id });
     pay.approve(r.intentId, { actor: 'user' });
     const ch = await pay.charge(r.intentId);
     check('手动付款：生成订单并进入 awaiting_payment', ch.ok === true && ch.status === 'awaiting_payment', JSON.stringify(ch).slice(0, 200));
@@ -214,15 +228,34 @@ async function main() {
   {
     VNOW = localMs(2026, 1, 5, 12, 0);
     const { pay } = fresh({ perTx: 1000, daily: 1000, monthly: 100000, autoApprove: 1000 });
-    const first = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', agent: 'a' });
-    const second = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', agent: 'a' });
+    const md = mkMandate(pay);
+    const first = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', mandateId: md.id });
+    const second = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', mandateId: md.id });
     check('网关：每日上限计入已扣款额度', first.ok === true && second.ok === false && second.code === 'DAILY_LIMIT_EXCEEDED',
       JSON.stringify(second).slice(0, 160));
-    check('网关：剩余额度正确', pay.summary('a').remaining.daily === 400, JSON.stringify(pay.summary('a').remaining));
+    check('网关：剩余额度正确', pay.summary('a').remaining.dailyCents === 400, JSON.stringify(pay.summary('a').remaining));
 
     VNOW = localMs(2026, 1, 6, 12, 0);
-    const third = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', agent: 'a' });
+    const third = await pay.purchase({ amountCents: 600, merchant: 'M', category: 'C', mandateId: md.id });
     check('网关：跨天额度重置', third.ok === true, JSON.stringify(third).slice(0, 160));
+  }
+
+  /* 连环 pending 放大消费：建单时各自“刚好不超限”，扣款前必须按最新额度复核 */
+  {
+    VNOW = localMs(2026, 1, 5, 12, 0);
+    const { pay } = fresh({ perTx: 1000, daily: 1500, monthly: 100000, autoApprove: 0, cooldownMin: 0 });
+    const md = mkMandate(pay);
+    const a = await pay.purchase({ amountCents: 1000, merchant: 'M', category: 'C', mandateId: md.id });
+    const b = await pay.purchase({ amountCents: 1000, merchant: 'M', category: 'C', mandateId: md.id });
+    check('放大防御：两笔 pending 建单时各自不超限', a.ok === true && b.ok === true, JSON.stringify([a.code, b.code]));
+    pay.approve(a.intentId, { actor: 'user' });
+    const ca = await pay.charge(a.intentId);
+    check('放大防御：第一笔照常扣款', ca.ok === true && ca.status === 'charged', JSON.stringify(ca).slice(0, 160));
+    pay.approve(b.intentId, { actor: 'user' });
+    const cb = await pay.charge(b.intentId);
+    check('放大防御：第二笔扣款前复核额度 → 拒绝并落台账',
+      cb.ok === false && cb.code === 'DAILY_LIMIT_EXCEEDED' && pay.getTx(b.intentId).status === 'denied', JSON.stringify(cb).slice(0, 200));
+    check('放大防御：被拒单不计入已用额度', pay.summary('a').spent.dailyCents === 1000, JSON.stringify(pay.summary('a').spent));
   }
 
   {
@@ -239,9 +272,50 @@ async function main() {
     check('授权范围：不存在 → MANDATE_NOT_FOUND', noSuch.ok === false && noSuch.code === 'MANDATE_NOT_FOUND');
   }
 
+  /* 三层授权第一层不可省略 + agent/币种服务端定（审查 中危 #13） */
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
-    const r = await pay.purchase({ amountCents: 1999, merchant: '书店', category: '图书', agent: 'scribe', items: [{ name: '书' }] });
+    const miss = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', agent: 'a' });
+    check('三层授权：缺 mandate 不放行（MANDATE_REQUIRED）',
+      miss.ok === false && miss.code === 'MANDATE_REQUIRED', JSON.stringify(miss).slice(0, 160));
+    check('三层授权：拒绝也落台账', pay.getTx(miss.intentId).status === 'denied', JSON.stringify(pay.getTx(miss.intentId)));
+
+    const md = pay.createMandate({ agent: 'a', totalLimitCents: 0, currency: 'CNY', categories: [] });
+    const forged = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', agent: 'evil', mandateId: md.id });
+    check('agent 由服务端按 mandate 映射（请求体自报无效）',
+      forged.ok === true && forged.transaction.agent === 'a' && pay.listTransactions({ agent: 'evil' }).length === 0,
+      JSON.stringify(forged.transaction).slice(0, 200));
+
+    const fx = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: md.id, currency: 'USD' });
+    check('currency 强制等于配置币种（自报 USD → CURRENCY_MISMATCH）',
+      fx.ok === false && fx.code === 'CURRENCY_MISMATCH', JSON.stringify(fx).slice(0, 160));
+    const native = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: md.id, currency: 'CNY' });
+    check('currency 与配置一致时放行，台账币种 = 配置币种',
+      native.ok === true && native.transaction.currency === 'CNY', JSON.stringify(native).slice(0, 160));
+
+    // 业务失败返回 fail(code)、不 throw（审查 可维护性 #7）
+    const bad = pay.createMandate({ totalLimitCents: 100 });
+    check('授权范围：缺 agent 拒绝创建（AGENT_REQUIRED）',
+      !!bad && bad.ok === false && bad.code === 'AGENT_REQUIRED', JSON.stringify(bad));
+  }
+
+  /* mandateSpent 按授权关联：两份授权不串额度（审查 中危 #13） */
+  {
+    const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
+    const md1 = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [] });
+    const md2 = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [] });
+    const a = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: md1.id });
+    const b = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: md1.id });
+    check('授权额度按 mandate 关联累计：同一授权第二笔超总额 → MANDATE_EXCEEDED',
+      a.ok === true && b.ok === false && b.code === 'MANDATE_EXCEEDED', JSON.stringify([a.code, b.code]));
+    const c = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: md2.id });
+    check('授权额度不串池：另一份授权额度独立', c.ok === true, JSON.stringify(c).slice(0, 160));
+  }
+
+  {
+    const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
+    const md = mkMandate(pay, { agent: 'scribe' });
+    const r = await pay.purchase({ amountCents: 1999, merchant: '书店', category: '图书', mandateId: md.id, items: [{ name: '书' }] });
     const rec = pay.receipt(r.intentId);
     check('收据：导出结构化数据 + 可读文本', !!rec && rec.transaction.intentId === r.intentId && /交易收据/.test(rec.text), rec && rec.text && rec.text.split('\n')[0]);
     check('收据：文本含金额与商户', /19\.99/.test(rec.text) && /书店/.test(rec.text));

@@ -24,10 +24,12 @@ import {
   ensureDataDir, loadConfig, publicConfig, applyEditablePatch,
 } from './config.mjs';
 import { openDb, closeDb } from './db.mjs';
-import { addClient, broadcast, clientCount, closeAll } from './events.mjs';
+import { addClient, broadcast, closeAll, issueTicket, consumeTicket } from './events.mjs';
+import { isFail } from './util.mjs';
 import { createScheduler } from './scheduler.mjs';
-import { createEmail } from './email.mjs';
+import { createEmail, EMAIL_CODES } from './email.mjs';
 import { createPayment } from './payment.mjs';
+import { PAYMENT_CODES } from './payment-policy.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const START_AT = Date.now();
@@ -104,10 +106,18 @@ function releaseLock() {
 
 /* ---------------- HTTP 小工具 ---------------- */
 
+// 只回显本机来源（file:// 的 Origin 是字面量 "null"；本地页面是 localhost / 127.0.0.1 / [::1]）。
+// 其它来源不给 CORS 头，浏览器自然拦截——token 之外的第二道防线：
+// 即使 token 泄漏，任意网页也调不动本服务（配合「服务只绑 127.0.0.1」的边界）。
+const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
 function applyCors(req, res) {
   const origin = req.headers.origin;
-  // 前端可能来自 file://（Origin 为字符串 "null"）或任意静态源；回显 Origin 即可，不用 credentials
-  res.setHeader('Access-Control-Allow-Origin', origin ? origin : '*');
+  if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');   // 非浏览器客户端（curl / 脚本）
+  } else if (origin === 'null' || LOCAL_ORIGIN.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
@@ -143,25 +153,259 @@ function readBody(req, limit) {
   });
 }
 
-/* ---------------- 鉴权：Authorization: Bearer，或 SSE 用的 ?token=（EventSource 不能设请求头） ---------------- */
+/* ---------------- 鉴权：只认 Authorization: Bearer ----------------
+ * 查询参数里的 ?token= 已移除（审查 低危 #18）：URL 会进代理 / 访问日志 / Referer，
+ * token 不能出现在 URL 里。EventSource 不能设请求头 → SSE 走短时效一次性 ticket
+ * （POST /api/events/ticket 用 Bearer 换，再以 ?ticket= 连接）。
+ */
 
 function timingEqual(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ba.length !== bb.length || ba.length === 0) return false;
-  return crypto.timingSafeEqual(ba, bb);
+  // 定长哈希再比（审查 低危 #18）：直接比较原始串时，长度不等会提前返回，泄漏长度侧信道
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
 }
 
-function tokenFrom(req, url) {
+function tokenFrom(req) {
   const h = req.headers['authorization'] || '';
   const m = /^Bearer\s+(.+)$/i.exec(String(h));
-  if (m) return m[1].trim();
-  return (url.searchParams.get('token') || '').trim();
+  return m ? m[1].trim() : '';
 }
 
-function authorized(req, url, cfg) {
-  const got = tokenFrom(req, url);
+function authorized(req, cfg) {
+  const got = tokenFrom(req);
   return !!got && timingEqual(got, cfg.token);
+}
+
+/* ---------------- 错误映射：业务码白名单，其余 500 ----------------
+ * catch 里不能把 e.message 原文回给客户端（审查 低危 #17）：SQLite 约束名、系统错误等
+ * 属于内部实现细节。只有白名单里的业务码按 400/503 + 可读文案返回，其余一律
+ * 500 + 通用文案，细节只进服务端日志。
+ */
+const BIZ_MESSAGES = {
+  BAD_JSON: '请求体不是合法 JSON。',
+  BODY_TOO_LARGE: '请求体太大了。',
+  NAME_REQUIRED: '触发器名字不能为空。',
+  TRIGGER_NOT_FOUND: '找不到这个触发器。',
+  ONCE_NEEDS_AT: '一次性触发器需要一个触发时间。',
+  INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE: '心跳间隔至少 1 分钟。',
+  BAD_TIMEZONE: '时区不合法。',
+  BAD_TRIGGER_TYPE: '不支持的触发器类型。',
+  CRON_EMPTY: 'cron 表达式为空。',
+  CRON_NEEDS_5_FIELDS: 'cron 表达式需要 5 个字段。',
+  AGENT_REQUIRED: '授权范围必须指定发起方（agent）。',
+};
+const BIZ_CODES = new Set([
+  'BAD_JSON', 'BODY_TOO_LARGE',
+  'NAME_REQUIRED', 'TRIGGER_NOT_FOUND',
+  'ONCE_NEEDS_AT', 'INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE', 'BAD_TIMEZONE', 'BAD_TRIGGER_TYPE',
+  'CRON_EMPTY', 'CRON_EMPTY_FIELD', 'CRON_BAD_STEP', 'CRON_BAD_NUMBER', 'CRON_NEEDS_5_FIELDS', 'CRON_OUT_OF_RANGE',
+  'AGENT_REQUIRED',
+  ...PAYMENT_CODES, ...EMAIL_CODES,
+]);
+const NOT_READY_CODES = new Set(['PAYMENT_NOT_READY', 'SCHEDULER_NOT_READY', 'EMAIL_NOT_READY']);
+
+function bizMessage(code) {
+  return BIZ_MESSAGES[code] || ('请求无效（' + code + '）');
+}
+
+/* ---------------- 路由表 ----------------
+ * 审查 可维护性 #3：handle() 手写正则顺序路由 → [{method, re, body, run}] 路由表，
+ * 鉴权 / 解码 / 错误映射收口到 dispatch 一处。新增接口只需在表里加一行，
+ * 不会漏鉴权、漏解码、漏错误映射。
+ *   run(ctx) → { status, body }；ctx = { req, res, url, cfg, params, body, query }
+ *   body:true 时 dispatch 统一 await readBody（解码只此一处）。
+ */
+
+// 常见「业务结果 → HTTP」映射：r.ok ? 200 : 400
+const okOr400 = (r) => ({ status: r.ok ? 200 : 400, body: r });
+
+// 模块层返回 fail(code)（审查 可维护性 #7：业务失败返回结构、不 throw）→ 400 + 可读文案
+const failTo400 = (r) => ({
+  status: 400,
+  body: { ok: false, code: r.code, message: r.message || bizMessage(r.code) },
+});
+
+const ROUTES = [
+  /* ---- 配置 ---- */
+  {
+    method: 'GET', re: /^\/api\/config$/, body: false,
+    run: (c) => ({ status: 200, body: { ok: true, config: publicConfig(c.cfg) } }),
+  },
+  {
+    method: 'PUT', re: /^\/api\/config$/, body: true,
+    run: (c) => {
+      const next = applyEditablePatch(c.body);
+      return { status: 200, body: { ok: true, config: publicConfig(next), note: '已写入 sidecar/data/config.json（即时生效，无需重启）' } };
+    },
+  },
+
+  /* ---- SSE ticket 发放：Bearer 换短时效一次性凭据（连接本身见 handle 入口处） ---- */
+  {
+    method: 'POST', re: /^\/api\/events\/ticket$/, body: false,
+    run: () => ({ status: 200, body: Object.assign({ ok: true }, issueTicket()) }),
+  },
+
+  /* ---- 调度：触发器 ---- */
+  {
+    method: 'GET', re: /^\/api\/triggers$/, body: false,
+    run: () => {
+      const sched = requireScheduler();
+      return { status: 200, body: { ok: true, triggers: sched.listTriggers(), stats: sched.stats() } };
+    },
+  },
+  {
+    method: 'POST', re: /^\/api\/triggers$/, body: true,
+    run: (c) => {
+      const r = requireScheduler().upsertTrigger(c.body);
+      return isFail(r) ? failTo400(r) : { status: 200, body: { ok: true, trigger: r } };
+    },
+  },
+  {
+    method: 'POST', re: /^\/api\/triggers\/([^/]+)\/confirm$/, body: false,
+    run: (c) => {
+      const r = requireScheduler().confirmTrigger(c.params[0]);
+      return isFail(r) ? failTo400(r) : { status: 200, body: { ok: true, trigger: r } };
+    },
+  },
+  {
+    method: 'POST', re: /^\/api\/triggers\/([^/]+)\/cancel$/, body: false,
+    run: (c) => ({ status: 200, body: { ok: true, cancelled: requireScheduler().cancelTrigger(c.params[0]) } }),
+  },
+
+  /* ---- 调度：一键暂停 / 待处理队列 ---- */
+  {
+    method: 'POST', re: /^\/api\/schedule\/pause$/, body: true,
+    run: (c) => {
+      const paused = c.body && c.body.paused !== undefined ? !!c.body.paused : true;
+      const next = applyEditablePatch({ schedule: { paused } });
+      broadcast('feature.changed', { feature: 'schedule', paused });
+      requireScheduler().refresh();
+      return { status: 200, body: { ok: true, paused: next.schedule.paused } };
+    },
+  },
+  {
+    method: 'GET', re: /^\/api\/pending$/, body: false,
+    run: () => ({ status: 200, body: { ok: true, pending: requireScheduler().listPending() } }),
+  },
+  {
+    method: 'POST', re: /^\/api\/pending\/([^/]+)\/ack$/, body: false,
+    run: (c) => ({ status: 200, body: { ok: true, acked: requireScheduler().ackPending(c.params[0]) } }),
+  },
+
+  /* ---- 邮件（一律用户显式发起；白名单与上限都在这里硬校验） ---- */
+  {
+    method: 'POST', re: /^\/api\/email\/send$/, body: true,
+    run: async (c) => {
+      // 只收 to/subject/body。confirm / actor 由服务端掌握：
+      // 「已确认」只存在于草稿确认流（/drafts/:id/send → sendDraft 内部带 confirmed），
+      // 请求体里的 confirm 一律无视——否则白名单闸门退化成一个可伪造的布尔；
+      // actor 恒为 user，不允许调用方冒充（审计口径）。
+      const r = await requireEmail().send(
+        { to: c.body.to, subject: c.body.subject, body: c.body.body, actor: 'user' },
+        { confirmed: false }
+      );
+      return okOr400(r);
+    },
+  },
+  {
+    method: 'POST', re: /^\/api\/email\/draft$/, body: true,
+    run: (c) => ({ status: 200, body: { ok: true, draft: requireEmail().createDraft(c.body) } }),
+  },
+  {
+    method: 'GET', re: /^\/api\/email\/drafts$/, body: false,
+    run: () => ({ status: 200, body: { ok: true, drafts: requireEmail().listDrafts() } }),
+  },
+  {
+    method: 'POST', re: /^\/api\/email\/drafts\/([^/]+)\/send$/, body: false,
+    run: async (c) => okOr400(await requireEmail().sendDraft(c.params[0], { actor: 'user' })),
+  },
+  {
+    method: 'DELETE', re: /^\/api\/email\/drafts\/([^/]+)$/, body: false,
+    run: (c) => ({ status: 200, body: { ok: true, discarded: requireEmail().discardDraft(c.params[0]) } }),
+  },
+  {
+    method: 'GET', re: /^\/api\/email\/inbox$/, body: false,
+    run: (c) => okOr400(requireEmail().inbox({ limit: c.query.get('limit') })),
+  },
+  {
+    method: 'GET', re: /^\/api\/email\/audit$/, body: false,
+    run: (c) => {
+      const mails = requireEmail();
+      return { status: 200, body: { ok: true, audit: mails.listAudit({ limit: c.query.get('limit') }), stats: mails.stats() } };
+    },
+  },
+
+  /* ---- 购物支付（模型拿不到凭证；策略在这里强制执行） ---- */
+  {
+    method: 'POST', re: /^\/api\/payment\/intents$/, body: true,
+    run: async (c) => okOr400(await requirePayment().purchase(c.body)),
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/intents\/([^/]+)\/approve$/, body: false,
+    run: async (c) => {
+      const pay = requirePayment();
+      const ok = pay.approve(c.params[0], { actor: 'user' });
+      if (!ok.ok) return { status: 400, body: ok };
+      const charged = await pay.charge(c.params[0]);   // 用户确认即放行 → 直接扣款
+      return okOr400(charged);
+    },
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/intents\/([^/]+)\/deny$/, body: false,
+    run: (c) => okOr400(requirePayment().deny(c.params[0], { actor: 'user' })),
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/intents\/([^/]+)\/charge$/, body: false,
+    run: async (c) => okOr400(await requirePayment().charge(c.params[0])),
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/intents\/([^/]+)\/paid$/, body: false,
+    run: (c) => okOr400(requirePayment().markPaid(c.params[0], { actor: 'user' })),
+  },
+  {
+    method: 'GET', re: /^\/api\/payment\/transactions$/, body: false,
+    run: (c) => ({
+      status: 200,
+      body: {
+        ok: true,
+        transactions: requirePayment().listTransactions({ agent: c.query.get('agent') || '', limit: c.query.get('limit') }),
+        stats: requirePayment().stats(),
+      },
+    }),
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/summary$/, body: true,
+    run: (c) => ({ status: 200, body: { ok: true, summary: requirePayment().summary(c.body && c.body.agent) } }),
+  },
+  {
+    method: 'GET', re: /^\/api\/payment\/receipt\/([^/]+)$/, body: false,
+    run: (c) => {
+      const r = requirePayment().receipt(c.params[0]);
+      if (!r) return { status: 404, body: { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔交易。' } };
+      return { status: 200, body: { ok: true, receipt: r } };
+    },
+  },
+  {
+    method: 'GET', re: /^\/api\/payment\/mandates$/, body: false,
+    run: () => ({ status: 200, body: { ok: true, mandates: requirePayment().listMandates() } }),
+  },
+  {
+    method: 'POST', re: /^\/api\/payment\/mandates$/, body: true,
+    run: (c) => {
+      const r = requirePayment().createMandate(c.body);
+      return isFail(r) ? failTo400(r) : { status: 200, body: { ok: true, mandate: r } };
+    },
+  },
+];
+
+function matchRoute(method, pathname) {
+  for (const r of ROUTES) {
+    if (r.method !== method) continue;
+    const m = r.re.exec(pathname);
+    if (m) return { route: r, params: m.slice(1).map(decodeURIComponent) };
+  }
+  return null;
 }
 
 /* ---------------- 路由 ---------------- */
@@ -188,164 +432,54 @@ async function handle(req, res) {
     });
   }
 
-  if (!authorized(req, url, cfg)) {
+  /* ---- SSE 连接：ticket 就是这张长连接的凭据（EventSource 带不了 Authorization 头），
+   * 必须先于通用 Bearer 鉴权处理；ticket 本身短时效、一次性（审查 低危 #18） ---- */
+  if (req.method === 'GET' && url.pathname === '/api/events') {
+    if (!consumeTicket(url.searchParams.get('ticket'))) {
+      return sendJSON(res, 401, {
+        ok: false, code: 'UNAUTHORIZED',
+        message: '缺少或过期的 SSE ticket：先 POST /api/events/ticket（带 Bearer token）换一张，一次性、30 秒内有效。',
+      });
+    }
+    if (!addClient(req, res)) {
+      return sendJSON(res, 429, { ok: false, code: 'SSE_CLIENTS_FULL', message: '实时推送连接数已达上限，请稍后重连。' });
+    }
+    return;   // 长连接：不结束响应
+  }
+
+  if (!authorized(req, cfg)) {
     return sendJSON(res, 401, {
       ok: false, code: 'UNAUTHORIZED',
       message: '缺少或错误的 token。请带上 Authorization: Bearer <token>（token 见 sidecar/data/config.json）。',
     });
   }
 
-  try {
-    if (req.method === 'GET' && url.pathname === '/api/config') {
-      return sendJSON(res, 200, { ok: true, config: publicConfig(cfg) });
-    }
-    if (req.method === 'PUT' && url.pathname === '/api/config') {
-      const body = await readBody(req);
-      const next = applyEditablePatch(body);
-      return sendJSON(res, 200, { ok: true, config: publicConfig(next), note: '已写入 sidecar/data/config.json（即时生效，无需重启）' });
-    }
-
-    /* ---- SSE：到点触发 / 待确认变化的推送通道 ---- */
-    if (req.method === 'GET' && url.pathname === '/api/events') {
-      addClient(req, res);
-      return;   // 长连接：不结束响应
-    }
-
-    /* ---- 调度：触发器 ---- */
-    if (req.method === 'GET' && url.pathname === '/api/triggers') {
-      const sched = requireScheduler();
-      return sendJSON(res, 200, { ok: true, triggers: sched.listTriggers(), stats: sched.stats() });
-    }
-    if (req.method === 'POST' && url.pathname === '/api/triggers') {
-      const body = await readBody(req);
-      const trigger = requireScheduler().upsertTrigger(body);
-      return sendJSON(res, 200, { ok: true, trigger });
-    }
-
-    let m = /^\/api\/triggers\/([^/]+)\/confirm$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const trigger = requireScheduler().confirmTrigger(decodeURIComponent(m[1]));
-      return sendJSON(res, 200, { ok: true, trigger });
-    }
-    m = /^\/api\/triggers\/([^/]+)\/cancel$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const done = requireScheduler().cancelTrigger(decodeURIComponent(m[1]));
-      return sendJSON(res, 200, { ok: true, cancelled: done });
-    }
-
-    /* ---- 调度：一键暂停 / 待处理队列 ---- */
-    if (req.method === 'POST' && url.pathname === '/api/schedule/pause') {
-      const body = await readBody(req);
-      const paused = body && body.paused !== undefined ? !!body.paused : true;
-      const next = applyEditablePatch({ schedule: { paused } });
-      broadcast('feature.changed', { feature: 'schedule', paused });
-      requireScheduler().refresh();
-      return sendJSON(res, 200, { ok: true, paused: next.schedule.paused });
-    }
-    if (req.method === 'GET' && url.pathname === '/api/pending') {
-      return sendJSON(res, 200, { ok: true, pending: requireScheduler().listPending() });
-    }
-    m = /^\/api\/pending\/([^/]+)\/ack$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const done = requireScheduler().ackPending(decodeURIComponent(m[1]));
-      return sendJSON(res, 200, { ok: true, acked: done });
-    }
-
-    /* ---- 邮件（一律用户显式发起；白名单与上限都在这里硬校验） ---- */
-    if (req.method === 'POST' && url.pathname === '/api/email/send') {
-      const body = await readBody(req);
-      const r = await requireEmail().send(Object.assign({ actor: 'user' }, body));
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    if (req.method === 'POST' && url.pathname === '/api/email/draft') {
-      const body = await readBody(req);
-      return sendJSON(res, 200, { ok: true, draft: requireEmail().createDraft(body) });
-    }
-    if (req.method === 'GET' && url.pathname === '/api/email/drafts') {
-      return sendJSON(res, 200, { ok: true, drafts: requireEmail().listDrafts() });
-    }
-    m = /^\/api\/email\/drafts\/([^/]+)\/send$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const r = await requireEmail().sendDraft(decodeURIComponent(m[1]), { actor: 'user' });
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    m = /^\/api\/email\/drafts\/([^/]+)$/.exec(url.pathname);
-    if (req.method === 'DELETE' && m) {
-      return sendJSON(res, 200, { ok: true, discarded: requireEmail().discardDraft(decodeURIComponent(m[1])) });
-    }
-    if (req.method === 'GET' && url.pathname === '/api/email/inbox') {
-      const r = await requireEmail().inbox({ limit: url.searchParams.get('limit') });
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    if (req.method === 'GET' && url.pathname === '/api/email/audit') {
-      const mails = requireEmail();
-      return sendJSON(res, 200, {
-        ok: true,
-        audit: mails.listAudit({ limit: url.searchParams.get('limit') }),
-        stats: mails.stats(),
-      });
-    }
-
-    /* ---- 购物支付（模型拿不到凭证；策略在这里强制执行） ---- */
-    if (req.method === 'POST' && url.pathname === '/api/payment/intents') {
-      const body = await readBody(req);
-      const r = await requirePayment().purchase(body);
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    m = /^\/api\/payment\/intents\/([^/]+)\/approve$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const pay = requirePayment();
-      const id = decodeURIComponent(m[1]);
-      const ok = pay.approve(id, { actor: 'user' });
-      if (!ok.ok) return sendJSON(res, 400, ok);
-      const charged = await pay.charge(id);           // 用户确认即放行 → 直接扣款
-      return sendJSON(res, charged.ok ? 200 : 400, charged);
-    }
-    m = /^\/api\/payment\/intents\/([^/]+)\/deny$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const r = requirePayment().deny(decodeURIComponent(m[1]), { actor: 'user' });
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    m = /^\/api\/payment\/intents\/([^/]+)\/charge$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const r = await requirePayment().charge(decodeURIComponent(m[1]));
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    m = /^\/api\/payment\/intents\/([^/]+)\/paid$/.exec(url.pathname);
-    if (req.method === 'POST' && m) {
-      const r = requirePayment().markPaid(decodeURIComponent(m[1]), { actor: 'user' });
-      return sendJSON(res, r.ok ? 200 : 400, r);
-    }
-    if (req.method === 'GET' && url.pathname === '/api/payment/transactions') {
-      return sendJSON(res, 200, {
-        ok: true,
-        transactions: requirePayment().listTransactions({ agent: url.searchParams.get('agent') || '', limit: url.searchParams.get('limit') }),
-        stats: requirePayment().stats(),
-      });
-    }
-    if (req.method === 'POST' && url.pathname === '/api/payment/summary') {
-      const body = await readBody(req);
-      return sendJSON(res, 200, { ok: true, summary: requirePayment().summary(body && body.agent) });
-    }
-    m = /^\/api\/payment\/receipt\/([^/]+)$/.exec(url.pathname);
-    if (req.method === 'GET' && m) {
-      const r = requirePayment().receipt(decodeURIComponent(m[1]));
-      if (!r) return sendJSON(res, 404, { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔交易。' });
-      return sendJSON(res, 200, { ok: true, receipt: r });
-    }
-    if (req.method === 'GET' && url.pathname === '/api/payment/mandates') {
-      return sendJSON(res, 200, { ok: true, mandates: requirePayment().listMandates() });
-    }
-    if (req.method === 'POST' && url.pathname === '/api/payment/mandates') {
-      const body = await readBody(req);
-      return sendJSON(res, 200, { ok: true, mandate: requirePayment().createMandate(body) });
-    }
-  } catch (e) {
-    const code = String((e && e.message) || e);
-    return sendJSON(res, 400, { ok: false, code: code, message: '请求无效：' + code });
+  const hit = matchRoute(req.method, url.pathname);
+  if (!hit) {
+    return sendJSON(res, 404, { ok: false, code: 'NOT_FOUND', message: '没有这个接口：' + req.method + ' ' + url.pathname });
   }
 
-  return sendJSON(res, 404, { ok: false, code: 'NOT_FOUND', message: '没有这个接口：' + req.method + ' ' + url.pathname });
+  try {
+    // 统一解码：body:true 的路由在此一次性读请求体（readBody 抛 BAD_JSON / BODY_TOO_LARGE）
+    const body = hit.route.body ? await readBody(req) : undefined;
+    const out = await hit.route.run({
+      req: req, res: res, url: url, cfg: cfg,
+      params: hit.params, body: body, query: url.searchParams,
+    });
+    return sendJSON(res, out.status, out.body);
+  } catch (e) {
+    // 统一错误映射：业务码白名单按 400/503，其余 500 + 通用文案（审查 低危 #17）
+    const code = String((e && e.message) || e);
+    if (NOT_READY_CODES.has(code)) {
+      return sendJSON(res, 503, { ok: false, code: code, message: '本地服务模块还没就绪，请稍后重试或重启本地服务。' });
+    }
+    if (BIZ_CODES.has(code) || /^CRON_OUT_OF_RANGE:/.test(code)) {
+      return sendJSON(res, 400, { ok: false, code: code, message: bizMessage(code) });
+    }
+    // 其余（SQLite 约束名、系统错误…）：内部细节不外泄，统一 500 + 通用文案（审查 低危 #17）
+    log('error', 'unhandled', code);
+    return sendJSON(res, 500, { ok: false, code: 'INTERNAL', message: '服务内部错误' });
+  }
 }
 
 /* ---------------- 启动 ---------------- */
@@ -428,18 +562,38 @@ function main() {
 
   server.listen(port, '127.0.0.1', () => banner(cfg, port, firstRun));
 
+  let shuttingDown = false;
   const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     log('info', 'shutting down');
     try { scheduler && scheduler.stop(); } catch (_) {}
     try { closeAll(); } catch (_) {}
-    try { server.close(); } catch (_) {}
-    try { closeDb(); } catch (_) {}
-    releaseLock();
-    process.exit(0);
+    // in-flight 响应要收完再退出（审查 中危 #15）：close 后立刻 exit 会把正在写的响应截断；
+    // keep-alive 连接可能拖住 close，3 秒还没关完就强退，避免挂死
+    let exited = false;
+    const done = () => {
+      if (exited) return;
+      exited = true;
+      try { closeDb(); } catch (_) {}
+      releaseLock();
+      process.exit(0);
+    };
+    const force = setTimeout(done, 3000);
+    if (force.unref) force.unref();
+    try { if (server.closeIdleConnections) server.closeIdleConnections(); } catch (_) {}
+    try { server.close(done); } catch (_) { done(); }
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   process.on('exit', releaseLock);
+  // 兜底（审查 中危 #15）：一次未捕获异常不该让进程退出、触发器停摆到人工重启——记日志、继续跑
+  process.on('uncaughtException', e => {
+    log('error', 'uncaughtException', String((e && e.stack) || e));
+  });
+  process.on('unhandledRejection', e => {
+    log('error', 'unhandledRejection', String((e && e.message) || e));
+  });
 }
 
 main();
