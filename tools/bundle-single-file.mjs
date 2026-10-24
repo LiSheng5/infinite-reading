@@ -15,7 +15,7 @@
  *   - file:// 下的 localStorage 与「本地服务 / 在线版」互不相通，迁移请用导出导入
  *   - 字体仍走 CDN；断网时自动退回系统字体
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
@@ -38,7 +38,9 @@ const skipped = [];
 // 1) 内联样式表：<link rel="stylesheet" href="css/style.css?v=…">
 html = html.replace(/<link\b[^>]*href="(css\/[^"]+)"[^>]*>/g, (m, href) => {
   inlined.push(href.split('?')[0]);
-  return '<style>\n' + readRel(href) + '\n</style>';
+  // CSS 里若出现 </style> 字面量，会提前截断样式块 → 转义（审查 可简化 #8）
+  const css = readRel(href).replace(/<\/style>/gi, '<\\/style>');
+  return '<style>\n' + css + '\n</style>';
 });
 
 // 2) 内联脚本：<script src="js/x.js?v=…"></script>（顺序即加载顺序，原样保留）
@@ -75,4 +77,3 @@ const kb = (statSync(OUT).size / 1024).toFixed(1);
 console.log('已生成 ' + OUT.replace(ROOT + '\\', '').replace(ROOT + '/', '') + '（' + kb + ' KB，内联 ' + inlined.length + ' 个文件）');
 console.log('内联清单：' + inlined.join(' , '));
 if (skipped.length) console.log('已跳过：' + skipped.join(' , ') + '（单文件版不带 Service Worker）');
-if (!existsSync(OUT)) process.exit(1);
