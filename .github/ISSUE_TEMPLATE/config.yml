@@ -2,7 +2,7 @@ blank_issues_enabled: true
 contact_links:
   - name: 🔐 报告安全漏洞（请勿公开提 Issue）
     url: https://github.com/LiSheng5/infinite-reading/security/advisories/new
-    about: 走 GitHub 私密安全公告，细节见 SECURITY.md
+    about: 走 GitHub 私密安全公告；安全边界与威胁模型见 CONTRIBUTING.md 的「安全说明」一节
   - name: 📖 先看文档（架构 / 设计 / 常见问题）
     url: https://github.com/LiSheng5/infinite-reading/blob/main/ARCHITECTURE.md
-    about: 模块职责、一回合调用链、localStorage 键位与关键不变量
+    about: 模块职责、一回合调用链、IndexedDB 键位与关键不变量

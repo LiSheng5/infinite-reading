@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: 版本
-      description: 见根目录 `VERSION` 文件，或书架/设置面板里显示的版本号
-      placeholder: 0.2.0
+      description: 见根目录 `VERSION` 文件，或开始页脚「无限阅读 vX.Y.Z」
+      placeholder: 0.12.0
     validations:
       required: true
   - type: dropdown

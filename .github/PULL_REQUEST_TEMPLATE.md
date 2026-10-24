@@ -11,7 +11,7 @@
 ## 怎么验证的
 
 - [ ] 双击 `index.html` 或本地服务里手动点过一遍，行为符合预期
-- [ ] 跑了 `npm test`（= `eval/run.js` + `eval/demo-smoke.js`，离线、不花 API），结果：<!-- 贴总分 / 是否全绿 -->
+- [ ] 跑了 `npm test`（全量离线套件：版本一致性 / 对比度 / 各模块单测 / 离线演示 / 安全检查，清单见 `package.json`，不花 API），结果：<!-- 贴总分 / 是否全绿 -->
 - [ ] 若改了适配器层：`?demo=1` 的离线演示仍然能跑通
 - [ ] 若改了存储结构：老存档能正常打开（`Store.migrateStory` 已升级）
 - [ ] 若改了版本号：只改了 `VERSION` 并跑过 `node tools/sync-version.mjs`
@@ -22,9 +22,9 @@
 - [ ] 新增模块挂在 `IR.*` 命名空间上，且 `app.js` 仍最后加载
 - [ ] AI 输出 / 导入内容一律经 `textContent` 渲染，没有拼进 `innerHTML`
 - [ ] 没有提交 API Key、带 Key 的截图或他人隐私数据
-- [ ] 引用的第三方资源（字体、图标、数据）已登记到 `THIRD-PARTY-NOTICES.md`，且许可与 MIT 兼容
+- [ ] 引用的第三方资源（字体、图标、数据）已登记到 `CONTRIBUTING.md` 的「第三方资源与许可」一节，且许可与 MIT 兼容
 - [ ] 只借鉴思路、未复制 AGPL 项目（SillyTavern / InfiPlot 等）的代码
-- [ ] 用户可见的改动已更新 `README.md` 与 `CHANGELOG.md` 的 `[Unreleased]`
+- [ ] 用户可见的改动已更新 `README.md` 与 `README.en.md`（中英两份）
 
 ## 截图 / 录屏（界面改动必填）
 

@@ -24,7 +24,7 @@ cd infinite-reading
 
 > ⚠️ `file://` 和 `http://localhost` 是**两套独立的本地存储（IndexedDB / localStorage 都按 origin 隔离）**，开发时固定用其中一种，别来回切。
 
-Node 只在可选处用到（都不是必须的）：跑离线评测 `node eval/run.js`、同步版本号 `node tools/sync-version.mjs`、以及可选的本地服务 `sidecar/`（`node sidecar/server.mjs`）。要求 Node ≥ 22（侧车用到 `node:sqlite`，见 `package.json` 的 `engines`）。
+Node 只在可选处用到（都不是必须的）：跑离线评测 `node eval/run.js`、同步版本号 `node tools/sync-version.mjs`、以及可选的本地服务 `sidecar/`（`node sidecar/server.mjs`）。要求 **Node ≥ 22.5**（侧车用到内置 `node:sqlite`：22.5–23.3 需加 `--experimental-sqlite`，≥ 23.4 无需；见 `package.json` 的 `engines` 与 `sidecar/README.md`）。
 
 ## 二、目录地图
 
@@ -35,19 +35,27 @@ js/providers.js     适配器层：ChatProviders / ImageProviders / VideoProvide
 js/context.js       上下文组装与压缩：assembleAI1 / assemblePainter / compressStory
 js/storage.js       IndexedDB 适配器（唯一碰 IndexedDB 的地方，无 IndexedDB 时退回 localStorage）
 js/store.js         存档层（唯一出口）：内存优先 + 异步落盘、schema 迁移、书架、存档点
+js/tree.js          分支树数据层（回合树唯一真源）：投影 / 兄弟切换 / 分叉；裁剪窗口常量与 genId / clone / plainReply 公共工具也在这里
+js/treeLayout.js    分支页画布几何（纯逻辑）：泳道分配 / 折叠长单链 / pathEdgeD
+js/prefs.js         本对话偏好与模型库解析（纯逻辑）：effective / resolveChatCfg / stripSecrets
+js/paintQueue.js    作画串行队列（纯逻辑）：手动 / 工具 / 重画共用一条 FIFO
+js/proposals.js     提案状态机（纯逻辑）：模型发起的邮件 / 下单只能产生提案，确认才执行
+js/motion.js        动效强度解析（纯逻辑）：设置项 + 系统偏好 → off / standard / rich
+js/titles.js        自动标题（纯逻辑）：触发判定、prompt、输出清洗与写回护栏
+js/search.js        全文搜索（纯逻辑）：标题 + 全部分支节点检索，输出零 HTML
 js/modelCapabilities.js  模型参数登记表（默认留空）
 js/roleCard.js      SillyTavern V2/V3 PNG 角色卡解析
 js/demo.js          离线演示（?demo=1）：内置剧本 + 本地占位图两个适配器
 js/zip.js           零依赖手写 ZIP：带原图的全量备份打包 / 解包
 js/sidecar.js       可选本地服务客户端：/health 探测、token、SSE 退避重连
-js/features.js      主动触达的去重与排队（投递回调由 app.js 注册）
-js/app.js           状态机与 UI：回合编排、设置、导入导出（业务模块拆在 js/app/*.js）
+js/features.js      主动触达的去重与排队（投递回调由 js/app/sidecar.js 的 initFeatures 注册）
+js/app.js           组合根：事件绑定 + 启动（业务模块拆在 js/app/*.js，现 20 个）
 eval/run.js         离线评测（零依赖、不花 API）
 eval/mock-story.js  评测用的 32 回合长局剧本
 eval/demo-smoke.js  演示模式冒烟测试（不开浏览器，验证适配器契约）
 eval/zip-smoke.js   ZIP 读写冒烟（第二套 CRC32 复算 + 手工解析中央目录）
 eval/scheduler-test.js / email-test.js / payment-test.js / sidecar-smoke.js / frontend-smoke.js  侧车与前端特性测试（接入 npm test）
-sidecar/            可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment
+sidecar/            可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events / util / statuses
 manifest.webmanifest / sw.js / js/pwa.js   PWA：清单、Service Worker、注册
 icons/              应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx）
@@ -91,12 +99,14 @@ node tools/sync-version.mjs --check   # 版本号一致性
 
 ## 五、版本号
 
-`VERSION` 是唯一真源，不要手改 `index.html` 里的 `?v=` 或 `package.json` 的 `version`：
+`VERSION` 是唯一真源，不要手改任何内嵌版本号（`?v=`、页脚版本戳、徽章等）：
 
 ```bash
 echo 0.3.1 > VERSION        # 1) 改真源
-node tools/sync-version.mjs # 2) 同步到 index.html / package.json
+node tools/sync-version.mjs # 2) 同步到全部落点
 ```
+
+同步范围（`tools/sync-version.mjs` 的 TARGETS）：`index.html` 的 `?v=` 与页脚「无限阅读 vX.Y.Z」、`package.json` 的 `version`、`sw.js` 的缓存名、`README.md` / `README.en.md` 的徽章与「当前版本」行、`js/store.js` 与 `js/app/backup.js` 导出包的版本戳。`npm test` 会先跑 `--check`，版本漂移直接红。
 
 ## 六、许可红线（重要）
 
@@ -204,9 +214,10 @@ node tools/sync-version.mjs # 2) 同步到 index.html / package.json
 |---|---|---|
 | 只绑回环地址 | 服务只监听 `127.0.0.1:4319`，局域网 / 外网都访问不到 | 不要把绑定地址改成 `0.0.0.0`——那是另一个风险等级，本项目不做 |
 | 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json` | 防的是「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。别把 token 贴到公开地方 |
-| 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`，`sidecar/data/` 已加入 `.gitignore` | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥 |
-| SSE 的 token 走查询参数 | `EventSource` 不能自定义请求头，所以 `/api/events?token=…` | 仅在回环地址下可接受；服务端日志**不记录 token、不记录邮件正文** |
-| 支付策略不是「防你自己」 | 策略在**代码层**强制执行（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、agent 预算隔离），且 AI 拿不到任何支付凭证 | 你拥有本机文件，理论上可以改配置或改代码绕过。它的价值是**防误操作 + 可审计**，不是防用户自己。**AI 可能出错，请设置合理额度** |
+| CORS 只回显本机来源 | 接口只对 `file://`（Origin 为 `null`）与 `localhost / 127.0.0.1 / [::1]` 回 `Access-Control-Allow-Origin`，其它来源不给 CORS 头 | 即使 token 泄漏，任意网页也读不到接口响应（token 之外的第二道防线）。机器名 / 局域网 IP 打开的页面用不了侧车三件套，请用 localhost 打开 |
+| 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`（Windows 上 `mode:0o600` 无效，启动写盘时会用 `icacls` 把 `config.json` 收紧为仅当前用户可读写，失败不阻断），`sidecar/data/` 已加入 `.gitignore`；仓库自带的静态服务（`启动.bat` / `tools/serve.py` / `tools/serve.ps1`）对 `sidecar/data/` 与 `.git/` 统一拒绝 | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥；自己起别的静态服务时也要排除这两个目录 |
+| SSE 走短时效一次性 ticket | `EventSource` 不能自定义请求头，token 也**不进 URL**（会进代理 / 访问日志 / Referer）：先 `POST /api/events/ticket`（Bearer）换一张 30 秒有效、一次性 ticket，再以 `/api/events?ticket=…` 连接 | 服务端日志**不记录 token、不记录邮件正文**；ticket 用掉即删，连接数有上限（超限 429） |
+| 支付策略不是「防你自己」 | 策略在**代码层**强制执行（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、agent 预算隔离、**长期授权范围 mandate 强制**：下单必须挂在用户签发的授权上，agent 与币种由服务端按授权 / 配置映射，不采信请求体自报），且 AI 拿不到任何支付凭证 | 你拥有本机文件，理论上可以改配置或改代码绕过。它的价值是**防误操作 + 可审计**，不是防用户自己。**AI 可能出错，请设置合理额度** |
 | 不做支付 App 自动化 | 本期只有「模拟支付」与「仅生成订单，由你在微信 / 支付宝里手动付款」两种模式 | 绝不对任何支付 App 做自动化或绕过，绝不保存支付密码；不接真实支付回调 |
 | 邮件白名单是后端硬校验 | 不在白名单里的收件人只能落成草稿，必须由你确认后才发出 | 每次发送 / 建草稿 / 被拒都写审计（只记事实，不记正文全文） |
 
@@ -224,7 +235,7 @@ node tools/sync-version.mjs # 2) 同步到 index.html / package.json
 ### 代码里的安全底线（贡献者请注意）
 
 - **模型输出不拼 HTML**：AI 返回的文本一律经 `textContent` / `createTextNode` 渲染，禁止把模型输出或导入文件内容写进 `innerHTML`。新增渲染代码请沿用这条规则。
-- **导入文件要校验**：`.irstory.json` / `.irbackup.json` / `.irbackup.zip` 先检查 `format`、`schema` 与包内清单再落库（见 `js/store.js`、`js/app.js` 的 `applyImport` / `applyBackupImport`）。只导入你自己信任来源的文件。
+- **导入文件要校验**：`.irstory.json` / `.irbackup.json` / `.irbackup.zip` 先检查 `format`、`schema` 与包内清单再落库（见 `js/store.js` 与 `js/app/backup.js` 的 `applyImport` / `applyBackupImport`）。只导入你自己信任来源的文件。
 - **ZIP 解包不写磁盘**：`js/zip.js` 只把字节切片还原成 Blob 交给上层，不接受也不生成任何文件路径，因此没有 zip slip（路径穿越）问题；另设条目数 / 解出总长上限，畸形包一律「拒绝处理」而不是硬解。它只读调用方按清单指定的条目，不遍历整包。
 - **接口地址是用户自填的**：不要假设 Base URL 可信，也不要往请求里塞除必要字段以外的信息。
 - **不要提交密钥**：提交前检查 `git diff` 与截图里没有真实 API Key；`sidecar/data/` 已在 `.gitignore` 里，别把它挪出忽略清单。

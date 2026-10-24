@@ -18,7 +18,7 @@
 
 | 文件 | 命名空间 | 职责 | 代表函数 |
 |---|---|---|---|
-| `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`VideoProviders['minimax-video'].submit/poll/generate`（MiniMax V2） |
+| `js/providers.js` | `IR.ChatProviders` / `IR.ImageProviders` / `IR.VideoProviders` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'].generate()`、`ImageProviders['minimax-image'].generate()`（官方 `/v1/image_generation`，支持 `image-01-live` 的 `style` 画风）、`VideoProviders['minimax-video'].submit/poll/generate`（MiniMax V2） |
 | `js/context.js` | `IR.Context` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
 | `js/tree.js` | `IR.Tree` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换；UI-4：任意节点继续 / 分叉 | `ensure`、`begin` / `commit` / `seal`、`project`、`switchSibling` / `switchTo`、`latestLeaf` / `forkBefore` / `canResume`、`pushLate`、`imageIdsOf` |
 | `js/treeLayout.js` | `IR.TreeLayout` | 分支页画布几何（**纯逻辑**，Node 可 `require`，UI-4）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出 | `compute`、`pointsToD` |
@@ -30,7 +30,7 @@
 | `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
 | `js/app.js` | 无（组合根） | 事件绑定 + 启动（`bind` / `init` / boot IIFE），只接线不写业务；消费下面所有 `js/app/*` | `bind`、`init` |
-| `js/app/*.js`（18 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
+| `js/app/*.js`（20 个） | `IR.App`（`A.state` 共享状态 + `A.reg` 注册表） | 主逻辑按功能节拆分（见 §2.1）：模块间调用一律 `A.xxx()` 晚绑定，只有 `core.js` 可被其他模块顶部解构 | 见 §2.1 |
 | `eval/run.js` | 无（Node 脚本） | 离线评测，`require` 同样的模块后重放剧本 | `evaluate`、`checkHeuristic`、`checkP7` |
 | `eval/mock-story.js` | `IR.MockStory` | 评测剧本（32 回合 + 探针） | 数据文件 |
 | `eval/tree-test.js` | 无（Node 脚本） | 分支树数据层测试（投影 / 兄弟切换 / 迁移 / store 集成 / UI-4 继续与分叉，不联网不开浏览器） | `check`、`playTurn`、`retryTurn` |
@@ -52,7 +52,7 @@
 providers.js → prefs.js → context.js → tree.js → treeLayout.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
-`prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `js/app/*` 之前（回合编排要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `store.js` 与 `js/app/*` 之前（`serializeStory` 用它的裁剪窗口常量、`imageIdsOf` 委托它的树遍历，缺了直接报错；回合编排也要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -63,7 +63,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 ### 2.1 `js/app/*`：主逻辑拆分与 `IR.App` 约定（v0.7.1）
 
-原 `js/app.js`（v0.7.0 时 6284 行）按功能节拆成 15 个经典脚本（IIFE），**行为、DOM、文案一行不变**：
+原 `js/app.js`（v0.7.0 时 6284 行）按功能节拆成经典脚本（IIFE），**行为、DOM、文案一行不变**（拆分时 15 个；此后随功能演进新增 / 再拆，现为 20 个——模块数以 `js/app/` 目录实际文件为准，本表随增量维护）：
 
 | 文件 | 职责（源「节」） | 代表函数 |
 |---|---|---|
@@ -79,10 +79,11 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | `js/app/round.js` | 回合编排（任务书模块表外新增）：`callAI1` / 玩家行动 / 开场 / 工具执行 / 旁白收尾 | `callAI1`、`sendPlayerAction`、`runOpening`、`finishNarration`、`pushLog` |
 | `js/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
 | `js/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
-| `js/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词（§6） | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench` |
-| `js/app/video.js` | 生视频（MiniMax V2，§7）：`videoQ` 独立串行队列、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB（`vid:<sceneId>`）→ 写回 story；`pendingVideos` 恢复轮询与取消 | `enqueueVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`cancelActiveVideo`、`videoSrc`、`renderWorkbenchVideo` |
+| `js/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench` |
+| `js/app/video.js` | 生视频（MiniMax V2，§5 / §10）：`videoQ` 独立串行队列、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB（`vid:<sceneId>`）→ 写回 story；`pendingVideos` 恢复轮询与取消 | `enqueueVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`cancelActiveVideo`、`videoSrc`、`renderWorkbenchVideo` |
 | `js/app/styleanchor.js` | 画风锚定（R3 / §5） | `openAnchor`、`runAnchorBatch`、`anchorLock` |
-| `js/app/render.js` | 聊天记录、画面面板、布局、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`applyLayout`、`closeLightbox` |
+| `js/app/render.js` | 聊天记录、画面面板、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`closeLightbox` |
+| `js/app/layout.js` | 布局状态（从 render.js 拆出的统一入口）：`#screen-game` 的 `data-layout`、字号 / 宽度 / 密度三档、舞台收起与沉浸模式（本对话覆盖 → 全局默认） | `effectiveLayout`、`applyLayout`、`bindSplitter` |
 | `js/app/settings.js` | 设置界面、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
 | `js/app/prefsui.js` | UI-3 设置分层界面：全局设置分组导航（桌面左导航 / 窄屏下钻）、模型库管理、本对话设置面板（右侧停靠 / 窄屏底部弹层） | `initSettingsNav`、`renderModelProfiles`、`renderStoryPrefs`、`openStoryPrefs` |
 | `js/app/branch.js` | UI-4 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作、历史位置提示条 | `initBranch`、`openBranch`、`closeBranch`、`updateHistoryBar` |
@@ -133,7 +134,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 - **对话与生图彻底分离**：两个 `Base URL` / `Key` / 模型名各自独立（设置面板里是两组配置）。
 - **剧情模式的作画只能由用户触发（P-1，v0.11.0）**：时机出图（`settings.trigger` 的每轮 / 选择后）与开局自动出图已删除，「出图时机」设置整体下线（`settings.trigger` / `story.prefs.trigger` 停止读写，旧值原样留在存档里）；剧情模型也不再下发 `request_image`（工具清单与工具说明里都没有它，模型若照旧历史调了按「该工具不可用」回传）。唯一入口 = 🎨（`#btn-stage-gen` / `#btn-manual-gen`）与画师工作台重画；舞台无图时显示引导「点 🎨 为当前场景画一张」。
 - **出图不卡回合**（v0.5.1）：`request_image`（chat / rp 直出变体）提交进**同一条作画队列**（`IR.PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
-- **画师是子代理，隔离上下文、用完即弃**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**scene 模式的输入只有固定几块（P-1 §4）**：`PAINTER_SYSTEM` + `[画风锚]`（设定卡优先）+ `[最近两张图]` + `[最近剧情]`（最近 `PAINTER_RECENT_TURNS = 3` 回合的「玩家行动 + 旁白」，玩家行动带（做）/（说）/（导演）标记、每条截断 200 字）+ `[画面参考]` / `[画风要求]`；**不得出现**更早对话、世界卡全文、摘要栈、剧情规则提示词、用户画像（`eval/painter-context-test.js` 固定）。**对话 / 扮演的工具出图不经画师**（§3.E）：模型自己写 `prompt` 直出；工作台对话（chat 模式）保持 `recall_recent_plot` 不动。
+- **画师是子代理，隔离上下文、用完即弃**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**scene 模式的输入只有固定几块（P-1 §4）**：`PAINTER_SYSTEM` + `[画风锚]`（设定卡优先）+ `[最近两张图]` + `[基底 prompt]`（上一次出图的**完整** prompt，差分基底：风格词原样保留、只改剧情变化的部分；第一次作画时整块省略）+ `[最近剧情]`（最近 `PAINTER_RECENT_TURNS = 3` 回合的「玩家行动 + 旁白」，玩家行动带（做）/（说）/（导演）标记、每条截断 200 字）+ `[画面参考]` / `[画风要求]`；**不得出现**更早对话、世界卡全文、摘要栈、剧情规则提示词、用户画像（`eval/painter-context-test.js` 固定）。**对话 / 扮演的工具出图不经画师**（§3.E）：模型自己写 `prompt` 直出；工作台对话（chat 模式）保持 `recall_recent_plot` 不动。
 - **「停止」只管聊天回合**（v0.5.1）：`chatAbortCtrl` 只有聊天回合的请求写它；`painterCompose` / 生图不再挂上来，后台作画不被停止中断（超时沿用适配器自己的）。
 - **出图任务带 `storyId`**：写入前核对，避免切故事后把图贴到别的档上。
 - **临时例外（§3.F）**：对话 / 扮演的「手动作画」按钮本期仍走「画师优先、不可用则场景描述兜底」——工具被关 / 模型不吃 tools 时它是唯一出图入口，而 chat / rp 的 `lastSceneSummary` 只是旁白截断、不适合当提示词。等智能体模式改版（画布去掉、工具为主）时整体处理。
@@ -165,7 +166,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 ### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
-顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], lastBg, lastSceneSummary, tree{}`。
+顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], pendingVideos[], lastBg, lastSceneSummary, tree{}`。
 
 - `titleAuto` / `titleGen`（UI-2 §3.2/§3.3）：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn === 1`（第一次）与 `turn === 6`（第二次），失败不计次。
 
@@ -173,8 +174,9 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 - `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
 - `prefs`（本对话偏好，UI-3 §3.2，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`trigger`、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `IR.Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。
 - `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`IR.Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `IR.Tree.ensure` 幂等迁移成线性链（末条旁白 `versions > 1` 展开成兄弟、旧存档点按 `sp.turn` 映射 `nodeId`）。
-- 写盘前经 `serializeStory` 裁剪：`log` 只保留末 120 条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 12 张、`savepoints` 只保留末 5 个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。
-- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级（`migrateStory` 原样透传 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
+- 写盘前经 `serializeStory` 裁剪：`log` 只保留末 `IR.Tree.LOG_WINDOW`（120）条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 `IR.Tree.SCENE_WINDOW`（12）张、`savepoints` 只保留末 `IR.Tree.SAVEPOINT_KEEP`（5）个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。裁剪窗口的唯一口径在 `js/tree.js` 顶部常量（store 与书架导出一律引用导出值），**不要在别处写字面量**。落盘快照**深拷贝**、`migrateStory` 入口同样先深拷贝——「已保存」内存快照不会被现场就地修改带脏，异步 put 也不会写进未 save 的现场。
+- `pendingVideos[]`（生视频，v0.12.0）：已提交、未出结果的异步任务（`taskId` 等）；切档 / 刷新后由 `js/app/video.js` 据此**续轮询同一任务**（不重复提交），完成 / 取消 / 过期后从数组移除。
+- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级（`migrateStory` 深拷贝后原样保留 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与迁移函数**。
 
 ### 4.3 对外交换格式
 
@@ -190,7 +192,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs.trigger` 随 `PREF_KEYS` 去掉，导入旧包按未知键丢弃。）
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（P4 视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs.trigger` 随 `PREF_KEYS` 去掉，导入旧包按未知键丢弃。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `IR.Prefs.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
 **主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `IR.Prefs.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`thinking` / `extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
@@ -223,7 +225,10 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | **每轮工具调用上限 2 次** | `context.js`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
 | **工具结果按语义分流** | `js/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（chat / rp）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
 | **剧情作画只能点按钮**（P-1，v0.11.0） | `js/app/round.js`（删 `maybeEnqueueImage` 与开局出图）、`js/context.js`：`toolsForMode('choice')` 无 `request_image` | 回合结束 / 开局不再自动出图，`S.turnPaintedByTool` 已随去重需求一起删除；省掉没要求时的画师构思 + 生图开销 |
-| **画师上下文隔离规则**（P-1 §4） | `context.js`：`assemblePainter`（scene）/ `recentTurnLines`、`PAINTER_RECENT_TURNS` / `PAINTER_RECENT_LINE_CHARS` | 画师每次调用只看固定几块（画风锚 / 最近两张图 / 最近 3 回合剧情 / 画面参考）；更早对话、世界卡、摘要栈、剧情规则、画像一律不进（`eval/painter-context-test.js` 固定） |
+| **画师上下文隔离规则**（P-1 §4） | `context.js`：`assemblePainter`（scene）/ `recentTurnLines`、`PAINTER_RECENT_TURNS` / `PAINTER_RECENT_LINE_CHARS` | 画师每次调用只看固定几块（画风锚 / 最近两张图 / 基底 prompt / 最近 3 回合剧情 / 画面参考）；更早对话、世界卡、摘要栈、剧情规则、画像一律不进（`eval/painter-context-test.js` 固定） |
+| **画风稳定靠「差分 prompt」** | `context.js`：`lastImagePrompt`、`PAINTER_SYSTEM`（差分规则）；`providers.js`：`clipPromptText` | 生图是纯文生图（不传图），风格只能靠文字锚：把上一次出图的完整 prompt 作为基底、只重写变化部分；超长 prompt 截断时保留尾部画风词（不许被 1500 字上限切掉） |
+| **视觉设定卡有两套视图** | `context.js`：`styleCardText`（画师）/ `styleCardTextForText` + `textAnchorText`（AI1） | 卡里的英文人物外观、媒介、色板、负面提示词都是**生图参数**，灌给旁白模型就会漏进思考链与正文（「画师的提示词混进来了」）；召回与 🧠 注入一律走文本侧视图（画风关键词 + 中文备注，并注明不要复述）。`eval/style-card-text-test.js` 固定 |
+| **参考图是唯一「真传图」的口子** | `js/app/library.js`：`refImageDataUrl`；`js/app/painter.js`：`runPaint`；`providers.js`：`minimax-image.supportsReference` + `subject_reference` | 仅当 `settings.image.refMode === 'prev'` 且适配器声明 `supportsReference` 时才把上一张图（长边 ≤1024 JPEG）塞进 `subject_reference`；拿不到图**不拦**这次作画（退化成本文生图），第一次作画自然跳过 |
 | **作画只有一条串行队列，构思也在里面** | `js/paintQueue.js`、`js/app/painter.js`：`paintQ` / `runPaintTask` | 手动 / 工具 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写）；「构思 → 出图」集中在 `runPaintTask` 一处 |
 | **回合锚点 `turnAnchor`** | `S.turnAnchor`（`IR.App.state`）；`js/app/round.js` / `turn.js` 的 commit / catch、`js/app/painter.js` 的 `runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
 | **「停止」只中断聊天回合** | `S.chatAbortCtrl`（`IR.App.state`）只有 `js/app/turn.js` 的 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
@@ -235,7 +240,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | **AI 文本一律 `textContent` 渲染** | `js/app/render.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
 | **树是唯一真源，其余字段是投影** | `js/tree.js`：`project` / `stateOf`；`js/app/*` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
 | **`seal` 必须在 `postTurn` 之后** | `js/app/round.js`：`sendPlayerAction`、`js/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
-| **全树图集必须含非当前分支** | `store.js`：`imageIdsOf` / `knownImageIds`、`js/tree.js`：`imageIdsOf` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径） |
+| **全树图集必须含非当前分支** | `js/tree.js`：`imageIdsOf`（树遍历**唯一实现**）；`store.js`：`imageIdsOf`（扫 log / scenes 后委托树遍历）、`knownImageIds` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径；树遍历只留一份实现，两处漂移过就是删档级事故） |
 | **晚到条目 / 画面带 `nodeId` 校验** | `js/app/painter.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
 | **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`js/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
 | **动画只动合成层属性** | `css/style.css` 的 `@keyframes` 与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
@@ -335,7 +340,7 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 ## 10. 想扩展的话
 
 - **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `js/app/*` 的业务逻辑。
-- **视频**：`IR.VideoProviders['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`js/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、上游只放行 MiniMax 两个域名、回包补 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。
+- **视频**：`IR.VideoProviders['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`js/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。
 - **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口。当前是白底蓝强调浅色主题（UI-1）；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
 
