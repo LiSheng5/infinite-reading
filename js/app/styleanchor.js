@@ -229,7 +229,7 @@
     }
     const old = S.story.styleCard;
     S.story.styleCard = Object.assign({
-      id: (old && old.id) || ('style' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)),
+      id: (old && old.id) || IR.genId('style'),
       version: ((old && +old.version) || 0) + 1,
       locked: true,
       updatedAt: Date.now(),

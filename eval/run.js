@@ -18,7 +18,9 @@ const path = require('path');
 
 global.window = global;
 require(path.join(__dirname, '..', 'js', 'context.js'));
+require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree 的裁剪窗口/树遍历（加载顺序同 index.html）
 require(path.join(__dirname, '..', 'js', 'store.js'));
+require(path.join(__dirname, '..', 'js', 'zip.js'));     // RoleCard.parsePNG 的 CRC 走 IR.Zip.crc32（三·5）
 require(path.join(__dirname, '..', 'js', 'roleCard.js'));
 require(path.join(__dirname, 'mock-story.js'));
 
@@ -39,18 +41,12 @@ function buildStory() {
 }
 
 function applyToolCalls(story, calls) {
-  for (const c of calls) {
-    const fn = (c && c.function) ? c.function : c;
-    const name = (fn && fn.name) || '';
-    let args = {};
-    try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) {}
-    if (name === 'update_memory') {
-      if (args.world) Context.mergeWorld(story.world, args.world);
-      if (args.relationship) Context.mergeWorld(story.world, { relationship: args.relationship });
-      if (Array.isArray(args.profile)) story.userProfile = (story.userProfile || []).concat(args.profile);
-    }
-    story.log.push({ type: 'tool', tool: name, summary: args.text || '', ts: 0 });
-  }
+  // 归档语义与真实链路同源（审查 可维护性 二·10）：工具吸收 / 提案留痕跳过 / 画像门控
+  // 都走 IR.Context.absorbToolCalls——这里只注入「画像门控开、合并去重同真源」的写入函数
+  Context.absorbToolCalls(story, calls, {
+    applyProfile: entries => { story.userProfile = Context.mergeProfile(story.userProfile || [], entries); },
+    now: 0,
+  });
 }
 
 function applyTurn(story, t, opening) {
@@ -60,11 +56,14 @@ function applyTurn(story, t, opening) {
 
   const r = t.reply;
   if (r.world) Context.mergeWorld(story.world, r.world);           // AI1 自报世界卡（增量浅合并）
-  story.log.push({ type: 'narration', text: r.narration });
-  story.messages.push({
-    role: 'assistant',
-    content: JSON.stringify({ narration: r.narration, choices: r.choices || [], scene_change: !!r.scene_change, scene_summary: r.scene_summary || '' }),
-  });
+  // 条目形状与 turn.js 同源（审查 可维护性 二·10）：narrationEntry（含 versions / activeVersion）
+  // 与 assistantEntry（slimReply 四字段）都用 IR.Context 的唯一实现
+  const rr = {
+    narration: r.narration || '', choices: r.choices || [],
+    scene_change: !!r.scene_change, scene_summary: r.scene_summary || '',
+  };
+  story.log.push(Context.narrationEntry(rr.narration, '', 0));
+  story.messages.push(Context.assistantEntry(rr, ''));
   if (r.tool_calls) applyToolCalls(story, r.tool_calls);
 
   story.turn += 1;
@@ -103,7 +102,7 @@ function evaluate() {
       });
     }
   }
-  return { results, tokenSeries, story, heuristic: checkHeuristic(story), p7: checkP7() };
+  return { results, tokenSeries, story, heuristic: checkHeuristic(story), p7: checkP7(), archive: checkArchive(story), mockTools: checkMockTools() };
 }
 
 /* ---------- C-E 启发式注入校验（T-P5-3 / §4.10 C-E） ----------
@@ -337,6 +336,84 @@ function checkP7() {
   return out;
 }
 
+/* ---------- 归档形状对齐校验（审查 可维护性 二·10） ----------
+ * 复刻归档此前与 turn.js 字段漂移：缺 versions / activeVersion、提案留痕没跳过、画像无门控。
+ * 现归档走 IR.Context 共享实现（narrationEntry / assistantEntry / absorbToolCalls），
+ * 这里把「形状契约」钉住：共享实现或复刻一漂移，评测即失败。 */
+function checkArchive(story) {
+  const out = [];
+  const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
+
+  const narr = (story.log || []).filter(e => e && e.type === 'narration');
+  push('旁白条目带 versions / activeVersion 版本栈（与 turn.js 同形状）',
+    narr.length > 0 && narr.every(e => Array.isArray(e.versions) && e.versions.length >= 1
+      && Number.isInteger(e.activeVersion) && e.versions[e.activeVersion] === e.text),
+    narr.length + ' 条');
+
+  const asst = (story.messages || []).filter(m => m && m.role === 'assistant');
+  push('assistant 消息 = slimReply 四字段 JSON（无 world / tool_calls）',
+    asst.length > 0 && asst.every(m => {
+      try {
+        const j = JSON.parse(m.content);
+        return j && typeof j.narration === 'string' && Array.isArray(j.choices)
+          && typeof j.scene_change === 'boolean' && typeof j.scene_summary === 'string'
+          && !('world' in j) && !('tool_calls' in j);
+      } catch (_) { return false; }
+    }), asst.length + ' 条');
+
+  // 合成调用钉语义：提案工具跳过留痕；画像写入走 applyProfile 门控（二·10 两个漂移点）
+  const s2 = Store.newStory({ mode: 'chat', premise: 'x' });
+  applyToolCalls(s2, [{ name: 'email_propose', arguments: '{"to":"a@b.c","subject":"hi","body":"x"}' }]);
+  push('提案类工具吸收时跳过 tool 留痕（留痕是提案卡本身）',
+    s2.log.filter(e => e.type === 'tool').length === 0, s2.log.length + ' 条留痕');
+  applyToolCalls(s2, [{ name: 'update_memory', arguments: '{"text":"记一下","profile":[{"text":"我怕蜘蛛","kind":"taboo"}]}' }]);
+  push('update_memory 画像经门控写入 + per-tool 留痕文案同源',
+    (s2.userProfile || []).length === 1 && s2.log.some(e => e.type === 'tool' && e.summary === '更新记忆：记一下'),
+    (s2.userProfile || []).length + ' 条画像 / ' + s2.log.filter(e => e.type === 'tool').map(e => e.summary).join('、'));
+
+  return out;
+}
+
+/* ---------- mock 工具形状 == 运行时 schema（审查 文档一致性 5.7） ----------
+ * mock-story 的 tool_calls 曾写出真实 schema 里不存在的参数（update_memory 的 scope），
+ * 真实链路会整包忽略 → 剧本「声称记住了」实际什么都没写，评测数据掺水。
+ * 这里把剧本里的每次工具调用对着运行时导出的工具 schema 钉一遍：
+ * 工具名必须在注册表里、参数键必须是 schema properties 的子集。 */
+function checkMockTools() {
+  const out = [];
+  const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
+
+  const registry = {};
+  for (const t of [].concat(
+    Context.TOOLS_AI1 || [], Context.REQUEST_IMAGE_DIRECT_TOOL || [],
+    Context.SCHEDULE_TOOLS || [], Context.EMAIL_TOOLS || [], Context.PAYMENT_TOOLS || [])) {
+    if (t && t.function && t.function.name) registry[t.function.name] = t.function;
+  }
+
+  let calls = 0;
+  for (let i = 0; i < MockStory.turns.length; i++) {
+    const list = (MockStory.turns[i].reply && MockStory.turns[i].reply.tool_calls) || [];
+    for (const c of list) {
+      calls += 1;
+      const fn = (c && c.function) || {};
+      const label = '第' + (i + 1) + '回合 ' + (fn.name || '(无名)');
+      const def = registry[fn.name];
+      if (!def) { push('mock 工具在运行时注册表里：' + label, false, '未知工具名'); continue; }
+      let args = null;
+      try { args = JSON.parse(fn.arguments || '{}'); } catch (_) { args = null; }
+      if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        push('mock 工具参数是 JSON 对象：' + label, false, 'arguments 不是对象'); continue;
+      }
+      const props = (def.parameters && def.parameters.properties) || {};
+      const extra = Object.keys(args).filter(k => !Object.prototype.hasOwnProperty.call(props, k));
+      push('mock 工具参数形状 == schema：' + label, extra.length === 0,
+        extra.length ? 'schema 外参数：' + extra.join('、') : 'ok');
+    }
+  }
+  push('剧本含工具调用（本组校验有覆盖）', calls > 0, calls + ' 次');
+  return out;
+}
+
 /* ---------- 报告 ---------- */
 function displayWidth(str) {
   let w = 0;
@@ -409,11 +486,31 @@ function report(out) {
     lines.push('P7 校验：' + phit + '/' + p7.length + (phit === p7.length ? ' ✅' : ' ❌'));
   }
 
+  const arch = out.archive || [];
+  if (arch.length) {
+    lines.push('');
+    lines.push('—— 归档形状对齐（审查 可维护性 二·10：与 turn.js 共用 IR.Context 归档）——');
+    for (const c of arch) lines.push(pad(c.name, 56) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
+    const ahit = arch.filter(x => x.hit).length;
+    lines.push('归档校验：' + ahit + '/' + arch.length + (ahit === arch.length ? ' ✅' : ' ❌'));
+  }
+
+  const mock = out.mockTools || [];
+  if (mock.length) {
+    lines.push('');
+    lines.push('—— mock 工具形状 == 运行时 schema（审查 文档一致性 5.7：剧本参数对齐工具注册表）——');
+    for (const c of mock) lines.push(pad(c.name, 56) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
+    const mhit = mock.filter(x => x.hit).length;
+    lines.push('mock 工具校验：' + mhit + '/' + mock.length + (mhit === mock.length ? ' ✅' : ' ❌'));
+  }
+
   console.log(lines.join('\n'));
   return {
     results, totalHit, totalAll, score: Number(score), tmin, tmax, tlast,
     heuristic: heur, heuristicHit: heur.filter(x => x.hit).length,
     p7: p7, p7Hit: p7.filter(x => x.hit).length,
+    archive: arch, archiveHit: arch.filter(x => x.hit).length,
+    mockTools: mock, mockToolsHit: mock.filter(x => x.hit).length,
   };
 }
 
@@ -430,6 +527,12 @@ if (summary.heuristicHit < summary.heuristic.length) {
 if (summary.p7Hit < summary.p7.length) {
   failed.push('P7 校验 ' + summary.p7Hit + '/' + summary.p7.length + ' 未全中');
 }
+if (summary.archiveHit < summary.archive.length) {
+  failed.push('归档形状校验 ' + summary.archiveHit + '/' + summary.archive.length + ' 未全中');
+}
+if (summary.mockToolsHit < summary.mockTools.length) {
+  failed.push('mock 工具形状校验 ' + summary.mockToolsHit + '/' + summary.mockTools.length + ' 未全中');
+}
 
 if (process.argv.indexOf('--json') !== -1) {
   console.log('\n' + JSON.stringify({
@@ -443,6 +546,8 @@ if (process.argv.indexOf('--json') !== -1) {
     assembledTokens: { min: summary.tmin, max: summary.tmax, last: summary.tlast },
     heuristic: { hit: summary.heuristicHit, total: summary.heuristic.length, checks: summary.heuristic },
     p7: { hit: summary.p7Hit, total: summary.p7.length, checks: summary.p7 },
+    archive: { hit: summary.archiveHit, total: summary.archive.length, checks: summary.archive },
+    mockTools: { hit: summary.mockToolsHit, total: summary.mockTools.length, checks: summary.mockTools },
     probes: summary.results.map(r => ({ turn: r.turn, category: r.category, hit: r.hit, answer: r.answer })),
   }, null, 2));
 }

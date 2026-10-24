@@ -53,14 +53,12 @@
     return s;
   }
 
-  // 标准 PNG CRC32（多项式 0xEDB88320）；用于校验 chunk 完好（坏块忽略，不静默出错）
+  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 IR.Zip.crc32（zip.js，
+  // 审查 可维护性 三·5）。roleCard.js 在 zip.js 之前加载，取值放调用时，缺了直接抛不静默降级。
   function crc32(b) {
-    let c = 0xFFFFFFFF;
-    for (let i = 0; i < b.length; i++) {
-      c ^= b[i];
-      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    }
-    return (c ^ 0xFFFFFFFF) >>> 0;
+    const fn = global.IR && global.IR.Zip && global.IR.Zip.crc32;
+    if (typeof fn !== 'function') throw new Error('IR.Zip.crc32 未加载：解析 PNG 前必须先加载 zip.js');
+    return fn(b);
   }
 
   function toBytes(data) {
@@ -209,7 +207,6 @@
       CARD_FIELDS, SOURCES, TEXT_KEYWORDS,
       emptyCard, normalize, fromST, parsePNG, readTextChunks,
       speechHint, worldCharacter, sourceLabel,
-      crc32,
     },
   });
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

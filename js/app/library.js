@@ -135,6 +135,63 @@
     return url || (sc && (sc.src || sc.thumb)) || (entry && (entry.thumb || entry.src)) || '';
   }
 
+  /* ---------- 生图参考图（v0.12.1，subject_reference 的输入） ----------
+   * 把「上一张图」变成能发给接口的 dataURL：优先 IndexedDB 里的原图，缩到长边 ≤ maxEdge 的
+   * JPEG（体积可控、人物特征还够清楚）；没有原图（IndexedDB 不可用 / 只存了缩略图）就退回缩略图。
+   * 拿不到图返回 ''，调用方按纯文生图继续跑，不拦这次作画。 */
+  function blobToScaledJpeg(blob, maxEdge) {
+    return new Promise(resolve => {
+      let objUrl = '';
+      const img = new Image();
+      const done = v => {
+        if (objUrl) { try { URL.revokeObjectURL(objUrl); } catch (_) {} }
+        resolve(v);
+      };
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth || img.width || 0;
+          const h = img.naturalHeight || img.height || 0;
+          if (!w || !h) { done(''); return; }
+          const scale = Math.max(w, h) > maxEdge ? maxEdge / Math.max(w, h) : 1;
+          const cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(w * scale));
+          cv.height = Math.max(1, Math.round(h * scale));
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          done(cv.toDataURL('image/jpeg', 0.85) || '');
+        } catch (_) { done(''); }
+      };
+      img.onerror = () => done('');
+      try { objUrl = URL.createObjectURL(blob); img.src = objUrl; }
+      catch (_) { done(''); }
+    });
+  }
+
+  async function refImageDataUrl(maxEdge) {
+    const limit = +maxEdge > 0 ? +maxEdge : 1024;
+    if (!S.story) return '';
+    const log = S.story.log || [];
+    let last = null;
+    for (let i = log.length - 1; i >= 0 && !last; i--) {
+      if (log[i] && log[i].type === 'image') last = log[i];
+    }
+    if (!last) {
+      const sc = (S.story.scenes || []).filter(s => s && s.kind !== 'video');
+      last = sc[sc.length - 1] || null;
+    }
+    if (!last) return '';
+    const imageId = last.imageId || '';
+    if (imageId) {
+      try {
+        const blob = await Store.getImage(imageId);
+        if (blob && blob.size) {
+          const jpg = await blobToScaledJpeg(blob, limit);
+          if (jpg) return jpg;
+        }
+      } catch (_) { /* 退回缩略图 */ }
+    }
+    return String(last.thumb || last.src || '');
+  }
+
   // 打字机（流式失败 / 非流式时的兜底观感）；返回 Promise
   function typewrite(el, text) {
     return new Promise(resolve => {
@@ -157,12 +214,12 @@
 
   function snapshotStory(s, name) {
     return {
-      id: 'sp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      id: IR.genId('sp'),
       name: name || ('存档点 ' + new Date().toLocaleString('zh-CN')),
       ts: Date.now(),
       turn: s.turn || 0,
       mode: s.mode || 'choice',
-      log: clone((s.log || []).slice(-120)),
+      log: clone((s.log || []).slice(-IR.Tree.LOG_WINDOW)),
       messages: clone((s.messages || []).slice(-40)),
       summaries: clone(s.summaries || []),
       world: clone(s.world || {}),
@@ -204,7 +261,7 @@
     S.story.savepoints = S.story.savepoints || [];
     const sp = snapshotStory(S.story, name);
     S.story.savepoints.push(sp);
-    if (S.story.savepoints.length > 5) S.story.savepoints = S.story.savepoints.slice(-5);
+    if (S.story.savepoints.length > IR.Tree.SAVEPOINT_KEEP) S.story.savepoints = S.story.savepoints.slice(-IR.Tree.SAVEPOINT_KEEP);
     saveAll();
     renderSavepoints();
     return sp;
@@ -364,7 +421,7 @@
 
   async function buildExportPack(st, kind, withSrc) {
     const images = [];
-    for (const s of (st.scenes || []).slice(-12)) {
+    for (const s of (st.scenes || []).slice(-IR.Tree.SCENE_WINDOW)) {
       // §0/§10：视频不随备份导出（体积）——只留封面，条目标 videoOmitted:true，导入后显示「视频未随备份导出」
       if (s.kind === 'video') {
         images.push({
@@ -434,5 +491,5 @@
     toast(withSrc && !hasSrc ? '已导出（原图已不在本地，仅带缩略图 + 提示词）' : '已导出：' + safeTitle + '.irstory.json', false, true);
   }
 
-  A.reg({ storeOriginal, sceneSrc, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, startDemo, continueLast, openExport, downloadBlob, download, doExport });
+  A.reg({ storeOriginal, sceneSrc, refImageDataUrl, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, startDemo, continueLast, openExport, downloadBlob, download, doExport });
 })();

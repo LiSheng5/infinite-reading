@@ -48,7 +48,7 @@
         <label class="field-label" for="setup-premise">故事设定（仅剧情模式用；开演前可随意修改）</label>
         <textarea id="setup-premise" rows="8" spellcheck="false"></textarea>
       </div>
-      <p class="version">无限阅读 v0.4 · 纯本地运行 · 数据只保存在你的浏览器里</p>
+      <p class="version">无限阅读 v0.12.0 · 纯本地运行 · 数据只保存在你的浏览器里</p>
     </div>
   </section>
 
@@ -539,6 +539,9 @@
           <option value="https://api.moonshot.cn/v1">国内 · 月之暗面 Kimi</option>
           <option value="https://api.siliconflow.cn/v1">国内 · 硅基流动 SiliconFlow（对话 + 生图）</option>
           <option value="https://api.hunyuan.cloud.tencent.com/v1">国内 · 腾讯混元</option>
+          <option value="https://api.minimaxi.com">国内 · MiniMax（生图 image-01 / image-01-live）</option>
+          <option value="https://api.minimax.io">国外 · MiniMax（生图 image-01 / image-01-live）</option>
+          <option value="http://127.0.0.1:4320">本地转发 · tools/video-proxy.mjs（仅 MiniMax 生图 / 生视频的 CORS 绕行）</option>
           <option value="https://qianfan.baidubce.com/v2">国内 · 百度千帆</option>
           <option value="https://api.stepfun.com/v1">国内 · 阶跃星辰 StepFun</option>
           <option value="https://api.lingyiwanwu.com/v1">国内 · 零一万物</option>
@@ -702,6 +705,24 @@
 
         <fieldset>
           <legend>生图模型（为每一幕作画）</legend>
+          <!-- 生图适配器：两套接口格式差在「路径 / 尺寸参数 / 回包结构」三处，选错了会一直报错，
+               所以单独给一个下拉；模型名与 Key 两组共用下面同一批输入。 -->
+          <label>生图适配器
+            <select id="s-image-provider">
+              <option value="openai-images">OpenAI 兼容（自动拼 /images/generations）</option>
+              <option value="minimax-image">MiniMax 原生（/v1/image_generation · image-01 / image-01-live）</option>
+            </select>
+          </label>
+          <!-- 参考图：把「上一张图」当人物 / 画风的硬锚（MiniMax subject_reference）。
+               纯文生图每次从零开始，人物长相最容易漂，这是目前唯一能真正传图的手段。 -->
+          <div class="grid2">
+            <label>参考图（一致性）
+              <select id="s-image-ref">
+                <option value="off">关闭（纯文生图）</option>
+                <option value="prev">用上一张图（人物 / 画风更连贯）</option>
+              </select>
+            </label>
+          </div>
           <div class="grid2">
             <label id="wrap-image-size" class="hidden">尺寸（该模型支持的档位）<select id="s-image-size"></select></label>
             <label id="wrap-image-aspect">比例
@@ -722,10 +743,12 @@
             <label>接口地址 Base URL<input id="s-image-base" type="text" list="dl-base-url" placeholder="https://…（点这里选，也可自己填）"></label>
             <label>模型<input id="s-image-model" type="text" placeholder="填你的生图模型名"></label>
           </div>
-          <p class="hint">生图接口可以和对话不是同一家（有些服务商只做对话、不做生图，就再配一家）；下拉里带「生图」标注的可直接选，地址会自动拼上 /images/generations。</p>
+          <p class="hint" id="hint-image-openai">生图接口可以和对话不是同一家（有些服务商只做对话、不做生图，就再配一家）；下拉里带「生图」标注的可直接选，地址会自动拼上 /images/generations。</p>
+          <p class="hint hidden" id="hint-image-minimax">MiniMax 原生接口：地址填 https://api.minimaxi.com（国内）或 https://api.minimax.io（国外），带不带 /v1 都行，会自动拼上 /v1/image_generation；模型填 image-01 或 image-01-live。MiniMax 不给浏览器跨域，直连被拦时先跑 node tools/video-proxy.mjs，地址改填 http://127.0.0.1:4320。<br>尺寸：image-01-live 只认比例（自定义宽高会被折成最接近的比例），自定义宽高只对 image-01 生效（512–2048 且 8 的倍数）。画风只对 live 生效，写进下面的自定义请求参数：style.style_type=漫画（漫画 / 元气 / 中世纪 / 水彩）+ style.style_weight=0.8（0–1，默认 0.8）。想更稳再加 seed=12345（同 seed + 同参数，出图更接近；换了提示词仍会变）。</p>
           <label>API Key<input id="s-image-key" type="password" placeholder="sk-…"></label>
           <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-image-params" type="text" placeholder="steps=30, negative_prompt=blurry"></label>
           <p class="hint">尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；模型名与参数都可随意填；画师工作台里也能改尺寸。不确定的项留空即可，会走通用默认。</p>
+          <p class="hint">参考图：开启后每次作画会把「上一张图」缩到长边 1024 的 JPEG，作为 subject_reference 交给接口——人物长相 / 服饰 / 画风更连贯，代价是构图会更接近上一张。目前只有 MiniMax 原生适配器支持；第一次作画（还没有上一张图）自动跳过，不会报错。官方文档把 subject_reference 写在 image-01 的图生图接口下，image-01-live 是否接受要实测：被拒会报 2013，把它改回「关闭」即可。</p>
           <div class="row-inline test-row">
             <button id="btn-test-image" class="mini-btn">⚡ 测试连接</button>
             <span class="hint test-state" id="test-image-state">只探测地址是否可达（不会真的出图，所以不花钱）。</span>
@@ -793,6 +816,12 @@
             <p class="hint" id="style-card-state"></p>
             <div id="style-card-view" class="hidden">
               <div id="style-card-text" class="mono-line"></div>
+              <!-- 只让改「画风备注」：这条最容易被模型写成剧情事实（「始终下雨」），改它不必重画 4 张候选 -->
+              <div class="row-inline">
+                <input id="s-card-note" type="text" placeholder="画风备注（只写画风偏好，别写时间 / 天气 / 地点）">
+                <button id="btn-save-card-note" class="mini-btn">保存备注</button>
+              </div>
+              <p class="hint">备注只管画面气质：时间、天气、地点、在场者由剧情与世界状态卡决定——玩家说放晴，就该画晴。</p>
             </div>
             <div class="row-inline">
               <button id="btn-anchor-rerun" class="btn">锚定画风（试画 4 张候选）</button>
@@ -1202,6 +1231,7 @@
 <script src="js/app/turn.js?v=0.12.0"></script>
 <script src="js/app/round.js?v=0.12.0"></script>
 <script src="js/app/render.js?v=0.12.0"></script>
+<script src="js/app/layout.js?v=0.12.0"></script>
 <script src="js/app/settings.js?v=0.12.0"></script>
 <script src="js/app/prefsui.js?v=0.12.0"></script>
 <script src="js/app.js?v=0.12.0"></script>

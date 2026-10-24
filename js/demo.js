@@ -197,9 +197,14 @@
 
   /* ==================== 小工具 ==================== */
 
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+  // sleep / clone 的唯一口径在 IR.sleep / IR.clone（tree.js，审查 可维护性 三·1 / 三·5），
+  // demo 模拟器不再各留一份实现；tree.js 缺失直接报错
+  const sleep = (global.IR && global.IR.sleep) || function () {
+    throw new Error('IR.sleep 未加载：tree.js 必须先于 demo.js');
+  };
+  const clone = (global.IR && global.IR.clone) || function () {
+    throw new Error('IR.clone 未加载：tree.js 必须先于 demo.js');
+  };
 
   function hash(str) {
     let h = 2166136261;
@@ -453,7 +458,7 @@
 
   // 把真实设置拷一份，把对话 / 生图都换成演示适配器（调用方负责不写回 localStorage）
   function applyTo(settings) {
-    const s = JSON.parse(JSON.stringify(settings || {}));
+    const s = clone(settings || {});
     s.chat = Object.assign({}, s.chat, { provider: 'demo', baseUrl: '', apiKey: '', model: 'demo', temperature: 0.9 });
     s.image = Object.assign({}, s.image, { provider: 'demo-image', baseUrl: '', apiKey: '', model: 'demo', size: '', quality: '' });
     // 子模型（画师 / 书记员 / 起草）留空即沿用剧情模型 → 同样是演示适配器
@@ -520,9 +525,16 @@
         merchantAllowlist: [], merchantBlocklist: [], categoryAllowlist: [], categoryBlocklist: [], budgets: {},
       },
     };
-    const state = { seq: 0, triggers: [], drafts: [], audit: [], txs: [] };
+    const state = { seq: 0, triggers: [], drafts: [], audit: [], txs: [], mandates: [] };
     const nid = p => p + String(++state.seq).padStart(3, '0');
-    const clone = o => JSON.parse(JSON.stringify(o));
+    // 与真实客户端同语义（审查 可维护性 #7）：业务失败 = reject 一个带 code 的 Error，
+    // 就像 js/sidecar.js 的 api() 把 400 + {ok:false,code} 抛出来那样——调用方的 catch 路径两边一致。
+    const sidecarFail = (code, message) => {
+      const e = new Error(message || code);
+      e.code = code;
+      e.status = 400;
+      return Promise.reject(e);
+    };
     const committed = () => state.txs.filter(t => t.status === 'charged' || t.status === 'awaiting_payment')
       .reduce((a, t) => a + t.amountCents, 0);
 
@@ -557,7 +569,13 @@
     S.listTriggers = () => Promise.resolve(clone(state.triggers));
     S.upsertTrigger = t => {
       const src = t || {};
+      // 业务校验与 sidecar 同码（NAME_REQUIRED / 规格码）：错误面一致，catch 路径不用写两套
+      if (!String(src.name || '').trim()) return sidecarFail('NAME_REQUIRED', '触发器名字不能为空。');
       const spec = clone(src.spec || {});
+      if (src.type === 'once' && !(Number(spec.at) > 0)) return sidecarFail('ONCE_NEEDS_AT', '一次性触发器需要一个触发时间。');
+      if (src.type === 'interval' && !(Math.floor(Number(spec.everyMs)) >= 60000)) return sidecarFail('INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE', '心跳间隔至少 1 分钟。');
+      if (src.type === 'cron' && !String(spec.expr || '').trim()) return sidecarFail('CRON_EMPTY', 'cron 表达式为空。');
+      if (['once', 'interval', 'cron'].indexOf(src.type) < 0) return sidecarFail('BAD_TRIGGER_TYPE', '不支持的触发器类型。');
       const found = state.triggers.filter(x => x.name === src.name)[0];
       const rec = found || { id: nid('t'), name: src.name, createdAt: Date.now() };
       Object.assign(rec, {
@@ -571,8 +589,10 @@
     };
     S.confirmTrigger = id => {
       const t = state.triggers.filter(x => x.id === id)[0];
-      if (t) { t.status = 'active'; t.nextAt = Date.now() + 3600000; }
-      return Promise.resolve(t ? clone(t) : null);
+      if (!t) return sidecarFail('TRIGGER_NOT_FOUND', '找不到这个触发器。');
+      t.status = 'active';
+      t.nextAt = Date.now() + 3600000;
+      return Promise.resolve(clone(t));
     };
     S.cancelTrigger = id => {
       state.triggers = state.triggers.filter(x => x.id !== id);
@@ -596,7 +616,7 @@
       const to = String(m.to || '').toLowerCase();
       if (!cfg.email.enabled) return Promise.resolve({ ok: false, code: 'EMAIL_DISABLED', message: '邮件功能未开启。' });
       if (cfg.email.dailyLimit <= 0) return Promise.resolve({ ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '每日上限为 0（默认保守值）。' });
-      if (cfg.email.allowlist.indexOf(to) < 0 && !m.confirm) {
+      if (cfg.email.allowlist.indexOf(to) < 0) {   // 与 sidecar 一致：请求体里的 confirm 不算数，确认只走草稿流
         const d = { id: nid('d'), at: Date.now(), to: to, subject: m.subject || '', body: m.body || '', status: 'pending' };
         state.drafts.push(d);
         auditPush('draft', to, d.subject, 'denied', 'NEED_CONFIRMATION');
@@ -622,17 +642,18 @@
     S.emailAudit = () => Promise.resolve({ ok: true, audit: clone(state.audit.slice(0, 20)) });
     S.emailInbox = () => Promise.resolve({ ok: true, messages: [] });
 
+    // summary 金额字段一律 *Cents 后缀（与真实 sidecar 同口径，审查 可维护性 #12）
     S.paymentSummary = () => Promise.resolve({
       ok: true,
       summary: {
         enabled: cfg.payment.enabled, provider: cfg.payment.provider, currency: cfg.payment.currency,
-        perTx: cfg.payment.perTx, daily: cfg.payment.daily, monthly: cfg.payment.monthly,
-        autoApprove: cfg.payment.autoApprove, cooldownMin: cfg.payment.cooldownMin,
-        spent: { daily: committed(), monthly: committed(), agent: committed() },
+        perTxCents: cfg.payment.perTx, dailyCents: cfg.payment.daily, monthlyCents: cfg.payment.monthly,
+        autoApproveCents: cfg.payment.autoApprove, cooldownMin: cfg.payment.cooldownMin,
+        spent: { dailyCents: committed(), monthlyCents: committed(), agentCents: committed() },
         remaining: {
-          daily: Math.max(0, cfg.payment.daily - committed()),
-          monthly: Math.max(0, cfg.payment.monthly - committed()),
-          agent: 0,
+          dailyCents: Math.max(0, cfg.payment.daily - committed()),
+          monthlyCents: Math.max(0, cfg.payment.monthly - committed()),
+          agentCents: 0,
         },
       },
     });
@@ -696,8 +717,15 @@
         },
       });
     };
-    S.paymentMandates = () => Promise.resolve({ ok: true, mandates: [] });
-    S.paymentCreateMandate = m => Promise.resolve({ ok: true, mandate: Object.assign({ id: nid('md') }, m || {}) });
+    // 授权范围语义与真实 sidecar 对齐：状态记在内存里，下单前应用层会来查 / 签发；
+    // 业务失败 reject 带 code 的 Error（真实客户端 api() 遇 400 也是抛，不是 resolve）
+    S.paymentMandates = () => Promise.resolve({ ok: true, mandates: clone(state.mandates) });
+    S.paymentCreateMandate = m => {
+      const md = Object.assign({ id: nid('md'), createdAt: Date.now() }, m || {});
+      if (!md.agent) return sidecarFail('AGENT_REQUIRED', '授权范围必须指定发起方（agent）。');
+      state.mandates.push(md);
+      return Promise.resolve(clone(md));   // 与 js/sidecar.js 同形：成功直接给 mandate 对象
+    };
 
     // app.js 有几处直接走 api()：给一个最小路由（只覆盖界面用到的那几个）
     S.api = (method, pathText) => {

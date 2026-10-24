@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * eval/videoqueue-test.js —— 视频队列与作画队列互不干扰（任务书 v0.12.0 §7/§12）
+ * eval/videoqueue-test.js —— 视频队列专有场景：与作画队列互不干扰 + video key 去重口径（任务书 v0.12.0 §7/§12）
  *
- * 视频是独立的异步队列（IR.PaintQueue 的第二个实例，run() 内部就是整段轮询），
- * 严格串行且绝不能堵出图。这里用两具真实队列实例模拟 paintQ / videoQ（Node、不联网）：
- *   1. videoQ 跑长任务时，paintQ 照常出图（两队列互不阻塞）；
- *   2. videoQ 自身严格串行（前一条没跑完，后一条不开始）；
- *   3. 同 key 去重：video:<sceneId>:i2v / video:<headNodeId>:t2v 已在队列里就不再入队（q.has）；
- *   4. 单条出错不拖垮后面的（错误经返回值带出）。
+ * 视频是独立的异步队列（IR.PaintQueue 的第二个实例，run() 内部就是整段轮询）。
+ * PaintQueue 单实例的串行推进 / 出错隔离 / anchor.dead / has/size 语义统一在
+ * eval/paintqueue-test.js 覆盖（同一个实现，不在此重复）；这里只测视频侧专有的
+ * 两件事（Node、不联网）：
+ *   1. videoQ 跑长任务时，paintQ 照常出图（两个队列实例互不阻塞）；
+ *   2. 同 key 去重：video:<sceneId>:i2v / video:<headNodeId>:t2v 已在队列里就不再入队
+ *      （q.has，js/app/video.js 的 enqueueVideo 口径）；跑完后 key 释放，可再生成一段。
  *
  * 用法：node eval/videoqueue-test.js
  */
@@ -62,29 +63,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('videoQ 任务照常完成', v.ok && v.value === 'video', JSON.stringify(v));
   }
 
-  /* ---------- 2. videoQ 严格串行 ---------- */
-  {
-    const videoQ = PaintQueue.create({});
-    const log = [];
-    const mk = (name, ms) => videoQ.enqueue({
-      key: 'video:' + name,
-      run: async () => {
-        log.push(name + ':start');
-        await sleep(ms);
-        log.push(name + ':end');
-        return name;
-      },
-    });
-    const p1 = mk('a', 30);
-    const p2 = mk('b', 5);
-    const rs = await Promise.all([p1, p2]);
-    check('videoQ 严格串行：后一条等前一条跑完',
-      log.join(',') === 'a:start,a:end,b:start,b:end', log.join(','));
-    check('两条都成功', rs.every(r => r.ok), JSON.stringify(rs));
-    check('运行期间 size() 计数正确', videoQ.size() === 0, videoQ.size());
-  }
-
-  /* ---------- 3. 同 key 去重（video:<sceneId>:i2v / video:<headNodeId>:t2v） ---------- */
+  /* ---------- 2. 同 key 去重（video:<sceneId>:i2v / video:<headNodeId>:t2v） ---------- */
   {
     const videoQ = PaintQueue.create({});
     let runs = 0;
@@ -105,16 +84,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const again = enqueueIfNew('video:scA:i2v');
     check('完成后再点可以重新入队', again !== null);
     await again;
-  }
-
-  /* ---------- 4. 单条出错不拖垮后面的 ---------- */
-  {
-    const videoQ = PaintQueue.create({});
-    const bad = videoQ.enqueue({ key: 'video:bad:t2v', run: () => Promise.reject(new Error('内容敏感')) });
-    const good = videoQ.enqueue({ key: 'video:good:t2v', run: async () => 'ok' });
-    const [b, g] = await Promise.all([bad, good]);
-    check('失败任务：ok=false 且带 error', !b.ok && b.error && /内容敏感/.test(b.error.message), JSON.stringify({ ok: b.ok, msg: b.error && b.error.message }));
-    check('后续任务不受影响', g.ok && g.value === 'ok', JSON.stringify(g));
   }
 
   /* ---------- 输出 ---------- */

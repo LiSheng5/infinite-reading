@@ -98,26 +98,38 @@
     return d;
   }
 
-  /* ---------------- 主入口 ---------------- */
+  /* ---------------- 主入口 ----------------
+   * compute 编排三段纯逻辑（审查 可维护性 #1）：
+   *   layerTree  —— 分层：children 表 → BFS 行号 → 当前路径 → 泳道分配
+   *   foldChains —— 折叠：≥ collapseRun 的纯单链折成超级节点
+   *   geometryOf —— 几何：节点 / 边 / pathEdgeD / 画布尺寸
+   * 三段都是纯函数（同一入参 → 同一出参），compute 只做编排 + 空树兜底。
+   */
 
-  function compute(tree, opts) {
+  // 归一化视图参数（一次算好，三段共用；缺省回落 DEFAULTS）
+  function normalizeOpts(opts) {
     const o = Object.assign({}, DEFAULTS, opts || {});
-    const collapseRun = Math.max(2, +o.collapseRun || DEFAULTS.collapseRun);
-    const laneW = +o.laneW > 0 ? +o.laneW : DEFAULTS.laneW;
-    const rowH = +o.rowH > 0 ? +o.rowH : DEFAULTS.rowH;
-    const labelLen = +o.labelLen > 0 ? +o.labelLen : DEFAULTS.labelLen;
-    const padX = +o.padX >= 0 ? +o.padX : DEFAULTS.padX;
-    const padY = +o.padY >= 0 ? +o.padY : DEFAULTS.padY;
-    const labelW = +o.labelW >= 0 ? +o.labelW : DEFAULTS.labelW;
-    const corner = +o.corner >= 0 ? +o.corner : DEFAULTS.corner;
+    return {
+      o: o,
+      collapseRun: Math.max(2, +o.collapseRun || DEFAULTS.collapseRun),
+      laneW: +o.laneW > 0 ? +o.laneW : DEFAULTS.laneW,
+      rowH: +o.rowH > 0 ? +o.rowH : DEFAULTS.rowH,
+      labelLen: +o.labelLen > 0 ? +o.labelLen : DEFAULTS.labelLen,
+      padX: +o.padX >= 0 ? +o.padX : DEFAULTS.padX,
+      padY: +o.padY >= 0 ? +o.padY : DEFAULTS.padY,
+      labelW: +o.labelW >= 0 ? +o.labelW : DEFAULTS.labelW,
+      corner: +o.corner >= 0 ? +o.corner : DEFAULTS.corner,
+    };
+  }
 
-    const empty = { nodes: [], edges: [], pathEdgeD: '', width: padX * 2, height: padY * 2 };
+  /* —— 1. 分层：children 表（防环）→ BFS 行号 → 当前路径（root→head，主干 lane 0）→ 泳道 —— */
+  function layerTree(tree, cfg) {
     const map = (tree && tree.nodes) || null;
-    if (!map || typeof map !== 'object') return empty;
+    if (!map || typeof map !== 'object') return null;
     const rootId = tree.root;
-    if (!rootId || !map[rootId] || typeof map[rootId] !== 'object') return empty;
+    if (!rootId || !map[rootId] || typeof map[rootId] !== 'object') return null;
 
-    /* —— 1. children 表（防环 / 剔除自引用；缺 parent 的悬挂节点不可达，不渲染） —— */
+    /* children 表（防环 / 剔除自引用；缺 parent 的悬挂节点不可达，不渲染） */
     const kids = new Map();          // id → [childId…]（保持 children 数组序，缺登记的补在后面）
     const parentOf = new Map();
     for (const id of Object.keys(map)) {
@@ -143,7 +155,7 @@
       kids.set(p, list);
     }
 
-    /* —— 2. 从根 BFS：行（深度）+ 可达集 —— */
+    /* 从根 BFS：行（深度）+ 可达集 */
     const row = new Map();
     const order = [];                // BFS 序（确定性遍历的基准）
     {
@@ -159,7 +171,7 @@
         }
       }
     }
-    if (!row.size) return empty;
+    if (!row.size) return null;
     parentOf.set(rootId, null);
     for (const id of order) {
       for (const c of (kids.get(id) || [])) {
@@ -167,7 +179,7 @@
       }
     }
 
-    /* —— 3. 当前路径（root → head），主干固定 lane 0 —— */
+    /* 当前路径（root → head），主干固定 lane 0 */
     const path = [];
     {
       const seen = new Set();
@@ -182,7 +194,7 @@
     }
     const onPathSet = new Set(path);
 
-    /* —— 4. 泳道分配：主干 + 每条支线一条「脊」；支线整棵子树区间打包到更靠右的泳道 —— */
+    /* 泳道分配：主干 + 每条支线一条「脊」；支线整棵子树区间打包到更靠右的泳道 */
     const laneOf = new Map();
     const occupied = [];             // occupied[lane] = [[rowStart, rowEnd]…]
 
@@ -255,9 +267,16 @@
     // 防御：极少数损坏结构下没分到泳道的节点（不可达脊）——按行补到 0，保证可渲染
     for (const id of order) if (!laneOf.has(id)) laneOf.set(id, 0);
 
-    /* —— 5. 折叠：≥ collapseRun 的纯单链（不含 head / 书签 / 选中 / 展开态） —— */
+    return { map: map, head: tree.head, kids: kids, parentOf: parentOf, row: row, order: order, onPathSet: onPathSet, laneOf: laneOf };
+  }
+
+  /* —— 2. 折叠：≥ collapseRun 的纯单链（不含 head / 书签 / 选中 / 展开态） —— */
+  function foldChains(L, cfg) {
+    const o = cfg.o;
+    const kids = L.kids, parentOf = L.parentOf, order = L.order;
+
     const protect = new Set();
-    if (tree.head) protect.add(tree.head);
+    if (L.head) protect.add(L.head);
     if (o.selected) protect.add(o.selected);
     for (const b of (Array.isArray(o.bookmarks) ? o.bookmarks : (o.bookmarks ? [o.bookmarks] : []))) {
       if (b) protect.add(b);
@@ -286,7 +305,7 @@
           placed.add(k);
           cur = k;
         }
-        if (run.length < collapseRun) continue;
+        if (run.length < cfg.collapseRun) continue;
         let skip = false;
         for (const rid of run) if (expandedSet.has(rid)) { skip = true; break; }
         if (skip) continue;
@@ -294,8 +313,17 @@
         for (const rid of run) collapsed.set(rid, run[0]);
       }
     }
+    return { collapsed: collapsed, supers: supers };
+  }
 
-    /* —— 6. 几何：节点 / 边 / pathEdgeD —— */
+  /* —— 3. 几何：节点 / 边 / pathEdgeD —— */
+  function geometryOf(L, F, cfg) {
+    const map = L.map, kids = L.kids, parentOf = L.parentOf, row = L.row, order = L.order;
+    const onPathSet = L.onPathSet, laneOf = L.laneOf;
+    const collapsed = F.collapsed, supers = F.supers;
+    const labelLen = cfg.labelLen, laneW = cfg.laneW, rowH = cfg.rowH;
+    const padX = cfg.padX, padY = cfg.padY, labelW = cfg.labelW, corner = cfg.corner;
+
     const xOf = id => padX + (laneOf.get(id) || 0) * laneW;
     const yOf = id => padY + (row.get(id) || 0) * rowH;
 
@@ -312,7 +340,7 @@
         lane: laneOf.get(id) || 0,
         row: row.get(id) || 0,
         onPath: onPathSet.has(id),
-        isHead: id === tree.head,
+        isHead: id === L.head,
         isFork: !sup && (kids.get(id) || []).length > 1,
       };
       if (sup) {
@@ -382,6 +410,15 @@
       width: padX * 2 + maxLane * laneW + labelW,
       height: padY * 2 + maxRow * rowH,
     };
+  }
+
+  function compute(tree, opts) {
+    const cfg = normalizeOpts(opts);
+    const empty = { nodes: [], edges: [], pathEdgeD: '', width: cfg.padX * 2, height: cfg.padY * 2 };
+    const L = layerTree(tree, cfg);          // 分层
+    if (!L) return empty;
+    const F = foldChains(L, cfg);            // 折叠
+    return geometryOf(L, F, cfg);            // 几何
   }
 
   global.IR = Object.assign(global.IR || {}, {

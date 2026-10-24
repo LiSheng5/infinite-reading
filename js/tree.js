@@ -6,6 +6,9 @@
  *  - 纯逻辑：不碰 DOM、不碰 IR.Storage、不联网；Node 里 require 就能测
  *  - 零依赖、零构建：IIFE 挂到全局 IR
  *
+ * 另承载 IR 根级纯工具（genId / clone / sleep / plainReply，审查 可维护性 #5 与三·1/三·4/三·5）：
+ * 零依赖、全模块可引用的小函数收敛在这里一处实现，其它模块只调用、不再各写一份。
+ *
  * API（本期）：
  *   ensure(story)            建树 / 校验（幂等）；无树的旧档降级建线性链，
  *                            末条旁白 versions>1 展开成兄弟、旧存档点 sp.turn→nodeId 映射（§6）
@@ -34,20 +37,58 @@
   'use strict';
 
   const TREE_V = 1;
-  const LOG_WINDOW = 120;      // 与 serializeStory 的 log 裁剪同口径
-  const SCENE_WINDOW = 12;     // 与 serializeStory 的 scenes 裁剪同口径
+  // story 裁剪窗口的唯一口径：store.js 的 serializeStory 与书架导出一律引用这里的导出，
+  // 不要再在别处写 120 / 12 / 5 字面量（改一处漏一处会静默裁错档）
+  const LOG_WINDOW = 120;      // serializeStory 的 log 裁剪
+  const SCENE_WINDOW = 12;     // serializeStory 的 scenes 裁剪
+  const SAVEPOINT_KEEP = 5;    // 存档点最多保留
   const PAINTER_THREAD_KEEP = 20;  // State 里的 painterThread 只留末 20 条
 
   let seq = 0;
-  function genId(prefix) {
+  // ID 生成的唯一口径（审查 可维护性 #5）：前端各处（store / painter / library / video /
+  // styleanchor / proposals）一律用 IR.genId(prefix)，不要再各写 Date.now().toString(36)+random 变体。
+  //   prefix —— 实体前缀（n/st/s/pf/sc/sp/vd/style/pp…）；
+  //   now    —— 可选时间戳（提案等需要「以注入时间为准」的确定性场景），缺省 Date.now()。
+  // seq 自增 + 3 位随机，保证同一毫秒内多次调用也不撞 id。
+  function genId(prefix, now) {
     seq += 1;
-    return prefix + Date.now().toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 5);
+    return prefix + Number(now || Date.now()).toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 5);
   }
 
-  // State / msgSnap 一律深拷贝存入，绝不存引用（world 会被 mergeWorld 原地改写）
+  // 深拷贝的唯一口径（审查 可维护性 三·1）：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
+  // 循环引用不炸）；环境没有或内容不可克隆（函数等）时回落 JSON 往返。
+  // State / msgSnap / demo 模拟器等一律用 IR.clone，不要再各写 JSON.parse(JSON.stringify(x))。
   function clone(x) {
     if (x == null || typeof x !== 'object') return x;
+    if (typeof structuredClone === 'function') {
+      try { return structuredClone(x); } catch (_) { /* 含不可克隆值 → 回落 JSON 语义 */ }
+    }
     return JSON.parse(JSON.stringify(x));
+  }
+
+  // 异步等待的唯一口径（审查 可维护性 三·5）：适配器轮询（providers）、app 工具、demo 模拟器共用
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  // 助手回复 → 纯文本的唯一口径（审查 可维护性 三·4）：剧情模式是 JSON（narration / 旁白），
+  // 解析失败 / 无旁白字段时当纯文本（§3.4）。search.js 索引与 store.js 书架摘要共用这一份。
+  function plainReply(raw) {
+    const s = String(raw == null ? '' : raw);
+    const t = s.trim();
+    if (t.charAt(0) === '{') {
+      try {
+        const o = JSON.parse(t);
+        if (o && typeof o === 'object' && !Array.isArray(o)) {
+          const n = o.narration || o['旁白'] || o.text || '';
+          if (n) return String(n);
+          if (Array.isArray(o.choices) && o.choices.length) {
+            return o.choices.map(function (c) { return String(c); }).join(' ');
+          }
+        }
+      } catch (_) { /* 坏 JSON：当纯文本 */ }
+    }
+    return s;
   }
 
   /* ---------------- 基础形状 ---------------- */
@@ -656,8 +697,13 @@
   }
 
   global.IR = Object.assign(global.IR || {}, {
+    // IR 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
+    genId: genId,
+    clone: clone,
+    sleep: sleep,
+    plainReply: plainReply,
     Tree: {
-      TREE_V, LOG_WINDOW, SCENE_WINDOW,
+      TREE_V, LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
       ensure, begin, commit, seal, project, pathOf, resyncState,
       siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
       pushLate, imageIdsOf,

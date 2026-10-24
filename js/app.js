@@ -277,6 +277,8 @@
       toast('已清空「不接受工具」的模型记录，下次会重新尝试下发工具');
     };
     $('#s-image-aspect').onchange = A.applyAspectToFields;
+    $('#s-image-provider').onchange = A.applyImageProviderHint;
+    $('#btn-save-card-note').onclick = A.saveCardNote;
     $('#s-story-mode').onchange = A.onModeChange;
     $('#btn-save-world').onclick = A.saveWorldFromForm;
     $('#btn-inject-memory').onclick = A.toggleInjectMemory;
@@ -491,9 +493,15 @@
 
   // 先进 boot（装载 IndexedDB / 把 localStorage 旧数据迁过来），再进界面。
   // boot 失败会自己退回 localStorage 模式：功能一样，只是容量仍是约 5MB —— 数据不会丢。
+  // 但「关键依赖缺失」（IR_DEP_MISSING，加载顺序错了）是启动错误，直接抛出失败——不静默降级。
   (async () => {
     let info = null;
-    try { info = await Store.boot(); } catch (e) { console.warn('存储初始化失败：', e); }
+    try {
+      info = await Store.boot();
+    } catch (e) {
+      if (e && e.code === 'IR_DEP_MISSING') throw e;
+      console.warn('存储初始化失败：', e);
+    }
     init();
     if (info && info.error) {
       toast('本地存储升级未完成（IndexedDB 用不了），已退回原来的存储方式：数据没丢，但容量仍是约 5MB。', true, true);

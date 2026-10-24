@@ -18,6 +18,7 @@
 const path = require('path');
 
 global.window = global;
+require(path.join(__dirname, '..', 'js', 'tree.js'));   // IR.plainReply 在 tree.js（加载顺序同 index.html）
 require(path.join(__dirname, '..', 'js', 'search.js'));
 
 const S = (global.IR || {}).Search;

@@ -121,7 +121,7 @@
       if (Array.isArray(s.profiles)) s.profiles.forEach(p => { if (p) p.apiKey = ''; });
     }
     return {
-      format: 'ir-backup', schema: 1, app: '无限阅读 v0.4',
+      format: 'ir-backup', schema: 1, app: '无限阅读 v0.12.0',
       exportedAt: Date.now(),
       settings: s,
       userProfile: Store.loadUserProfile(),
@@ -380,7 +380,8 @@
       // 视频条目：只随包带封面（videoOmitted），本体没导出——导入后显示「视频未随备份导出」
       kind: im.kind || undefined, videoOmitted: im.videoOmitted || undefined,
       mode: im.mode || undefined, duration: im.duration || undefined,
-      thumb: im.thumb || null, src: im.src || null, ts: Date.now(),
+      // 导入档案不可信（审查 中危 #12）：thumb 白名单只放行 data:/blob:，坏数据不进存储
+      thumb: Store.safeThumb(im.thumb), src: im.src || null, ts: Date.now(),
     }));
     st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
     // UI-3 §3.4：本对话偏好随包导入（只有 profileId + 显示用标签；凭证在导出侧已剥）。
@@ -409,6 +410,9 @@
             }
           }
         }
+        // 竞态守卫（审查 中危 #14）：换键是异步的，期间故事可能已被删除——
+        // 保存前校验还存在，否则 saveStory 会把已删故事“复活”
+        if (!Store.loadStory(st.id)) return;
         Store.saveStory(st);   // 换键结果要落盘（story 已切走，saveAll 是空操作）
         A.renderStage(); A.renderThumbs();
       })();

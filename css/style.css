@@ -335,11 +335,6 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
 .chat-note, .reason-block, .thumb {
   animation: leafIn var(--dur-slow) var(--ease-out) both;
 }
-/* 弹窗 / 浮层入场：弹簧手感 */
-.modal-card { animation: leafIn var(--dur-base) var(--ease-spring) both; }
-/* 旁白是阅读面本身：不做入场位移动画，避免长文重排时跳动 */
-.toast { animation: leafInX var(--dur-base) var(--ease-spring) both; }
-.menu { animation: fadeIn var(--dur-fast) var(--ease-out) both; }
 
 /* 流式增量：新到的文字包在 span.delta 里逐段淡入（仅 rich；standard/off 由 JS 不建 span） */
 .delta { animation: fadeIn var(--dur-fast) var(--ease-out) both; }
@@ -373,7 +368,6 @@ html[data-motion="standard"] *::after {
 /* 同屏同时运行的循环动画 ≤ 3 个：#busy-line + Ken Burns + 环境光（其余一律单次） */
 
 /* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐） ---- */
-.hud { position: relative; }
 #busy-line {
   position: absolute; left: 0; right: 0; bottom: -1px;
   height: 2px;
@@ -721,6 +715,7 @@ mark {
 
 /* ---------- 顶栏：一条 44px 的细线，次要功能收进「⋯」 ---------- */
 .hud {
+  position: relative;   /* #busy-line（顶栏内绝对定位）的基准 */
   display: flex; justify-content: space-between; align-items: center;
   height: 44px; padding: 0 14px; gap: 10px; z-index: 20;
   flex-wrap: nowrap;
@@ -757,6 +752,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   z-index: 40;
+  animation: fadeIn var(--dur-fast) var(--ease-out) both;
 }
 .menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 .menu-item {
@@ -1480,6 +1476,7 @@ html[data-motion="rich"] .stage-empty {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-2);
+  animation: leafIn var(--dur-base) var(--ease-spring) both;   /* 入场：弹簧手感 */
 }
 .modal-card.narrow { width: min(520px, 94vw); }
 .modal-head {
@@ -1787,6 +1784,8 @@ label input.inline-num {
   box-shadow: var(--shadow-2);
   z-index: 45;
   pointer-events: none;
+  /* 旁白是阅读面本身：不做入场位移动画，避免长文重排时跳动 */
+  animation: leafInX var(--dur-base) var(--ease-spring) both;
 }
 .toast.error { border-left-color: var(--danger, var(--ink)); color: var(--ink); }
 .toast-close {

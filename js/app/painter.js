@@ -335,6 +335,14 @@
     const nodeId = opts.nodeId || (anchor && anchor.nodeId) || null;
     const cfgImg = imageCfg(opts.params);
     const imgAdapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
+    // 参考图（设置里开了「用上一张图」且适配器支持）：把上一张图当 subject_reference 的硬锚。
+    // 拿不到图（第一次作画 / 只存了缩略图也没有）就按纯文生图跑，绝不因为参考图失败拦下这次作画。
+    if (S.settings.image.refMode === 'prev' && imgAdapter.supportsReference) {
+      try {
+        const ref = await A.refImageDataUrl(1024);
+        if (ref) cfgImg.referenceImage = ref;
+      } catch (_) { /* 忽略：按无参考图出图 */ }
+    }
     const src = await imgAdapter.generate(cfgImg, opts.prompt);
 
     // 写入前核对：等图期间换了故事 → 丢弃这张图，绝不写进别的故事
@@ -361,7 +369,7 @@
     const onPath = !node || IR.Tree.pathOf(S.story, tree.head).indexOf(node.id) >= 0;
 
     const scene = {
-      id: 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      id: IR.genId('sc'),
       prompt: opts.prompt, promptRaw: opts.promptRaw || '', alt: opts.alt || '',
       src, ts: Date.now(),
       model: cfgImg.model || '', size: cfgImg.size || '',

@@ -8,6 +8,7 @@ const path = require('path');
 
 require(path.join(__dirname, '..', 'js', 'prefs.js'));
 require(path.join(__dirname, '..', 'js', 'context.js'));
+require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
 require(path.join(__dirname, '..', 'js', 'store.js'));
 
 const P = global.IR.Prefs;
@@ -251,6 +252,41 @@ console.log('[8] 压缩阈值：不同 profile 的 contextWindow → 不同 70% 
   ok(t1 !== t2, '同样消息量下两个 profile 的 70% 阈值不同');
   eq(C.compressThreshold(0), 0, 'contextWindow=0 → 阈值 0（未知，回退条数）');
   eq(C.compressThreshold(1000), 700, 'compressThreshold(1000) = 700');
+}
+
+console.log('[9] 生视频三参数唯一源 = 面板控件（审查 三·2 双数据源）');
+{
+  const s = Store.migrateSettings({
+    video: { duration: 8, resolution: '1080P', ratio: '9:16', extraParams: 'duration=10, resolution=2K, watermark=false' },
+  });
+  eq(s.video.duration, 10, 'extraParams 同名键折回控件字段（值不丢）：duration=10');
+  eq(s.video.resolution, '768P', '非法分辨率夹回默认 768P（2K 不在档位表）');
+  eq(s.video.ratio, '9:16', '控件 ratio 保留');
+  eq(String(s.video.extraParams).indexOf('duration') < 0, true, 'duration 键已从 extraParams 移除');
+  eq(String(s.video.extraParams).indexOf('watermark=false') >= 0, true, '其它 extraParams 键原样保留');
+  const s2 = Store.migrateSettings(s);
+  eq(s2.video.duration, 10, '幂等：二次迁移不再改值');
+  eq(s2.video.extraParams, s.video.extraParams, '幂等：extraParams 不再变化');
+}
+
+console.log('[10] boot 关键依赖自检（审查 可维护性 #9）');
+{
+  ok(typeof Store.assertDeps === 'function', 'Store.assertDeps 已导出');
+  let threw = null;
+  try { Store.assertDeps(); } catch (e) { threw = e; }
+  ok(!threw, '依赖齐全（IR.Tree + IR.Prefs）→ assertDeps 通过' + (threw ? '（抛了：' + threw.message + '）' : ''));
+  const saved = global.IR.Prefs;
+  try {
+    delete global.IR.Prefs;
+    let e2 = null;
+    try { Store.assertDeps(); } catch (e) { e2 = e; }
+    ok(!!e2 && e2.code === 'IR_DEP_MISSING', '缺 IR.Prefs → 抛 IR_DEP_MISSING（启动即失败，不静默降级）');
+  } finally {
+    global.IR.Prefs = saved;
+    let e3 = null;
+    try { Store.assertDeps(); } catch (e) { e3 = e; }
+    ok(!e3, '恢复依赖后自检重新通过');
+  }
 }
 
 if (failed) {

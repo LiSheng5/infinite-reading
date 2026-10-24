@@ -331,8 +331,10 @@
     return false;
   }
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-  function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+  // sleep / clone 的唯一口径在 IR.sleep / IR.clone（tree.js，审查 可维护性 三·1 / 三·5）：
+  // 这里只转接进 A.reg，app 模块照旧解构 { sleep, clone }，实现全仓只有一份
+  const sleep = IR.sleep;
+  const clone = IR.clone;
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);

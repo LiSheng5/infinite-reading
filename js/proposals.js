@@ -12,7 +12,7 @@
  *     **confirm（用户点击）之前绝不能调用 paymentPurchase**；
  *   - 确认是幂等的：confirm 同步抢占状态为 executing 再 await，并发再点不会二次执行。
  *
- * 纯函数、零依赖；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
+ * 纯函数、零外部依赖（ID 生成共用 js/tree.js 的 IR.genId）；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
  */
 (function (global) {
   'use strict';
@@ -28,10 +28,9 @@
   const MAX_REASON = 200;
   const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
-  let seq = 0;
+  // ID 生成统一走 IR.genId（js/tree.js，审查 可维护性 #5）；now 仍可注入（测试确定性）。
   function genId(now) {
-    seq = (seq + 1) % 10000;
-    return 'pp-' + Number(now || Date.now()).toString(36) + '-' + seq;
+    return IR.genId('pp-', now);
   }
 
   function fail(msg) { return { ok: false, error: String(msg || '提案无效') }; }
@@ -177,11 +176,12 @@
       }
       // payment
       if (!S || typeof S.paymentPurchase !== 'function') throw new Error('本地服务不支持代下单');
+      // agent / 币种不自报（审查 中危 #13）：服务端按 mandate / 配置映射；
+      // mandateId 由应用层（features.js）注入到 paymentPurchase 包装里
       const r = await S.paymentPurchase({
         amountCents: p.args.amountCents,
         merchant: p.args.merchant,
         category: p.args.category,
-        agent: 'agent',
         items: p.args.items,
       });
       if (!r || r.ok === false) throw new Error((r && (r.message || r.code)) || '下单失败');

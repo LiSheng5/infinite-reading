@@ -172,11 +172,15 @@
       track(Storage.put('kv', key, on ? 1 : null).catch(persistFail));
       return;
     }
-    try { if (on) ls().setItem(key, '1'); else ls().removeItem(key); } catch (_) {}
+    // 与 writeLSJSON 同一告警口径（审查 低危 #20）：配额满等失败不再静默吞掉
+    try { if (on) ls().setItem(key, '1'); else ls().removeItem(key); }
+    catch (e) { console.warn('写入失败（可能超出本地存储限额）', key, e); }
   }
 
-  function genId() {
-    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // ID 生成统一走 IR.genId（js/tree.js，审查 可维护性 #5）：不再各写时间戳+随机变体。
+  // 默认前缀 's'（故事），需要别的前缀时显式传（如 genId('pf')）。
+  function genId(prefix) {
+    return IR.genId(prefix || 's');
   }
 
   /* ---------------- schema v2 默认值 ---------------- */
@@ -283,11 +287,13 @@
       draft: defaultSubModel(),                                // 开局向导起草
       // UI-3 模型库（§3.1）：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
-      image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '' },
+      // refMode：'off' = 纯文生图；“'prev' = 把上一张图当参考图（MiniMax subject_reference）
+      image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '', refMode: 'off' },
       // 生视频（MiniMax V2「minimax-video」）：异步任务。
-      // 时长 / 分辨率 / 比例走「自定义请求参数」extraParams（§0 假设 2），不设独立控件。
+      // 时长 / 分辨率 / 比例以面板控件为唯一来源（审查 三·2）；extraParams 只补其它键。
       video: {
-        provider: 'minimax-video', baseUrl: '', apiKey: '', model: '', extraParams: '',
+        provider: 'minimax-video', baseUrl: '', apiKey: '', model: '',
+        duration: 5, resolution: '768P', ratio: '16:9', extraParams: '',
       },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
       // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
@@ -328,6 +334,34 @@
       if (seen[id]) continue;                            // 防重 id（保留先到的）
       seen[id] = true;
       out.push(Object.assign({}, p, { id: id }));
+    }
+    return out;
+  }
+
+  // 从 extraParams 里抽出 duration / resolution / ratio（历史迁移折进去的同名键）：
+  // 值带回控件字段，键从 extraParams 移除——「唯一源 = 面板控件」（审查 三·2）
+  function extractVideoControlParams(raw) {
+    const out = { extraParams: raw, duration: null, resolution: null, ratio: null };
+    const keepVal = v => (v == null || v === '' ? null : v);
+    if (typeof raw === 'string') {
+      const keep = [];
+      raw.split(/[,，\n;；]/).forEach(pair => {
+        const i = pair.indexOf('=');
+        if (i <= 0) { if (pair.trim()) keep.push(pair); return; }
+        const k = pair.slice(0, i).trim();
+        const v = pair.slice(i + 1).trim();
+        if (k === 'duration') out.duration = keepVal(v);
+        else if (k === 'resolution') out.resolution = keepVal(v);
+        else if (k === 'ratio') out.ratio = keepVal(v);
+        else keep.push(pair);
+      });
+      out.extraParams = keep.join(', ');
+    } else if (raw && typeof raw === 'object') {
+      const next = Object.assign({}, raw);
+      for (const k of ['duration', 'resolution', 'ratio']) {
+        if (k in next) { out[k] = keepVal(next[k]); delete next[k]; }
+      }
+      out.extraParams = next;
     }
     return out;
   }
@@ -404,28 +438,35 @@
     // T-M-1：思考档位 / 上下文窗口 / 手填参数（幂等校验）
     // 离线演示模式已删除：旧设置里的 mock 一律迁回真实接口（用户需补填 Base URL / 模型）
     out.chat.provider = 'openai-compatible';
-    if (out.image.provider === 'mock') out.image.provider = 'openai-images';
+    // 生图适配器：'mock' → OpenAI 兼容；MiniMax 原生接口的旧别名统一成 'minimax-image'。
+    // 其它值原样保留（演示模式的 'demo-image' 只活在内存里，刷新后自然消失）。
+    const IMAGE_PROVIDER_ALIAS = { mock: 'openai-images', minimax: 'minimax-image', 'minimax-images': 'minimax-image' };
+    if (IMAGE_PROVIDER_ALIAS[out.image.provider]) out.image.provider = IMAGE_PROVIDER_ALIAS[out.image.provider];
     out.chat.thinking = (typeof out.chat.thinking === 'string' && out.chat.thinking) ? out.chat.thinking : 'default';
     out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
     if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
     if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
+    // 参考图开关（v0.12.1）：只认 'prev'，其余一律 'off'（旧档没有这个字段 → 关闭）
+    out.image.refMode = (raw.image && raw.image.refMode === 'prev') ? 'prev' : 'off';
     // §5.7：生视频 provider 一律 'minimax-video'（'openai-videos' / 'minimax' 等旧值迁移）
     out.video.provider = 'minimax-video';
     if (typeof out.video.extraParams !== 'string' && !(out.video.extraParams && typeof out.video.extraParams === 'object')) out.video.extraParams = '';
-    // 旧版设置页的 duration / resolution / ratio 控件已下线（§0 假设 2：走自定义请求参数）。
-    // 旧值不丢：还没写过 extraParams 的，把它们折进 extraParams（coerce 后仍是数字）。
+    // 时长 / 分辨率 / 比例的唯一来源 = 面板控件（审查 三·2 双数据源）：
+    // 旧迁移曾把这三项折进 extraParams（当时控件下线过一段时间），同名键会盖住下拉框——
+    // 「改了没生效」。这里把 extraParams 里的同名键折回控件字段并移除（值不丢，唯一源从此只有控件；
+    // providers 的 applyVideoControlParams 同口径，运行时同名键也被控件覆盖）。
     {
-      const legacyBits = [];
-      const dv = raw.video || {};
-      const hasExtra = !!((typeof out.video.extraParams === 'string' && out.video.extraParams.trim())
-        || (out.video.extraParams && typeof out.video.extraParams === 'object' && Object.keys(out.video.extraParams).length));
-      if (!hasExtra) {
-        const dInt = parseInt(dv.duration, 10);
-        if (Number.isFinite(dInt) && dInt !== 5) legacyBits.push('duration=' + dInt);
-        if (dv.resolution && String(dv.resolution).toUpperCase() !== '768P') legacyBits.push('resolution=' + String(dv.resolution).toUpperCase());
-        if (dv.ratio && String(dv.ratio) !== '16:9') legacyBits.push('ratio=' + dv.ratio);
-        if (legacyBits.length) out.video.extraParams = legacyBits.join(', ');
-      }
+      const pick = extractVideoControlParams(out.video.extraParams);
+      out.video.extraParams = pick.extraParams;
+      if (pick.duration != null) out.video.duration = pick.duration;
+      if (pick.resolution != null) out.video.resolution = pick.resolution;
+      if (pick.ratio != null) out.video.ratio = pick.ratio;
+      const dv = parseInt(out.video.duration, 10);
+      out.video.duration = Math.max(4, Math.min(15, Number.isFinite(dv) ? dv : 5));
+      out.video.resolution = String(out.video.resolution || '').toUpperCase();
+      if (['480P', '768P', '1080P'].indexOf(out.video.resolution) < 0) out.video.resolution = '768P';
+      out.video.ratio = String(out.video.ratio || '');
+      if (['16:9', '9:16', '1:1'].indexOf(out.video.ratio) < 0) out.video.ratio = '16:9';
     }
 
     // v0.1 的 image.size 字符串 → aspect/width/height（R8）
@@ -483,6 +524,9 @@
   // v1 / 任意旧档 → v2（幂等）
   function migrateStory(raw) {
     if (!raw || typeof raw !== 'object') return null;
+    // 先深拷贝再组装：loadStory 拿到的是 MEM 里的「已保存」对象，tree / messages / savepoints 等
+    // 若原样透传引用，现场改动会把已保存快照带脏（normVideoFields 还会就地归一）。拷贝一次，两侧解耦。
+    raw = JSON.parse(JSON.stringify(raw));
     const out = newStory({ id: raw.id, title: raw.title, premise: raw.premise, mode: raw.mode });
     // UI-2 §3.2：旧存档一律 titleAuto=false（保留现有标题）；只有存档里显式记了才沿用
     out.titleAuto = ('titleAuto' in raw) ? !!raw.titleAuto : false;
@@ -612,7 +656,30 @@
     return report;
   }
 
+  /* ---------------- 关键依赖自检（审查 可维护性 #9） ----------------
+   * 加载顺序错了要「启动即报错」，不能表现为功能悄悄降级：
+   *   - IR.Tree    裁剪窗口 / 树遍历（serializeStory / imageIdsOf 的真源），缺了存档口径就错；
+   *   - IR.Prefs   凭证清洗真源（stripSecrets）：缺位时导出备份可能带出密钥，不是可降级项；
+   *   - IR.Storage 存储后端——浏览器里必须在（缺了会静默退回 localStorage）；Node 评测按设计无它（进程内内存）。
+   * IR.Search 是设计内的可选依赖（缺位只跳过搜索索引），不在此列。
+   * app.js 对 IR_DEP_MISSING 重新抛出（启动失败），其它 boot 错误照旧降级 localStorage。 */
+  function assertDeps() {
+    const R = global.IR || {};
+    const missing = [];
+    if (!R.Tree || !R.Tree.LOG_WINDOW || typeof R.Tree.imageIdsOf !== 'function') missing.push('IR.Tree（tree.js）');
+    if (!R.Prefs || typeof R.Prefs.stripSecrets !== 'function') missing.push('IR.Prefs（prefs.js）');
+    if (typeof document !== 'undefined' && (!R.Storage || typeof R.Storage.get !== 'function')) {
+      missing.push('IR.Storage（storage.js）');
+    }
+    if (missing.length) {
+      const e = new Error('store.js 关键依赖未就绪：' + missing.join('、') + '——请按 ARCHITECTURE.md 的加载顺序先引入');
+      e.code = 'IR_DEP_MISSING';
+      throw e;
+    }
+  }
+
   async function boot() {
+    assertDeps();
     const out = { backend: 'localstorage', migrated: null, error: null };
     if (!hasIDB) return out;                       // Node / 老浏览器：与 v0.2 行为一致
 
@@ -694,18 +761,27 @@
   function storyThumb(story) {
     // 视频用封面（thumb）参与书架缩略图（旧档 poster 作兜底）
     const imgs = (story.log || []).filter(e => (e.type === 'image' && e.thumb) || (e.type === 'video' && (e.thumb || e.poster)));
-    if (imgs.length) { const last = imgs[imgs.length - 1]; return last.thumb || last.poster; }
+    if (imgs.length) { const last = imgs[imgs.length - 1]; return safeThumb(last.thumb || last.poster); }
     const sc = (story.scenes || []).filter(s => s && (s.thumb || s.poster));
     if (!sc.length) return null;
     const last = sc[sc.length - 1];
-    return last.thumb || last.poster;
+    return safeThumb(last.thumb || last.poster);
+  }
+  // 缩略图白名单（审查 中危 #12）：导入档案是不可信输入，thumb 只放行 data:/blob: 前缀，
+  // 其余（外链、javascript:、带引号的 CSS 注入串）一律丢弃；拼 CSS url() 的一侧还要 JSON.stringify 转义。
+  function safeThumb(src) {
+    const s = String(src == null ? '' : src);
+    return (/^(data|blob):/i.test(s)) ? s : null;
   }
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
   function serializeStory(story) {
+    // 裁剪窗口的唯一口径在 IR.Tree（tree.js 必须先于 store.js 加载；缺了直接报错，不静默用错窗口）
+    const T = global.IR && global.IR.Tree;
+    if (!T || !T.LOG_WINDOW) throw new Error('IR.Tree 未加载：tree.js 必须先于 store.js（见 ARCHITECTURE 加载顺序）');
     const out = Object.assign({}, story, {
-      log: (story.log || []).slice(-120).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
+      log: (story.log || []).slice(-T.LOG_WINDOW).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
       // scene 字段是白名单（§5①）：新字段不加会在这里被丢掉
-      scenes: (story.scenes || []).slice(-12).map(s => ({
+      scenes: (story.scenes || []).slice(-T.SCENE_WINDOW).map(s => ({
         id: s.id, alt: s.alt, prompt: s.prompt, promptRaw: s.promptRaw || '',
         kind: s.kind || undefined,                 // 'video' = 视频场景（其余按图片处理）
         aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
@@ -723,12 +799,15 @@
         ratio: s.ratio || undefined, model: s.model || undefined,
         ts: s.ts,
       })),
-      savepoints: (story.savepoints || []).slice(-5),   // 存档点最多保留 5 个
+      savepoints: (story.savepoints || []).slice(-T.SAVEPOINT_KEEP),   // 存档点最多保留 5 个
     });
     // UI-3 §3.2/§3.4：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
     if (story.prefs && typeof story.prefs === 'object') out.prefs = sanitizePrefsSafe(story.prefs);
     else delete out.prefs;
-    return out;
+    // 落盘快照一律深拷贝（与 IR.Tree 的「深拷贝存入」同口径）：out 若与在用 story 共享
+    // world / tree / messages 引用，mergeWorld 等就地改写会污染「已保存」内存快照，
+    // 异步 put 的结构化克隆时机不定还会把未 save 的现场写进库里
+    return JSON.parse(JSON.stringify(out));
   }
 
   /* ---------------- 导出包（UI-3 §3.4：剥凭证 + 附 profileLabel） ----------------
@@ -738,7 +817,7 @@
   function buildStoryPack(st, kind, images, settings) {
     const P = (global.IR && global.IR.Prefs) || null;
     const pack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.4',
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.12.0',
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
@@ -815,22 +894,11 @@
 
   /* ---------------- 索引条目：snippet 与旧索引迁移（UI-2 §3.1） ---------------- */
 
-  // 助手回复纯文本：剧情模式是 JSON（narration / 旁白），解析失败当纯文本
-  function plainReplyText(raw) {
-    const s = String(raw == null ? '' : raw);
-    const t = s.trim();
-    if (t.charAt(0) === '{') {
-      try {
-        const o = JSON.parse(t);
-        if (o && typeof o === 'object' && !Array.isArray(o)) {
-          const n = o.narration || o.旁白 || o.text || '';
-          if (n) return String(n);
-          if (Array.isArray(o.choices) && o.choices.length) return o.choices.map(String).join(' ');
-        }
-      } catch (_) { /* 坏 JSON：当纯文本 */ }
-    }
-    return s;
-  }
+  // 助手回复纯文本：唯一实现在 IR.plainReply（tree.js，审查 可维护性 三·4），
+  // 与 search.js 索引共用同一口径——「JSON 旁白提取」不再有第二份实现
+  const plainReplyText = (global.IR && global.IR.plainReply) || function () {
+    throw new Error('IR.plainReply 未加载：tree.js 必须先于 store.js（见 ARCHITECTURE 加载顺序）');
+  };
 
   // 最近一条消息摘要（≤60 字，码点）：当前路径末条旁白 / 回复的纯文本，剥掉 JSON 与标记
   function storySnippet(story) {
@@ -917,18 +985,11 @@
       if (e && e.type === 'image' && e.imageId) out.push(e.imageId);
       if (e && e.videoId) out.push(e.videoId);
     });
-    // 分支树里引用到的图也算（含非当前分支）：tree.nodes[*].scenes 与 entries 里的 imageId。
-    // 漏掉就会在删除故事 /「清理孤儿原图」时**静默删掉别的分支的图**（任务书 §10）。
-    // 直接按 tree 形状遍历，不依赖 IR.Tree（本层保持零依赖，eval 脚本 require 就能跑）。
-    const nodes = rawStory.tree && rawStory.tree.nodes;
-    if (nodes && typeof nodes === 'object') {
-      Object.keys(nodes).forEach(id => {
-        const n = nodes[id];
-        if (!n) return;
-        // videoId 同样要收（§5③）：漏了，「删除故事 / 清理孤儿原图」会误删或残留别的分支的视频
-        (Array.isArray(n.scenes) ? n.scenes : []).forEach(s => { if (s && s.imageId) out.push(s.imageId); if (s && s.videoId) out.push(s.videoId); });
-        (Array.isArray(n.entries) ? n.entries : []).forEach(e => { if (e && e.imageId) out.push(e.imageId); if (e && e.videoId) out.push(e.videoId); });
-      });
+    // 分支树里引用到的图/视频也算（含非当前分支）：漏掉就会在删除故事 /「清理孤儿原图」时
+    // **静默删掉别的分支的图**（任务书 §10）。tree 形状的遍历（含 videoId，§5③）只有
+    // IR.Tree.imageIdsOf 一份实现，这里只负责 log / scenes——两份实现一旦漂移就是删档级事故。
+    if (rawStory.tree) {
+      global.IR.Tree.imageIdsOf(rawStory.tree).forEach(x => out.push(x));
     }
     return out;
   }
@@ -1140,14 +1201,14 @@
       buildStoryPack, sanitizePrefsSafe,
       newStory,
       loadSettings, saveSettings,
-      listStories, loadStory, saveStory, deleteStory, storyThumb,
+      listStories, loadStory, saveStory, deleteStory, storyThumb, safeThumb,
       listIndex, storySnippet, ensureIndexComplete,
       loadUserProfile, saveUserProfile,
       getCurrentId, setCurrentId, loadCurrent,
       migrateLegacy, clearAll,
 
-      // 存储后端（IndexedDB 主库 + 回退）
-      boot, flush, storageInfo,
+      // 存储后端（IndexedDB 主库 + 回退）；assertDeps = 关键依赖清单自检（boot 会先跑）
+      boot, flush, storageInfo, assertDeps,
       setPersistErrorHandler(fn) { onPersistErrorFn = (typeof fn === 'function') ? fn : null; },
       setImageReadyHandler(fn) { onImageReadyFn = (typeof fn === 'function') ? fn : null; },
 

@@ -420,8 +420,8 @@
       const list = (r && r.transactions) || [];
       const s = await IR.Sidecar.paymentSummary('');
       if (sum && s && s.summary) {
-        sum.textContent = '今日已用 ' + A.yuan(s.summary.spent.daily) + ' · 本月 ' + A.yuan(s.summary.spent.monthly)
-          + ' · 每日剩余 ' + A.yuan(s.summary.remaining.daily);
+        sum.textContent = '今日已用 ' + A.yuan(s.summary.spent.dailyCents) + ' · 本月 ' + A.yuan(s.summary.spent.monthlyCents)
+          + ' · 每日剩余 ' + A.yuan(s.summary.remaining.dailyCents);
       }
       box.innerHTML = '';
       if (!list.length) {
@@ -495,6 +495,33 @@
     openModal('modal-payment');
   }
 
+  // 三层授权第一层（长期授权范围，审查 中危 #13）：下单必须挂在用户签发的 mandate 上，
+  // agent 身份与币种由本地服务按 mandate / 配置映射，请求体自报无效。
+  // 没有授权时先问用户要不要签发一份（发起方 agent、总额度=每月上限、不限品类）——不静默代签。
+  async function ensurePaymentMandate() {
+    try {
+      const list = await IR.Sidecar.paymentMandates();
+      const mds = (list && list.mandates) || [];
+      if (mds.length) return mds[0].id;
+      const sum = await IR.Sidecar.paymentSummary();
+      const monthly = (sum && sum.summary && sum.summary.monthlyCents) || 0;
+      const ok = await irConfirm(
+        '下单要先有「长期授权范围」。现在按当前配置签发一份吗？\n\n'
+        + '发起方：agent（由本地服务记账）\n总额度：' + A.yuan(monthly) + '（= 设置里的每月上限）\n品类：不限\n\n'
+        + '之后每一笔仍要逐笔确认；额度与策略始终由本地服务在代码层强制。',
+        { title: '签发长期授权', okText: '签发授权' }
+      );
+      if (!ok) return '';
+      const md = await IR.Sidecar.paymentCreateMandate({
+        agent: 'agent', totalLimitCents: monthly, categories: [],
+      });
+      return (md && md.id) || '';
+    } catch (e) {
+      toast('读取授权范围失败：' + ((e && e.message) || e), true);
+      return '';
+    }
+  }
+
   async function doPaymentSubmit() {
     const amountCents = Math.floor(Number($('#pm-amount').value) || 0);
     const merchant = $('#pm-merchant').value.trim();
@@ -503,9 +530,15 @@
     const out = $('#pm-result');
     if (amountCents <= 0) { toast('先填金额（单位：分，例如 1999 = 19.99 元）', true); return; }
     try {
+      const mandateId = await ensurePaymentMandate();
+      if (!mandateId) {
+        out.textContent = '没有放行：下单需要先签发长期授权范围。';
+        toast('已取消：没有长期授权', true);
+        return;
+      }
       const r = await IR.Sidecar.paymentPurchase({
         amountCents: amountCents, merchant: merchant, category: category,
-        agent: 'agent', items: itemsText ? [{ name: itemsText }] : [],
+        mandateId: mandateId, items: itemsText ? [{ name: itemsText }] : [],
       });
       if (!r || !r.ok) {
         out.textContent = '没有放行：' + ((r && (r.message || r.code)) || '未知原因');
@@ -523,7 +556,7 @@
           '品类：' + (category || '（未填）'),
         ];
         if (itemsText) lines.push('商品：' + itemsText);
-        lines.push('', '每日剩余：' + A.yuan(rem.daily || 0) + ' · 每月剩余：' + A.yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+        lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
         const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
         const rr = ok ? await IR.Sidecar.paymentApprove(r.intentId) : await IR.Sidecar.paymentDeny(r.intentId);
         out.textContent = ok
@@ -661,7 +694,22 @@
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     let res = null;
     try {
-      res = await IR.Proposals.confirm(p, IR.Sidecar, Date.now());
+      // 支付提案同样要挂长期授权（审查 中危 #13）：没有就先问用户签发；
+      // mandateId 注入到 paymentPurchase 包装里，提案层保持纯函数、不碰授权细节
+      let svc = IR.Sidecar;
+      if (p.kind === 'payment') {
+        const mandateId = await ensurePaymentMandate();
+        if (!mandateId) {
+          p.status = 'failed';
+          p.result = { ok: false, error: '下单需要先签发长期授权范围。' };
+          saveAll(); A.renderChat();
+          return;
+        }
+        svc = Object.assign({}, IR.Sidecar, {
+          paymentPurchase: payload => IR.Sidecar.paymentPurchase(Object.assign({}, payload, { mandateId: mandateId })),
+        });
+      }
+      res = await IR.Proposals.confirm(p, svc, Date.now());
     } catch (err) {
       p.status = 'failed';
       p.result = { ok: false, error: String((err && err.message) || err) };
@@ -680,7 +728,7 @@
       ];
       const items = (a.items || []).map(i => i && i.name).filter(Boolean).join('、');
       if (items) lines.push('商品：' + items);
-      lines.push('', '每日剩余：' + A.yuan(rem.daily || 0) + ' · 每月剩余：' + A.yuan(rem.monthly || 0), '', '确认后才会真正扣款。');
+      lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
       const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
       if (ok) {
         try { await IR.Proposals.approveSecond(p, IR.Sidecar); } catch (err) {

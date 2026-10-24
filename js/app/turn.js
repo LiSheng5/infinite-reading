@@ -34,33 +34,12 @@
     return { narration: text, choices: [], scene_change: false, scene_summary: '', parseFailed: true, looksJson: looksJson };
   }
 
-  function slimReply(r) {
-    return { narration: r.narration, choices: r.choices, scene_change: r.scene_change, scene_summary: r.scene_summary };
-  }
-
+  // 归档形状 / 工具吸收的唯一口径在 IR.Context（审查 可维护性 二·10）：
+  // assistant 消息内容 = IR.Context.slimReply 的 JSON；applyToolCall 只是转接，
+  // 评测（eval/run.js）走同一实现，字段不会再漂移。
+  // 画像门控 = applyProfile 注入点（这里给 A.applyProfileEntries：关开关即停止收集，§4.12）。
   function applyToolCall(c) {
-    const fn = (c && c.function) ? c.function : c;
-    const name = (fn && fn.name) || '';
-    let args = {};
-    try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
-    // 提案类工具的留痕是 {type:'proposal'} 提案卡本身（确认后另记一条 tool 留痕），这里不再重复记
-    if (IR.Context.isProposalTool(name)) return;
-    let summary = name;
-    if (name === 'update_memory') {
-      if (args.world && typeof args.world === 'object') IR.Context.mergeWorld(S.story.world, args.world);
-      if (args.relationship) IR.Context.mergeWorld(S.story.world, { relationship: args.relationship });
-      // 画像条目按开关 / 范围写入（关开关即停止收集，§4.12）
-      if (Array.isArray(args.profile)) A.applyProfileEntries(args.profile);
-      summary = args.text ? ('更新记忆：' + args.text) : '更新记忆';
-    } else if (name === 'recall_world_state') summary = '查阅了世界状态卡';
-    else if (name === 'recall_style_card') summary = '查阅了视觉设定卡';
-    else if (name === 'request_image') summary = '排队生图';   // §3.A.6：chat / rp 没有画师，措辞中立
-    else if (name === 'schedule_once') summary = '安排了一次主动联系（待确认）';
-    else if (name === 'schedule_heartbeat') summary = '安排了定时主动联系（待确认）';
-    else if (name === 'schedule_cron') summary = '安排了日历主动联系（待确认）';
-    else if (name === 'list_triggers') summary = '查看了主动联系安排';
-    else if (name === 'cancel_trigger') summary = '取消了主动联系安排';
-    S.story.log.push({ type: 'tool', tool: name, summary, ts: Date.now() });
+    IR.Context.absorbToolCalls(S.story, [c], { applyProfile: A.applyProfileEntries });
   }
 
   function absorbReply(reply) {
@@ -271,24 +250,13 @@
   }
 
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
-  const REASONING_MAX = 4000;
-  function clipReasoning(text) {
-    const s = String(text || '');
-    return s.length > REASONING_MAX ? (s.slice(0, REASONING_MAX) + '\n…（思考链过长，已截断）') : s;
-  }
-
-  // 旁白条目（versions = 版本栈）；思考链随条目一起存，供折叠块渲染与以后带 tools 回传
+  // 旁白条目 / assistant 条目：唯一口径在 IR.Context.narrationEntry / assistantEntry（二·10）
   function pushNarrationEntry(text, reasoning) {
-    const e = { type: 'narration', text, versions: [text], activeVersion: 0, ts: Date.now() };
-    if (reasoning) e.reasoning = clipReasoning(reasoning);
-    S.story.log.push(e);
+    S.story.log.push(IR.Context.narrationEntry(text, reasoning));
   }
 
-  // AI1 原始对话里的 assistant 条目：reasoning 一并存档（不进请求体，§4.5）
   function assistantMessage(reply, reasoning) {
-    const m = { role: 'assistant', content: JSON.stringify(slimReply(reply)) };
-    if (reasoning) m.reasoning = clipReasoning(reasoning);
-    return m;
+    return IR.Context.assistantEntry(reply, reasoning);
   }
 
   // 流式清洗：从累积的 JSON 文本里抠出旁白可读部分

@@ -39,6 +39,10 @@
     $('#s-image-model').value = S.settings.image.model;
     $('#s-image-key').value = S.settings.image.apiKey;
     $('#s-image-params').value = typeof S.settings.image.extraParams === 'string' ? S.settings.image.extraParams : '';
+    // 生图适配器：只有两个真实值；演示模式的假适配器（demo-image）不显示在表单里，保存时也不会覆盖它
+    $('#s-image-provider').value = S.settings.image.provider === 'minimax-image' ? 'minimax-image' : 'openai-images';
+    $('#s-image-ref').value = S.settings.image.refMode === 'prev' ? 'prev' : 'off';
+    applyImageProviderHint();
     const vd = S.settings.video || {};
     $('#s-video-base').value = vd.baseUrl || '';
     $('#s-video-model').value = vd.model || '';
@@ -78,6 +82,19 @@
     renderStoryPanels();
     renderInjectHint();
     A.renderSavepoints();
+  }
+
+  // 生图适配器切换：两套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生）
+  function applyImageProviderHint() {
+    const sel = $('#s-image-provider');
+    const mm = !!sel && sel.value === 'minimax-image';
+    const hintO = $('#hint-image-openai'), hintM = $('#hint-image-minimax');
+    if (hintO) hintO.classList.toggle('hidden', mm);
+    if (hintM) hintM.classList.toggle('hidden', !mm);
+    const base = $('#s-image-base'), model = $('#s-image-model'), params = $('#s-image-params');
+    if (base) base.placeholder = mm ? 'http://127.0.0.1:4320 或 https://api.minimaxi.com' : 'https://…（点这里选，也可自己填）';
+    if (model) model.placeholder = mm ? 'image-01 或 image-01-live' : '填你的生图模型名';
+    if (params) params.placeholder = mm ? 'style.style_type=漫画, style.style_weight=0.8, seed=12345' : 'steps=30, negative_prompt=blurry';
   }
 
   function applyAspectToFields() {
@@ -128,7 +145,10 @@
     S.settings.draft.model = $('#s-draft-model').value.trim();
     S.settings.draft.apiKey = $('#s-draft-key').value.trim();
 
-    S.settings.image.provider = 'openai-images';
+    // 生图适配器选哪个用哪个；演示模式保持假适配器（否则一保存就把 demo 换成真接口）
+    if (!DEMO) S.settings.image.provider = $('#s-image-provider').value === 'minimax-image' ? 'minimax-image' : 'openai-images';
+    // 参考图：'prev' 才真的传图，其余一律关闭
+    S.settings.image.refMode = $('#s-image-ref').value === 'prev' ? 'prev' : 'off';
     S.settings.image.baseUrl = $('#s-image-base').value.trim();
     S.settings.image.model = $('#s-image-model').value.trim();
     S.settings.image.apiKey = $('#s-image-key').value.trim();
@@ -142,7 +162,8 @@
     S.settings.video.baseUrl = $('#s-video-base').value.trim();
     S.settings.video.model = $('#s-video-model').value.trim();
     S.settings.video.apiKey = $('#s-video-key').value.trim();
-    // 独立控件填常用项；「自定义请求参数」是高级覆盖（同名 key 以它为准，providers 后合并）
+    // 时长 / 分辨率 / 比例以这些控件为唯一来源（审查 三·2）：「自定义请求参数」只补其它键，
+    // 同名 key 会被控件值覆盖（providers.applyVideoControlParams 同口径）
     S.settings.video.duration = Math.max(4, Math.min(15, parseInt($('#s-video-duration').value, 10) || 5));
     S.settings.video.resolution = $('#s-video-resolution').value || '768P';
     S.settings.video.ratio = $('#s-video-ratio').value || '16:9';
@@ -233,7 +254,10 @@
     };
     return {
       cfg: {
-        provider: t.kind === 'image' ? 'openai-images' : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
+        // 生图按面板上选的适配器测（演示模式下面板显示的是 openai-images，但 DEMO 会提前拦下不联网）
+        provider: t.kind === 'image'
+          ? (($('#s-image-provider') || {}).value === 'minimax-image' ? 'minimax-image' : 'openai-images')
+          : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
         baseUrl: grab(0), apiKey: grab(1), model: grab(2),
       },
       inherited,
@@ -288,6 +312,7 @@
         + (card.updatedAt ? '（' + fmtTime(card.updatedAt) + ' 锁定）' : '') + '：之后每张画都带着它。';
       $('#style-card-view').classList.remove('hidden');
       $('#style-card-text').textContent = IR.Context.styleCardText(card) || '（卡是空的）';
+      $('#s-card-note').value = card.note || '';
     } else {
       $('#style-card-state').textContent = has
         ? '未锚定：画师自由发挥（上面的画风预设兜底）；也可以走一遍「锚定画风」。'
@@ -539,5 +564,19 @@
     renderStoryPanels();
   }
 
-  A.reg({ syncSettingsToForm, applyAspectToFields, applyFormToSettings, TEST_TARGETS, testConnection, renderStoryPanels, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
+  // 「画风备注」就地改（不重画候选）：顺手升版本，兼容「卡更新了」的 UI 提示
+  function saveCardNote() {
+    const card = S.story && S.story.styleCard;
+    if (!card) { toast('这个档还没有视觉设定卡', true); return; }
+    const note = String(($('#s-card-note') || {}).value || '').trim();
+    if (note === String(card.note || '')) { toast('备注没变'); return; }
+    card.note = note;
+    card.version = (+card.version || 0) + 1;
+    card.updatedAt = Date.now();
+    saveAll();
+    renderStylePanel();
+    toast('已更新画风备注（v' + card.version + '）：只影响画面气质，剧情事实仍由世界卡与剧情决定', false, true);
+  }
+
+  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderStoryPanels, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
 })();

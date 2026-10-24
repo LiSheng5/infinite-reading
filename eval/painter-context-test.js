@@ -5,6 +5,7 @@
  *   [system]  PAINTER_SYSTEM
  *   [system]  [画风锚]（设定卡优先，未锚定走降级文案）
  *   [system]  [最近两张图]（alt + prompt）
+ *   [system]  [基底 prompt]（上一次出图的完整 prompt，差分基底；无上一张图时省略）
  *   [system]  [最近剧情]：最近 PAINTER_RECENT_TURNS 回合的「玩家行动 + 旁白」，
  *             玩家行动带（做）/（说）/（导演）标记，每条截断 200 字，按时间顺序
  *   [user]    [画面参考] + [画风要求]
@@ -124,6 +125,14 @@ console.log('[2] assemblePainter（scene）：块齐全，[最近剧情] 只含�
     '[画风锚] 用设定卡（含人物设定）');
   ok(all.indexOf('IMG1ALT') >= 0 && all.indexOf('IMG2PROMPT') >= 0, '[最近两张图] 带 alt + prompt');
 
+  // 差分基底（v0.12.1）：上一次出图的完整 prompt 单独成块，且只给最近那一张
+  const baseBlk = blockOf(msgs, '[基底 prompt]');
+  ok(!!baseBlk, '有 [基底 prompt] 块（差分基底）');
+  ok(baseBlk.indexOf('IMG2PROMPT') >= 0 && baseBlk.indexOf('IMG1PROMPT') < 0,
+    '[基底 prompt] 取最近一张（IMG2），不含更早的 IMG1');
+  ok(msgs[0].content.indexOf('基底') >= 0, 'PAINTER_SYSTEM 明确要求「以基底为准、风格原样保留」');
+  ok(msgs[0].content.indexOf('完整') >= 0, 'PAINTER_SYSTEM 要求输出完整 prompt（不是差异）');
+
   const plot = blockOf(msgs, '[最近剧情]');
   ok(!!plot, '有 [最近剧情] 块');
   ok(plot.indexOf('T4ACTION') >= 0 && plot.indexOf('T6NARR旁白') >= 0, '[最近剧情] 含最近 3 回合');
@@ -160,6 +169,18 @@ console.log('[4] 未锚定降级：不抛错、走「（未锚定，自由发挥
   ok(!threw && msgs, '未锚定故事不抛错');
   const all = msgs.map(m => m.content).join('\n\n');
   ok(all.indexOf('[画风锚]\n（未锚定，自由发挥）') >= 0, '降级文案「（未锚定，自由发挥）」');
+}
+
+console.log('[4b] 差分基底的两种省略：第一次作画 / 工作台对话');
+{
+  const story = buildStory();
+  story.log = story.log.filter(e => e.type !== 'image');
+  story.scenes = [];
+  const msgs = C.assemblePainter(story, { sceneRef: '雨夜站台', styleHint: '' });
+  ok(!blockOf(msgs, '[基底 prompt]'), '没有上一张图 → 不发 [基底 prompt] 块');
+
+  const chat = C.assemblePainter(buildStory(), { mode: 'chat', userText: '灯光暖一点', currentPrompt: 'CURPROMPT', currentAlt: 'CURALT' });
+  ok(!blockOf(chat, '[基底 prompt]'), 'chat 模式不重复下发（已有 [当前这张图]）');
 }
 
 console.log('[5] chat（工作台）模式保持不动：[最近剧情] 仍是最近 3 条旁白 + recall_recent_plot');

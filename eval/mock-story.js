@@ -182,7 +182,7 @@
           choices: ['问弟弟也失踪了吗', '不再追问，把照片还给他', '自己留着照片'],
           scene_change: false,
           scene_summary: '便利店收银台前，两人之间隔着一张旧照片',
-          tool_calls: [{ id: 'call-mem-1', type: 'function', function: { name: 'update_memory', arguments: '{"scope":"world.relationship","text":"周叙有个弟弟，曾在这家店待过"}' }, result: { ok: true, written: 'world.relationship.notes' } }],
+          tool_calls: [{ id: 'call-mem-1', type: 'function', function: { name: 'update_memory', arguments: '{"world":{"relationship":{"notes":"周叙有个弟弟，曾在这家店待过"}},"text":"周叙有个弟弟，曾在这家店待过"}' }, result: { ok: true, written: 'world.relationship.notes' } }],
         },
       },
       {
