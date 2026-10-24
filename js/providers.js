@@ -1,7 +1,7 @@
 /*
  * 无限阅读 · 适配器层
  * - ChatProviders：剧情对话（AI1）与画师提示词（AI2）共用的对话适配器
- * - ImageProviders：生图适配器（OpenAI 兼容 /images/generations，通用；模型名由用户自填）
+ * - ImageProviders：生图适配器（OpenAI 兼容 /images/generations；MiniMax 原生 /v1/image_generation）
  * - VideoProviders：生视频适配器（MiniMax V2「minimax-video」：提交任务 → 轮询取 URL）
  *
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
@@ -122,14 +122,20 @@
     if (!C || !cfg || !cfg.model) return null;
     try { return C.find(kind, cfg.model, cfg.provider); } catch (_) { return null; }
   }
+  // 路径段黑名单：a.b 形式的手填参数若不拦，"__proto__.x=1" 会把 x 写进 Object.prototype
+  // （原型污染），经 .irbackup.json 导入恶意设置同样能触发
+  const FORBIDDEN_PARAM_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
   function setParam(body, path, value) {
     const parts = String(path || '').split('.');
     let o = body;
     for (let i = 0; i < parts.length - 1; i++) {
-      if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {};
-      o = o[parts[i]];
+      const k = parts[i];
+      if (!k || FORBIDDEN_PARAM_KEYS.has(k)) return;
+      if (!o[k] || typeof o[k] !== 'object') o[k] = {};
+      o = o[k];
     }
-    if (parts[parts.length - 1]) o[parts[parts.length - 1]] = value;
+    const last = parts[parts.length - 1];
+    if (last && !FORBIDDEN_PARAM_KEYS.has(last)) o[last] = value;
   }
   function coerce(v) {
     if (v === 'true') return true;
@@ -259,9 +265,17 @@
           });
           if (!res.ok) throw new Error(await readError(res));
 
+          // 流式请求却没响应体（空 200）：显式报「未返回流式响应」（审查 低危 #20）——
+          // 别落进 res.json() 抛出费解的解析错误，被上层误报成网络故障
+          if (wantStream && !res.body) {
+            throw new Error('未返回流式响应：接口返回了空响应体（检查「接口地址」是不是 API 域名，中间代理是否吞掉了流式）。');
+          }
+
           // 非流式
-          if (!wantStream || !res.body) {
-            const data = await res.json();
+          if (!wantStream) {
+            let data;
+            try { data = await res.json(); }
+            catch (_) { throw new Error('未返回响应：接口返回了空响应体（检查「接口地址」是不是 API 域名）。'); }
             const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
             const text = msg.content || '';
             emitReasoning(hooks, reasoningOf(msg));   // 思考链：非流式一次性给全
@@ -273,6 +287,7 @@
 
           // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示（§4.5）
           let full = '';
+          let gotAny = false;   // 流里是否解析出过任何 SSE 事件（空流要显式报错，见收尾）
           const callBuf = [];
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -284,6 +299,7 @@
             if (payload === '[DONE]') return;
             try {
               const j = JSON.parse(payload);
+              if (j && (j.choices || j.error)) gotAny = true;   // 真正的 API 事件（[DONE] 除外）
               const delta = j.choices && j.choices[0] && j.choices[0].delta;
               const rpiece = reasoningOf(delta);
               if (rpiece) emitReasoning(hooks, rpiece);
@@ -317,6 +333,11 @@
           if (buf.trim()) handleLine(buf);
           const done_calls = callBuf.filter(Boolean);
           if (done_calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(done_calls);
+          // 连接通了但流里一个事件都没有（代理把 SSE 吞成空体的典型症状）：显式报错（审查 低危 #20），
+          // 不把「空回复」冒充成功返回给调用方
+          if (!full && !done_calls.length && !gotAny) {
+            throw new Error('未返回流式响应：连接成功但流里没有任何内容（代理 / 网关可能吞掉了流式响应，可改用非流式重试）。');
+          }
           return full;
         } finally {
           if (ctrl) { clearTimeout(idleTimer); clearTimeout(totalTimer); }
@@ -326,6 +347,83 @@
   };
 
   /* ---------------- 生图适配器 ---------------- */
+
+  /* MiniMax 生图（image-01 / image-01-live）的常量与换算。
+   * 比例 → 官方给出的实际分辨率（用来把用户手填的宽高折成最接近的比例：
+   * image-01-live 不支持 width/height，自定义尺寸只能这么落地）。 */
+  const MINIMAX_IMAGE_ASPECTS = {
+    '1:1': [1024, 1024],
+    '16:9': [1280, 720],
+    '4:3': [1152, 864],
+    '3:2': [1248, 832],
+    '2:3': [832, 1248],
+    '3:4': [864, 1152],
+    '9:16': [720, 1280],
+    '21:9': [1344, 576],     // 官方注明：仅 image-01
+  };
+  const MINIMAX_IMAGE_PROMPT_MAX = 1500;        // 官方上限（字符）
+  const MINIMAX_IMAGE_TIMEOUT_MS = 180000;      // 出图单次上限 3 分钟（接口是同步的，慢的时候会排队）
+
+  // 官方 base_resp.status_code 常见错误 → 人话
+  const MINIMAX_IMAGE_ERRORS = {
+    1002: '触发限流了：稍等一会儿再试（同一 Key 并发 / 频率太快）。',
+    1004: '账号鉴权失败：检查 API Key 是否复制完整、是否过期。',
+    1008: '账户余额不足：去 MiniMax 控制台充值后再试。',
+    1026: '提示词里检测到敏感内容，被拒了：改一改这次的画面描述。',
+    2013: '参数不合法：常见原因是模型名写错、给 image-01-live 下发了宽高、比例不在官方列表里，或该模型不接受参考图（把设置里的「参考图」改成关闭再试）。',
+    2049: 'API Key 无效：检查是否复制错，以及 Key 与站点是否配套（minimaxi.com / minimax.io 的 Key 不通用）。',
+  };
+
+  // 接口地址：Base URL 填不填 /v1 都行（两份官方文档一个带 /v1 一个不带，这里统一成带）
+  function minimaxImageEndpoint(cfg) {
+    const base = trimBase(cfg);
+    return /\/v1$/i.test(base) ? base + '/image_generation' : base + '/v1/image_generation';
+  }
+
+  // image-01 的自定义宽高是否可用：512~2048、必须是 8 的倍数、成对出现
+  function minimaxSizeOk(cfg) {
+    const w = Math.round(+((cfg && cfg.width) || 0));
+    const h = Math.round(+((cfg && cfg.height) || 0));
+    if (!(w >= 512 && w <= 2048 && h >= 512 && h <= 2048)) return false;
+    return w % 8 === 0 && h % 8 === 0;
+  }
+
+  // 把「自定义宽高」折成官方支持的比例里最接近的那个（live 只能这么出图）
+  function minimaxAspectOf(cfg, live) {
+    const w = +((cfg && cfg.width) || 0);
+    const h = +((cfg && cfg.height) || 0);
+    if (!(w > 0 && h > 0)) return '16:9';
+    const target = w / h;
+    let best = '1:1', bestD = Infinity;
+    for (const k of Object.keys(MINIMAX_IMAGE_ASPECTS)) {
+      if (live && k === '21:9') continue;
+      const [aw, ah] = MINIMAX_IMAGE_ASPECTS[k];
+      const d = Math.abs(Math.log((aw / ah) / target));
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    return best;
+  }
+
+  /* 超长提示词截断：官方上限 1500 字。直接 slice 会把**尾部的画风关键词**切掉
+   * （画师的 prompt 通常「主体 → 动作 → 环境 → 画风」），风格就更容易漂，
+   * 所以这里保留头（内容）与尾（画风），只牺牲中间。 */
+  function clipPromptText(s, max) {
+    const t = String(s || '');
+    if (t.length <= max) return t;
+    const tailLen = 200;
+    const head = t.slice(0, max - tailLen - 2).replace(/[,，\s]+$/, '');
+    const tail = t.slice(-tailLen).replace(/^[,，\s]+/, '');
+    return (head + ', ' + tail).slice(0, max);
+  }
+
+  // 回包给的是裸 base64（官方示例按 .jpeg 落盘）：按前缀猜 MIME，认不出就按 jpeg
+  function minimaxDataUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^data:/i.test(s)) return s;
+    const mime = s.indexOf('iVBOR') === 0 ? 'image/png' : (s.indexOf('R0lG') === 0 ? 'image/gif' : 'image/jpeg');
+    return 'data:' + mime + ';base64,' + s;
+  }
 
   const ImageProviders = {
 
@@ -384,6 +482,138 @@
         throw new Error('生图接口返回里既没有 url 也没有 b64_json');
       },
     },
+
+    /* MiniMax 原生生图（image-01 / image-01-live）—— 2026-10-22 按官方文档核对
+     *   （platform.minimax.cn/docs/api-reference/image-generation-t2i）：
+     *   POST {Base URL}/v1/image_generation
+     *   body  model（image-01 | image-01-live）/ prompt（≤1500 字）/ aspect_ratio /
+     *         width + height（**仅 image-01**，512~2048 且 8 的倍数，成对给）/
+     *         response_format（url | base64）/ n（1~9）/ seed / prompt_optimizer / aigc_watermark /
+     *         style{ style_type, style_weight }（**仅 image-01-live**；
+     *           style_type ∈ 漫画 / 元气 / 中世纪 / 水彩，style_weight ∈ (0,1]，默认 0.8）
+     *   回包  data.image_base64[] 或 data.image_urls[]；**base_resp.status_code === 0 才算成功**
+     *         （HTTP 200 也可能是业务失败，所以必须看 base_resp）
+     * 与 OpenAI 兼容的生图接口差三处：路径、尺寸参数（比例优先）、回包结构。
+     * 画风等厂商参数照旧走「自定义请求参数」（最后合并、优先级最高），例如：
+     *   style.style_type=漫画, style.style_weight=0.8, prompt_optimizer=true, seed=12345
+     */
+    'minimax-image': {
+      label: 'MiniMax 生图（image-01 / image-01-live）',
+      // 认 cfg.referenceImage（转成 subject_reference）：设置里的「参考图 = 用上一张图」靠它生效
+      supportsReference: true,
+
+      /* 「测试连接」：只读探测，**绝不出图**（出图就花钱且撤销不了）。
+       * 用 GET 打 /v1/image_generation——方法不合法，服务端回 4xx 也算「地址 + 跨域」通了。 */
+      async test(cfg) {
+        const bad = cfgProblem(cfg, true);
+        if (bad) return { level: 'fail', message: bad.replace('Base URL', '生图接口地址').replace('模型名', '生图模型名') };
+        if (!String(cfg.apiKey || '').trim()) return { level: 'fail', message: '还没填生图 API Key。' };
+
+        let res;
+        try {
+          res = await fetchWithTimeout(minimaxImageEndpoint(cfg), { method: 'GET', headers: videoHeaders(cfg, false) });
+        } catch (e) {
+          // MiniMax 两个域名的响应都不带 Access-Control-Allow-*：提示走本地转发，别让人干猜
+          return {
+            level: 'fail',
+            message: friendlyNetwork(e)
+              + (e instanceof TypeError
+                ? '（MiniMax 不允许浏览器直连：先起本地转发 node tools/video-proxy.mjs，接口地址改填 http://127.0.0.1:4320）'
+                : ''),
+          };
+        }
+
+        const tail = '这里只做只读探测（不会真的出图，所以不花钱）；Key 与模型名是否真能用，要等第一次「作画」才知道。';
+        if (res.status === 401 || res.status === 403) {
+          return { level: 'warn', message: '接口可达，但这次探测被拒（HTTP ' + res.status + '）：Key 可能只对生成接口有效，也有可能是复制不完整。' + tail };
+        }
+        if (res.status === 404 || res.status === 405 || res.status === 400) {
+          return { level: 'warn', message: '接口可达（HTTP ' + res.status + '，探测用的 GET 本来就不是合法方法，属正常）。' + tail };
+        }
+        if (!res.ok) {
+          let detail = '';
+          try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+          return { level: 'warn', message: '地址可达，但探测没通过：' + friendlyStatus(res.status, detail) + tail };
+        }
+        return { level: 'ok', message: '连接成功：接口可达。' + tail };
+      },
+
+      async generate(cfg, prompt) {
+        const bad = cfgProblem(cfg, true);
+        if (bad) throw new Error(bad.replace('Base URL', '生图接口地址').replace('模型名', '生图模型名'));
+        if (!String(cfg.apiKey || '').trim()) throw new Error('还没填生图 API Key。');
+        const text = String(prompt || '').trim();
+        if (!text) throw new Error('提示词是空的：这一张画没有内容可画。');
+
+        const model = String(cfg.model || '').trim();
+        const live = /live/i.test(model);          // image-01-live：只认比例 + 画风，不认自定义宽高
+        const body = {
+          model: model,
+          prompt: clipPromptText(text, MINIMAX_IMAGE_PROMPT_MAX),
+          response_format: 'base64',               // 官方 url 只有 24 小时有效期，且下载还要过 CORS（缩略图会画不出来）
+          n: 1,                                    // 本项目一次只用一张，别让 n 白花钱
+        };
+        // 参考图（subject_reference）：人物 / 服饰 / 画风一致性的唯一硬手段——
+        // 画师只看文字，真正能「看到上一张」的只有生图接口。值可以是 dataURL 或公网 URL。
+        if (cfg.referenceImage) {
+          body.subject_reference = [{ type: 'character', image_file: String(cfg.referenceImage) }];
+        }
+        // 尺寸：官方规定「比例与宽高同时给时比例胜出」；live 只认比例，自定义宽高仅 image-01 生效
+        const aspect = String(cfg.aspect || '').trim();
+        const preset = Object.prototype.hasOwnProperty.call(MINIMAX_IMAGE_ASPECTS, aspect) && !(live && aspect === '21:9') ? aspect : '';
+        if (preset) body.aspect_ratio = preset;
+        else if (!live && minimaxSizeOk(cfg)) {
+          body.width = Math.round(+cfg.width);
+          body.height = Math.round(+cfg.height);
+        } else body.aspect_ratio = minimaxAspectOf(cfg, live);
+
+        // 手填参数最后合并（优先级最高）：style 画风 / seed / prompt_optimizer / aigc_watermark 都走这里
+        mergeExtraParams(body, cfg.extraParams);
+        // 协议硬规则收尾：live 下发宽高会被 2013 拒；n 一律收敛到 1（多出的张数本项目用不上）
+        if (live) { delete body.width; delete body.height; }
+        body.n = 1;
+
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), MINIMAX_IMAGE_TIMEOUT_MS) : null;
+        let res;
+        try {
+          res = await fetch(minimaxImageEndpoint(cfg), {
+            method: 'POST',
+            headers: videoHeaders(cfg, true),
+            body: JSON.stringify(body),
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+        } catch (e) {
+          if (e instanceof TypeError) {
+            throw new Error('该接口不允许浏览器直连（CORS）：请求被浏览器拦下了，这次没有产生费用。可起本地转发 node tools/video-proxy.mjs（接口地址改填 http://127.0.0.1:4320）后重试。');
+          }
+          if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')))) {
+            throw new Error('等了 ' + Math.round(MINIMAX_IMAGE_TIMEOUT_MS / 1000) + ' 秒还没出图：接口可能正在排队，稍后再试一次。');
+          }
+          throw e;
+        } finally { if (timer) clearTimeout(timer); }
+
+        if (!res.ok) throw new Error(await readError(res));
+        let data;
+        try { data = await res.json(); } catch (_) {
+          throw new Error('生图接口回包不是 JSON：接口地址可能填成了网页地址（要填 API 域名或本地转发地址）。');
+        }
+        const br = data.base_resp || {};
+        const code = br.status_code == null ? 0 : +br.status_code;
+        if (code !== 0) {
+          throw new Error('MiniMax 拒绝了这次出图（' + code + '）：' + (br.status_msg || '没有说明')
+            + (MINIMAX_IMAGE_ERRORS[code] ? '——' + MINIMAX_IMAGE_ERRORS[code] : ''));
+        }
+        const d = data.data || {};
+        const b64 = Array.isArray(d.image_base64) ? d.image_base64.filter(Boolean)[0] : '';
+        if (b64) return minimaxDataUrl(b64);
+        const link = Array.isArray(d.image_urls) ? d.image_urls.filter(Boolean)[0] : '';
+        if (link) return String(link);
+        const failed = data.metadata && +data.metadata.failed_count;
+        throw new Error('生图接口没有返回图片'
+          + (failed ? '（' + failed + ' 张都被内容安全拦截了：改一改这次的画面描述再试）' : '：' + JSON.stringify(data).slice(0, 200)));
+      },
+    },
   };
 
   /* ---------------- 生视频适配器（MiniMax V2，任务书 v0.12.0 §2/§4） ----------------
@@ -407,7 +637,8 @@
     return Math.max(min, Math.min(max, n));
   }
 
-  function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
+  // sleep 的唯一口径在 IR.sleep（tree.js，审查 可维护性 三·5）；providers 加载早于 tree.js，
+  // 这里不取值、只在调用时经 global.IR.sleep 走（缺了会直接抛，不静默降级）
 
   /* 图片入参：先缩到长边 ≤ 1280、JPEG 0.9，再转 data URL（控制体积，避开 64 MB 上限）。
    * Node（单测）里没有 document / Image：原样返回，不影响请求形状断言。 */
@@ -442,18 +673,26 @@
     return headers;
   }
 
+  /* 时长 / 分辨率 / 比例的唯一来源 = 面板控件（cfg.duration / resolution / ratio，审查 三·2 双数据源）：
+   * extraParams 只补充其它键（style / seed / watermark…），同名这三键一律以控件为准——
+   * 此前 extraParams 后合并优先，旧迁移折进 extraParams 的同名键会一直盖住下拉框（「改了没生效」）。
+   * 协议硬规则一并收口：duration 夹 4~15；图生 ratio 一律 adaptive；文生 ratio 必填且非 adaptive。 */
+  function applyVideoControlParams(body, cfg, mode) {
+    body.duration = clampInt(cfg && cfg.duration, 4, 15, 5);
+    body.resolution = String((cfg && cfg.resolution) || '768P');
+    if (mode === 'i2v') body.ratio = 'adaptive';
+    else {
+      const r = String((cfg && cfg.ratio) || '');
+      body.ratio = (r && r !== 'adaptive') ? r : '16:9';
+    }
+    return body;
+  }
+
   // 提交前的生效参数（默认 + 用户 extraParams 合并；供确认弹窗与留痕用，与 submit 同一套规则）
   function videoEffectiveParams(cfg, mode) {
-    const body = {
-      model: String((cfg && cfg.model) || ''),
-      duration: clampInt(cfg && cfg.duration, 4, 15, 5),
-      resolution: String((cfg && cfg.resolution) || '768P'),
-      ratio: String((cfg && cfg.ratio) || '16:9'),
-    };
+    const body = { model: String((cfg && cfg.model) || '') };
     mergeExtraParams(body, cfg && cfg.extraParams);
-    body.duration = clampInt(body.duration, 4, 15, 5);
-    if (mode === 'i2v') body.ratio = 'adaptive';
-    else if (!body.ratio || body.ratio === 'adaptive') body.ratio = '16:9';
+    applyVideoControlParams(body, cfg, mode);
     return { model: body.model, duration: body.duration, resolution: body.resolution, ratio: body.ratio };
   }
 
@@ -518,12 +757,9 @@
         resolution: p.resolution,
         ratio: p.ratio,
       };
-      // 手填参数最后合并、优先（§4）；随后强制执行协议硬规则：
-      // 图生一律 ratio:'adaptive'（忽略用户参数里的 ratio）；文生 ratio 必填且不能是 adaptive。
+      // 手填参数补其它键；时长 / 分辨率 / 比例以面板控件为唯一源（同名忽略），协议硬规则同 videoEffectiveParams
       mergeExtraParams(body, cfg.extraParams);
-      body.duration = clampInt(body.duration, 4, 15, 5);
-      if (mode === 'i2v') body.ratio = 'adaptive';
-      else if (!body.ratio || body.ratio === 'adaptive') body.ratio = '16:9';
+      applyVideoControlParams(body, cfg, mode);
 
       let res;
       try {
@@ -608,7 +844,7 @@
           // 轮询阶段：单次网络错误容忍，连续 3 次才判失败（§4）
           netFails += 1;
           if (netFails >= VIDEO_POLL_MAX_NETFAIL) throw e;
-          await sleepMs(pollMs);
+          await global.IR.sleep(pollMs);
           continue;
         }
         if (hooks.onStatus) { try { hooks.onStatus(q.status, q); } catch (_) {} }
@@ -618,7 +854,7 @@
         if (q.status === 'failed' || q.status === 'cancelled' || q.status === 'expired') {
           throw new Error(q.error || ('任务' + q.status));
         }
-        await sleepMs(pollMs);
+        await global.IR.sleep(pollMs);
       }
     },
   };
