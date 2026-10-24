@@ -1,9 +1,10 @@
 <#
   Infinite Reading - portable static server (Windows PowerShell, no dependencies).
 
-  Used by ..\Start.bat as a fallback when Python is not installed.
-  Serves the repository root on http://localhost:<Port>/ , bound to loopback only
-  (nothing is exposed to the local network).
+  Used by the repo-root one-click launcher (*.bat) as a fallback when Python
+  is not installed. Serves the repository root on http://localhost:<Port>/ ,
+  bound to loopback only (nothing is exposed to the local network).
+  Sensitive paths (sidecar/data = local-service token & keys, .git) are refused.
 
   Notes: keep this file ASCII-only. Windows PowerShell 5.1 reads .ps1 files as ANSI
   unless they carry a UTF-8 BOM, so non-ASCII text here can be mis-decoded.
@@ -16,6 +17,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 $rootFull = [System.IO.Path]::GetFullPath($Root)
+
+# Never served: sidecar/data holds the local-service token / API keys, .git is repo internals
+$blockRoots = @(
+  [System.IO.Path]::GetFullPath((Join-Path $rootFull 'sidecar/data')),
+  [System.IO.Path]::GetFullPath((Join-Path $rootFull '.git'))
+)
 
 $mime = @{
   '.html'        = 'text/html; charset=utf-8'
@@ -62,7 +69,19 @@ while ($listener.IsListening) {
     if ([string]::IsNullOrEmpty($rel)) { $rel = 'index.html' }
 
     $full = [System.IO.Path]::GetFullPath((Join-Path $rootFull $rel))
-    if (-not $full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+    # Prefix compare must include the trailing separator: a sibling dir like
+    # ..\infinite-reading-evil\x would pass a bare StartsWith($rootFull).
+    $rootPrefix = $rootFull.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $blocked = -not $full.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $blocked) {
+      foreach ($b in $blockRoots) {
+        if ($full -eq $b -or $full.StartsWith($b + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+          $blocked = $true
+          break
+        }
+      }
+    }
+    if ($blocked) {
       $res.StatusCode = 403
       $body = [System.Text.Encoding]::UTF8.GetBytes('403 Forbidden')
       $res.OutputStream.Write($body, 0, $body.Length)

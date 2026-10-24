@@ -7,8 +7,9 @@ rem  Why not just double-click index.html? Because file:// and
 rem  http://localhost are two separate data stores, and browsers
 rem  often block direct API calls (CORS) under file://.
 rem
-rem  Nothing to install: it uses Python when available, otherwise
-rem  the built-in PowerShell server (tools\serve.ps1).
+rem  Nothing to install: it runs tools\serve.py when Python is available,
+rem  otherwise the built-in PowerShell server (tools\serve.ps1). Both
+rem  refuse to serve sidecar\data and .git (token & keys live there).
 rem
 rem  Keep this file ASCII-only (cmd.exe may decode it as ANSI).
 rem ============================================================
@@ -27,15 +28,15 @@ timeout /t 1 >nul
 
 where python >nul 2>nul
 if %errorlevel%==0 (
-  echo   [python] python -m http.server %PORT%
-  python -m http.server %PORT% --bind 127.0.0.1 --directory "%~dp0"
+  echo   [python] python tools\serve.py %PORT%
+  python "%~dp0tools\serve.py" %PORT%
   goto :end
 )
 
 where py >nul 2>nul
 if %errorlevel%==0 (
-  echo   [py] py -3 -m http.server %PORT%
-  py -3 -m http.server %PORT% --bind 127.0.0.1 --directory "%~dp0"
+  echo   [py] py -3 tools\serve.py %PORT%
+  py -3 "%~dp0tools\serve.py" %PORT%
   goto :end
 )
 
