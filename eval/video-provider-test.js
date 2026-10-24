@@ -5,7 +5,8 @@
  *
  * 不开浏览器、不联网：用「假 fetch」验 MiniMax V2 的请求形状与状态机（任务书 v0.12.0 §4/§12）：
  *   - t2v / i2v 的 body 组装：ratio 规则（文生必填非 adaptive；图生一律 adaptive）、
- *     first_frame 角色、extraParams 后合并优先、duration 以整数下发；
+ *     first_frame 角色、duration 以整数下发；时长 / 分辨率 / 比例以面板控件为唯一源（审查 三·2），
+ *     extraParams 只补其它键、同名这三键被控件覆盖；
  *   - generate：queued → running → succeeded；hooks.onTaskId / onStatus；
  *   - failed / cancelled / expired 直接抛（带 task.error 原文）；
  *   - 超时（VIDEO_TOTAL_TIMEOUT_MS）；提交阶段 TypeError（CORS 提示、不重试）；
@@ -17,6 +18,7 @@
 const path = require('path');
 
 global.window = global;
+require(path.join(__dirname, '..', 'js', 'tree.js'));   // IR.sleep 在 tree.js（providers 轮询依赖，三·5）
 require(path.join(__dirname, '..', 'js', 'providers.js'));
 
 const V = (global.IR || {}).VideoProviders;
@@ -76,17 +78,17 @@ const cfg = {
     req.body.duration === 5 && typeof req.body.duration === 'number' && req.body.resolution === '768P',
     req.body.duration + '/' + typeof req.body.duration + '/' + req.body.resolution);
 
-  /* ---------- extraParams 后合并、优先；duration 整数（coerce "5" → 5） ---------- */
+  /* ---------- extraParams 补其它键；时长 / 分辨率 / 比例以面板控件为唯一源（审查 三·2） ---------- */
   installFetch(() => jsonRes(200, { task_id: 't-2' }));
   await mm.submit(Object.assign({}, cfg, { extraParams: 'duration=7, resolution=2K, ratio=9:16, watermark=false' }),
     { prompt: 'x', mode: 't2v' });
   req = calls[0];
-  check('extraParams：duration / resolution / ratio 覆盖默认', req.body.duration === 7
-    && req.body.resolution === '2K' && req.body.ratio === '9:16',
+  check('extraParams：同名 duration / resolution / ratio 被控件覆盖（默认 5/768P/16:9）', req.body.duration === 5
+    && req.body.resolution === '768P' && req.body.ratio === '16:9',
     req.body.duration + '/' + req.body.resolution + '/' + req.body.ratio);
   check('extraParams：其它键原样并入', req.body.watermark === false, JSON.stringify(req.body.watermark));
 
-  /* ---------- 独立控件（cfg.duration / resolution / ratio）为基值，extraParams 覆盖其上 ---------- */
+  /* ---------- 独立控件（cfg.duration / resolution / ratio）是这三项的唯一源 ---------- */
   installFetch(() => jsonRes(200, { task_id: 't-2b' }));
   await mm.submit(Object.assign({}, cfg, { duration: 10, resolution: '1080P', ratio: '4:3' }),
     { prompt: 'x', mode: 't2v' });
@@ -98,7 +100,7 @@ const cfg = {
   installFetch(() => jsonRes(200, { task_id: 't-2c' }));
   await mm.submit(Object.assign({}, cfg, { duration: 10, extraParams: 'duration=6' }),
     { prompt: 'x', mode: 't2v' });
-  check('同名时自定义参数覆盖独立控件', calls[0].body.duration === 6, calls[0].body.duration);
+  check('同名时以独立控件为准（改下拉框必然生效，审查 三·2）', calls[0].body.duration === 10, calls[0].body.duration);
 
   installFetch(() => jsonRes(200, { task_id: 't-2d' }));
   await mm.submit(Object.assign({}, cfg, { duration: 3, ratio: '9:16' }),
@@ -108,18 +110,18 @@ const cfg = {
     calls[0].body.duration + '/' + calls[0].body.ratio);
 
   installFetch(() => jsonRes(200, { task_id: 't-3' }));
-  await mm.submit(Object.assign({}, cfg, { extraParams: { duration: '5' } }), { prompt: 'x', mode: 't2v' });
-  check('duration 必须以整数下发（"5" 经 coerce 变数字 5）',
+  await mm.submit(Object.assign({}, cfg, { duration: '5' }), { prompt: 'x', mode: 't2v' });
+  check('duration 必须以整数下发（"5" 夹取后仍是数字 5）',
     calls[0].body.duration === 5 && typeof calls[0].body.duration === 'number',
     calls[0].body.duration + '/' + typeof calls[0].body.duration);
 
   installFetch(() => jsonRes(200, { task_id: 't-4' }));
-  await mm.submit(Object.assign({}, cfg, { extraParams: 'ratio=adaptive' }), { prompt: 'x', mode: 't2v' });
-  check('t2v：用户把 ratio 写成 adaptive 也强制回 16:9', calls[0].body.ratio === '16:9', calls[0].body.ratio);
+  await mm.submit(Object.assign({}, cfg, { ratio: 'adaptive' }), { prompt: 'x', mode: 't2v' });
+  check('t2v：控件把 ratio 写成 adaptive 也强制回 16:9', calls[0].body.ratio === '16:9', calls[0].body.ratio);
 
   /* ---------- i2v body 组装 ---------- */
   installFetch(() => jsonRes(200, { task_id: 't-5' }));
-  await mm.submit(Object.assign({}, cfg, { extraParams: 'ratio=9:16' }),
+  await mm.submit(Object.assign({}, cfg, { ratio: '9:16' }),
     { prompt: 'make it move', image: 'data:image/png;base64,AAA', mode: 'i2v' });
   req = calls[0];
   const imgItem = (req.body.content || []).find(c => c.type === 'image_url');
