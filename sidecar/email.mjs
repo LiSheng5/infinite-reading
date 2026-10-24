@@ -11,7 +11,8 @@
  * 注意：邮件不是「模型自己调用的工具」——发信是高风险副作用动作，
  * 一律由用户在界面显式发起 → 确认 → 执行（见 ARCHITECTURE.md）。
  */
-import crypto from 'node:crypto';
+import { genId, dayRange } from './util.mjs';
+import { AUDIT, DRAFT } from './statuses.mjs';
 
 export const EMAIL_CODES = [
   'EMAIL_DISABLED',
@@ -27,13 +28,6 @@ export const EMAIL_CODES = [
 
 const MAX_BODY = 20000;
 const MAX_SUBJECT = 300;
-
-function genId(prefix) { return prefix + Date.now().toString(36) + crypto.randomBytes(4).toString('hex'); }
-
-function dayKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
 
 // 只做「像不像地址」的基本校验：真正的可达性由服务商决定
 const ADDR_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
@@ -99,13 +93,13 @@ export function createEmail(deps) {
     return id;
   }
 
-  // 当日成功发送数（按本地日聚合审计表）
+  // 当日成功发送数（本地日聚合审计表）
   function sentToday(t0) {
-    const key = dayKey(t0);
-    const rows = db.prepare("SELECT at FROM email_audit WHERE kind='send' AND status='ok'").all();
-    let n = 0;
-    for (const r of rows) if (dayKey(Number(r.at)) === key) n += 1;
-    return n;
+    const [d0, d1] = dayRange(t0);
+    const r = db.prepare(
+      'SELECT COUNT(*) AS n FROM email_audit WHERE kind=? AND status=? AND at >= ? AND at < ?'
+    ).get('send', AUDIT.OK, d0, d1);
+    return (r && r.n) || 0;
   }
 
   function inAllowlist(cfg, addr) {
@@ -118,7 +112,7 @@ export function createEmail(deps) {
     const addr = normalizeAddress(input && input.to);
     const id = genId('d');
     db.prepare('INSERT INTO email_drafts (id, at, to_addr, subject, body, status) VALUES (?,?,?,?,?,?)')
-      .run(id, now(), addr, String((input && input.subject) || '').slice(0, MAX_SUBJECT), String((input && input.body) || '').slice(0, MAX_BODY), 'pending');
+      .run(id, now(), addr, String((input && input.subject) || '').slice(0, MAX_SUBJECT), String((input && input.body) || '').slice(0, MAX_BODY), DRAFT.PENDING);
     return getDraft(id);
   }
 
@@ -130,28 +124,31 @@ export function createEmail(deps) {
   }
 
   function listDrafts() {
-    return db.prepare("SELECT * FROM email_drafts WHERE status='pending' ORDER BY at DESC LIMIT 100").all()
+    return db.prepare('SELECT * FROM email_drafts WHERE status=? ORDER BY at DESC LIMIT 100').all(DRAFT.PENDING)
       .map(r => ({ id: r.id, at: Number(r.at), to: r.to_addr, subject: r.subject, body: r.body, status: r.status }));
   }
 
   /*
-   * 发送。confirm=true 表示「用户已经确认过了」，此时即便不在白名单也放行（仍然受每日上限约束）。
+   * 发送。opts.confirmed=true 表示「用户已在草稿确认流里确认过」，此时即便不在白名单也放行
+   * （仍然受每日上限约束）。这个标志**只走内部第二参数**，绝不从请求体读——
+   * 若 HTTP 层把它当普通字段收上来，白名单闸门就退化成一个可伪造的布尔。
    * 返回结构化结果，让界面 / 调用方能换方案或提示用户。
    */
-  async function send(input) {
+  async function send(input, opts) {
     const src = input || {};
+    const confirmed = !!(opts && opts.confirmed);
     const actor = String(src.actor || 'user');
     const cfg = getConfig();
     const e = cfg.email || {};
 
     if (!e.enabled) {
-      audit('send', src.to, src.subject, 'denied', 'EMAIL_DISABLED', actor);
+      audit('send', src.to, src.subject, AUDIT.DENIED, 'EMAIL_DISABLED', actor);
       return { ok: false, code: 'EMAIL_DISABLED', message: '邮件功能未开启（设置 → 邮件 → 启用）。' };
     }
 
     const addr = normalizeAddress(src.to);
     if (!addr) {
-      audit('send', src.to, src.subject, 'denied', 'BAD_RECIPIENT', actor);
+      audit('send', src.to, src.subject, AUDIT.DENIED, 'BAD_RECIPIENT', actor);
       return { ok: false, code: 'BAD_RECIPIENT', message: '收件人地址不合法。' };
     }
 
@@ -159,9 +156,9 @@ export function createEmail(deps) {
     const body = String(src.body || '').slice(0, MAX_BODY);
 
     // 白名单硬校验：不在名单里且用户还没确认 → 只落草稿
-    if (!inAllowlist(cfg, addr) && !src.confirm) {
+    if (!inAllowlist(cfg, addr) && !confirmed) {
       const draft = createDraft({ to: addr, subject: subject, body: body });
-      audit('draft', addr, subject, 'denied', 'NEED_CONFIRMATION', actor);
+      audit('draft', addr, subject, AUDIT.DENIED, 'NEED_CONFIRMATION', actor);
       return {
         ok: false, code: 'NEED_CONFIRMATION', draftId: draft.id,
         message: '这个收件人不在白名单里，已存为草稿：需要你确认后才会发出。',
@@ -170,23 +167,23 @@ export function createEmail(deps) {
 
     const limit = Number(e.dailyLimit) || 0;
     if (limit <= 0) {
-      audit('send', addr, subject, 'denied', 'DAILY_LIMIT_EXCEEDED', actor);
+      audit('send', addr, subject, AUDIT.DENIED, 'DAILY_LIMIT_EXCEEDED', actor);
       return { ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '每日发送上限为 0（默认保守值），请先在设置里调大。' };
     }
     if (sentToday(now()) >= limit) {
-      audit('send', addr, subject, 'denied', 'DAILY_LIMIT_EXCEEDED', actor);
+      audit('send', addr, subject, AUDIT.DENIED, 'DAILY_LIMIT_EXCEEDED', actor);
       return { ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '今天的发送量已达上限（' + limit + ' 封）。' };
     }
 
     try {
       const provider = providerOf(cfg);
       const out = await provider.send(cfg, { to: addr, subject: subject, body: body });
-      audit('send', addr, subject, 'ok', '', actor);
+      audit('send', addr, subject, AUDIT.OK, '', actor);
       return { ok: true, id: (out && out.id) || '', provider: (cfg.email && cfg.email.provider) || 'mock', to: addr };
     } catch (err) {
       const code = String((err && err.message) || err);
       const mapped = code.indexOf('MISSING_RESEND_API_KEY') >= 0 ? 'MISSING_RESEND_API_KEY' : 'PROVIDER_ERROR';
-      audit('send', addr, subject, 'denied', mapped, actor);
+      audit('send', addr, subject, AUDIT.DENIED, mapped, actor);
       return { ok: false, code: mapped, message: '发送失败：' + code };
     }
   }
@@ -195,27 +192,35 @@ export function createEmail(deps) {
   async function sendDraft(id, opts) {
     const draft = getDraft(id);
     if (!draft) return { ok: false, code: 'DRAFT_NOT_FOUND', message: '找不到这封草稿。' };
-    if (draft.status !== 'pending') return { ok: false, code: 'DRAFT_ALREADY_SENT', message: '这封草稿已经处理过了。' };
+    if (draft.status !== DRAFT.PENDING) return { ok: false, code: 'DRAFT_ALREADY_SENT', message: '这封草稿已经处理过了。' };
     const res = await send({
       to: draft.to, subject: draft.subject, body: draft.body,
-      actor: (opts && opts.actor) || 'user', confirm: true,
-    });
+      actor: (opts && opts.actor) || 'user',
+    }, { confirmed: true });   // 确认动作发生在这里（用户点了草稿确认），不是请求体字段
     if (res.ok) {
-      db.prepare("UPDATE email_drafts SET status='sent' WHERE id=?").run(draft.id);
-      audit('confirm', draft.to, draft.subject, 'ok', '', (opts && opts.actor) || 'user');
+      db.prepare('UPDATE email_drafts SET status=? WHERE id=?').run(DRAFT.SENT, draft.id);
+      audit('confirm', draft.to, draft.subject, AUDIT.OK, '', (opts && opts.actor) || 'user');
     }
     return res;
   }
 
   function discardDraft(id) {
-    const info = db.prepare("UPDATE email_drafts SET status='discarded' WHERE id=? AND status='pending'").run(String(id || ''));
+    const info = db.prepare('UPDATE email_drafts SET status=? WHERE id=? AND status=?')
+      .run(DRAFT.DISCARDED, String(id || ''), DRAFT.PENDING);
     return info.changes > 0;
+  }
+
+  // limit 归一（审查 低危 #19）：Number('abc') 是 NaN，直接进 SQL LIMIT 会触发绑定异常——
+  // 非有限数 / 非正数一律回退默认值，再夹到上限内。
+  function clampLimit(v, dflt, max) {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : dflt;
   }
 
   async function inbox(opts) {
     const cfg = getConfig();
     if (!(cfg.email && cfg.email.enabled)) return { ok: false, code: 'EMAIL_DISABLED', message: '邮件功能未开启。' };
-    const limit = Math.max(1, Math.min(50, Number((opts && opts.limit) || 20)));
+    const limit = clampLimit(opts && opts.limit, 20, 50);
     try {
       const out = await providerOf(cfg).list(cfg, { folder: (opts && opts.folder) || 'inbox', limit: limit });
       if (out && out.ok === false) return out;
@@ -226,7 +231,7 @@ export function createEmail(deps) {
   }
 
   function listAudit(opts) {
-    const limit = Math.max(1, Math.min(200, Number((opts && opts.limit) || 50)));
+    const limit = clampLimit(opts && opts.limit, 50, 200);
     return db.prepare('SELECT * FROM email_audit ORDER BY at DESC LIMIT ?').all(limit)
       .map(r => ({
         id: r.id, at: Number(r.at), kind: r.kind, to: r.to_addr,
@@ -241,7 +246,7 @@ export function createEmail(deps) {
       provider: (getConfig().email || {}).provider || 'mock',
       sentToday: sentToday(t0),
       dailyLimit: Number((getConfig().email || {}).dailyLimit) || 0,
-      pendingDrafts: db.prepare("SELECT COUNT(*) AS n FROM email_drafts WHERE status='pending'").get().n,
+      pendingDrafts: db.prepare('SELECT COUNT(*) AS n FROM email_drafts WHERE status=?').get(DRAFT.PENDING).n,
     };
   }
 

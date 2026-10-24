@@ -89,11 +89,13 @@ async function main() {
     check('不存在的草稿：DRAFT_NOT_FOUND', missing.ok === false && missing.code === 'DRAFT_NOT_FOUND');
   }
 
-  /* 5. 直接带 confirm 发送（界面已确认过）可越过白名单，但仍受上限约束 */
+  /* 5. 草稿确认流内部带 confirmed（sendDraft 用）可越过白名单，但仍受上限约束 */
   {
     const { mail } = fresh({ allowlist: [], dailyLimit: 2 });
-    const r = await mail.send({ to: 'stranger@example.com', subject: 's', body: 'b', confirm: true, actor: 'user' });
-    check('带 confirm：越过白名单直接发送', r.ok === true, JSON.stringify(r));
+    const r = await mail.send({ to: 'stranger@example.com', subject: 's', body: 'b', actor: 'user' }, { confirmed: true });
+    check('内部 confirmed：越过白名单直接发送', r.ok === true, JSON.stringify(r));
+    const r2 = await mail.send({ to: 'stranger2@example.com', subject: 's', body: 'b', confirm: true, actor: 'user' });
+    check('请求体里的 confirm 不算数（只走内部 opts.confirmed）', r2.ok === false && r2.code === 'NEED_CONFIRMATION', JSON.stringify(r2));
   }
 
   /* 6. 每日上限：默认 0 = 一封都不发 */
@@ -147,6 +149,8 @@ async function main() {
     const { mail } = fresh({ provider: 'mock' });
     const inb = await mail.inbox({ limit: 5 });
     check('收件箱（mock）：返回空列表', inb.ok === true && inb.messages.length === 0);
+    const inbBad = await mail.inbox({ limit: 'abc' });
+    check('收件箱 limit 非法值：夹回默认值（NaN 不进调用）', inbBad.ok === true && inbBad.messages.length === 0, JSON.stringify(inbBad));
     const m2 = fresh({ provider: 'resend' });
     const inb2 = await m2.mail.inbox({});
     check('收件箱（resend）：明确返回 INBOX_NOT_SUPPORTED', inb2.ok === false && inb2.code === 'INBOX_NOT_SUPPORTED');
@@ -160,6 +164,17 @@ async function main() {
     check('草稿：丢弃成功', mail.discardDraft(d.id) === true);
     check('草稿：丢弃后不在待处理列表', mail.listDrafts().length === 0);
     check('草稿：重复丢弃返回 false', mail.discardDraft(d.id) === false);
+  }
+
+  /* 11. 审计 limit 非法值（?limit=abc）：NaN 不进 SQL LIMIT（审查 低危 #19） */
+  {
+    const { mail } = fresh({ allowlist: ['a@b.com'], dailyLimit: 2 });
+    await mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
+    let threw = null, audit = null;
+    try { audit = mail.listAudit({ limit: 'abc' }); } catch (e) { threw = e; }
+    check('审计 limit=abc：夹回默认值，不触发绑定异常', !threw && Array.isArray(audit) && audit.length === 1, String(threw));
+    const neg = mail.listAudit({ limit: -5 });
+    check('审计 limit 为负：夹回默认值', Array.isArray(neg) && neg.length === 1);
   }
 
   const pass = results.filter(r => r.hit).length;

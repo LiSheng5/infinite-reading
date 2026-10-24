@@ -12,7 +12,12 @@
  * 算法：先用 UTC 偏移把「墙上时间」算出来，在墙上时间里按分钟整数扫描找下一个匹配点，
  * 再用 Intl 把候选点换回真实 UTC 并校验偏移是否一致（夏令时切换时可能需要再收敛一次）。
  * 这样日常表达式几毫秒级出结果，也不会在夏令时边界上算错。
+ *
+ * 错误风格（审查 可维护性 #7）：表达式非法是业务失败 → parseCron 返回 { ok:false, code:'CRON_*' }，
+ * 不 throw；nextRun 遇到非法表达式按「找不到下一次」返回 null。
  */
+import { fail, isFail } from './util.mjs';
+
 const MACROS = {
   '@hourly': '0 * * * *',
   '@daily': '0 0 * * *',
@@ -66,25 +71,30 @@ function parseField(text, min, max) {
 }
 
 export function parseCron(expr) {
-  const raw = String(expr == null ? '' : expr).trim();
-  if (!raw) throw new Error('CRON_EMPTY');
-  const s = MACROS[raw.toLowerCase()] || raw;
-  const f = s.split(/\s+/);
-  if (f.length !== 5) throw new Error('CRON_NEEDS_5_FIELDS');
+  try {
+    const raw = String(expr == null ? '' : expr).trim();
+    if (!raw) return fail('CRON_EMPTY');
+    const s = MACROS[raw.toLowerCase()] || raw;
+    const f = s.split(/\s+/);
+    if (f.length !== 5) return fail('CRON_NEEDS_5_FIELDS');
 
-  const dowRaw = parseField(f[4], 0, 7);
-  const dow = new Set();
-  for (const v of dowRaw) dow.add(v === 7 ? 0 : v);   // 兼容 7=周日
+    const dowRaw = parseField(f[4], 0, 7);
+    const dow = new Set();
+    for (const v of dowRaw) dow.add(v === 7 ? 0 : v);   // 兼容 7=周日
 
-  return {
-    minute: parseField(f[0], 0, 59),
-    hour: parseField(f[1], 0, 23),
-    dom: parseField(f[2], 1, 31),
-    month: parseField(f[3], 1, 12),
-    dow,
-    domRestricted: f[2].trim() !== '*',
-    dowRestricted: f[4].trim() !== '*',
-  };
+    return {
+      minute: parseField(f[0], 0, 59),
+      hour: parseField(f[1], 0, 23),
+      dom: parseField(f[2], 1, 31),
+      month: parseField(f[3], 1, 12),
+      dow,
+      domRestricted: f[2].trim() !== '*',
+      dowRestricted: f[4].trim() !== '*',
+    };
+  } catch (e) {
+    // parseField 的内部抛出在这里收口成业务失败（CRON_* 码），不再外抛
+    return fail(String((e && e.message) || e));
+  }
 }
 
 /* ---------------- 时区（Intl，含夏令时） ---------------- */
@@ -207,6 +217,7 @@ function utcForWall(zone, wall, guessOffset) {
  */
 export function nextRun(cronInput, tz, fromMs) {
   const cron = (typeof cronInput === 'string') ? parseCron(cronInput) : cronInput;
+  if (!cron || isFail(cron)) return null;   // 非法表达式：按「找不到下一次」处理
   const zone = (typeof tz === 'string' && isValidTimezone(tz)) ? tz : 'UTC';
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : Date.now();
 

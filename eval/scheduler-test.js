@@ -41,10 +41,15 @@ async function main() {
 
   /* ---------------- 1. cron 解析与匹配 ---------------- */
 
-  const throws = fn => { try { fn(); return false; } catch (_) { return true; } };
-  check('cron：5 字段必需', throws(() => parseCron('* * * *')), '4 字段应报错');
-  check('cron：越界拒绝', throws(() => parseCron('99 * * * *')), '99 分钟应报错');
-  check('cron：步长非法拒绝', throws(() => parseCron('*/0 * * * *')), '步长 0 应报错');
+  // 业务失败 = 结构化返回 { ok:false, code }、不 throw（审查 可维护性 #7）；code 前缀命中即算
+  const fails = (fn, code) => {
+    let r = null;
+    try { r = fn(); } catch (_) { return false; }   // 业务失败不该抛
+    return !!(r && r.ok === false && r.code && (!code || r.code === code || r.code.indexOf(code) === 0));
+  };
+  check('cron：5 字段必需', fails(() => parseCron('* * * *'), 'CRON_NEEDS_5_FIELDS'), '4 字段应拒绝');
+  check('cron：越界拒绝', fails(() => parseCron('99 * * * *'), 'CRON_OUT_OF_RANGE'), '99 分钟应拒绝');
+  check('cron：步长非法拒绝', fails(() => parseCron('*/0 * * * *'), 'CRON_BAD_STEP'), '步长 0 应拒绝');
   check('cron：@daily 宏可用', (() => { const c = parseCron('@daily'); return c.hour.has(0) && c.minute.has(0); })());
 
   check('cron：UTC 09:00 → 09:00Z',
@@ -246,13 +251,14 @@ async function main() {
     check('pending：ack 幂等（重复 ack = false）', s.ackPending(pend[0].id) === false);
   }
 
-  // 3.10 非法规格被拒
+  // 3.10 非法规格被拒（业务失败返回 fail(code)：不 throw、不落库）
   {
     const { s } = fresh({});
-    check('规格：interval 小于 1 分钟被拒', throws(() => mk(s, 'bad', 'interval', { everyMs: 1000 })));
-    check('规格：cron 表达式非法被拒', throws(() => mk(s, 'bad2', 'cron', { expr: 'nope' })));
-    check('规格：once 缺 at 被拒', throws(() => mk(s, 'bad3', 'once', {})));
-    check('规格：未知类型被拒', throws(() => mk(s, 'bad4', 'weird', {})));
+    check('规格：interval 小于 1 分钟被拒', fails(() => mk(s, 'bad', 'interval', { everyMs: 1000 }), 'INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE'));
+    check('规格：cron 表达式非法被拒', fails(() => mk(s, 'bad2', 'cron', { expr: 'nope' }), 'CRON_'));
+    check('规格：once 缺 at 被拒', fails(() => mk(s, 'bad3', 'once', {}), 'ONCE_NEEDS_AT'));
+    check('规格：未知类型被拒', fails(() => mk(s, 'bad4', 'weird', {}), 'BAD_TRIGGER_TYPE'));
+    check('规格：失败的 upsert 不落库', s.listTriggers().length === 0, s.listTriggers().length + ' 条');
   }
 
   /* ---------------- 汇总 ---------------- */

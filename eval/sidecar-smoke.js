@@ -64,11 +64,11 @@ async function waitHealth(timeoutMs) {
   return null;
 }
 
-function openSse(token) {
+function openSse(ticket) {
   return new Promise((resolve, reject) => {
     let done = false;
     sseReq = http.get(
-      { host: '127.0.0.1', port: PORT, path: '/api/events?token=' + encodeURIComponent(token) },
+      { host: '127.0.0.1', port: PORT, path: '/api/events?ticket=' + encodeURIComponent(ticket) },
       res => {
         if (res.statusCode !== 200) { reject(new Error('SSE HTTP ' + res.statusCode)); return; }
         res.on('data', c => {
@@ -137,7 +137,17 @@ async function main() {
       { name: 'user-once', type: 'once', spec: { at: Date.now() + 900 }, source: 'user', prompt: 'p', reason: 'r' }, token);
     check('用户新建触发器 = active', once.json.trigger.status === 'active', JSON.stringify(once.json.trigger));
 
-    const ssePromise = openSse(token).catch(e => 'ERR:' + e.message);
+    // SSE 鉴权（审查 低危 #18）：token 不再走查询参数；先用 Bearer 换短时效一次性 ticket
+    const noTicket = await req('GET', '/api/events');
+    check('SSE：无 ticket → 401', noTicket.status === 401, noTicket.status);
+    const tokAsTicket = await req('GET', '/api/events?token=' + encodeURIComponent(token));
+    check('SSE：token 不再走查询参数（?token= → 401）', tokAsTicket.status === 401, tokAsTicket.status);
+    const badTicket = await req('GET', '/api/events?ticket=nope');
+    check('SSE：无效 ticket → 401（一次性，用掉即删）', badTicket.status === 401, badTicket.status);
+    const tk = await req('POST', '/api/events/ticket', null, token);
+    check('SSE：POST /api/events/ticket 换取一次性凭据', tk.status === 200 && !!tk.json.ticket, JSON.stringify(tk.json));
+
+    const ssePromise = openSse(tk.json.ticket).catch(e => 'ERR:' + e.message);
     await sleep(250);
     const sseResult = await Promise.race([ssePromise, sleep(6000).then(() => 'TIMEOUT')]);
     check('SSE 收到 trigger.fire 实时推送', sseResult === true, String(sseResult));
@@ -164,6 +174,15 @@ async function main() {
 
     const pause = await req('POST', '/api/schedule/pause', { paused: true }, token);
     check('一键暂停', pause.json.paused === true);
+
+    // 错误映射（审查 低危 #17）：业务码走白名单 400 + 结构化 code；内部细节不外泄
+    const badTrigger = await req('POST', '/api/triggers', { name: 'bad-type', type: 'nope', spec: {} }, token);
+    check('业务错误码按白名单映射 400（BAD_TRIGGER_TYPE）',
+      badTrigger.status === 400 && badTrigger.json && badTrigger.json.code === 'BAD_TRIGGER_TYPE', JSON.stringify(badTrigger.json));
+    // limit 非法值夹取（审查 低危 #19）：不再把 NaN 带进 SQL LIMIT 触发绑定异常
+    const auditBad = await req('GET', '/api/email/audit?limit=abc', null, token);
+    check('审计 ?limit=abc 被夹取（返回列表而非绑定异常）',
+      auditBad.status === 200 && Array.isArray(auditBad.json.audit), auditBad.status + ' ' + auditBad.raw.slice(0, 120));
 
     const notFound = await req('GET', '/api/nope', null, token);
     check('未知接口 → 404', notFound.status === 404, notFound.status);

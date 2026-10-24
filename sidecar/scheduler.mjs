@@ -11,29 +11,16 @@
  * 为什么把 now / emit / startLoop 做成可注入：单测要用虚拟时钟，不碰真实定时器。
  * 单进程：由 server.mjs 的锁文件 + 端口占用保证；本地触发只有侧车一个真源，多标签页前端不会重复触发。
  */
-import crypto from 'node:crypto';
 import { nextRun, parseCron, isValidTimezone } from './cron.mjs';
+import { genId, safeJSON, dayRange, fail, isFail } from './util.mjs';
+import { TRIGGER, FIRE, sqlIn } from './statuses.mjs';
 
-export const USER_ID = 'local';
+const USER_ID = 'local';
 const MIN_INTERVAL_MS = 60 * 1000;          // 心跳最小 1 分钟，防抖
 const MAX_INTERVAL_MS = 365 * 24 * 3600 * 1000;
 const MAX_CATCHUP = 50;                     // RUN_ALL 补跑上限，防雪崩
 const TICK_CLAMP_MS = 60 * 1000;            // 滚动定时器最长 60s 醒一次（防系统休眠错过大跨度）
 const MISFIRE_THRESHOLD_MS = 60 * 1000;     // 迟到不超过这个量级算「准点」，不算「错过」
-
-function genId(prefix) {
-  return prefix + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
-}
-
-function safeJSON(text, fallback) {
-  try { const v = JSON.parse(text); return (v && typeof v === 'object') ? v : fallback; }
-  catch (_) { return fallback; }
-}
-
-function dayKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
 
 function minutesOfDay(ms) {
   const d = new Date(ms);
@@ -55,28 +42,30 @@ export function inQuietHours(quiet, ms) {
   return false;
 }
 
-/* ---------------- 规格归一化 ---------------- */
+/* ---------------- 规格归一化 ----------------
+ * 业务失败一律返回 fail(code)（审查 可维护性 #7）；编程错误才 throw。 */
 
 export function normalizeSpec(type, spec) {
   const s = (spec && typeof spec === 'object') ? spec : {};
   if (type === 'once') {
     const at = Number(s.at);
-    if (!Number.isFinite(at) || at <= 0) throw new Error('ONCE_NEEDS_AT');
+    if (!Number.isFinite(at) || at <= 0) return fail('ONCE_NEEDS_AT');
     return { at: Math.floor(at) };
   }
   if (type === 'interval') {
     const every = Math.floor(Number(s.everyMs));
-    if (!Number.isFinite(every) || every < MIN_INTERVAL_MS) throw new Error('INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE');
+    if (!Number.isFinite(every) || every < MIN_INTERVAL_MS) return fail('INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE');
     return { everyMs: Math.min(every, MAX_INTERVAL_MS) };
   }
   if (type === 'cron') {
     const expr = String(s.expr || '').trim();
     const tz = String(s.tz || '').trim();
-    parseCron(expr);                                  // 非法直接抛
-    if (tz && !isValidTimezone(tz)) throw new Error('BAD_TIMEZONE');
+    const parsed = parseCron(expr);                    // 非法返回 fail（CRON_*）
+    if (isFail(parsed)) return parsed;
+    if (tz && !isValidTimezone(tz)) return fail('BAD_TIMEZONE');
     return { expr, tz: tz || 'UTC' };
   }
-  throw new Error('BAD_TRIGGER_TYPE');
+  return fail('BAD_TRIGGER_TYPE');
 }
 
 // 下一次到点时间；null = 不再有下一次（一次性 / 不可能的表达式）
@@ -131,16 +120,16 @@ export function createScheduler(deps) {
     const id = genId('f');
     db.prepare(
       'INSERT INTO trigger_fires (id, trigger_id, due_at, status, reason, claimed_at, delivered_at) VALUES (?,?,?,?,?,?,?)'
-    ).run(id, triggerId, dueAt, status, reason || '', status === 'pending' ? null : at, null);
+    ).run(id, triggerId, dueAt, status, reason || '', status === FIRE.PENDING ? null : at, null);
     return { id, dueAt, status };
   }
 
   function deliveredToday(t0) {
-    const key = dayKey(t0);
-    const rows = db.prepare("SELECT due_at FROM trigger_fires WHERE status IN ('pending','delivered','done')").all();
-    let n = 0;
-    for (const r of rows) if (dayKey(Number(r.due_at)) === key) n += 1;
-    return n;
+    const [d0, d1] = dayRange(t0);
+    const r = db.prepare(
+      'SELECT COUNT(*) AS n FROM trigger_fires WHERE status IN ' + sqlIn([FIRE.PENDING, FIRE.DELIVERED, FIRE.DONE]) + ' AND due_at >= ? AND due_at < ?'
+    ).get(d0, d1);
+    return (r && r.n) || 0;
   }
 
   // 从 dueAt 起、到 t0 为止「本该跑」的时刻（含 dueAt），最多 MAX_CATCHUP 个
@@ -181,15 +170,15 @@ export function createScheduler(deps) {
       else if (policy === 'RUN_ONCE') times = all.length ? [all[all.length - 1]] : [];
       else skippedReason = 'missed_skip';                // SKIP：留痕，不打扰
     }
-    if (skippedReason) insertFire(trigger.id, dueAt, 'skipped', skippedReason, t0);
+    if (skippedReason) insertFire(trigger.id, dueAt, FIRE.SKIPPED, skippedReason, t0);
 
     let fired = 0;
     let today = deliveredToday(t0);
 
     for (const t of times) {
-      if (inQuietHours(quiet, t)) { insertFire(trigger.id, t, 'skipped', 'quiet_hours', t0); continue; }
-      if (cap > 0 && today >= cap) { insertFire(trigger.id, t, 'skipped', 'daily_cap', t0); continue; }
-      const fire = insertFire(trigger.id, t, 'pending', 'due', t0);
+      if (inQuietHours(quiet, t)) { insertFire(trigger.id, t, FIRE.SKIPPED, 'quiet_hours', t0); continue; }
+      if (cap > 0 && today >= cap) { insertFire(trigger.id, t, FIRE.SKIPPED, 'daily_cap', t0); continue; }
+      const fire = insertFire(trigger.id, t, FIRE.PENDING, 'due', t0);
       today += 1;
       fired += 1;
       emit('trigger.fire', {
@@ -224,18 +213,20 @@ export function createScheduler(deps) {
    * 按 (user_id, name) upsert。
    * source='model'（默认）：新建后是 pending_confirm，需用户在界面上确认才生效；
    * source='user'：用户在界面上自己建的，直接 active。
+   * 业务失败返回 fail(code)（审查 可维护性 #7），成功返回触发器对象。
    */
   function upsertTrigger(input) {
     const src = (input && typeof input === 'object') ? input : {};
     const name = String(src.name || '').trim();
-    if (!name) throw new Error('NAME_REQUIRED');
+    if (!name) return fail('NAME_REQUIRED');
     const type = String(src.type || '').trim();
     const spec = normalizeSpec(type, src.spec);
+    if (isFail(spec)) return spec;
     const t0 = now();
     const source = src.source === 'user' ? 'user' : 'model';
 
     const existing = findByName(name);
-    const status = existing ? existing.status : (source === 'model' ? 'pending_confirm' : 'active');
+    const status = existing ? existing.status : (source === 'model' ? TRIGGER.PENDING_CONFIRM : TRIGGER.ACTIVE);
     const enabled = src.enabled === undefined ? 1 : (src.enabled ? 1 : 0);
     const channel = String(src.channel || '').slice(0, 200);
     const prompt = String(src.prompt || '').slice(0, 4000);
@@ -254,20 +245,20 @@ export function createScheduler(deps) {
 
     const saved = getTrigger(findByName(name).id);
     emit('trigger.changed', { id: saved.id, name: saved.name, status: saved.status, action: existing ? 'updated' : 'created' });
-    arm();
+    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
     return saved;
   }
 
   function confirmTrigger(id) {
     const trg = getTrigger(id);
-    if (!trg) throw new Error('TRIGGER_NOT_FOUND');
+    if (!trg) return fail('TRIGGER_NOT_FOUND');
     const t0 = now();
     const next = initialNext(trg.type, trg.spec, t0);
-    db.prepare("UPDATE triggers SET status='active', enabled=1, next_at=?, updated_at=? WHERE id=?")
-      .run(next, t0, trg.id);
+    db.prepare('UPDATE triggers SET status=?, enabled=1, next_at=?, updated_at=? WHERE id=?')
+      .run(TRIGGER.ACTIVE, next, t0, trg.id);
     const saved = getTrigger(trg.id);
     emit('trigger.changed', { id: saved.id, name: saved.name, status: saved.status, action: 'confirmed' });
-    arm();
+    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
     return saved;
   }
 
@@ -276,7 +267,7 @@ export function createScheduler(deps) {
     if (!trg) return false;
     db.prepare('DELETE FROM triggers WHERE id = ?').run(trg.id);
     emit('trigger.changed', { id: trg.id, name: trg.name, status: 'cancelled', action: 'cancelled' });
-    arm();
+    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
     return true;
   }
 
@@ -285,8 +276,8 @@ export function createScheduler(deps) {
     return db.prepare(
       'SELECT f.id, f.trigger_id, f.due_at, f.status, f.reason, t.name, t.prompt, t.channel '
       + 'FROM trigger_fires f LEFT JOIN triggers t ON t.id = f.trigger_id '
-      + "WHERE f.status='pending' ORDER BY f.due_at ASC"
-    ).all().map(r => ({
+      + 'WHERE f.status=? ORDER BY f.due_at ASC'
+    ).all(FIRE.PENDING).map(r => ({
       id: r.id,
       triggerId: r.trigger_id,
       dueAt: Number(r.due_at),
@@ -300,7 +291,8 @@ export function createScheduler(deps) {
 
   function ackPending(id) {
     const t0 = now();
-    const info = db.prepare("UPDATE trigger_fires SET status='delivered', delivered_at=? WHERE id=? AND status='pending'").run(t0, String(id || ''));
+    const info = db.prepare('UPDATE trigger_fires SET status=?, delivered_at=? WHERE id=? AND status=?')
+      .run(FIRE.DELIVERED, t0, String(id || ''), FIRE.PENDING);
     return info.changes > 0;
   }
 
@@ -313,8 +305,8 @@ export function createScheduler(deps) {
 
     const t0 = now();
     const rows = db.prepare(
-      "SELECT * FROM triggers WHERE status='active' AND enabled=1 AND next_at IS NOT NULL AND next_at <= ? ORDER BY next_at ASC"
-    ).all(t0);
+      'SELECT * FROM triggers WHERE status=? AND enabled=1 AND next_at IS NOT NULL AND next_at <= ? ORDER BY next_at ASC'
+    ).all(TRIGGER.ACTIVE, t0);
 
     let fired = 0;
     for (const row of rows) fired += handleDue(toTrigger(row), t0, sched).fired;
@@ -330,8 +322,8 @@ export function createScheduler(deps) {
     if (!sched.enabled || sched.paused) return;
 
     const row = db.prepare(
-      "SELECT MIN(next_at) AS n FROM triggers WHERE status='active' AND enabled=1 AND next_at IS NOT NULL"
-    ).get();
+      'SELECT MIN(next_at) AS n FROM triggers WHERE status=? AND enabled=1 AND next_at IS NOT NULL'
+    ).get(TRIGGER.ACTIVE);
     const at = (row && row.n != null) ? Number(row.n) : null;
     if (at == null) return;
 
@@ -339,14 +331,19 @@ export function createScheduler(deps) {
     timer = setTimeout(() => {
       timer = null;
       try { tick(); } catch (_) { /* 单次失败不拖垮调度循环 */ }
-      arm();
+      // arm() 也要在 try 里（审查 中危 #15）：这里抛出没人接，一次 DB 抖动就能让调度循环静默停摆
+      try {
+        arm();
+      } catch (_) {
+        try { timer = setTimeout(() => { timer = null; try { arm(); } catch (_) {} }, 30000); } catch (_) {}
+      }
     }, delay);
   }
 
   function start() {
     stopped = false;
     try { tick(); } catch (_) {}     // 启动即按 missed 策略处理停摆期间错过的触发
-    arm();
+    try { arm(); } catch (_) {}
   }
 
   function stop() {
@@ -355,7 +352,6 @@ export function createScheduler(deps) {
   }
 
   return {
-    USER_ID,
     start,
     stop,
     refresh: arm,
@@ -375,9 +371,9 @@ export function createScheduler(deps) {
         paused: !!sched.paused,
         missedPolicy: sched.missedPolicy || 'SKIP',
         triggers: db.prepare('SELECT COUNT(*) AS n FROM triggers').get().n,
-        active: db.prepare("SELECT COUNT(*) AS n FROM triggers WHERE status='active' AND enabled=1").get().n,
-        pending: db.prepare("SELECT COUNT(*) AS n FROM trigger_fires WHERE status='pending'").get().n,
-        firedToday: deliveredToday(now()),
+        active: db.prepare('SELECT COUNT(*) AS n FROM triggers WHERE status=? AND enabled=1').get(TRIGGER.ACTIVE).n,
+        pending: db.prepare('SELECT COUNT(*) AS n FROM trigger_fires WHERE status=?').get(FIRE.PENDING).n,
+        deliveredToday: deliveredToday(now()),   // 键名与函数对齐（审查 可维护性 #12：原 firedToday 实取 deliveredToday）
       };
     },
   };

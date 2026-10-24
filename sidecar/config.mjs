@@ -12,8 +12,10 @@
  * 保守默认：三功能全关、额度 0、白名单空 —— 用户手动开启并填好额度才可能生效。
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -32,9 +34,10 @@ export const DB_PATH = path.join(DATA_DIR, 'ir-sidecar.db');
 export const LOCK_PATH = path.join(DATA_DIR, '.lock');
 export const DEFAULT_PORT = envPort() || 4319;
 
-export const MISSED_POLICIES = ['SKIP', 'RUN_ONCE', 'RUN_ALL'];
-export const EMAIL_PROVIDERS = ['mock', 'resend'];
-export const PAYMENT_PROVIDERS = ['mock', 'manual-order'];
+// 归一化用的枚举口径：只在本模块内被 enumOf 引用，没有外部消费方，不导出
+const MISSED_POLICIES = ['SKIP', 'RUN_ONCE', 'RUN_ALL'];
+const EMAIL_PROVIDERS = ['mock', 'resend'];
+const PAYMENT_PROVIDERS = ['mock', 'manual-order'];
 
 /* ---------------- 归一化小工具（把任何脏输入夹回安全范围） ---------------- */
 
@@ -151,35 +154,67 @@ export function ensureDataDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+/*
+ * Windows 上 mode:0o600 基本无效（只影响只读位），文件权限实际取决于 ACL：
+ * 这里 best-effort 用 icacls 把 config.json（含 token / 邮件密钥）收紧为「仅当前用户可读写」。
+ * 失败不拦写盘（无 icacls / 权限不足时保持原样），POSIX 走 0o600。
+ */
+function tightenWindowsAcl(file) {
+  if (process.platform !== 'win32') return;
+  try {
+    const user = os.userInfo().username;
+    if (!user) return;
+    spawnSync('icacls', [file, '/inheritance:r', '/grant:r', user + ':(F)'],
+      { stdio: 'ignore', windowsHide: true });
+  } catch (_) { /* best effort：收紧失败不阻断配置写入 */ }
+}
+
 function writeConfigFile(cfg) {
   ensureDataDir();
   const tmp = CONFIG_PATH + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
   fs.renameSync(tmp, CONFIG_PATH);
+  tightenWindowsAcl(CONFIG_PATH);
+  return rememberConfig(cfg);   // 写盘即刷缓存：saveConfig 后的读不必再回盘
 }
 
-/* 读配置；文件不存在则用保守默认创建。每次调用都重读，便于用户手改文件后无需重启 */
+/* ---------------- 读配置（mtime 缓存，审查 可维护性 #6 三·6） ----------------
+ * 此前每个 HTTP 请求都 loadConfig() = 读盘 + 双向 JSON 比较 + 可能回写——高频请求下是无谓 IO。
+ * 现按 (mtimeMs, size) 缓存：文件没动过直接用缓存；用户手改文件（mtime 变）或 saveConfig 写盘
+ * （writeConfigFile 同步刷新缓存）后自动失效重读——「手改无需重启」的语义不变。 */
+let cfgCache = null;   // { mtimeMs, size, cfg }
+
+function statConfig() {
+  try { return fs.statSync(CONFIG_PATH); } catch (_) { return null; }
+}
+
+function cacheFresh(st) {
+  return !!(cfgCache && st && st.mtimeMs === cfgCache.mtimeMs && st.size === cfgCache.size);
+}
+
+function rememberConfig(cfg) {
+  const st = statConfig();
+  cfgCache = { mtimeMs: st ? st.mtimeMs : -1, size: st ? st.size : -1, cfg: cfg };
+  return cfg;
+}
+
 export function loadConfig() {
   ensureDataDir();
-  if (!fs.existsSync(CONFIG_PATH)) {
-    const cfg = defaultConfig();
-    writeConfigFile(cfg);
-    return cfg;
-  }
+  const st = statConfig();
+  if (cacheFresh(st)) return cfgCache.cfg;
+  if (!st) return writeConfigFile(defaultConfig());
   let raw = null;
   try {
     raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch (_) {
     // 配置损坏：先备份现场（不覆盖证据），再用保守默认重建
     try { fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + '.broken.' + Date.now()); } catch (_) {}
-    const cfg = defaultConfig();
-    writeConfigFile(cfg);
-    return cfg;
+    return writeConfigFile(defaultConfig());
   }
   const cfg = sanitizeConfig(raw);
   // 归一化落盘（幂等）：用户手改出的脏字段会被夹回安全值
-  if (JSON.stringify(raw) !== JSON.stringify(cfg)) writeConfigFile(cfg);
-  return cfg;
+  if (JSON.stringify(raw) !== JSON.stringify(cfg)) return writeConfigFile(cfg);
+  return rememberConfig(cfg);
 }
 
 function mergeDeep(base, patch) {

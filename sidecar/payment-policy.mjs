@@ -14,6 +14,7 @@
  * 否则小额免确认可以绕过每日 / 每月上限与预算隔离（重复小额下单就能刷爆），
  * 那是真实的口子，不是优化。此偏离在阶段说明中已标注。
  */
+import { num } from './util.mjs';
 
 export const PAYMENT_CODES = [
   'GATEWAY_DISABLED',
@@ -24,8 +25,11 @@ export const PAYMENT_CODES = [
   'DAILY_LIMIT_EXCEEDED',
   'MONTHLY_LIMIT_EXCEEDED',
   'BUDGET_EXCEEDED',
+  'MANDATE_REQUIRED',
   'MANDATE_NOT_FOUND',
   'MANDATE_EXCEEDED',
+  'CURRENCY_MISMATCH',
+  'AGENT_REQUIRED',
   'COOLDOWN_ACTIVE',
   'USER_REJECTED',
   'PROVIDER_ERROR',
@@ -42,15 +46,13 @@ function approval(message, extra) {
 function allow(message, extra) {
   return Object.assign({ decision: 'allow', code: '', message: message }, extra || {});
 }
+/* 注：裁决结果的金额字段一律 *Cents 后缀（单位=分，审查 可维护性 #12）；
+ * ctx 输入键（spentDaily / spentMonthly / spentAgent）同样以「分」计，见 evaluatePolicy 注释。 */
 
 function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
 function listHas(arr, v) {
   const t = norm(v);
   return (Array.isArray(arr) ? arr : []).some(x => norm(x) === t);
-}
-function num(v) {
-  const n = Math.floor(Number(v));
-  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 function remainder(limit, spent) { return Math.max(0, limit - spent); }
 
@@ -167,11 +169,11 @@ export function evaluatePolicy(input, ctx) {
   const autoApprove = num(p.autoApprove);
   if (autoApprove > 0 && amount <= autoApprove) {
     return allow('金额 ' + amount + ' 分在免确认阈值 ' + autoApprove + ' 分内，自动放行。', {
-      remaining: { perTx: remainder(perTx, amount), daily: remainder(daily, spentDaily + amount), monthly: remainder(monthly, spentMonthly + amount) },
+      remaining: { perTxCents: remainder(perTx, amount), dailyCents: remainder(daily, spentDaily + amount), monthlyCents: remainder(monthly, spentMonthly + amount) },
     });
   }
 
   return approval('需要人工确认：金额 ' + amount + ' 分' + (autoApprove > 0 ? ' 超过免确认阈值 ' + autoApprove + ' 分' : '（未设置免确认阈值）') + '。', {
-    remaining: { perTx: remainder(perTx, amount), daily: remainder(daily, spentDaily + amount), monthly: remainder(monthly, spentMonthly + amount) },
+    remaining: { perTxCents: remainder(perTx, amount), dailyCents: remainder(daily, spentDaily + amount), monthlyCents: remainder(monthly, spentMonthly + amount) },
   });
 }
