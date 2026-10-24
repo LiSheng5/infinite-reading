@@ -21,6 +21,8 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 - 🧠 **It remembers** — an explicit "world state card" plus on-demand recall and auto-compression at 70% of the context window, so long sessions don't forget.
 - 📚 **Made to last** — story shelf, save points, `.irstory.json` import/export, and import of raw story text.
 - 🔌 **Any model** — chat and image models are configured separately; any OpenAI-compatible endpoint works (cloud or local, set your own Base URL).
+- 🖼 **MiniMax image generation (`image-01` / `image-01-live`)** — pick **MiniMax native** in the image adapter to use the official `/v1/image_generation`; `image-01-live` supports four style presets (漫画 / 元气 / 中世纪 / 水彩 — manga / energetic / medieval / watercolor, via custom params like `style.style_type=漫画, style.style_weight=0.8`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (one local relay process serves both image and video), base URL `http://127.0.0.1:4320`.
+- 🎯 **Consistent art style** — the painter writes each prompt on top of the previous image's full prompt as a "diff base" (style words kept verbatim, only the plot-driven part rewritten). With "reference = last image" enabled in settings, a JPEG of the previous image (long edge ≤ 1024) is also submitted as `subject_reference`, keeping faces and outfits coherent across scenes.
 - 🎬 **Offline demo** — append `?demo=1` to run the whole flow without a key or a network (built-in script + locally drawn placeholder images).
 - 🎬 **Video (MiniMax)** — the 🎬 button on the story stage opens a small menu: "video from current image" / "video from the plot". The painter writes a motion prompt, a MiniMax async task runs on its own queue (10s polling, never blocks image generation), and the finished MP4 is stored in IndexedDB and played on stage. Reload or switch stories mid-run and the same task is picked up again. Uses the MiniMax V2 API (`MiniMax-H3` / `MiniMax-H3-Max`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (a dependency-free local relay) and set the base URL to `http://127.0.0.1:4320`.
 
@@ -111,7 +113,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 | Single file | `npm run bundle` → `dist/ir.html` (~530 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/?demo=1` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
-| Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22) |
+| Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22.5 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
 
 **Installable (PWA)**: open it over `https` or `localhost` and the browser offers an install action — you get a desktop icon and offline launch. The Service Worker only caches same-origin static assets; **cross-origin API calls and your API key never enter any cache**.
 
@@ -134,7 +136,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 
 | File | Role |
 |---|---|
-| `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders` / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
+| `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders` (`openai-images` generic-compatible · `minimax-image` official `/v1/image_generation`) / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
 | `js/context.js` | Context assembly, compression chain, text import |
 | `js/tree.js` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
 | `js/storage.js` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
@@ -142,7 +144,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `js/zip.js` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
 | `js/roleCard.js` | Character cards (SillyTavern PNG parsing) |
 | `js/modelCapabilities.js` | Model parameter registry (empty by default) |
-| `js/app.js` | State machine, settings, import/export (drawing is button-triggered only since v0.11.0) |
+| `js/app.js` | Composition root: event binding + boot (business logic lives in the 20 modules under `js/app/` — see ARCHITECTURE.md §2.1) |
 | `js/demo.js` | Offline demo: registers the built-in script and placeholder-image adapters for `?demo=1` |
 | `js/sidecar.js` + `js/features.js` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `js/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
@@ -151,7 +153,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
 | `sidecar/` | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
-| `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server (not runtime code) |
+| `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server, `video-proxy.mjs` local relay for image/video generation (not runtime code) |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip call chain, storage keys and backup formats, and the invariants you must not break.
 
