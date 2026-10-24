@@ -62,6 +62,22 @@ const TARGETS = [
     find: () => /\*\*Current version: v[0-9A-Za-z.\-]+\*\*/g,
     replace: () => '**Current version: v' + version + '**',
   },
+  {
+    // 页脚与导出包的版本戳（曾因不在同步范围停在 v0.4）
+    file: 'index.html',
+    find: () => /无限阅读 v[0-9A-Za-z.\-]+/g,
+    replace: () => '无限阅读 v' + version,
+  },
+  {
+    file: 'js/store.js',
+    find: () => /无限阅读 v[0-9A-Za-z.\-]+/g,
+    replace: () => '无限阅读 v' + version,
+  },
+  {
+    file: 'js/app/backup.js',
+    find: () => /无限阅读 v[0-9A-Za-z.\-]+/g,
+    replace: () => '无限阅读 v' + version,
+  },
 ];
 
 let dirty = 0;
