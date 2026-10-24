@@ -164,21 +164,35 @@
     }, delay);
   }
 
+  let sseConnecting = false;
+
   function startSSE() {
     if (stopped || state !== 'online' || !cfg.token) return;
     if (!global.EventSource) return;
-    if (sse) return;
-    try {
-      sse = new global.EventSource(base() + '/api/events?token=' + encodeURIComponent(cfg.token));
-    } catch (_) {
-      sse = null;
-      return;
-    }
-    sse.onopen = () => { sseRetry = 0; };
-    sse.addEventListener('trigger.fire', ev => emit('fire', safeParse(ev.data)));
-    sse.addEventListener('trigger.changed', ev => emit('changed', safeParse(ev.data)));
-    sse.addEventListener('feature.changed', ev => emit('changed', safeParse(ev.data)));
-    sse.onerror = () => scheduleReconnect();
+    if (sse || sseConnecting) return;
+    sseConnecting = true;
+    // EventSource 不能带 Authorization 头，token 也绝不进 URL（会进代理 / 日志 / Referer，审查 低危 #18）：
+    // 先用 Bearer 换一张短时效一次性 ticket，再以 ?ticket= 连接
+    api('POST', '/api/events/ticket').then(t => {
+      sseConnecting = false;
+      if (stopped || state !== 'online' || sse) return;
+      const ticket = t && t.ticket;
+      if (!ticket) { scheduleReconnect(); return; }
+      try {
+        sse = new global.EventSource(base() + '/api/events?ticket=' + encodeURIComponent(ticket));
+      } catch (_) {
+        sse = null;
+        return;
+      }
+      sse.onopen = () => { sseRetry = 0; };
+      sse.addEventListener('trigger.fire', ev => emit('fire', safeParse(ev.data)));
+      sse.addEventListener('trigger.changed', ev => emit('changed', safeParse(ev.data)));
+      sse.addEventListener('feature.changed', ev => emit('changed', safeParse(ev.data)));
+      sse.onerror = () => scheduleReconnect();
+    }).catch(() => {
+      sseConnecting = false;
+      scheduleReconnect();
+    });
   }
 
   /* ---------------- 对外 ---------------- */
@@ -252,12 +266,24 @@
   function can(feature) { return state === 'online' && !!features[feature]; }
   function config() { return { port: cfg.port, token: cfg.token }; }
   function getConfig() { return api('GET', '/api/config'); }
+  // 业务失败的统一出入口（审查 可维护性 #7）：响应体带 { ok:false, code } 时抛出与 api() 400 同形的 Error
+  //（err.code / err.status），调用方只用写一套 catch。成功则解包 body[key]。
+  function unwrap(r, key) {
+    if (r && r.ok === false) {
+      const e = new Error(r.message || r.code || '请求失败');
+      e.code = r.code || 'FAILED';
+      e.status = 400;
+      throw e;
+    }
+    return key ? (r && r[key]) : r;
+  }
+
   function putConfig(patch) { return api('PUT', '/api/config', patch); }
   function listPending() { return api('GET', '/api/pending').then(r => (r && r.pending) || []); }
   function ackPending(id) { return api('POST', '/api/pending/' + encodeURIComponent(id) + '/ack'); }
   function listTriggers() { return api('GET', '/api/triggers').then(r => (r && r.triggers) || []); }
-  function upsertTrigger(t) { return api('POST', '/api/triggers', t).then(r => r && r.trigger); }
-  function confirmTrigger(id) { return api('POST', '/api/triggers/' + encodeURIComponent(id) + '/confirm').then(r => r && r.trigger); }
+  function upsertTrigger(t) { return api('POST', '/api/triggers', t).then(r => unwrap(r, 'trigger')); }
+  function confirmTrigger(id) { return api('POST', '/api/triggers/' + encodeURIComponent(id) + '/confirm').then(r => unwrap(r, 'trigger')); }
   function cancelTrigger(id) { return api('POST', '/api/triggers/' + encodeURIComponent(id) + '/cancel'); }
   function pauseAll(paused) { return api('POST', '/api/schedule/pause', { paused: paused !== false }); }
 
@@ -280,7 +306,7 @@
   function paymentTransactions(limit) { return api('GET', '/api/payment/transactions' + (limit ? '?limit=' + encodeURIComponent(limit) : '')); }
   function paymentReceipt(id) { return api('GET', '/api/payment/receipt/' + encodeURIComponent(id)); }
   function paymentMandates() { return api('GET', '/api/payment/mandates'); }
-  function paymentCreateMandate(m) { return api('POST', '/api/payment/mandates', m); }
+  function paymentCreateMandate(m) { return api('POST', '/api/payment/mandates', m).then(r => unwrap(r, 'mandate')); }
 
   global.IR = Object.assign(global.IR || {}, {
     Sidecar: {

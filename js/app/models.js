@@ -123,6 +123,19 @@
     $('#s-image-height').disabled = !show;
   }
 
+  // 选项一律 createElement + textContent（审查 低危 #21，红线「绝不 innerHTML 拼片段」）：
+  // 当前数据源是静态注册表，但拼接写法在未来数据源一变即成注入点
+  function fillOptions(sel, opts) {
+    if (!sel) return;
+    sel.textContent = '';
+    for (const o of opts) {
+      const el = document.createElement('option');
+      el.value = String(o[0]);
+      el.textContent = String(o[1]);
+      sel.appendChild(el);
+    }
+  }
+
   // 设置面板：按模型能力显隐参数（思考档位 / 尺寸 / 质量 / 上下文窗口提示）
   function renderCapabilityFields() {
     // —— 对话模型 ——
@@ -141,7 +154,7 @@
       }
       const cur = opts.some(o => o[0] === S.settings.chat.thinking) ? S.settings.chat.thinking : 'default';
       const sel = $('#s-chat-thinking');
-      sel.innerHTML = opts.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('');
+      fillOptions(sel, opts);
       sel.value = cur;
       S.settings.chat.thinking = cur;
     } else {
@@ -171,8 +184,8 @@
       sizeWrap.classList.remove('hidden');
       aspectWrap.classList.add('hidden');
       const sel = $('#s-image-size');
-      sel.innerHTML = sizes.map(s => '<option value="' + s + '">' + s + sizeRatioLabel(s) + '</option>').join('')
-        + '<option value="__custom__">自定义尺寸…（手填宽高）</option>';
+      fillOptions(sel, sizes.map(s => [s, s + sizeRatioLabel(s)])
+        .concat([['__custom__', '自定义尺寸…（手填宽高）']]));
       const cur = sizes.indexOf(S.settings.image.size) >= 0
         ? S.settings.image.size
         : (S.settings.image.size === '__custom__'
@@ -185,7 +198,7 @@
       if (qs.length) {
         qWrap.classList.remove('hidden');
         const qsel = $('#s-image-quality');
-        qsel.innerHTML = ['<option value="">默认</option>'].concat(qs.map(q => '<option value="' + q + '">' + q + '</option>')).join('');
+        fillOptions(qsel, [['', '默认']].concat(qs.map(q => [q, q])));
         qsel.value = qs.indexOf(S.settings.image.quality) >= 0 ? S.settings.image.quality : '';
         S.settings.image.quality = qsel.value;
       } else {

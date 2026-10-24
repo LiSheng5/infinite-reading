@@ -500,7 +500,8 @@ function headTo(story, nodeId) {
   check('serializeStory：log / scenes / savepoints 照旧裁剪',
     raw.log.length === 120 && raw.scenes.length === 12 && raw.savepoints.length === 5,
     raw.log.length + '/' + raw.scenes.length + '/' + raw.savepoints.length);
-  check('serializeStory：裁剪不作用在 tree 上', raw.tree === s2.tree && eq(raw.tree, s2.tree));
+  check('serializeStory：裁剪不作用在 tree 上，且落盘深拷贝（不与在用 story 共享引用）',
+    raw.tree !== s2.tree && eq(raw.tree, s2.tree));
 
   // ③ saveStory → loadStory 往返：tree 完好，ensure 不重建，project 还原投影
   S.saveStory(s);
@@ -795,6 +796,15 @@ function headTo(story, nodeId) {
     && s.summaries.indexOf('旧摘要二') < 0 && s.summaries.indexOf('旧摘要三') < 0);
   check('§8.5 旧分支节点仍在树上（q2 / q3 不丢）',
     !!s.tree.nodes[q2.id] && !!s.tree.nodes[q3.id] && s.tree.nodes[q2.id].parent === q1.id);
+}
+
+/* ---------------- boot 关键依赖自检（审查 可维护性 #9） ---------------- */
+{
+  // 本加载器只引 tree.js + store.js（按设计无 IR.Prefs）：assertDeps 必须点名缺什么、且码是 IR_DEP_MISSING
+  let e = null;
+  try { IR.Store.assertDeps(); } catch (err) { e = err; }
+  check('boot 自检：缺 IR.Prefs 抛 IR_DEP_MISSING 并点名缺失模块',
+    !!e && e.code === 'IR_DEP_MISSING' && /IR\.Prefs/.test(e.message), e ? e.message : '（没抛）');
 }
 
 /* ---------------- 汇总 ---------------- */

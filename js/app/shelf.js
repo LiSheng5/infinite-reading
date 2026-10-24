@@ -36,7 +36,9 @@
 
   function relTime(ts) {
     if (!ts) return '';
-    const diff = Date.now() - ts;
+    // 时钟回拨 / 未来时间戳会给出负差值（显示「-3 分钟前」）：负值与非法值一律归「刚刚」（审查 低危 #20）
+    let diff = Date.now() - ts;
+    if (!Number.isFinite(diff) || diff < 0) diff = 0;
     if (diff < 60000) return '刚刚';
     if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
     const d = new Date(ts), now = new Date();
@@ -123,8 +125,11 @@
     }
 
     const thumb = document.createElement('div');
-    thumb.className = 'shelf-row-thumb' + (it.thumb ? '' : ' empty');
-    if (it.thumb) thumb.style.backgroundImage = 'url("' + it.thumb + '")';
+    // 导入档案的 thumb 不可信（审查 中危 #12）：白名单只放行 data:/blob:，并用 JSON.stringify
+    // 转义进 url()——引号破不出 CSS 值，与 models.js setStageArt 的转义口径一致
+    const thumbSrc = Store.safeThumb(it.thumb);
+    thumb.className = 'shelf-row-thumb' + (thumbSrc ? '' : ' empty');
+    if (thumbSrc) thumb.style.backgroundImage = 'url(' + JSON.stringify(thumbSrc) + ')';
     else thumb.textContent = MODE_ICONS[it.mode] || MODE_ICONS.choice;
     row.appendChild(thumb);
 
@@ -272,10 +277,18 @@
     const id = story.id;
     if (titleBusy.has(id)) return;
     titleBusy.add(id);
+    const startedAt = Date.now();
 
     const writeBack = (title) => {
+      if (!title) { titleBusy.delete(id); return; }
+      // 竞态守卫（审查 中危 #14）：回合正在写盘（S.busy）时不能 saveAll——会把半截回合的
+      // 中间态一起落盘。稍后重试；60 秒仍未收工就放弃这次（保留现有标题，titleAuto 仍为真）。
+      if (S.busy && S.story && S.story.id === id) {
+        if (Date.now() - startedAt > 60000) { titleBusy.delete(id); return; }
+        setTimeout(() => writeBack(title), 2000);
+        return;
+      }
       titleBusy.delete(id);
-      if (!title) return;
       const st = (S.story && S.story.id === id) ? S.story : Store.loadStory(id);
       if (!st) return;
       if (!IR.Titles.applyTitle(st, id, title)) return;   // 护栏：id 一致 + titleAuto 仍为真

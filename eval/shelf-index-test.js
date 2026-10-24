@@ -27,6 +27,7 @@ const path = require('path');
 })();
 
 global.window = global;
+require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
 require(path.join(__dirname, '..', 'js', 'store.js'));
 require(path.join(__dirname, '..', 'js', 'search.js'));
 

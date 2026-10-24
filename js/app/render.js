@@ -270,119 +270,129 @@
 
   // 拒绝：不执行任何发送 / 扣款；已有 intent / 草稿时由 Proposals.deny 负责清理
 
-  function bubbleFor(e, index) {
-    if (e.type === 'proposal') return A.proposalBubble(e);
-    if (e.type === 'tool') {
-      const d = document.createElement('div');
-      d.className = 'chat-note';
-      d.textContent = e.summary || e.tool || '工具调用';
-      return d;
-    }
-    if (e.type === 'system') {
-      const d = document.createElement('div');
-      d.className = 'chat-note';
-      d.textContent = e.text || '';
-      return d;
-    }
-    if (e.type === 'image') {
-      // chat / rp（v0.6.0）：舞台没了 → 图直接内联在聊天流里，点开是灯箱；这两个模式不给「工作台」入口
-      if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return inlineImageBubble(e);
-      // 场景标记行：56px 小缩略图 + 一行 alt（不再在聊天里内嵌大图）。
-      // 点图 / 点文字 = 在右侧舞台选中这张；「工作台」入口悬停时才出现。
-      const d = document.createElement('div');
-      d.className = 'bubble bubble-image';
-      const sc = imageSceneById(e.id);
-      const src = A.sceneSrc(sc, e) || null;
-      const selectScene = () => {
-        if (!S.story) return;
-        S.story.lastBg = e.id;
-        saveAll();
-        renderStage();
-        renderThumbs();
-      };
-      if (src) {
-        const img = document.createElement('img');
-        img.src = src;
-        img.alt = e.alt || '场景缩略图';
-        img.title = '在右侧舞台看这张';
-        img.onclick = selectScene;
-        d.appendChild(img);
-      }
-      const row = document.createElement('div');
-      row.className = 'img-alt-row';
-      const cap = document.createElement('span');
-      cap.className = 'img-alt';
-      cap.textContent = (e.alt || '（一幅场景插图）') + (e.supersededBy ? ' · 已被重画版替代' : '');
-      cap.title = '点击在右侧舞台查看';
-      cap.onclick = selectScene;
-      row.appendChild(cap);
-      const wb = document.createElement('button');
-      wb.className = 'mini-btn';
-      wb.type = 'button';
-      wb.textContent = '工作台';
-      wb.title = '看 / 改完整 prompt、跟画师说着改、按此重画';
-      wb.onclick = () => A.openWorkbench(e.id);
-      row.appendChild(wb);
-      d.appendChild(row);
-      return d;
-    }
+  /* ---- 气泡渲染：按 e.type 分派独立子渲染器（审查 可维护性 #2）----
+   * bubbleFor 只做类型分派；每种条目一个子渲染器，新增条目类型 = 新增一个分支函数，
+   * 不再改巨型 switch。返回的都是 DOM 节点。 */
 
-    // 视频（§8）：聊天流里 56px 封面 + alt + ▶，点一下在舞台选中（同图片行）
-    if (e.type === 'video') {
-      const d = document.createElement('div');
-      d.className = 'bubble bubble-image';
-      const selectVideo = () => {
-        if (!S.story) return;
-        S.story.lastBg = e.id;
-        saveAll();
-        renderStage(); renderThumbs();
-      };
-      const cover = e.thumb || e.poster;
-      if (cover) {
-        const img = document.createElement('img');
-        img.src = cover; img.alt = e.alt || '场景视频封面';
-        img.title = '在右侧舞台播放这段视频';
-        img.onclick = selectVideo;
-        d.appendChild(img);
-      }
-      const row = document.createElement('div');
-      row.className = 'img-alt-row';
-      const cap = document.createElement('span');
-      cap.className = 'img-alt';
-      cap.textContent = '▶ ' + (e.alt || '场景视频') + (e.duration ? ' · ' + e.duration + 's' : '')
-        + (e.videoOmitted ? ' · 视频未随备份导出' : '');
-      cap.title = '点击在右侧舞台播放';
-      cap.onclick = selectVideo; row.appendChild(cap);
-      if (!e.videoId && e.remoteUrl) {
-        // 降级视频（§7）：链接限时有效，给「新标签页打开」入口
-        const open = document.createElement('button');
-        open.className = 'mini-btn'; open.type = 'button';
-        open.textContent = '新标签页打开';
-        open.title = '浏览器无法转存，链接限时有效';
-        open.onclick = () => { try { window.open(e.remoteUrl, '_blank', 'noopener'); } catch (_) {} };
-        row.appendChild(open);
-      }
-      d.appendChild(row);
-      return d;
-    }
+  function toolNoteBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'chat-note';
+    d.textContent = e.summary || e.tool || '工具调用';
+    return d;
+  }
 
-    // 模型主动联系（调度触发）：样式同玩家气泡，另加一行轻量标注「谁 / 何时 / 为何找你」
-    if (e.type === 'agent') {
-      const d = document.createElement('div');
-      d.className = 'bubble bubble-player bubble-agent';
-      const tag = document.createElement('div');
-      tag.className = 'agent-note';
-      tag.textContent = '💠 AI 主动找你'
-        + (e.trigger ? '（' + e.trigger + '）' : '')
-        + (e.reason ? ' · ' + e.reason : '')
-        + (e.ts ? ' · ' + fmtTime(e.ts) : '');
-      d.appendChild(tag);
-      const body = document.createElement('div');
-      body.textContent = e.text || '';
-      d.appendChild(body);
-      return d;
-    }
+  function systemNoteBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'chat-note';
+    d.textContent = e.text || '';
+    return d;
+  }
 
+  // 场景标记行：56px 小缩略图 + 一行 alt（不再在聊天里内嵌大图）。
+  // 点图 / 点文字 = 在右侧舞台选中这张；「工作台」入口悬停时才出现。
+  function imageRowBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'bubble bubble-image';
+    const sc = imageSceneById(e.id);
+    const src = A.sceneSrc(sc, e) || null;
+    const selectScene = () => {
+      if (!S.story) return;
+      S.story.lastBg = e.id;
+      saveAll();
+      renderStage();
+      renderThumbs();
+    };
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = e.alt || '场景缩略图';
+      img.title = '在右侧舞台看这张';
+      img.onclick = selectScene;
+      d.appendChild(img);
+    }
+    const row = document.createElement('div');
+    row.className = 'img-alt-row';
+    const cap = document.createElement('span');
+    cap.className = 'img-alt';
+    cap.textContent = (e.alt || '（一幅场景插图）') + (e.supersededBy ? ' · 已被重画版替代' : '');
+    cap.title = '点击在右侧舞台查看';
+    cap.onclick = selectScene;
+    row.appendChild(cap);
+    const wb = document.createElement('button');
+    wb.className = 'mini-btn';
+    wb.type = 'button';
+    wb.textContent = '工作台';
+    wb.title = '看 / 改完整 prompt、跟画师说着改、按此重画';
+    wb.onclick = () => A.openWorkbench(e.id);
+    row.appendChild(wb);
+    d.appendChild(row);
+    return d;
+  }
+
+  function imageBubble(e) {
+    // chat / rp（v0.6.0）：舞台没了 → 图直接内联在聊天流里，点开是灯箱；这两个模式不给「工作台」入口
+    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return inlineImageBubble(e);
+    return imageRowBubble(e);
+  }
+
+  // 视频（§8）：聊天流里 56px 封面 + alt + ▶，点一下在舞台选中（同图片行）
+  function videoBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'bubble bubble-image';
+    const selectVideo = () => {
+      if (!S.story) return;
+      S.story.lastBg = e.id;
+      saveAll();
+      renderStage(); renderThumbs();
+    };
+    const cover = e.thumb || e.poster;
+    if (cover) {
+      const img = document.createElement('img');
+      img.src = cover; img.alt = e.alt || '场景视频封面';
+      img.title = '在右侧舞台播放这段视频';
+      img.onclick = selectVideo;
+      d.appendChild(img);
+    }
+    const row = document.createElement('div');
+    row.className = 'img-alt-row';
+    const cap = document.createElement('span');
+    cap.className = 'img-alt';
+    cap.textContent = '▶ ' + (e.alt || '场景视频') + (e.duration ? ' · ' + e.duration + 's' : '')
+      + (e.videoOmitted ? ' · 视频未随备份导出' : '');
+    cap.title = '点击在右侧舞台播放';
+    cap.onclick = selectVideo; row.appendChild(cap);
+    if (!e.videoId && e.remoteUrl) {
+      // 降级视频（§7）：链接限时有效，给「新标签页打开」入口
+      const open = document.createElement('button');
+      open.className = 'mini-btn'; open.type = 'button';
+      open.textContent = '新标签页打开';
+      open.title = '浏览器无法转存，链接限时有效';
+      open.onclick = () => { try { window.open(e.remoteUrl, '_blank', 'noopener'); } catch (_) {} };
+      row.appendChild(open);
+    }
+    d.appendChild(row);
+    return d;
+  }
+
+  // 模型主动联系（调度触发）：样式同玩家气泡，另加一行轻量标注「谁 / 何时 / 为何找你」
+  function agentBubble(e) {
+    const d = document.createElement('div');
+    d.className = 'bubble bubble-player bubble-agent';
+    const tag = document.createElement('div');
+    tag.className = 'agent-note';
+    tag.textContent = '💠 AI 主动找你'
+      + (e.trigger ? '（' + e.trigger + '）' : '')
+      + (e.reason ? ' · ' + e.reason : '')
+      + (e.ts ? ' · ' + fmtTime(e.ts) : '');
+    d.appendChild(tag);
+    const body = document.createElement('div');
+    body.textContent = e.text || '';
+    d.appendChild(body);
+    return d;
+  }
+
+  // 通用文本气泡（player / choice / narration）：标签 + 正文 + 思考链 + 分支导航
+  function textBubble(e, index) {
     const d = document.createElement('div');
     d.className = 'bubble ' + (e.type === 'player' ? 'bubble-player'
       : e.type === 'choice' ? 'bubble-choice'
@@ -439,6 +449,21 @@
       d.appendChild(tools);
     }
     return d;
+  }
+
+  // 分派表：e.type → 子渲染器。缺省（player/choice/narration 及未知类型）走 textBubble。
+  const BUBBLE_RENDERERS = {
+    proposal: (e) => A.proposalBubble(e),
+    tool: toolNoteBubble,
+    system: systemNoteBubble,
+    image: imageBubble,
+    video: videoBubble,
+    agent: agentBubble,
+  };
+
+  function bubbleFor(e, index) {
+    const r = BUBBLE_RENDERERS[e && e.type];
+    return r ? r(e) : textBubble(e, index);
   }
 
   /* ================= 渲染：画面面板 ================= */
@@ -599,157 +624,7 @@
     }
   }
 
-  /* ================= 渲染：布局状态（P2 的统一入口 · UI-3 §3.5 分层） =================
-   * 所有排版只由 #screen-game 的 data-layout 决定：
-   *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
-   * 有效值 = story.prefs.ui 覆盖 → settings.ui 全局默认；story.ui 只记输入类型。 */
-
-  const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
-  // 字号 / 宽度 / 密度（§3.5）：三档映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
-  const FONT_SCALE = { sm: 0.92, md: 1, lg: 1.12 };
-  const CONTENT_W = { narrow: '620px', standard: '760px', wide: '920px' };
-  const DENSITY = { compact: 0.82, standard: 1 };
-
-  function uiState() {
-    if (!S.settings.ui || typeof S.settings.ui !== 'object') S.settings.ui = Store.defaultSettings().ui;
-    return S.settings.ui;
-  }
-
-  // 有效 UI（只读合并快照）：本对话覆盖 → 全局默认（UI-3 §3.5）
-  function effectiveUi() {
-    return IR.Prefs.effective(S.settings, S.story, 'ui');
-  }
-
-  // 写回：本对话已覆盖的键写 story.prefs.ui，未覆盖的写全局 settings.ui
-  function writeUi(patch) {
-    const prefsUi = (S.story && S.story.prefs && S.story.prefs.ui) || null;
-    for (const k of Object.keys(patch)) {
-      if (prefsUi && Object.prototype.hasOwnProperty.call(prefsUi, k)) prefsUi[k] = patch[k];
-      else uiState()[k] = patch[k];
-    }
-  }
-
-  function autoLayout() {
-    return (typeof window !== 'undefined' && window.innerWidth >= 900) ? 'split' : 'stack';
-  }
-
-  function effectiveLayout() {
-    // v0.6.0：chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return 'chat';
-    const ui = effectiveUi();
-    if (ui.layout === 'immersive') return 'immersive';
-    if (ui.layout === 'split' || ui.layout === 'stack') return ui.layout;
-    return autoLayout();
-  }
-
-  // 设置里的布局项：chat / rp 下给一行灰字说明（布局选项本身不动，切回剧情模式照常生效）
-  function renderLayoutHint() {
-    const el = $('#ui-layout-hint');
-    if (!el) return;
-    const noStage = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
-    el.textContent = noStage ? '此模式没有画面区（纯聊天布局），下面的布局选项只对剧情模式生效。' : '';
-  }
-
-  function isImmersive() {
-    return effectiveLayout() === 'immersive';
-  }
-
-  function setLayout(next) {
-    const layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
-    writeUi({ layout: layout });
-    if (layout !== 'immersive') S.immersiveTextHidden = false;
-    applyLayout();
-    persistSettings();
-  }
-
-  function applyLayout() {
-    const el = $('#screen-game');
-    if (!el) return;
-    const ui = effectiveUi();
-    const layout = effectiveLayout();
-    el.dataset.layout = layout;
-    el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
-    // UI-3 §3.5：字号 / 宽度 / 密度 → CSS 变量（令牌驱动；chat / rp 的内容区吃这三个变量）
-    el.style.setProperty('--font-scale', String(FONT_SCALE[ui.fontScale] != null ? FONT_SCALE[ui.fontScale] : 1));
-    el.style.setProperty('--content-w', CONTENT_W[ui.width] || CONTENT_W.standard);
-    el.style.setProperty('--density', String(DENSITY[ui.density] != null ? DENSITY[ui.density] : 1));
-    el.classList.toggle('no-image', !!ui.imageCollapsed && layout !== 'immersive');
-    el.classList.toggle('text-hidden', !!S.immersiveTextHidden);
-    if (layout !== 'stack') { el.classList.remove('stage-strip', 'kb-open'); }
-    renderLayoutHint();
-
-    const exitBtn = $('#btn-immersive-exit');
-    if (exitBtn) exitBtn.classList.toggle('hidden', layout !== 'immersive');
-    const toggle = $('#btn-toggle-image');
-    if (toggle) toggle.title = ui.imageCollapsed ? '展开画面' : '收起画面';
-    const imm = $('#btn-immersive');
-    if (imm) imm.title = layout === 'immersive' ? '退出沉浸（Esc）' : '沉浸（画面铺满）';
-  }
-
-  // 画面（收起 / 展开舞台）：沉浸态下等同于退出沉浸
-  function toggleStagePanel() {
-    if (!S.story) return;
-    if (isImmersive()) { setLayout('auto'); return; }
-    writeUi({ imageCollapsed: !effectiveUi().imageCollapsed });
-    applyLayout();
-    persistSettings();
-  }
-
-  function enterImmersive() {
-    if (!S.story) return;
-    setLayout('immersive');
-    S.immersiveTextHidden = false;
-    applyLayout();
-  }
-
-  // Esc / ✕ 退出沉浸态：回到「自动」布局
-  function exitImmersive() {
-    if (!isImmersive()) return false;
-    S.immersiveTextHidden = false;
-    setLayout('auto');
-    return true;
-  }
-
-  function bindSplitter() {
-    const sp = $('#splitter');
-    if (!sp) return;
-    let dragging = false;
-    const onMove = (clientX, touch) => {
-      if (!S.story || effectiveLayout() !== 'split') return;
-      const rect = $('#game-layout').getBoundingClientRect();
-      const p = (clientX - rect.left) / Math.max(1, rect.width);
-      // 每栏最小约 28%
-      writeUi({ splitRatio: Math.max(0.28, Math.min(0.72, p)) });
-      applyLayout();
-      if (touch && touch.preventDefault) touch.preventDefault();
-    };
-    const stop = () => {
-      if (!dragging) return;
-      dragging = false;
-      sp.classList.remove('dragging');
-      if (S.story) persistSettings();
-    };
-    sp.addEventListener('mousedown', e => { dragging = true; sp.classList.add('dragging'); e.preventDefault(); });
-    window.addEventListener('mousemove', e => { if (dragging) onMove(e.clientX); });
-    window.addEventListener('mouseup', stop);
-    sp.addEventListener('touchstart', () => { dragging = true; sp.classList.add('dragging'); }, { passive: true });
-    window.addEventListener('touchmove', e => {
-      if (dragging && e.touches && e.touches[0]) onMove(e.touches[0].clientX, e);
-    }, { passive: false });
-    window.addEventListener('touchend', stop);
-    // 双击分隔条恢复 1:1
-    sp.addEventListener('dblclick', () => {
-      writeUi({ splitRatio: 0.5 });
-      applyLayout();
-      persistSettings();
-    });
-    // 窗口尺寸变化：auto 需要在 split / stack 之间切换
-    let rzTimer = null;
-    window.addEventListener('resize', () => {
-      clearTimeout(rzTimer);
-      rzTimer = setTimeout(applyLayout, 120);
-    });
-  }
+  /* 布局状态段已拆出到 js/app/layout.js（app-structure-test 的 800 行红线；只搬家，不改行为） */
 
   /* ================= 进入 / 离开故事 ================= */
 
@@ -772,7 +647,7 @@
     $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
     A.syncKindSwitch();
     S.choicesTrayOpen = false;
-    applyLayout();
+    A.applyLayout();
     renderChat();
     renderStage();
     renderThumbs();
@@ -795,5 +670,7 @@
     $('#btn-send').disabled = false;
   }
 
-  A.reg({ scrollChatBottom, imageSceneById, currentScene, renderChat, closeLightbox, renderStage, watchStageVisibility, renderThumbs, effectiveLayout, renderLayoutHint, isImmersive, applyLayout, toggleStagePanel, enterImmersive, exitImmersive, bindSplitter, enterGame });
+  // 布局类导出（effectiveLayout / renderLayoutHint / isImmersive / applyLayout / toggleStagePanel /
+  // enterImmersive / exitImmersive / bindSplitter）在 js/app/layout.js 注册（本文件只搬家拆分）
+  A.reg({ scrollChatBottom, imageSceneById, currentScene, renderChat, closeLightbox, renderStage, watchStageVisibility, renderThumbs, enterGame });
 })();

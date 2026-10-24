@@ -59,24 +59,11 @@
 
   /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
 
-  // 助手回复：剧情模式是 JSON（narration / 旁白），解析失败当纯文本（§3.4）
-  function plainReply(raw) {
-    var s = String(raw == null ? '' : raw);
-    var t = s.trim();
-    if (t.charAt(0) === '{') {
-      try {
-        var o = JSON.parse(t);
-        if (o && typeof o === 'object' && !Array.isArray(o)) {
-          var n = o.narration || o.旁白 || o.text || '';
-          if (n) return String(n);
-          if (Array.isArray(o.choices) && o.choices.length) {
-            return o.choices.map(function (c) { return String(c); }).join(' ');
-          }
-        }
-      } catch (_) { /* 坏 JSON：当纯文本 */ }
-    }
-    return s;
-  }
+  // 助手回复 → 纯文本：唯一实现在 IR.plainReply（tree.js，审查 可维护性 三·4）。
+  // store.js 的书架摘要共用同一口径，schema 演进只改一处；tree.js 必须先加载，缺了直接报错不静默降级
+  const plainReply = (global.IR && global.IR.plainReply) || function () {
+    throw new Error('IR.plainReply 未加载：tree.js 必须先于 search.js（见 ARCHITECTURE 加载顺序）');
+  };
 
   // 玩家行动文本：去掉 [玩家行动] / [设定] 标记
   function plainAction(raw) {

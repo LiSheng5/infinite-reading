@@ -78,9 +78,8 @@
     return out;
   }
 
-  function codeSlice(s, n) {
-    return Array.from(String(s == null ? '' : s)).slice(0, n).join('');
-  }
+  // codeSlice 的唯一口径在 IR.TreeLayout.codeSlice（treeLayout.js，审查 可维护性 三·5）
+  const codeSlice = IR.TreeLayout.codeSlice;
 
   // 面板预览文本（textContent 用）：玩家行动原话；AI 回复取旁白（坏 JSON 当纯文本）
   function replyPreview(node) {

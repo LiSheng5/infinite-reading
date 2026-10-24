@@ -26,6 +26,8 @@ const REQUIRED_IDS = [
   'wrap-image-size', 's-image-size', 'wrap-image-aspect', 's-image-aspect',
   'wrap-image-quality', 's-image-quality', 'row-image-wh', 's-image-width', 's-image-height',
   's-image-base', 's-image-model', 's-image-key', 's-image-params',
+  // v0.12.1：生图适配器（OpenAI 兼容 / MiniMax 原生）与参考图（subject_reference）开关
+  's-image-provider', 's-image-ref',
   'btn-test-image', 'test-image-state',
   // v0.12.0（§9.5）：生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
   // 后补：时长 / 分辨率 / 比例的独立控件（用户要求加回；自定义参数改为高级覆盖）
@@ -33,6 +35,8 @@ const REQUIRED_IDS = [
   's-video-duration', 's-video-resolution', 's-video-ratio',
   'btn-test-video', 'test-video-state',
   's-style-preset', 's-style-custom', 'style-card-state', 'style-card-view', 'style-card-text',
+  // v0.12.1：画风备注就地改（不必重画 4 张候选）
+  's-card-note', 'btn-save-card-note',
   'btn-anchor-rerun', 'rolling-style-text',
   's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',
   's-show-reasoning', 's-tools-enabled', 's-notools-hint', 'btn-clear-notools',

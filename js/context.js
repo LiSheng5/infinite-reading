@@ -30,7 +30,6 @@
     characterCard: 500, relationship: 80,   // R13：rp 角色卡常驻 + 关系记忆（chat / rp）
   };
   const COMPRESS_RATIO = 0.7;            // 超模型窗口 ~70% 触发压缩
-  const DEFAULT_WINDOW_MESSAGES = 20;    // v0.1 基线遗留（评测报告用）
   const DEFAULT_KEEP_MESSAGES = 8;       // §3.1：组装窗口 = 最近 8 条 messages（4 个回合）
   const DEFAULT_MAX_MESSAGES = 16;       // 积压超过即压缩（保留 8 + 消化积压）
   const DEFAULT_MAX_SUMMARIES = 6;        // 摘要栈上限，满了合并最旧两幕
@@ -109,6 +108,8 @@
    *   [system]  PAINTER_SYSTEM（导演判断：画场景还是人物、构图、氛围）
    *   [system]  [画风锚]：设定卡全文（未锚定时带滚动风格摘要代替；都没有时「（未锚定，自由发挥）」）
    *   [context] [最近两张图]：最近 2 张图的 prompt + alt（防重复）
+   *   [context] [基底 prompt]：上一次出图的完整 prompt（差分基底：风格部分原样保留，
+   *             只改剧情变化的部分；没有上一张图时整块省略）。仅在 scene 模式下发。
    *   [context] [最近剧情]：scene 模式 = 最近 PAINTER_RECENT_TURNS 回合的「玩家行动 + 旁白」（§4，
    *             玩家行动带（做）/（说）/（导演）标记、每条截断 PAINTER_RECENT_LINE_CHARS 字）；
    *             chat（工作台）模式保持最近 3 条旁白不动
@@ -124,7 +125,14 @@
     '只输出一个 JSON 对象（禁止多余文字）：',
     '{"prompt_en":"English image prompt, composition/light/atmosphere/medium, under 40 words","subject":"scene|character|both","alt":"中文一句话，说明这张图画了什么"}',
     '',
-    '规则：prompt_en 用英文、具体、有画面感；不要出现任何文字、水印、签名的描述；alt 与 prompt 内容一致。',
+    '规则：',
+    '- prompt_en 用英文、具体、有画面感；不要出现任何文字、水印、签名的描述；alt 与 prompt 内容一致。',
+    '- 若上下文给了「[基底 prompt]」（上一次出图的完整提示词）或「[当前这张图]」的提示词：以它为基底，'
+      + '画风 / 媒介 / 色板 / 光线 / 镜头语言 / 画质词**原样保留**（措辞和顺序都别改），'
+      + '只重写剧情（或用户要求）真正变化的部分：人物、动作、视角、道具、时间天气、地点。',
+    '- 换了场景或视角时，替换与新画面冲突的主体描述，风格词照旧保留。',
+    '- 输出必须是**完整**的 prompt（生图接口只吃完整句子）：不要输出差异说明、不要写「同上」、不要省略没变的部分。',
+    '- 没有可参照的基底时（第一次出图），自己把风格写全。',
   ].join('\n');
 
   // 画师工作台对话：讨论「已经画好的这张图」怎么改
@@ -134,7 +142,7 @@
     '现在用户在画师工作台里跟你讨论已经画好的这张图。用中文回应他的要求（一句话，说明你改了什么），并给出改后的 prompt_en 与 alt。',
     '只输出一个 JSON 对象（禁止多余文字）：',
     '{"reply":"中文一句话，说明改动","prompt_en":"改后的英文提示词","alt":"改后的中文说明"}',
-    '用户没要求改的地方尽量原样保留；不要输出与当前这张图无关的新场景。',
+    '用户没要求改的地方尽量原样保留（尤其画风 / 媒介 / 色板 / 光线 / 镜头语言 / 画质词，措辞和顺序都别动）；不要输出与当前这张图无关的新场景。',
   ].join('\n');
 
   // 视频动态提示词（§6）：把这一幕写成「视频提示词」。输出沿用现有 JSON 键（prompt_en / alt）。
@@ -171,7 +179,12 @@
     '只输出一个 JSON 对象（禁止多余文字）：',
     '{"card":{"styleKeywords":["english keywords"],"medium":"媒介（英文短语）","palette":"色板（英文短语）","characters":[{"name":"中文名","appearanceEn":"English appearance","outfit":"服饰","features":"特征"}],"negative":"negative prompt","note":"中文备注"},"reply":"中文一句话，说明这次写了/改了什么"}',
     '',
-    '规则：characters 覆盖给定人物，每人一条，appearanceEn 用英文且具体；用户要求修改时，未要求改的字段原样保留；画风关键词保持稳定，不要每轮换一套。',
+    '规则：',
+    '- characters 覆盖给定人物，每人一条，appearanceEn 用英文且具体；',
+    '- 用户要求修改时，未要求改的字段原样保留；画风关键词保持稳定，不要每轮换一套；',
+    '- note 是**画风备注**，只写不随剧情变化的东西（笔触 / 光线质感 / 构图偏好 / 色调约束）。',
+    '  不要写时间、天气、地点、季节、人物生死这类剧情事实——它们属于世界状态卡，由剧情随时改变；',
+    '  例如写「冷暖光各占一半，颗粒明显」，而不要写「始终深夜、始终下雨」。',
   ].join('\n');
 
   // 画师可用工具（仅工作台对话下发；结构化定义，§4.5）
@@ -199,7 +212,7 @@
     type: 'function',
     function: {
       name: 'recall_style_card',
-      description: '取回视觉设定卡全文（画风关键词 / 媒介 / 色板 / 人物外观）。要写人物外貌、服饰或画面细节时先调用。',
+      description: '取回画面基调（画风参数）。要写人物外貌、服饰或画面细节时先调用；结果里的英文是给绘图模型的参数，只用来把握氛围，不要在正文里复述。',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   };
@@ -459,7 +472,7 @@
 
   function isRecallTool(name) { return !!RECALL_TOOL_SCOPE[name]; }
 
-  // 视觉设定卡全文（P4 锁定后每次必带的锚）
+  // 视觉设定卡全文（P4 锁定后每次必带的锚）——**给画师**：外观与负面提示词都要，画师据此写 prompt
   function styleCardText(card) {
     if (!card) return '';
     const lines = [];
@@ -475,6 +488,25 @@
     return lines.join('\n') || '';
   }
 
+  /* 视觉设定卡的「文本侧视图」——**给 AI1（旁白模型）**，和上面那套不是一回事：
+   * 卡里的 人物外观 / 媒介 / 色板 是英文的生图参数，负面更是纯提示词参数，
+   * 原样喂给旁白模型只会漏进思考链和正文（用户看到的就是「画师的提示词混进来了」）。
+   * 文本侧只留：画风关键词（一句，注明是生图参数、别复述）+ 中文备注。 */
+  function styleCardTextForText(card) {
+    if (!card) return '';
+    const lines = [];
+    const kw = (card.styleKeywords || []).filter(Boolean);
+    if (kw.length) {
+      lines.push('画风参数（英文，仅供你把握氛围：不要在正文 / 对白 / 思考里复述、翻译或讨论这些词）：'
+        + kw.join(', '));
+    }
+    if (card.note) {
+      lines.push('画面偏好：' + card.note
+        + '（只作画风参考：时间 / 天气 / 地点 / 在场者这些**剧情事实**以世界状态卡与最近剧情为准，冲突时听剧情）');
+    }
+    return lines.join('\n');
+  }
+
   function rollingStyleText(rs) {
     rs = rs || {};
     const lines = [];
@@ -483,6 +515,10 @@
     if (rs.wardrobe) lines.push('服饰元素：' + rs.wardrobe);
     return lines.join('\n');
   }
+
+  // 画风锚的作用域说明：卡只定画风与气质，剧情事实（时间 / 天气 / 地点 / 在场者）永远听剧情的。
+  // 起因：卡里的「备注」被写成了「始终深夜、始终下雨」，玩家要晴天时画师仍照雨画。
+  const ANCHOR_SCOPE_HINT = '\n（画风锚只决定画风与气质：地点 / 时间 / 天气 / 在场者这类剧情事实以 [最近剧情] 为准，与备注冲突时听剧情。）';
 
   // 画风锚：设定卡优先 → 滚动风格摘要 → 未锚定（§6 降级）
   function painterAnchorText(story) {
@@ -495,6 +531,16 @@
     return t2 || '（未锚定，自由发挥）';
   }
 
+  // 文本侧画风锚（AI1 用）：设定卡走「文本侧视图」（不含英文外观 / 负面提示词），没卡退回滚动风格摘要
+  function textAnchorText(story) {
+    const card = story && story.styleCard;
+    if (card && card.locked !== false) {
+      const t = styleCardTextForText(card);
+      if (t) return t;
+    }
+    return rollingStyleText((story && story.rollingStyle) || {});
+  }
+
   // 召回块文本（§4.5）：world → 世界卡全文；style → 视觉设定卡（无卡退回滚动风格摘要 / 未锚定）
   function recallBlock(story, scope) {
     if (scope === 'world') {
@@ -503,7 +549,12 @@
         ? ('[召回 · 世界状态卡]\n' + t)
         : '[召回 · 世界状态卡]\n（世界卡还是空的：按设定自由发挥，并在回复里用 world 字段自报地点 / 时间 / 人物。）';
     }
-    if (scope === 'style') return '[召回 · 视觉设定卡]\n' + painterAnchorText(story);
+    if (scope === 'style') {
+      const t = textAnchorText(story);
+      return t
+        ? ('[召回 · 视觉设定卡]\n' + t + '\n（以上只是画面基调参考：不要在旁白、对白或选项里复述这些参数。）')
+        : '[召回 · 视觉设定卡]\n（还没有视觉设定卡：按故事设定自拟画面基调。）';
+    }
     return '';
   }
 
@@ -520,6 +571,19 @@
       for (const s of sc) out.push('· ' + (s.alt || '') + '｜prompt：' + (s.prompt || ''));
     }
     return out.reverse();
+  }
+
+  /* 上一次出图的完整 prompt（含画风后缀），给画师当「差分基底」。
+   * 为什么需要：生图是纯文生图、每次从零开始，风格只能靠这段文字钉住；
+   * 让画师在它上面只改剧情变化的部分，风格才不会一轮一个样。 */
+  function lastImagePrompt(story) {
+    const log = (story && story.log) || [];
+    for (let i = log.length - 1; i >= 0; i--) {
+      const e = log[i];
+      if (e && e.type === 'image' && e.prompt) return String(e.prompt).trim();
+    }
+    const scenes = ((story && story.scenes) || []).filter(s => s && s.prompt);
+    return scenes.length ? String(scenes[scenes.length - 1].prompt).trim() : '';
   }
 
   function recentNarrationLines(story, n) {
@@ -657,7 +721,7 @@
     // 视频动态提示词（§6）：隔离规则不变——系统提示 + 画风锚 + 最近两张图 + 最近 3 回合剧情
     if (mode === 'video') {
       const out = [{ role: 'system', content: PAINTER_VIDEO_SYSTEM }];
-      out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) });
+      out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) + ANCHOR_SCOPE_HINT });
       const vimgs = recentImageLines(story, 2);
       if (vimgs.length) out.push({ role: 'system', content: '[最近两张图]\n' + vimgs.join('\n') });
       const vturns = recentTurnLines(story, PAINTER_RECENT_TURNS);
@@ -678,9 +742,21 @@
 
     const chatMode = mode === 'chat';
     const out = [{ role: 'system', content: chatMode ? PAINTER_CHAT_SYSTEM : PAINTER_SYSTEM }];
-    out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) });
+    out.push({ role: 'system', content: '[画风锚]\n' + painterAnchorText(story) + ANCHOR_SCOPE_HINT });
     const imgs = recentImageLines(story, 2);
     if (imgs.length) out.push({ role: 'system', content: '[最近两张图]\n' + imgs.join('\n') });
+    // 差分基底（仅 scene 模式）：把上一次出图的完整 prompt 单独再给一遍，
+    // 让画师「在它上面改」而不是另起一段 —— 纯文生图没有图片参考，风格稳定全靠这个锚。
+    // 工作台对话模式已有「[当前这张图]」，不重复。
+    if (!chatMode) {
+      const basePrompt = lastImagePrompt(story);
+      if (basePrompt) {
+        out.push({
+          role: 'system',
+          content: '[基底 prompt]（上一次出图的完整提示词：风格部分原样保留，只改剧情变化的部分）\n' + basePrompt,
+        });
+      }
+    }
     // [最近剧情]：scene 模式按 §4 只带最近 PAINTER_RECENT_TURNS 回合的「玩家行动 + 旁白」（P-1）；
     // chat（工作台）模式保持最近 3 条旁白不动（§4 不动范围，另有 recall_recent_plot）
     const narr = chatMode ? recentNarrationLines(story, 3) : recentTurnLines(story, PAINTER_RECENT_TURNS);
@@ -1008,6 +1084,8 @@
 
   // 压缩判定与切分（纯函数，同步）：返回 { candidate, groups } 或 null。
   // 运行时（app.js）用它决定「交给书记员模型压」还是「本地兜底压」，评测也走它，避免两份判定。
+  // opts.estimatedTokens：调用方手上已有「组装结果的 token 估算」时直接传入（审查 三·3：
+  // 此前这里会再组装一次全量上下文只为估算，每回合 2~3 次组装）；不传则自己组装估算。
   function planCompression(story, opts) {
     opts = opts || {};
     if (!story || !Array.isArray(story.messages)) return null;
@@ -1017,7 +1095,10 @@
     const cw = +opts.contextWindow;
     if (Number.isFinite(cw) && cw > 0) {
       const threshold = compressThreshold(cw);
-      overBudget = estimateContextTokens(story, '') > threshold;
+      const est = (opts.estimatedTokens !== undefined && Number.isFinite(+opts.estimatedTokens))
+        ? +opts.estimatedTokens
+        : estimateContextTokens(story, '');
+      overBudget = est > threshold;
     }
     if (story.messages.length <= max && !overBudget) return null;
 
@@ -1366,7 +1447,9 @@
     return out;
   }
 
-  // 宽容解析：原样 → 转义裸控制符 → 补括号，依次尝试；全失败返回 null
+  // 宽容解析的唯一入口（审查 三·7）：原样 → 转义裸控制符 → 补括号，依次尝试；全失败返回 null。
+  // escapeRawControls / completeJson 只是这里的内部步骤（不导出，避免第二入口）；容错四条路径
+  // 的 eval 用例见 eval/run.js「宽容解析」段。
   function tolerantJSONParse(text) {
     const s = String(text == null ? '' : text).trim()
       .replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
@@ -1485,8 +1568,10 @@
       const pb = profileBlock(opts.profile, playerAction || '');
       if (pb) parts.push('【关于玩家】\n' + pb);
     }
-    const va = painterAnchorText(story);
-    if (va) parts.push('【视觉设定卡】\n' + va);
+    // 视觉设定卡只给「文本侧视图」：英文外观 / 负面提示词是给画师的生图参数，
+    // 灌给旁白模型只会让它把提示词念出来（用户看到的「画师的提示词混进思考链」就是这么来的）。
+    const va = textAnchorText(story);
+    if (va) parts.push('【画面基调】（来自视觉设定卡）\n' + va);
     parts.push('[指令] 先用一两句复述当前处境（地点 / 时间 / 在场者 / 伏笔），再继续剧情；复述要与以上记忆一致。不要提「注入」「系统」「工具」这类字眼。');
     return parts.join('\n\n');
   }
@@ -1595,14 +1680,87 @@
     }).join('\n');
   }
 
+  // 组装结果的 token 估算（纯函数）：估算与实发同源，不再各组一份上下文（审查 三·3）
+  function estimateTokensOf(messages) {
+    return estimateTokens(messagesToText(messages));
+  }
+
   function estimateContextTokens(story, playerAction, opts) {
-    return estimateTokens(messagesToText(assembleAI1(story, playerAction, opts)));
+    return estimateTokensOf(assembleAI1(story, playerAction, opts));
+  }
+
+  /* ---------------- 一回合归档：条目形状 + 工具吸收（审查 可维护性 二·10） ----------------
+   * 此前 js/app/turn.js 与 eval/run.js 各写一份归档，字段已漂移（run.js 缺 versions /
+   * activeVersion、没跳过提案留痕、画像无门控）。这里收敛成纯函数，turn.js 与评测共用：
+   *   slimReply / narrationEntry / assistantEntry —— 条目形状的唯一口径；
+   *   absorbToolCalls(story, calls, opts)        —— 世界卡 / 画像吸收 + tool 留痕。
+   * 画像写入门控由调用方注入（opts.applyProfile）：不传 = 不收集（对应「关开关即停止收集」，
+   * app 传 A.applyProfileEntries，评测传自己的合并函数）。 */
+
+  const REASONING_MAX = 4000;
+  function clipReasoning(text) {
+    const s = String(text || '');
+    return s.length > REASONING_MAX ? (s.slice(0, REASONING_MAX) + '\n…（思考链过长，已截断）') : s;
+  }
+
+  // assistant 消息里的回包瘦身：只留叙事四字段（world / tool_calls 不进 messages）
+  function slimReply(r) {
+    return { narration: r.narration, choices: r.choices, scene_change: r.scene_change, scene_summary: r.scene_summary };
+  }
+
+  // 旁白日志条目（versions = 版本栈）；思考链随条目一起存，供折叠块渲染与以后带 tools 回传
+  function narrationEntry(text, reasoning, now) {
+    const e = { type: 'narration', text: text, versions: [text], activeVersion: 0, ts: now || Date.now() };
+    if (reasoning) e.reasoning = clipReasoning(reasoning);
+    return e;
+  }
+
+  // AI1 原始对话里的 assistant 条目：reasoning 一并存档（不进请求体，§4.5）
+  function assistantEntry(reply, reasoning) {
+    const m = { role: 'assistant', content: JSON.stringify(slimReply(reply)) };
+    if (reasoning) m.reasoning = clipReasoning(reasoning);
+    return m;
+  }
+
+  // 工具留痕文案（per-tool 摘要，§3.A.6：chat / rp 没有画师，措辞中立）
+  function toolSummary(name, args) {
+    if (name === 'update_memory') return args.text ? ('更新记忆：' + args.text) : '更新记忆';
+    if (name === 'recall_world_state') return '查阅了世界状态卡';
+    if (name === 'recall_style_card') return '查阅了视觉设定卡';
+    if (name === 'request_image') return '排队生图';
+    if (name === 'schedule_once') return '安排了一次主动联系（待确认）';
+    if (name === 'schedule_heartbeat') return '安排了定时主动联系（待确认）';
+    if (name === 'schedule_cron') return '安排了日历主动联系（待确认）';
+    if (name === 'list_triggers') return '查看了主动联系安排';
+    if (name === 'cancel_trigger') return '取消了主动联系安排';
+    return name;
+  }
+
+  // 把 tool_calls 吸收进 story（世界卡 / 画像）并留痕：
+  //   - 提案类工具不留 tool 留痕（留痕是 {type:'proposal'} 提案卡本身，确认后另记一条）；
+  //   - update_memory 的画像条目经 opts.applyProfile 门控写入（不传 = 不收集）。
+  function absorbToolCalls(story, calls, opts) {
+    if (!story || !Array.isArray(calls)) return;
+    const o = opts || {};
+    for (const c of calls) {
+      const fn = (c && c.function) ? c.function : c;
+      const name = (fn && fn.name) || '';
+      let args = {};
+      try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
+      if (isProposalTool(name)) continue;   // 提案留痕跳过（提案卡本身就是留痕）
+      if (name === 'update_memory') {
+        if (args.world && typeof args.world === 'object') mergeWorld(story.world, args.world);
+        if (args.relationship) mergeWorld(story.world, { relationship: args.relationship });
+        if (Array.isArray(args.profile) && typeof o.applyProfile === 'function') o.applyProfile(args.profile);
+      }
+      story.log.push({ type: 'tool', tool: name, summary: toolSummary(name, args), ts: o.now || Date.now() });
+    }
   }
 
   global.IR = global.IR || {};
   global.IR.Context = {
     BUDGET, COMPRESS_RATIO,
-    DEFAULT_WINDOW_MESSAGES, DEFAULT_KEEP_MESSAGES, DEFAULT_MAX_MESSAGES, DEFAULT_MAX_SUMMARIES,
+    DEFAULT_KEEP_MESSAGES, DEFAULT_MAX_MESSAGES, DEFAULT_MAX_SUMMARIES,
     TONE_MAX_CHARS, PREMISE_MAX_CHARS,
     WINDOW_MIN_MESSAGES, WINDOW_MAX_MESSAGES, WINDOW_TOKEN_RATIO, fitWindow,
     AI1_SYSTEM, systemForMode, RP_SYSTEM_FALLBACK,
@@ -1616,7 +1774,7 @@
     EMAIL_TOOLS, PAYMENT_TOOLS, TOOL_NAMES_PROPOSAL, EMAIL_POLICY_TEXT, PAYMENT_POLICY_TEXT,
     isProposalTool, stripKindMarker, KIND_MARK_HINT_SHORT,
     TOOL_POLICY_TEXT, TOOL_POLICY_IMAGE, toolPolicyText, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
-    styleCardText, rollingStyleText, painterAnchorText,
+    styleCardText, styleCardTextForText, rollingStyleText, painterAnchorText, textAnchorText,
     PAINTER_RECENT_TURNS, PAINTER_RECENT_LINE_CHARS,
     recentImageLines, recentNarrationLines, recentTurnLines, recentPlotText, assemblePainter,
     ENTITY_MIN_MATCH, NAME_MIN_MATCH, HEURISTIC_MAX_ENTRIES, HEURISTIC_MAX_CHARS,
@@ -1626,13 +1784,14 @@
     characterCardText, relationshipBlock,
     normalizeProfile, mergeProfile, pickProfileEntries, profileSummaryLine, profileBlock,
     profileEnabledFor, localProfileExtract,
-    tolerantJSONParse, escapeRawControls, completeJson, normalizeAIReply,
+    tolerantJSONParse, normalizeAIReply,
     IMPORT_FINAL_SYSTEM, IMPORT_MAP_SYSTEM, IMPORT_MERGE_SYSTEM, IMPORT_TASKS,
     IMPORT_CALL_RESERVE, IMPORT_FIT_RATIO, IMPORT_MIN_BUDGET,
     assembleImporter, splitImportChunks, planImport, planImportMerge,
     estimateTokens, playerContent,
     topThreads, buildSummaryLine, worldCardText, mergeWorld, localScribe,
     sceneSlot, localSummarize, mergeSummaries, compressThreshold, planCompression, trimSummaries, compressStory,
-    assembleAI1, messagesToText, estimateContextTokens,
+    assembleAI1, messagesToText, estimateContextTokens, estimateTokensOf,
+    slimReply, narrationEntry, assistantEntry, toolSummary, absorbToolCalls,
   };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

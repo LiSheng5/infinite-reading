@@ -238,7 +238,7 @@
   }
 
   async function commitVideo(o) {
-    const id = 'vd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const id = IR.genId('vd');
     const scene = {
       id: id, kind: 'video',
       videoId: undefined, thumb: null,

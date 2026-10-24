@@ -53,7 +53,10 @@
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
 
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发（§4.5）
-  async function callAI1(playerAction, opts) {
+  // 拆两段（审查 可维护性 #4）：
+  //   buildAI1Request —— 组装 tools / messages（含偏好解析、工具可用性、预算压缩）
+  //   invokeAI1       —— 调用 + 工具执行 + 单次重发 + 回包兜底
+  function buildAI1Request(playerAction, opts) {
     opts = opts || {};
     // UI-3 §3.3：主模型配置一律走 resolveChatCfg（本对话 profile → 模型库；缺省 = 默认主模型）
     const resolved = IR.Prefs.resolveChatCfg(S.settings, S.story);
@@ -76,12 +79,6 @@
       A.renderInjectHint();
       pushLog({ type: 'system', text: '已注入完整记忆（世界卡 + 设定 + 视觉设定卡）：本轮先复述处境再继续' });
     }
-    S.live = { text: '', reasoning: '' };
-    S.liveReasonEl = null;
-    S.liveReasonCollapsed = false;
-    S.liveReasonOpen = false;
-    A.renderChat();
-    S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
 
     // UI-3 §3.3：工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）
     const prefsTools = IR.Prefs.effective(S.settings, S.story, 'tools');
@@ -107,16 +104,38 @@
     // P1-5（2026-10-14）：组装前先查预算，超了就地用本地摘要先压再组——此前是「先组后压」
     //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
+    // 审查 三·3：估算直接用本次组装结果（estimateTokensOf），不再「估一次、组一次、压缩时再估一次」；
+    // 超预算才压一次并重组——常态一回合只组装一次。
+    let messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
     try {
       const cw = asmOpts.contextWindow;
-      if (cw > 0 && IR.Context.estimateContextTokens(S.story, playerAction, asmOpts) > IR.Context.compressThreshold(cw)) {
-        IR.Context.compressStory(S.story, { summarize: IR.Context.localSummarize, contextWindow: cw });
+      if (cw > 0) {
+        const est = IR.Context.estimateTokensOf(messages);
+        if (est > IR.Context.compressThreshold(cw)) {
+          IR.Context.compressStory(S.story, {
+            summarize: IR.Context.localSummarize, contextWindow: cw, estimatedTokens: est,
+          });
+          messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
+        }
       }
     } catch (_) { /* 压缩失败不拦回合：最坏按原样发 */ }
-    const messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
     const cfgTools = toolsOn
       ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed) })
       : cfg;
+    return { adapter: adapter, cfg: cfg, cfgTools: cfgTools, messages: messages, asmOpts: asmOpts, toolsOn: toolsOn };
+  }
+
+  // 调用 + 重发：流式首调 → 工具执行 → 按需重发（不带工具）→ 回包兜底
+  async function invokeAI1(playerAction, req) {
+    const adapter = req.adapter, cfg = req.cfg, cfgTools = req.cfgTools;
+    const messages = req.messages, asmOpts = req.asmOpts, toolsOn = req.toolsOn;
+
+    S.live = { text: '', reasoning: '' };
+    S.liveReasonEl = null;
+    S.liveReasonCollapsed = false;
+    S.liveReasonOpen = false;
+    A.renderChat();
+    S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
 
     let streamedCalls = [];
     let reasoning = '';
@@ -190,6 +209,11 @@
       };
     }
     return { reply: reply1, streamed: first.streamed, reasoning: reasoning };
+  }
+
+  // 编排：组装 → 调用 + 重发（对外入口不变，仍是 callAI1）
+  async function callAI1(playerAction, opts) {
+    return invokeAI1(playerAction, buildAI1Request(playerAction, opts));
   }
 
   // 输入类型（做 / 说 / 导演）：状态按故事记在 story.ui.kind，旧存档缺省 = 做
