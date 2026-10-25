@@ -1,0 +1,184 @@
+{
+  "project": "infinite-reading",
+  "version": "0.12.1",
+  "stage": "0（迁移基线）· 回归夹具 roundtrip",
+  "generatedAt": "2026-10-25T07:50:56.809Z",
+  "tool": "acceptance/tools/fixture.mjs roundtrip",
+  "how": "每个夹具文件各起一个干净浏览器上下文（file://）：真实 UI 导入（#file-import）→ 还原 → 真实 UI 再导出 → 与夹具原文件逐字段比对",
+  "comparePolicy": {
+    "backup": {
+      "label": "全量备份",
+      "ignore": [
+        [
+          "exportedAt"
+        ],
+        [
+          "app"
+        ],
+        [
+          "stories",
+          "*",
+          "updatedAt"
+        ],
+        [
+          "images",
+          "*",
+          "path"
+        ]
+      ],
+      "normalize": []
+    },
+    "story": {
+      "label": "单故事档案",
+      "ignore": [
+        [
+          "createdAt"
+        ],
+        [
+          "updatedAt"
+        ],
+        [
+          "images",
+          "*",
+          "ts"
+        ]
+      ],
+      "normalize": [
+        [
+          [
+            "title"
+          ],
+          null
+        ]
+      ]
+    },
+    "zipExtra": "zip 里的 images/* 按 manifest 的 id 对齐后逐字节 sha256 比对（path 编号差异放行）",
+    "note": "除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚该阶段（任务书 §11）。"
+  },
+  "ok": true,
+  "artifacts": [
+    {
+      "file": "backup-plain.irbackup.json",
+      "ok": true,
+      "checks": [
+        {
+          "name": "导入前无存档",
+          "ok": true,
+          "detail": "listStories=0"
+        },
+        {
+          "name": "还原 3 个故事",
+          "ok": true,
+          "detail": "[{\"id\":\"smvnj24hs14ci\",\"title\":\"雨夜便利店\",\"mode\":\"choice\",\"turn\":6,\"savepoints\":2,\"scenes\":2,\"treeNodes\":8},{\"id\":\"smvnj24jeojc9\",\"title\":\"凌霜的航线夜谈\",\"mode\":\"rp\",\"turn\":3,\"savepoints\":0,\"scenes\":0,\"treeNodes\":4},{\"id\":\"smvnj24jex88d\",\"title\":\"新对话\",\"mode\":\"chat\",\"turn\":2,\"savepoints\":0,\"scenes\":0,\"treeNodes\":3}]"
+        },
+        {
+          "name": "夹具与再导出均为有效档案（防空比对）",
+          "ok": true,
+          "detail": "format=ir-backup/ir-backup stories=3/3"
+        }
+      ],
+      "diffs": [],
+      "imageDiffs": [],
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ]
+    },
+    {
+      "file": "backup-with-src.zip",
+      "ok": true,
+      "checks": [
+        {
+          "name": "导入前无存档",
+          "ok": true,
+          "detail": "listStories=0"
+        },
+        {
+          "name": "还原 3 个故事",
+          "ok": true,
+          "detail": "[{\"id\":\"smvnj24hs14ci\",\"title\":\"雨夜便利店\",\"mode\":\"choice\",\"turn\":6,\"savepoints\":2,\"scenes\":2,\"treeNodes\":8},{\"id\":\"smvnj24jeojc9\",\"title\":\"凌霜的航线夜谈\",\"mode\":\"rp\",\"turn\":3,\"savepoints\":0,\"scenes\":0,\"treeNodes\":4},{\"id\":\"smvnj24jex88d\",\"title\":\"新对话\",\"mode\":\"chat\",\"turn\":2,\"savepoints\":0,\"scenes\":0,\"treeNodes\":3}]"
+        },
+        {
+          "name": "原图已还原",
+          "ok": true,
+          "detail": "[{\"imageId\":\"img:scmvnj24irf70z\",\"size\":8382}]"
+        },
+        {
+          "name": "zip 逐图字节一致",
+          "ok": true,
+          "detail": "2 张图"
+        }
+      ],
+      "diffs": [],
+      "imageDiffs": [],
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ]
+    },
+    {
+      "file": "story-choice-full.irstory.json",
+      "ok": true,
+      "checks": [
+        {
+          "name": "导入前无存档",
+          "ok": true,
+          "detail": "listStories=0"
+        },
+        {
+          "name": "导入故事已还原",
+          "ok": true,
+          "detail": "{\"id\":\"smvnj314n193l\",\"title\":\"雨夜便利店（导入）\",\"log\":15,\"scenes\":2,\"withImageId\":1,\"treeNodes\":8,\"savepoints\":0,\"characterCard\":null,\"turn\":6}"
+        },
+        {
+          "name": "原图换键落定",
+          "ok": true,
+          "detail": "imageId=1 期望≥1"
+        },
+        {
+          "name": "夹具与再导出均为有效档案（防空比对）",
+          "ok": true,
+          "detail": "format=ir-story/ir-story log=15/15"
+        }
+      ],
+      "diffs": [],
+      "imageDiffs": [],
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ]
+    },
+    {
+      "file": "story-rp-full.irstory.json",
+      "ok": true,
+      "checks": [
+        {
+          "name": "导入前无存档",
+          "ok": true,
+          "detail": "listStories=0"
+        },
+        {
+          "name": "导入故事已还原",
+          "ok": true,
+          "detail": "{\"id\":\"smvnj38dl1pi5\",\"title\":\"凌霜的航线夜谈（导入）\",\"log\":6,\"scenes\":0,\"withImageId\":0,\"treeNodes\":4,\"savepoints\":0,\"characterCard\":\"凌霜\",\"turn\":3}"
+        },
+        {
+          "name": "原图换键落定",
+          "ok": true,
+          "detail": "imageId=0 期望≥0"
+        },
+        {
+          "name": "夹具与再导出均为有效档案（防空比对）",
+          "ok": true,
+          "detail": "format=ir-story/ir-story log=6/6"
+        }
+      ],
+      "diffs": [],
+      "imageDiffs": [],
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ]
+    }
+  ]
+}

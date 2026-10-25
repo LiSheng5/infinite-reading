@@ -1,0 +1,161 @@
+{
+  "project": "infinite-reading",
+  "version": "0.12.1",
+  "stage": "0（迁移基线）· 回归夹具",
+  "generatedAt": "2026-10-25T07:50:02.316Z",
+  "tool": "acceptance/tools/fixture.mjs build",
+  "entry": "file:///D:/infinite-reading/index.html",
+  "how": {
+    "seed": "页面内经 IR.Store / IR.Tree / IR.Context 的真实写入路径播种（见 fixture.mjs 头注）",
+    "export": "全部经真实 UI：设置→数据→「一键导出全部备份」/ 书架行菜单→导出弹窗"
+  },
+  "stories": [
+    {
+      "id": "smvnj24hs14ci",
+      "title": "雨夜便利店",
+      "mode": "choice",
+      "turn": 6,
+      "logEntries": 15,
+      "treeNodes": 8,
+      "branches": 1,
+      "savepoints": 2,
+      "images": 1,
+      "videos": 1,
+      "summaries": 0,
+      "characterCard": false
+    },
+    {
+      "id": "smvnj24jeojc9",
+      "title": "凌霜的航线夜谈",
+      "mode": "rp",
+      "turn": 3,
+      "logEntries": 6,
+      "treeNodes": 4,
+      "branches": 0,
+      "savepoints": 0,
+      "images": 0,
+      "videos": 0,
+      "summaries": 0,
+      "characterCard": true
+    },
+    {
+      "id": "smvnj24jex88d",
+      "title": "新对话",
+      "mode": "chat",
+      "turn": 2,
+      "logEntries": 4,
+      "treeNodes": 3,
+      "branches": 0,
+      "savepoints": 0,
+      "images": 0,
+      "videos": 0,
+      "summaries": 0,
+      "characterCard": false
+    }
+  ],
+  "globalUserProfile": [
+    {
+      "text": "玩家喜欢在夜里写东西",
+      "kind": "preference",
+      "updatedAt": 1790322657415
+    },
+    {
+      "text": "对关东煮的气味过敏",
+      "kind": "fact",
+      "updatedAt": 1790322718415
+    },
+    {
+      "text": "不想被剧透结局",
+      "kind": "taboo",
+      "updatedAt": 1790322779415
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "backup-plain.irbackup.json",
+      "kind": "ir-backup",
+      "withSrc": false,
+      "rules": "RULES_BACKUP",
+      "sha256": "3573fddc4570d376f0591ecfb9d2b6a9f749041755027aad0b6e95b513e72040",
+      "size": 202455
+    },
+    {
+      "file": "backup-with-src.zip",
+      "kind": "ir-backup-zip",
+      "withSrc": true,
+      "rules": "RULES_BACKUP + 逐图字节",
+      "sha256": "5053783508ba37c532ceab171c01e2ec6e093588759841468289feb2087dae57",
+      "size": 219809
+    },
+    {
+      "file": "story-choice-full.irstory.json",
+      "kind": "ir-story",
+      "withSrc": true,
+      "rules": "RULES_STORY",
+      "sha256": "3eac746f469fabdce14628e44ff4d9939ce61ed2fcffcd5aeff46856b423844a",
+      "size": 72276
+    },
+    {
+      "file": "story-rp-full.irstory.json",
+      "kind": "ir-story",
+      "withSrc": false,
+      "rules": "RULES_STORY",
+      "sha256": "7bad63a8cf0bc9740fdeb5f10f385365f1b8f861963a08bbc08e834e8dd1ccf9",
+      "size": 11742
+    }
+  ],
+  "comparePolicy": {
+    "backup": {
+      "label": "全量备份",
+      "ignore": [
+        [
+          "exportedAt"
+        ],
+        [
+          "app"
+        ],
+        [
+          "stories",
+          "*",
+          "updatedAt"
+        ],
+        [
+          "images",
+          "*",
+          "path"
+        ]
+      ],
+      "normalize": []
+    },
+    "story": {
+      "label": "单故事档案",
+      "ignore": [
+        [
+          "createdAt"
+        ],
+        [
+          "updatedAt"
+        ],
+        [
+          "images",
+          "*",
+          "ts"
+        ]
+      ],
+      "normalize": [
+        [
+          [
+            "title"
+          ],
+          null
+        ]
+      ]
+    },
+    "zipExtra": "zip 里的 images/* 按 manifest 的 id 对齐后逐字节 sha256 比对（path 编号差异放行）",
+    "note": "除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚该阶段（任务书 §11）。"
+  },
+  "consoleErrors": [
+    "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+  ]
+}

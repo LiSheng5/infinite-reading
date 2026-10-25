@@ -1,0 +1,1825 @@
+npm warn Unknown user config "electron_mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "electron_builder_binaries_mirror". This will stop working in the next major version of npm.
+
+> infinite-reading@0.12.1 test
+> node tools/sync-version.mjs --check && node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/motion-test.js && node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/run.js && node eval/tree-test.js && node eval/treelayout-test.js && node eval/prefs-test.js && node eval/settings-ids-test.js && node eval/painter-context-test.js && node eval/style-card-text-test.js && node eval/video-provider-test.js && node eval/minimax-image-test.js && node eval/videoqueue-test.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs
+
+一致  index.html
+一致  package.json
+一致  sw.js
+一致  README.md
+一致  README.md
+一致  README.en.md
+一致  README.en.md
+一致  index.html
+一致  js/store.js
+一致  js/app/backup.js
+版本号 0.12.1 · 检查通过
+UI-1 对比度检查（css/style.css :root）
+┌─────────┬─────────────────────────────┬────────────┬───────────┬───────────┬──────┐
+│ (index) │ 令牌对                      │ 用途       │ 比值      │ 要求      │ 结果 │
+├─────────┼─────────────────────────────┼────────────┼───────────┼───────────┼──────┤
+│ 0       │ '--ink / --bg'              │ 'text'     │ '19.15:1' │ '≥ 4.5:1' │ '✅' │
+│ 1       │ '--ink / --surface'         │ 'text'     │ '17.84:1' │ '≥ 4.5:1' │ '✅' │
+│ 2       │ '--ink / --surface-2'       │ 'text'     │ '17.03:1' │ '≥ 4.5:1' │ '✅' │
+│ 3       │ '--ink / --accent-soft'     │ 'text'     │ '16.67:1' │ '≥ 4.5:1' │ '✅' │
+│ 4       │ '--ink-dim / --bg'          │ 'text'     │ '5.81:1'  │ '≥ 4.5:1' │ '✅' │
+│ 5       │ '--ink-dim / --surface'     │ 'text'     │ '5.41:1'  │ '≥ 4.5:1' │ '✅' │
+│ 6       │ '--ink-dim / --surface-2'   │ 'text'     │ '5.16:1'  │ '≥ 4.5:1' │ '✅' │
+│ 7       │ '--accent / --bg'           │ 'text'     │ '5.17:1'  │ '≥ 4.5:1' │ '✅' │
+│ 8       │ '--accent / --surface'      │ 'text'     │ '4.82:1'  │ '≥ 4.5:1' │ '✅' │
+│ 9       │ '--accent / --surface-2'    │ 'text'     │ '4.60:1'  │ '≥ 4.5:1' │ '✅' │
+│ 10      │ '--on-accent / --accent'    │ 'text'     │ '5.17:1'  │ '≥ 4.5:1' │ '✅' │
+│ 11      │ '--on-ink / --ink'          │ 'text'     │ '19.15:1' │ '≥ 4.5:1' │ '✅' │
+│ 12      │ '--danger / --bg'           │ 'text'     │ '5.62:1'  │ '≥ 4.5:1' │ '✅' │
+│ 13      │ '--accent / --bg'           │ 'graphics' │ '5.17:1'  │ '≥ 3:1'   │ '✅' │
+│ 14      │ '--line-strong / --bg'      │ 'graphics' │ '3.58:1'  │ '≥ 3:1'   │ '✅' │
+│ 15      │ '--line-strong / --surface' │ 'graphics' │ '3.34:1'  │ '≥ 3:1'   │ '✅' │
+│ 16      │ '--line / --bg'             │ 'decor'    │ '1.24:1'  │ '≥ 1.1:1' │ '✅' │
+└─────────┴─────────────────────────────┴────────────┴───────────┴───────────┴──────┘
+全部通过（17 项）
+  ok  必需令牌 --bg
+  ok  必需令牌 --surface
+  ok  必需令牌 --surface-2
+  ok  必需令牌 --line
+  ok  必需令牌 --line-strong
+  ok  必需令牌 --ink
+  ok  必需令牌 --ink-dim
+  ok  必需令牌 --accent
+  ok  必需令牌 --accent-soft
+  ok  必需令牌 --on-accent
+  ok  必需令牌 --on-ink
+  ok  必需令牌 --danger
+  ok  必需令牌 --shadow-1
+  ok  必需令牌 --shadow-2
+  ok  必需令牌 --bg-glass
+  ok  必需令牌 --dur-fast
+  ok  必需令牌 --dur-base
+  ok  必需令牌 --dur-slow
+  ok  必需令牌 --ease-out
+  ok  必需令牌 --ease-spring
+  ok  必需令牌 --ease-inout
+  ok  style.css :root 之外无颜色字面量
+  ok  js/*.js 无未允许的颜色字面量
+  ok  @keyframes 只动 transform/opacity/filter/stroke-dashoffset/stroke-dasharray
+  ok  animation/transition 引用的令牌都存在
+  ok  transition 不动 width/height/box-shadow 等重排属性
+tokens-test：全部通过
+  ok  resolve('auto', false) → rich
+  ok  resolve('auto', true) → off
+  ok  resolve('rich', true)（显式优先） → rich
+  ok  resolve('off', false) → off
+  ok  resolve('standard', false) → standard
+  ok  resolve('standard', true) → standard
+  ok  resolve(undefined, false) 当 auto → rich
+  ok  resolve(null, true) 当 auto → off
+  ok  resolve('nonsense', false) 当 auto → rich
+  ok  resolve(42, true) 当 auto → off
+motion-test：全部通过
+  ok  sanitize：首尾引号剥掉  [雨夜便利店]
+  ok  sanitize：书名号剥掉  [末班电车]
+  ok  sanitize：markdown 标记剥掉  [便利店奇遇]
+  ok  sanitize：标题前缀 # 剥掉  [雨夜奇遇]
+  ok  sanitize：换行（多行解释）→ fallback  [FB]
+  ok  sanitize：首尾换行只是收掉、不算多行  [雨夜便利店]
+  ok  sanitize：结尾标点剥掉  [雨夜便利店]
+  ok  sanitize：结尾逗号 / 分号剥掉  [雨夜便利店]
+  ok  sanitize：空串 → fallback  [FB]
+  ok  sanitize：只有引号 → fallback  [FB]
+  ok  sanitize：多行解释（带说明）→ fallback  [ok]
+  ok  sanitize：超长截断加省略号（20 字 + …）  [一二三四五六七八九十一二三四五六七八九十… / len=21]
+  ok  sanitize：emoji 按码点截断（不截坏代理对）  [🚄霓虹霓虹霓虹霓虹霓虹霓虹霓虹霓虹霓虹霓… / cp=21 / utf16=22]
+  ok  sanitize：生僻字不被截坏  [龘靐齉齾龗]
+  ok  sanitize：内联 code 反引号剥掉  [雨夜便利店]
+  ok  fallback：无消息 → 「新对话」  [新对话]
+  ok  fallback：首条用户消息截断（15 码点 + …）  [午夜十二点的车站我们决定留下来…]
+  ok  fallback：短消息不加省略号  [推开门]
+  ok  fallback：跳过 assistant 取第一条 user  [找钥匙]
+  ok  fallback：剥掉（做/说/导演）内层标记  [推开门]
+  ok  fallback：跳过开局占位话术「（故事开场…）」  [推开门走进便利店]
+  ok  fallback：只有占位话术 → 「新对话」
+  ok  needsTitle：titleAuto 为假 → 假
+  ok  needsTitle：titleAuto 缺失 → 假
+  ok  needsTitle：turn===1 未生成 → 真
+  ok  needsTitle：turn===1 已生成 → 假
+  ok  needsTitle：turn===6 未二次生成 → 真
+  ok  needsTitle：turn===6 已二次生成 → 假
+  ok  needsTitle：其余回合 → 假
+  ok  buildPrompt：首条是标题系统提示  [给这段对话起一个不超过 15 个字的标题]
+  ok  buildPrompt：只含最近 3 轮（最多 6 条对话）  [len=7 first=这么晚还在营业？]
+  ok  buildPrompt：不含故事系统提示 / 世界卡
+  ok  buildPrompt：不含工具调用内容
+  ok  buildPrompt：不含 [设定] / [玩家行动] 标记
+  ok  buildPrompt：剧情 JSON 解析成旁白纯文本  [system:给这段对话起一个不超 | user:这么晚还在营业？ | assistant:「嗯，值夜班。」他擦 | user:走向传说中的第八个货 | assistant:货架尽头有一张旧照片 | user:捡起照片 | assistant:照片背面写着一行小字]
+  ok  buildPrompt：单条 ≤ 600 字（码点）  [54,8,14,11,11,4,600]
+  ok  buildPrompt：坏 JSON 当纯文本不抛错
+  ok  applyTitle：正常写回 + 计次  [雨夜便利店/1]
+  ok  applyTitle：titleAuto 已改为假 → 不写  [旧标题]
+  ok  applyTitle：id 不一致 → 不写  [旧标题]
+  ok  applyTitle：force（手动重新生成）跳过 titleAuto 检查  [手动新标题]
+titles-test：全部通过（41 项）
+  [perf] 搜索首次构建（50 故事 × 500 节点）：257ms；单次查询：2ms
+  ok  query：中文子串命中  [{"nid":"n1","snippet":"走向货架 第八个货架尽头有一张旧照片。","ranges":[[2,4],[8,10]]}]
+  ok  query：多词 AND（都命中）
+  ok  query：多词 AND（缺一词 → 无结果）
+  ok  query：大小写规整
+  ok  query：全半角规整（NFKC）  [[{"id":"s-fw","score":6,"titleRanges":[[0,3]],"hits":[{"nid":"n0","snippet":"abc 全角内容","ranges":[[0,3]]}]}]]
+  ok  query：标题高亮区间映射回原文（全角）  [[[0,3]]]
+  ok  query：标题命中排在仅正文命中之前  [title-hit:5,body-hit:3]
+  ok  query：同分按更新时间新到旧  [new,old]
+  ok  query：非当前分支节点里的内容能被搜到  ["n-branch"]
+  ok  query：片段含 emoji 时 ranges 自洽  [{"nid":"n0","snippet":"🚄列车进站,站台上的灯光闪烁。","ranges":[[7,9]]}]
+  ok  query：片段内多处命中合并出多个 ranges  [{"nid":"n0","snippet":"风铃风铃风铃","ranges":[[0,2],[2,4],[4,6]]}]
+  ok  query：每个结果最多 2 个命中片段
+  ok  query：输出不含拼出来的 HTML（无 mark/span 标签）  [[{"id":"s-evil","score":1,"titleRanges":[],"hits":[{"nid":"n0","snippet":"<scrip]
+  ok  query：对抗内容原样保留在片段文本里（不做转义拼接）  [<script>alert(1)</script>货架底下的秘密]
+  ok  query：片段是文档文本的原样子串  [<script>alert(1)</script>货架底下的秘密]
+  ok  query：标题里的对抗内容也只出 ranges 不出 HTML  [[[3,9],[13,19]] → "script"]
+  ok  增量：更新一个对话后只重建该 id（builds +1）  [builds=4 base=3]
+  ok  增量：更新后能搜到新内容
+  ok  增量：删除后搜不到
+  ok  性能：50 × 500 节点一次查询 < 500ms（Node）  [build=257ms query=2ms docs=50 nodes=25000]
+  ok  buildDoc：坏 JSON 当纯文本、不抛错  [坏 json 行动 {"narration": 没写完的]
+  ok  query：坏 JSON 文档也能搜
+search-test：全部通过（22 项）
+  ok  newStory：chat 默认 titleAuto=true、标题「新对话」  [title=雨夜便利店 titleAuto=true]
+  ok  saveStory：索引条目含 mode / turn / titleAuto / snippet  [{"id":"smvnfkeun1o9d","title":"雨夜便利店","updatedAt":1792908731183,"thumb":null,"mode":"chat","turn":3,"titleAuto":true,"snippet":"门铃响了，店员抬头看了一眼。"}]
+  ok  saveStory：snippet 取最近一条旁白纯文本  [门铃响了，店员抬头看了一眼。]
+  ok  saveStory：剧情 JSON 的 snippet 是旁白纯文本（不带 {"narration"）  [货架尽头有一张旧照片。]
+  ok  saveStory：剧情新故事 titleAuto=false
+  ok  迁移：旧索引补齐 1 条（缺字段的那条）  [{"patched":1,"total":3,"anomalies":[{"id":"gone-id","reason":"missing-story"},{"id":"","reason":"bad-entry"}]}]
+  ok  迁移：异常条目被如实记录（无 id / 故事丢失）  [[{"id":"gone-id","reason":"missing-story"},{"id":"","reason":"bad-entry"}]]
+  ok  迁移：补齐后条目含 mode / turn / titleAuto / snippet  [{"id":"smvnfkeuo3d2c","title":"旧对话","updatedAt":111,"thumb":null,"mode":"chat","turn":5,"titleAuto":false,"snippet":"旧档里的一句旁白。"}]
+  ok  迁移：坏条目与丢失故事从索引剔除  [["smvnfkeuo3d2c"]]
+  ok  迁移：再跑一次是空操作（幂等）  [{"patched":0,"total":1,"anomalies":[]}]
+  ok  删除前：索引与搜索文档都在
+  ok  deleteStory：索引同步清理
+  ok  deleteStory：搜索文档同步清理
+  ok  deleteStory：存档本体已删
+  ok  newStory：chat / rp 默认 titleAuto=true
+  ok  newStory：choice 默认 titleAuto=false
+  ok  migrateStory：旧档 titleAuto=false（保留现有标题）  [{"t":"旧档","a":false}]
+  ok  migrateStory：存档里显式的 titleAuto / titleGen 沿用
+shelf-index-test：全部通过（18 项）
+无限阅读 · 上下文组装评测（T-P0-1 / §4.10 C-D）
+组装实现：IR.Context.assembleAI1（v2：摘要行 + 摘要栈 + 保留窗口 8 条 + C-E 启发式注入）
+剧本：雨夜便利店（32 回合）· 探针 15 条 · 不消耗任何 API
+
+—— 追问回合明细 ——
+第10 回合  角色名          [命中]  店里那位年轻的店员，他叫什么名字？         → 周叙  (1581 字 / 1 幕摘要)
+第10 回合  时间设定        [命中]  传闻里「第八个货架」在几点出现？           → 凌晨三点  (1668 字 / 1 幕摘要)
+第10 回合  伏笔原话        [命中]  店员第一次劝你买东西时，说的原话是什么？   → 挑便宜的就走  (1584 字 / 1 幕摘要)
+第10 回合  地点细节        [命中]  收银台旁那台旧收音机，有什么显眼的特征？   → 红色的旋钮  (1691 字 / 1 幕摘要)
+第10 回合  玩家自己说过的事  [命中]  你告诉店员，你要找的人是谁？               → 失踪的妹妹苏晚  (1578 字 / 1 幕摘要)
+第20 回合  角色名          [命中]  店里那位年轻的店员，他叫什么名字？         → 周叙  (1922 字 / 4 幕摘要)
+第20 回合  时间设定        [命中]  传闻里「第八个货架」在几点出现？           → 凌晨三点  (2010 字 / 4 幕摘要)
+第20 回合  伏笔原话        [命中]  店员第一次劝你买东西时，说的原话是什么？   → 挑便宜的就走  (1925 字 / 4 幕摘要)
+第20 回合  地点细节        [命中]  收银台旁那台旧收音机，有什么显眼的特征？   → 红色的旋钮  (2044 字 / 4 幕摘要)
+第20 回合  玩家自己说过的事  [命中]  你告诉店员，你要找的人是谁？               → 失踪的妹妹苏晚  (1919 字 / 4 幕摘要)
+第30 回合  角色名          [命中]  店里那位年轻的店员，他叫什么名字？         → 周叙  (2152 字 / 6 幕摘要)
+第30 回合  时间设定        [命中]  传闻里「第八个货架」在几点出现？           → 凌晨三点  (2268 字 / 6 幕摘要)
+第30 回合  伏笔原话        [命中]  店员第一次劝你买东西时，说的原话是什么？   → 挑便宜的就走  (2155 字 / 6 幕摘要)
+第30 回合  地点细节        [命中]  收银台旁那台旧收音机，有什么显眼的特征？   → 红色的旋钮  (2266 字 / 6 幕摘要)
+第30 回合  玩家自己说过的事  [命中]  你告诉店员，你要找的人是谁？               → 失踪的妹妹苏晚  (2149 字 / 6 幕摘要)
+
+—— 5 类探针命中率 ——
+角色名            3/3   (100.0%)
+时间设定          3/3   (100.0%)
+伏笔原话          3/3   (100.0%)
+地点细节          3/3   (100.0%)
+玩家自己说过的事  3/3   (100.0%)
+
+总分：15/15 = 100.0%
+对比 v0.1 基线（P0 记录）：60% → 不低于基线 ✅
+组装长度（字）：最小 1098 / 最大 2217（末回合 2217）—— 压缩链使其保持稳定
+
+—— C-E 启发式注入（T-P5-3 / §4.10 C-E：与工具召回并行的兜底）——
+角色名 → 带回人物条目        [命中]  周叙现在还在店里吗？                     注入 1 条
+伏笔实体词 → 带回伏笔条目    [命中]  再看看关东煮的锅，锅盖上有没有字         注入 2 条
+时间实体词 → 带回时间条目    [命中]  第八个货架到底在几点出现？               注入 2 条
+无实体词 → 不注入（零成本）  [命中]  外面还在下雨吗？                         注入 0 条
+多实体词 → 注入有条数上限    [命中]  周叙、林姨、关东煮、第八个货架、收音机… 注入 4 条
+虚词片段 → 不注入（防误命中）[命中]  那是什么？                               注入 0 条
+同一张卡里的实体词仍照常命中  [命中]  第八个货架在哪里？                       注入 1 条
+C-E 校验：7/7 ✅（输入含实体词 → 上下文出现对应条目；无实体词不注入）
+
+—— P7 角色卡 + 用户画像（T-P7-1 / T-P7-2 / §4.12）——
+V2 PNG（tEXt chara）→ 字段映射正确     [命中]  name=沈砚 source=st-import
+V3 PNG（iTXt ccv3）→ 解出 data 字段    [命中]  name=林昭
+导入卡 → 世界卡人物条目（personality / speech 对接）[命中]  speech="书不卖。"
+坏块 / 非 PNG → 拒绝解析（不静默出错） [命中]  ok
+rp 组装：角色卡 + 示例对话 + 关系记忆进系统提示词[命中]  ok
+choice 组装不常驻角色卡（不涨预算）     [命中]  ok
+画像：命中话题的条目被注入、无关条目不进（Top-N 精确）[命中]  · 忌讳｜我怕蜘蛛
+画像：关闭（不传）时零注入              [命中]  ok
+画像：单轮注入条数 ≤ Top-N             [命中]  注入 3 条
+画像：块长封顶                          [命中]  192 字
+画像：开关语义（all / 按模式）          [命中]  ok
+画像：合并去重（同文只留最新 kind）     [命中]  共 2 条
+离线本地提取（确定性规则）              [命中]  taboo/preference
+离线本地提取：问句不算画像              [命中]  ok
+宽容解析：正常 JSON 照常                [命中]  ok
+宽容解析：字符串里的裸换行能救回        [命中]  "他说：\n「门没锁。」\n雨声很轻。"
+宽容解析：尾部截断（括号没闭合）能救回  [命中]  ok
+宽容解析：围栏与前后说明文字能剥掉      [命中]  ok
+宽容解析：纯散文返回 null（走 fail-open 展示原文）[命中]  ok
+中文键契约：旁白 / 选项 / 场景切换 / 画面归一化[命中]  ok
+中文键契约：人物 / 地点 / 时间 / 伏笔 → world（下游链路不用改）[命中]  ok
+中文键契约：英文键回包（chat / rp / 旧存档）原样透传[命中]  ok
+剧情模式组装：历史 assistant 消息转成中文键（与本轮契约一致）[命中]  ok
+P7 校验：23/23 ✅
+
+—— 归档形状对齐（审查 可维护性 二·10：与 turn.js 共用 IR.Context 归档）——
+旁白条目带 versions / activeVersion 版本栈（与 turn.js 同形状）[命中]  32 条
+assistant 消息 = slimReply 四字段 JSON（无 world / tool_calls）[命中]  5 条
+提案类工具吸收时跳过 tool 留痕（留痕是提案卡本身）      [命中]  0 条留痕
+update_memory 画像经门控写入 + per-tool 留痕文案同源    [命中]  1 条画像 / 更新记忆：记一下
+归档校验：4/4 ✅
+
+—— mock 工具形状 == 运行时 schema（审查 文档一致性 5.7：剧本参数对齐工具注册表）——
+mock 工具参数形状 == schema：第10回合 recall_world_state[命中]  ok
+mock 工具参数形状 == schema：第13回合 recall_world_state[命中]  ok
+mock 工具参数形状 == schema：第16回合 update_memory     [命中]  ok
+剧本含工具调用（本组校验有覆盖）                        [命中]  3 次
+mock 工具校验：4/4 ✅
+
+✅ 评测通过（可作 CI 门禁）
+IR.Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不丢）
+✓ ensure：空档只建一个根节点
+✓ ensure：根节点 kind=root、sealed、有初始 State
+✓ ensure：幂等（连跑两次树不变）
+✓ ensure：损坏树降级重建线性链且不抛错
+✓ ensure：降级后 log 不丢  → 2
+✓ ensure：降级后重建出 turn 节点  → 2
+✓ project：log = 各回合条目按序拼接  → ["行动 1","第 1 幕旁白","行动 2","第 2 幕旁白","行动 3","第 3 幕旁白","行动 4","第 4 幕旁白","行动 5","第 5 幕旁白"]
+✓ project：messages = 5 对 [user, assistant]
+✓ project：messages 内容 = 期望
+✓ project：world = head 结算后的 State
+✓ project：summaries = 期望  → ["第 2 幕摘要","第 4 幕摘要"]
+✓ project：turn = head.turn
+✓ project：log 条目与 node.entries 同一对象
+✓ project：messages 与 node.userMsg/assistantMsg 同一对象
+✓ 共享：改 log / message 就地落在树上
+✓ State 是 clone：改 story.world 不影响 states 池  → 第一天
+✓ 去重：state 未变的回合复用父节点 sid
+✓ 去重：state 变了才开新 sid
+✓ 去重：states 池条数 = 根 + 1  → 2
+✓ msgFloor：窗口 = 末 1 对时 floor = 2  → 2
+✓ 重试出兄弟：同 parent、children = 2
+✓ 切回原分支：messages 与切换前逐条相同  → [{"role":"user","content":"[玩家行动]（做）行动 3"},{"role":"assistant","content":"{\"旁白\":\"第 3 幕旁白\",\"选项\":[]}"}]
+✓ 切到兄弟：messages 与该分支 seal 后一致
+✓ 再切回：仍是逐条相同
+✓ 切换不改变树的节点数
+✓ msgSnap：messages 奇数条 → 存整窗口快照  → 5
+✓ msgSnap：切走后窗口变空（根节点无消息）
+✓ msgSnap：切回后窗口逐条相同（含孤立消息）  → [{"role":"user","content":"[玩家行动]（做）行动 1"},{"role":"assistant","content":"{\"旁白\":\"第 1 幕旁白\",\"选项\":[]}"},{"role":"user","content":"[玩家行动]（做）行动 2"},{"role":"assistant","content":"{\"旁白\":\"第 2 幕旁白\",\"选项\":[]}"},{"role":"user","content":"（孤立的半句话"}]
+✓ project 到祖先：log / turn 回退  → 2/1
+✓ project 到祖先：world 回退到该节点状态  → 第一天
+✓ project 到祖先：messages 只剩该节点前的窗口
+✓ project 回叶子：全部恢复
+✓ active 记忆：祖先的 active 仍指向下探方向
+✓ 迁移：链 = 根 + 2 个 turn 节点  → 3
+✓ 迁移：head = 最后一个 turn 节点
+✓ 迁移：head.sid = 当前 State（= 根节点那份）
+✓ 迁移：更早的 turn 节点 sid = null
+✓ 迁移：走神条目不进树
+✓ 迁移：turn 从现值倒推
+✓ 迁移：action 还原（sent 带标记 / kind 来自标记）  → {"type":"player","text":"行动 2","kind":"say","sent":"（说）行动 2"}
+✓ 迁移：narration 条目带上 nid
+✓ 迁移后 project：messages 与原窗口逐条相同
+✓ 迁移后 project：log 只丢走神条目  → 4
+✓ 迁移：幂等（再跑两次树深相等）
+✓ 失败回合：树不变
+✓ 失败回合：悬挂尾巴随 project 消失  → 2
+✓ 失败回合：begin 不改树、logMark 记录正确
+✓ 往返：ensure 不重建（树合法）
+✓ 往返：log 逐条相同
+✓ 往返：messages 逐条相同
+✓ 往返：world / summaries / turn 相同
+✓ 往返：引用重建（log 条目 === node.entries）
+✓ 往返：兄弟分支都还在
+✓ 边界：根节点只有一个孩子
+✓ 边界：pathOf 含两端
+✓ switchSibling 前：head 在 B 线
+✓ switchSibling(-1)：切到兄弟 A
+✓ 切换还原：world 回到 A 线状态  → A 线
+✓ 切换还原：log / messages 跟着换
+✓ switchSibling(+1)：切回 B 线并还原
+✓ siblings：两兄弟含自身、按创建序  → ["nmvnfkfm81z7ws","nmvnfkfm821bmu"]
+✓ 深分支就位：head 在 A 线末端
+✓ active 下探：切到兄弟后落在 B 线末端 s3，不是 s2  → nmvnfkfm828qb6
+✓ active 下探：投影是 B 线第 3 幕
+✓ active 下探：切回落在 A 线叶子 n3，不是兄弟本身 n2
+✓ 切换不动树结构
+✓ pushLate 在路径上：node.entries 收下
+✓ pushLate 在路径上：插在该节点末条之后  → 行动 1|第 1 幕旁白|迟到的图|行动 2|第 2 幕旁白
+✓ pushLate 不在路径上：进 node.entries
+✓ pushLate 不在路径上：不泄漏进当前 log
+✓ 切回该分支：晚到条目随投影出现  → 行动 1|第 1 幕旁白|迟到的图|行动 2|第 2 幕旁白|晚到的书记员条目
+✓ pushLate scene：进 node.scenes（同口径不含 src）  → {"id":"sc-1","alt":"雨夜车站","prompt":"p","promptRaw":"","aspect":"","width":0,"height":0,"thumb":null,"imageId":"img-1","ts":11}
+✓ pushLate scene：在路径上 → 同一对象进 story.scenes
+✓ pushLate scene：不在路径上只写节点
+✓ pushLate：节点不存在 → 丢弃
+✓ imageIdsOf：含非当前分支节点里的图  → imgA,imgB
+✓ imageIdsOf：entry 与 scene 同图只算一次  → imgA,imgB
+✓ 非当前分支的图不进当前投影
+✓ imageIdsOf：空树 / 非法入参返回空
+✓ imageIdsOf：含视频 videoId（含非当前分支）  → imgA,vid:A,imgB,vid:B
+✓ siblings：只有一个孩子时返回长度 1
+✓ switchSibling 越界无副作用
+✓ switchSibling：根节点 / 未知节点不动
+✓ siblings：未知节点返回空
+✓ switchTo：head 落到目标节点并投影
+✓ switchTo：active 记忆对齐到目标
+✓ switchTo：未知节点返回 null 不动
+✓ switchTo 后切兄弟：照旧落到 B 线末端
+✓ active 对齐后切回：落在存档点节点，不是旧末端
+✓ store：SCHEMA = 3、新档 schema 字段跟着升
+✓ store：migrateStory 透传 raw.tree（深相等）
+✓ store：无 tree 的旧档 migrate 后仍无 tree
+✓ serializeStory：log / scenes / savepoints 照旧裁剪  → 120/12/5
+✓ serializeStory：裁剪不作用在 tree 上，且落盘深拷贝（不与在用 story 共享引用）
+✓ store 往返：loadStory 带回 tree（深相等）
+✓ store 往返：ensure 不重建（树合法）
+✓ store 往返：project 后 log / world / scenes 与原档一致
+✓ store 往返：兄弟分支还在，非当前分支的图不进投影
+✓ knownImageIds：含非当前分支的图  → imgB,imgA
+✓ imageIdsOf：tree 内引用算数（scenes + entries）
+✓ imageIdsOf：无 tree 的旧档照旧只扫 log / scenes
+✓ store imageIdsOf：scenes / log / tree 里的 videoId 都收  → vid:B,vid:C,vid:B,vid:C,vid:A,vid:B,vid:C
+✓ knownImageIds：视频不被当孤儿（含非当前分支）  → imgB,imgA,vid:B,vid:C,vid:A
+✓ serializeStory：视频 scene 字段白名单保留（§5①）
+✓ pendingVideos：serializeStory / migrateStory 保留（§5⑤）
+✓ migrateStory：旧字段 poster / videoUrl 归一到 thumb / remoteUrl
+✓ versions 展开：链长不变（根 + 2 个 turn 节点）  → 3
+✓ versions 展开：head = activeVersion 那一版（B 版）
+✓ versions 展开：head 状态 = 当前 State
+✓ versions 展开：其余版本变兄弟、兄弟序 = 版本序  → 3
+✓ versions 展开：兄弟是近似节点（meta.approx / assistantMsg 只有 narration）
+✓ versions 展开：兄弟同 action、sid 复用 head 的
+✓ versions 展开：兄弟条目 = 行动 + 本版旁白（nid 各归各）
+✓ versions 展开 + 存档点映射：幂等（连跑两次树与存档点深相等）
+✓ 存档点映射：sp.turn → nodeId（链上同 turn 的节点）  → nmvnfkfme3cxnh/nmvnfkfme3dlm1
+✓ 存档点映射：对不上保持无 nodeId、已有 nodeId 不动
+✓ 切到近似兄弟：log / messages 换成本版旁白
+✓ 切到近似兄弟：世界卡沿用（sid 复用 head 的）
+✓ 切回 activeVersion：落回 B 版，选项跟着回来
+✓ §2.1 switchTo 到非叶子不下探：head 就落在 n2
+✓ §2.1 非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）  → nmvnfkfme3m2h3,nmvnfkfme3o1y5
+✓ §2.1 parent.active 指向新节点
+✓ §2.1 原有孩子与其子树不变
+✓ §2.3 forkBefore：head 落到 parent
+✓ §2.3 forkBefore：返回的 action 与原节点一致  → {"type":"player","text":"行动三","kind":"do","sent":"（做）行动三"}
+✓ §2.3 forkBefore：根节点返回 ok:false
+✓ §2.3 forkBefore：未知节点返回 ok:false
+✓ §2.3 forkBefore：开局节点返回 ok:false  → 开局回合不能改写
+✓ §2.3 forkBefore：开局节点拒绝时不动 head
+✓ §2.2 latestLeaf：沿 active 下探到叶子  → nmvnfkfme3y6d5
+✓ §2.2 latestLeaf：叶子就是自己
+✓ §2.2 latestLeaf：无 active 时取最后一个孩子  → nmvnfkfme3xyb5
+✓ §2.2 latestLeaf：未知节点返回 null
+✓ §2.4 canResume：正常节点 → true
+✓ §2.4 canResume：sid === null → false
+✓ §2.4 canResume：未知节点 → false
+✓ §2.4 canResume：直接传节点对象也认
+✓ §2.4 迁移旧档：早期回合被 canResume 拦住（sid === null）
+✓ §8.5 新节点是 q1 的新孩子、与 q2 成兄弟
+✓ §8.5 log 只含新路径内容（无旧二 / 旧三）
+✓ §8.5 messages 只含新路径窗口（无旧旁白二）
+✓ §8.5 world / summaries 是新分支的
+✓ §8.5 旧分支节点仍在树上（q2 / q3 不丢）
+✓ boot 自检：缺 IR.Prefs 抛 IR_DEP_MISSING 并点名缺失模块  → store.js 关键依赖未就绪：IR.Prefs（prefs.js）——请按 ARCHITECTURE.md 的加载顺序先引入
+—
+tree-test：144/144 通过
+  ✓ 1. 线性链：11 个节点全部渲染
+  ✓ 1. 线性链：单泳道
+  ✓ 1. 线性链：行号递增且 y = padY + row*rowH
+  ✓ 1. 线性链：无分叉边（所有边 x 不变）
+  ✓ 2. 一次分叉：两条泳道
+  ✓ 2. 一次分叉：主干在 lane 0、支线在 lane 1
+  ✓ 2. 一次分叉：存在分叉边 t2→x1
+  ✓ 2. 一次分叉：分叉边从分叉点出发
+  ✓ 2. 一次分叉：先水平再向下
+  ✓ 2. 一次分叉：边不穿过其他节点
+  ✓ 3. 嵌套：A 与 B 复用同一支线泳道
+  ✓ 3. 嵌套：嵌套分叉在更靠右的泳道
+  ✓ 3. 嵌套：泳道数 ≤ 理论最小值 + 1（实际 3，下限 3）
+  ✓ 3. 嵌套：泳道数尽量小（本形状 = 3）
+  ✓ 4. 当前路径恒在 lane 0
+  ✓ 4. onPath 标记正确
+  ✓ 4. isHead 标记正确
+  ✓ 4. isFork 标记正确
+  ✓ 4. pathEdgeD 覆盖 root→head
+  ✓ 5. 折叠：出现超级节点
+  ✓ 5. 折叠：collapsedCount 正确（root..t11 共 12 个）
+  ✓ 5. 折叠：标签是「··· N 回合」
+  ✓ 5. 折叠：head / 书签 / 选中节点不被折叠
+  ✓ 5. 折叠：被折叠的节点不出现在输出里
+  ✓ 5. 折叠：expanded 后不再折叠
+  ✓ 5. 折叠：expandAll 全部展开
+  ✓ 6. 标签：玩家行动优先
+  ✓ 6. 标签：剧情 JSON 取旁白
+  ✓ 6. 标签：坏 JSON 当纯文本
+  ✓ 6. 标签：开局取 AI 旁白（不取开局固定语）
+  ✓ 6. 标签：root 是「开局」
+  ✓ 6. 标签：按码点截断（emoji 不被截坏）
+  ✓ 6. 标签：<script> 原样出现在文本里（无转义）
+  ✓ 6. 标签：输出里没有拼好的 HTML / innerHTML
+  ✓ 7. 确定性：同输入两次输出深相等
+  ✓ 8. 规模：2001 节点（≥2000）布局 < 500ms（实测 9ms）
+  ✓ 8. 规模：输出节点数 > 0
+  ✓ 9. 空树：返回可渲染的最小结果
+  ✓ 9. 空对象：返回可渲染的最小结果
+  ✓ 9. 只有根：返回单节点
+  ✓ 9. 缺 parent 的悬挂节点：不抛错
+  ✓ 9. 环：不抛错
+  ✓ 9. head 指向不存在的节点：不抛错
+treelayout-test：全部通过
+[1] effective：覆盖 / 跟随 / 各键独立
+  ok  无 prefs 时 choices 跟随全局
+  ok  无 prefs 时 showReasoning 跟随全局
+  ok  无 prefs 时字号跟随全局默认
+  ok  prefs.choices 覆盖全局
+  ok  prefs.showReasoning 覆盖全局
+  ok  prefs.ui.fontScale 覆盖全局
+  ok  ui.density 不受 ui.fontScale 覆盖影响
+  ok  ui.splitRatio 未覆盖 → 跟随全局
+  ok  prefs.tools.email 覆盖
+  ok  prefs.tools.payment 未覆盖 → 跟随全局可用性
+  ok  prefs.tools.schedule 未覆盖 → 跟随全局可用性
+  ok  profileId 命中模型库
+  ok  未设置 profileId → default
+  ok  profileId 找不到 → 回退 default
+  ok  profileId 找不到时 effectiveInfo.missing = true
+  ok  profileId 命中时 missing = false
+[2] resolveChatCfg：命中 / 缺失 / 未设置
+  ok  命中 profile → source=story, missing=false
+  ok  命中 profile → 用 profile 的 model
+  ok  命中 profile → 用 profile 的 baseUrl
+  ok  命中 profile → 用 profile 的 contextWindow
+  ok  profileId 不存在 → 回退默认且 missing=true
+  ok  回退到默认主模型
+  ok  未设置 → 默认，missing=false
+  ok  未设置 → settings.chat
+  ok  profile.model 留空 → 沿用默认 model
+  ok  profile.baseUrl 留空 → 沿用默认 baseUrl
+  ok  仍是本对话来源
+[3] visibleFor：三种模式的可见控件集合
+  ok  剧情：模型 / 选项显示 / 布局 / 思考过程
+  ok  剧情：画风入口 + 推进模式
+  ok  剧情：不含出图时机（P-1 下线）
+  ok  剧情：不含工具开关 / 定时主动开关
+  ok  智能体：模型 / 工具开关 / 布局 / 思考过程
+  ok  智能体：不含出图时机 / 选项显示
+  ok  扮演：模型 / 角色卡入口 / 布局 / 思考过程 / 定时主动开关
+  ok  扮演：不含工具开关组
+  ok  扮演：不含出图时机 / 选项显示
+  ok  未知模式回落剧情集合且不抛错
+[4] sanitizePrefs：丢未知键 / 剥凭证 / profileId 校验
+  ok  丢弃未知顶层键
+  ok  剥掉顶层凭证形字段
+  ok  profileId 保留
+  ok  profileLabel 保留（仅显示）
+  ok  tools 只留白名单布尔键，token/apiKey 剥掉
+  ok  ui 深层未知键丢弃（连同其中的 baseUrl / key）
+  ok  ui.fontScale 非法值丢弃
+  ok  ui.splitRatio 夹到 0.72
+  ok  trigger 不在白名单 → 被丢弃（旧包导入不报错）
+  ok  旧包带 trigger 导入 → 被丢弃、不报错（其余键正常）
+  ok  profileId 非字符串被丢弃
+  ok  profileId 数组被丢弃
+  ok  sanitizePrefs(null) → {} 不抛错
+  ok  sanitizePrefs(字符串) → {} 不抛错
+  ok  清洗结果不含假密钥串
+[5] 导出：整个 JSON 不含 apiKey / baseUrl 键名与假密钥串
+  ok  导出 JSON 无 apiKey 键名
+  ok  导出 JSON 无 baseUrl 键名
+  ok  导出 JSON 无 key 键名
+  ok  导出 JSON 无 token 键名
+  ok  导出 JSON 不含假密钥串
+  ok  导出保留 prefs.profileId（不透明 id）
+  ok  导出附 prefs.profileLabel（名称 · 模型名）
+  ok  正常字段不受剥凭证影响
+  ok  brief 包同样无凭证键名
+[6] migrateStory：无 prefs 不报错；恶意 prefs 被清洗
+  ok  旧故事（无 prefs）→ 不抛错
+  ok  旧故事不凭空长出 prefs
+  ok  migrateStory 后 prefs 无凭证键
+  ok  migrateStory 后 prefs 不含假密钥串
+  ok  migrateStory 丢弃未知键
+  ok  profileId 透传
+  ok  tools 清洗后透传
+  ok  ui 清洗后透传
+  ok  serializeStory 落盘也不含凭证
+[7] migrateSettings：幂等补 profiles；已有数据原样保留
+  ok  profiles 是数组
+  ok  已有 profile 保留
+  ok  profile 的 apiKey 原样保留（全局设置允许存密钥）
+  ok  profile 的 model 原样保留
+  ok  profile 的 temperature 原样保留
+  ok  二次迁移幂等
+  ok  缺省补 profiles: []
+  ok  缺省补 ui.fontScale
+  ok  缺省补 ui.width
+  ok  缺省补 ui.density
+  ok  profiles 非数组 → []
+  ok  坏 profile 条目被修成有 id 或丢弃
+[8] 压缩阈值：不同 profile 的 contextWindow → 不同 70% 阈值
+  ok  context.js 导出纯函数 compressThreshold
+  ok  profile p1 阈值 = floor(20000×0.7)
+  ok  profile p2 阈值 = floor(40000×0.7)
+  ok  同样消息量下两个 profile 的 70% 阈值不同
+  ok  contextWindow=0 → 阈值 0（未知，回退条数）
+  ok  compressThreshold(1000) = 700
+[9] 生视频三参数唯一源 = 面板控件（审查 三·2 双数据源）
+  ok  extraParams 同名键折回控件字段（值不丢）：duration=10
+  ok  非法分辨率夹回默认 768P（2K 不在档位表）
+  ok  控件 ratio 保留
+  ok  duration 键已从 extraParams 移除
+  ok  其它 extraParams 键原样保留
+  ok  幂等：二次迁移不再改值
+  ok  幂等：extraParams 不再变化
+[10] boot 关键依赖自检（审查 可维护性 #9）
+  ok  Store.assertDeps 已导出
+  ok  依赖齐全（IR.Tree + IR.Prefs）→ assertDeps 通过
+  ok  缺 IR.Prefs → 抛 IR_DEP_MISSING（启动即失败，不静默降级）
+  ok  恢复依赖后自检重新通过
+✅ prefs-test 全部通过
+✅ settings-ids-test：#154 个设置控件 id 与 0 个 radio 组全部保留
+[1] recentTurnLines：只带最近 N 回合、类型标记、截断、时间顺序
+  ok  常量 PAINTER_RECENT_TURNS = 3（一处可调）
+  ok  常量 PAINTER_RECENT_LINE_CHARS = 200（一处可调）
+  ok  最近 3 回合 = 3 组「玩家行动 + 旁白」共 6 行（实得 6）
+  ok  含最近 3 回合（T4~T6）的玩家行动与旁白
+  ok  不含第 1~3 回合与开场旁白
+  ok  第 4 回合行动带（做）：· （做）T4ACTION玩家行动
+  ok  第 5 回合行动带（说）：· （说）T5ACTION玩家行动
+  ok  第 6 回合行动带（导演）：· （导演）T6ACTION玩家行动
+  ok  （做）/（说）/（导演）各恰好一次
+  ok  超长旁白从头保留
+  ok  超长旁白被截断：尾部哨兵串不出现
+  ok  截断后单条 ≤ 前缀 + 200 字（实得 202）
+  ok  按时间顺序：T4 → T5 → T6
+  ok  空故事 / null 不抛错
+[2] assemblePainter（scene）：块齐全，[最近剧情] 只含最近 3 回合
+  ok  含 [画风锚]
+  ok  含 [最近两张图]
+  ok  含 [画面参考]
+  ok  含 [画风要求]
+  ok  首条 = PAINTER_SYSTEM
+  ok  [画风锚] 用设定卡（含人物设定）
+  ok  [最近两张图] 带 alt + prompt
+  ok  有 [基底 prompt] 块（差分基底）
+  ok  [基底 prompt] 取最近一张（IMG2），不含更早的 IMG1
+  ok  PAINTER_SYSTEM 明确要求「以基底为准、风格原样保留」
+  ok  PAINTER_SYSTEM 要求输出完整 prompt（不是差异）
+  ok  有 [最近剧情] 块
+  ok  [最近剧情] 含最近 3 回合
+  ok  [最近剧情] 不含第 1~3 回合 / 开场
+  ok  [最近剧情] 玩家行动带（做）/（说）/（导演）
+  ok  [最近剧情] 单条超 200 字被截断
+[3] 隔离规则：世界卡 / 摘要栈 / 剧情规则 / 画像 / 记忆一律不进画师上下文
+  ok  不含世界卡全文与关系记忆
+  ok  不含摘要栈
+  ok  不含剧情规则提示词
+  ok  不含用户画像
+  ok  不含 AI1 组装的任何注入块
+[4] 未锚定降级：不抛错、走「（未锚定，自由发挥）」
+  ok  未锚定故事不抛错
+  ok  降级文案「（未锚定，自由发挥）」
+[4b] 差分基底的两种省略：第一次作画 / 工作台对话
+  ok  没有上一张图 → 不发 [基底 prompt] 块
+  ok  chat 模式不重复下发（已有 [当前这张图]）
+[5] chat（工作台）模式保持不动：[最近剧情] 仍是最近 3 条旁白 + recall_recent_plot
+  ok  工作台仍带 recall_recent_plot 工具说明
+  ok  工作台带 [当前这张图]
+  ok  chat 模式 [最近剧情] 保持旁白口径（不带玩家行动标记）
+[6] video 模式（§6）：隔离清单同 scene；图生带源画面、文生带画风要求
+  ok  首条 = PAINTER_VIDEO_SYSTEM
+  ok  i2v 带源图 alt 与 promptRaw
+  ok  i2v 标注「图生」
+  ok  i2v 同样带 [画风锚] + [最近两张图]
+  ok  i2v [最近剧情] 只含最近 3 回合
+  ok  i2v 不含世界卡 / 摘要栈 / 画像 / 剧情规则
+  ok  t2v 标注「文生」
+  ok  t2v 带 [画面参考]
+  ok  t2v 带 [画风要求]（画风后缀）
+  ok  t2v 不带源画面块
+  ok  t2v 同样遵守隔离清单
+[7] 静态断言：turn.js / round.js 不再调用 enqueueImage（含 maybeEnqueueImage）
+  ok  turn.js 无 enqueueImage 调用
+  ok  round.js 无 enqueueImage 调用
+  ok  turn.js / round.js 不再引用 turnPaintedByTool
+  ok  painter.js 的 enqueueImage 保留（手动 🎨 唯一入口）
+  ok  「构思 → 出图」仍集中在 runPaintTask 一处（画师分支未被误删）
+✅ painter-context-test 全部通过
+[1] 画师视图不变：外观与负面提示词都要
+  ok  含画风关键词
+  ok  含人物外观（英文，给生图用）
+  ok  含负面提示词
+  ok  含媒介 / 色板
+[2] 文本侧视图（AI1）：只留画风关键词 + 中文备注
+  ok  保留画风关键词（模型据此把握氛围）
+  ok  保留中文备注（仅作画风参考）
+  ok  备注标注为「画风参考，剧情事实以世界卡为准」
+  ok  不含人物英文外观
+  ok  不含负面提示词
+  ok  不含媒介 / 色板
+  ok  明确写了「不要复述这些词」
+[3] 召回块与强制注入都走文本侧视图
+  ok  recall_style_card 不再带英文外观 / 负面
+  ok  recall_style_card 仍给画风关键词
+  ok  召回块带「不要复述」指令
+  ok  🧠 注入记忆不再带英文外观 / 负面
+  ok  注入块用「画面基调」标签（不再冒充完整设定卡）
+[4] assembleAI1 的整包文本里没有生图参数
+  ok  不含负面提示词 / 英文人物外观
+  ok  画风关键词仍保留（供氛围参考）
+[4b] 画师侧：画风锚带作用域说明（剧情事实优先，备注不能钉死天气）
+  ok  [画风锚] 声明「地点 / 时间 / 天气听剧情」
+  ok  备注仍给画师（画风气质要用），但已被限定作用域
+[5] 未锚定：退到滚动风格摘要，不出现「（未锚定，自由发挥）」
+  ok  textAnchorText 退到滚动风格摘要
+  ok  召回块不把「未锚定」这种内部话术说给模型
+  ok  完全没有卡时给降级文案
+✅ style-card-text-test 全部通过
+  ✔ t2v：提交到 /v2/video_generation
+  ✔ t2v：带 Bearer Key
+  ✔ t2v：返回 taskId
+  ✔ t2v：提示词在 content[0].text
+  ✔ t2v：默认 ratio = 16:9（必填且非 adaptive）
+  ✔ t2v：默认 duration=5 / resolution=768P，duration 为整数
+  ✔ extraParams：同名 duration / resolution / ratio 被控件覆盖（默认 5/768P/16:9）
+  ✔ extraParams：其它键原样并入
+  ✔ 独立控件：cfg.duration/resolution/ratio 进请求体
+  ✔ 同名时以独立控件为准（改下拉框必然生效，审查 三·2）
+  ✔ 独立控件：duration 夹回 4~15；i2v 比例仍强制 adaptive
+  ✔ duration 必须以整数下发（"5" 夹取后仍是数字 5）
+  ✔ t2v：控件把 ratio 写成 adaptive 也强制回 16:9
+  ✔ i2v：带 first_frame 图片项
+  ✔ i2v：一律 ratio:adaptive（忽略用户参数里的 ratio）
+  ✔ generate：成功返回 url
+  ✔ generate：hooks.onTaskId 提交成功立刻回调
+  ✔ generate：onStatus 记录 queued → running
+  ✔ failed：抛出并带 task.error 原文
+  ✔ failed：错误里带 code
+  ✔ cancelled：抛出并带 task.error 原文
+  ✔ expired：抛出并带 task.error 原文
+  ✔ 超时：抛出并提示 task_id
+  ✔ 提交 TypeError：提示 CORS / 不允许浏览器直连
+  ✔ 提交 TypeError：不重试（只发一次）
+  ✔ 轮询单次网络错误容忍（2 次瞬断后仍成功）
+  ✔ 轮询连续 3 次失败才判失败
+  ✔ test：走只读列任务探测
+  ✔ test：不产生生成任务（没有 POST）
+  ✔ test：文案写明不花钱
+  ✔ test：成功 level=ok
+  ✔ test：Key 被拒 → fail
+  ✔ test：缺地址 → fail 且不联网
+  ✔ 缺 Base URL：给人话错误
+  ✔ 缺 Key：给人话错误
+  ✔ 空提示词：直接拒绝
+
+生视频适配器单测：36/36 通过
+✅ minimax-image-test：36 项全部通过（MiniMax image-01 / image-01-live 适配器）
+  ✔ videoQ 运行中 paintQ 照常出图
+  ✔ paint 出图先于视频结束（互不阻塞）
+  ✔ videoQ 任务照常完成
+  ✔ 同 key 重复入队被拦截
+  ✔ 不同 key 照常入队
+  ✔ 去重后同一 key 只跑一次
+  ✔ 完成后再点可以重新入队
+
+视频队列单测：7/7 通过
+无限阅读 · 离线演示模式冒烟测试（js/demo.js）
+[命中] ?demo=1 判定为演示模式  —— search=?demo=1
+[命中] 不带 demo 参数时不进入演示模式  —— search=?foo=1
+[命中] applyTo：对话 / 生图都换成演示适配器  —— demo / demo-image
+[命中] applyTo：子模型留空 → 沿用剧情模型（同样是演示适配器）  —— ok
+[命中] applyTo：不动原对象（配置不落盘的前提）  —— ok
+[命中] AI1 开局：流式回包与返回值一致（打字机效果）  —— 长度 418
+[命中] AI1 开局：会给思考链钩子（演示思考链）  —— （演示模式）这一段「思考…
+[命中] AI1 开局：JSON 契约齐备（旁白 + 选项 + 画面）  —— 选项 3 个
+[命中] AI1 开局：自报世界卡能合并（地点 / 人物 / 伏笔）  —— 末班电车（第三节车厢）｜1 人｜1 伏笔
+[命中] AI1：连续 13 轮（含剧本用尽后的收尾）都能给出旁白  —— 13/13
+[命中] 压缩：演示模式仍能本地压缩（不依赖模型）  —— 摘要 0 幕
+[命中] 画师（场景）：给出英文 prompt_en + 中文 alt  —— cinematic still, rain-soaked neon …
+[命中] 画师（场景）：画风要求里的英文关键词被并入 prompt  —— ok
+[命中] 画师（工作台）：给出 reply + 改后 prompt_en  —— （演示模式）按你说的「灯光暖一点」调整了…
+[命中] 画师（锚定 · 试画）：给满 4 组画风  —— 4 组
+[命中] 画师（锚定 · 设定卡）：card 字段齐备  —— photographic, 35mm film
+[命中] 书记员 / 压缩 / 滚动风格：返回空串（由本地规则兜底，不污染世界卡）  —— ""
+[命中] 生图适配器已注册，且约定同样是 generate(cfg, prompt) -> src  —— ok
+[命中] 分支树 · demo 3 回合：一回合一个 turn 节点、每回合都有旁白  —— 车门合拢，顶灯闪｜老人没抬头，手指｜你抹开一块水汽。
+[命中] 分支树 · 重试出兄弟：同 parent、两条分支、旁白不同  —— 你抹开一块水汽。 ≠ 你走到车厢尽头。
+[命中] 分支树 · 切换：落到原分支末端，旁白 / 选项跟着换
+[命中] 分支树 · 再切回：落回重试分支末端，旁白 / 选项跟着回来
+[命中] 分支树 · 切换零网络请求（演示适配器没被再调用）  —— 4 次
+[命中] 分支树 · siblings 顺序 = 创建序（‹ n/m › 用它定位）
+
+合计：24/24 ✅
+无限阅读 · ZIP 读写冒烟测试（js/zip.js）
+[命中] 产出的文件是 zip（PK\x03\x04 开头）  —— 前 4 字节 504b0304
+[命中] 中央目录可被独立解析  —— 3 个条目
+[命中] 条目顺序与内容不变  —— ir-backup.json images/0001.png images/0002.bin
+[命中] 方法 8 之外一律 store（method=0），任何解压工具都能开  —— 0,0,0
+[命中] 文件名标记为 UTF-8（flag 0x800）  —— 0x800
+[命中] 本地头名字与中央目录名字一致（偏移没写错）  —— ok
+[命中] CRC32 与独立逐位实现一致（文本条目）  —— 0xfa7e30cf
+[命中] CRC32 与独立逐位实现一致（二进制条目）  —— ok
+[命中] 大条目（200KB）长度字段没被截断成 16 位  —— 200000 字节
+[命中] 压缩后大小 = 原始大小（store 的约定）  —— ok
+[命中] 数据区字节与原始一致（大条目）  —— ok
+[命中] 读回条目数一致  —— 3 个
+[命中] 文本条目往返一致（含中文与 emoji）  —— ok
+[命中] 二进制条目逐字节一致  —— ok
+[命中] 大条目逐字节一致  —— ok
+[命中] 能读第三方工具压出来的包（方法 8 deflate）  —— 1 个条目
+[命中] 反斜杠路径归一化成正斜杠（Windows 压缩工具的坑）  —— folder/ir-backup.json
+[命中] deflate 条目的正文解压正确  —— ok
+[命中] 畸形输入一律报错，而不是静默返回半成品  —— 3/3 · 找不到 ZIP 目录结构（文件损坏，或本来就不是
+[命中] 空包（没有条目）被拒绝  —— ok
+
+合计：20/20 ✅
+  ✔ cron：5 字段必需
+  ✔ cron：越界拒绝
+  ✔ cron：步长非法拒绝
+  ✔ cron：@daily 宏可用
+  ✔ cron：UTC 09:00 → 09:00Z
+  ✔ cron：Asia/Shanghai 09:00 → 01:00Z（UTC+8）
+  ✔ cron：*/15 从 00:00 起 → 00:15
+  ✔ cron：工作日 09:00 跳过周末（周五 → 下周一）
+  ✔ cron：春季跳变不存在的 02:30 被跳过
+  ✔ cron：秋季回拨取较早一次（EDT）
+  ✔ cron：不可能的表达式返回 null
+  ✔ cron：非法时区退回 UTC
+  ✔ 免打扰：区间内命中
+  ✔ 免打扰：区间外不命中
+  ✔ 免打扰：跨零点内命中
+  ✔ 免打扰：跨零点外不命中
+  ✔ interval：nextAt = now + everyMs
+  ✔ interval：未到点不触发
+  ✔ interval：到点触发一次
+  ✔ interval：触发后推到下一轮
+  ✔ upsert：同名不新增记录
+  ✔ upsert：同名更新 spec
+  ✔ 模型新建 = pending_confirm
+  ✔ 未确认的触发器不触发
+  ✔ confirm 后变 active 且有 nextAt
+  ✔ SKIP：不补跑
+  ✔ SKIP：无 pending
+  ✔ RUN_ONCE：只补一次
+  ✔ RUN_ALL：补齐全部错过（5 次）
+  ✔ 免打扰：拦截触发（无 pending）
+  ✔ 免打扰：当前本地时间确在窗口内
+  ✔ 每日上限：第 1 条放行
+  ✔ 每日上限：第 2 条被拦
+  ✔ 每日上限：pending 只有 1 条
+  ✔ 暂停：不触发
+  ✔ 暂停：nextAt 不推进（恢复后继续）
+  ✔ 总开关关闭：不触发
+  ✔ once：nextAt = at
+  ✔ once：触发一次
+  ✔ once：触发后停用且无下次
+  ✔ cron：nextAt = 00:15Z
+  ✔ cron：到点触发
+  ✔ cron：广播 trigger.fire 且带触发原因
+(node:18820) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✔ pending：队列有记录
+  ✔ pending：ack 成功
+  ✔ pending：ack 后不再排队
+  ✔ pending：ack 幂等（重复 ack = false）
+  ✔ 规格：interval 小于 1 分钟被拒
+  ✔ 规格：cron 表达式非法被拒
+  ✔ 规格：once 缺 at 被拒
+  ✔ 规格：未知类型被拒
+  ✔ 规格：失败的 upsert 不落库
+
+调度器单测：52/52 通过
+  ✔ 未开启：拒绝并返回 EMAIL_DISABLED
+  ✔ 未开启：审计留痕（denied）
+  ✔ 未开启：不发网络请求（provider 未被触发）
+  ✔ 非法收件人：BAD_RECIPIENT
+  ✔ 地址归一化：去空格 + 小写
+  ✔ 地址归一化：非法返回空
+  ✔ 白名单命中（忽略大小写与空格）：发送成功
+  ✔ 发送成功：审计记录 ok
+  ✔ 审计不含正文
+  ✔ 白名单命中不会产生草稿
+  ✔ 非白名单未确认：返回 NEED_CONFIRMATION
+  ✔ 非白名单未确认：自动落成草稿
+  ✔ 非白名单未确认：审计标记 denied/NEED_CONFIRMATION
+  ✔ 非白名单未确认：没有产生「已发送」记录
+  ✔ 用户确认草稿后：发送成功
+  ✔ 确认后：草稿标记为 sent
+  ✔ 确认后：审计有 confirm 记录
+  ✔ 重复确认同一草稿：DRAFT_ALREADY_SENT
+  ✔ 不存在的草稿：DRAFT_NOT_FOUND
+  ✔ 内部 confirmed：越过白名单直接发送
+  ✔ 请求体里的 confirm 不算数（只走内部 opts.confirmed）
+  ✔ 上限为 0：一封都不发（保守默认）
+  ✔ 上限 1：第 1 封放行
+  ✔ 上限 1：第 2 封被拒
+  ✔ stats：当日已发 1 封 / 上限 1
+  ✔ 跨天：额度重置，可再发
+  ✔ resend 缺 key：MISSING_RESEND_API_KEY
+  ✔ resend 有 key：发送成功并回带 id
+  ✔ resend：打到正确端点并带 Bearer Key
+  ✔ resend 被服务商拒绝：结构化 PROVIDER_ERROR
+  ✔ 收件箱（mock）：返回空列表
+  ✔ 收件箱 limit 非法值：夹回默认值（NaN 不进调用）
+  ✔ 收件箱（resend）：明确返回 INBOX_NOT_SUPPORTED
+  ✔ 草稿：创建成功且可读回
+  ✔ 草稿：丢弃成功
+  ✔ 草稿：丢弃后不在待处理列表
+  ✔ 草稿：重复丢弃返回 false
+  ✔ 审计 limit=abc：夹回默认值，不触发绑定异常
+  ✔ 审计 limit 为负：夹回默认值
+
+邮件单测：39/39 通过
+(node:15280) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14048) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✔ 未开启：GATEWAY_DISABLED
+  ✔ 金额为 0：BAD_AMOUNT
+  ✔ 金额为负：BAD_AMOUNT
+  ✔ 金额非数字：BAD_AMOUNT
+  ✔ 商户黑名单：拒绝
+  ✔ 黑名单优先于白名单（同时在两表 → 仍拒绝）
+  ✔ 白名单非空且不含：拒绝
+  ✔ 白名单命中：放行到下一步
+  ✔ 品类黑名单：拒绝
+  ✔ 品类白名单非空且不含：拒绝
+  ✔ 单笔上限为 0：一律拒绝（保守默认）
+  ✔ 恰好等于单笔上限：放行（≤ 而非 <）
+  ✔ 超单笔上限一分：拒绝
+  ✔ 每日上限为 0：拒绝
+  ✔ 每日额度恰好用尽：放行（spent+amount == daily）
+  ✔ 每日额度超一分：拒绝
+  ✔ 每月额度恰好用尽：放行
+  ✔ 每月额度超一分：拒绝
+  ✔ 配了 budgets 但该 agent 未列：拒绝（预算隔离）
+  ✔ agent 预算恰好用尽：放行
+  ✔ agent 预算超一分：拒绝
+  ✔ 冷静期内：拒绝
+  ✔ 冷静期已过：放行到下一步
+  ✔ 未设免确认阈值（0）：需要人工批准
+  ✔ 免确认阈值边界：恰好等于 → 自动放行
+  ✔ 免确认阈值边界：超一分 → 需要人工批准
+  ✔ 安全：小额免确认不能绕过每日上限
+  ✔ 安全：小额免确认不能绕过每月上限
+  ✔ 安全：小额免确认不能绕过预算隔离
+  ✔ 安全：小额免确认不能绕过冷静期
+  ✔ 授权范围：超出总额度 → MANDATE_EXCEEDED
+  ✔ 授权范围：品类不在范围内 → CATEGORY_BLOCKED
+  ✔ 授权范围：额度与品类都满足 → 放行
+  ✔ 错误码表齐全（10 项）
+  ✔ 剩余额度随金额递减（给确认弹窗用）
+  ✔ 网关：额度 0 → 拒绝并落台账
+  ✔ 网关：超免确认阈值 → 待人工确认
+  ✔ 网关：待确认的单据带商品/金额/商户（给弹窗展示）
+  ✔ 网关：待确认单据不算「已占用额度」
+  ✔ 网关：用户拒绝 → USER_REJECTED
+  ✔ 网关：用户确认 → approved
+  ✔ 网关：扣款成功（mock）→ charged
+  ✔ 网关：确认后额度被占用
+  ✔ 网关：重复确认 → INTENT_ALREADY_RESOLVED
+  ✔ 网关：已扣款的单据再 charge → 幂等返回（不再扣）
+  ✔ 网关：小额免确认 → 自动扣款
+  ✔ 网关：幂等键重复提交 → 复用同一单据，不重复扣款
+  ✔ 网关：并发 charge 只真正扣款一次
+  ✔ 网关：并发中只有一方成功
+  ✔ 手动付款：生成订单并进入 awaiting_payment
+  ✔ 手动付款：给出可读付款指引（不自动操作任何 App）
+  ✔ 手动付款：订单号只记在本地
+  ✔ 手动付款：用户回来说「我已支付」→ charged
+  ✔ 手动付款：重复标记 → INTENT_ALREADY_RESOLVED
+  ✔ 网关：每日上限计入已扣款额度
+  ✔ 网关：剩余额度正确
+  ✔ 网关：跨天额度重置
+  ✔ 放大防御：两笔 pending 建单时各自不超限
+  ✔ 放大防御：第一笔照常扣款
+  ✔ 放大防御：第二笔扣款前复核额度 → 拒绝并落台账
+  ✔ 放大防御：被拒单不计入已用额度
+  ✔ 授权范围：创建成功
+  ✔ 授权范围：范围内放行
+  ✔ 授权范围：累计超总额度 → MANDATE_EXCEEDED
+  ✔ 授权范围：品类越界 → CATEGORY_BLOCKED
+  ✔ 授权范围：不存在 → MANDATE_NOT_FOUND
+  ✔ 三层授权：缺 mandate 不放行（MANDATE_REQUIRED）
+  ✔ 三层授权：拒绝也落台账
+  ✔ agent 由服务端按 mandate 映射（请求体自报无效）
+  ✔ currency 强制等于配置币种（自报 USD → CURRENCY_MISMATCH）
+  ✔ currency 与配置一致时放行，台账币种 = 配置币种
+  ✔ 授权范围：缺 agent 拒绝创建（AGENT_REQUIRED）
+  ✔ 授权额度按 mandate 关联累计：同一授权第二笔超总额 → MANDATE_EXCEEDED
+  ✔ 授权额度不串池：另一份授权额度独立
+  ✔ 收据：导出结构化数据 + 可读文本
+  ✔ 收据：文本含金额与商户
+  ✔ 收据：找不到的单据返回 null
+  ✔ 台账：记录了 agent / 金额 / 商户 / 时间 / 状态
+  ✔ 台账：可按 agent 过滤
+
+支付网关单测：79/79 通过
+  ✔ 服务可启动且 /health 可达
+  ✔ /health 免鉴权
+  ✔ /health 只回布尔能力位（默认全关）
+  ✔ 无 token 访问受保护接口 → 401
+  ✔ 首启自动生成 token（≥32 字符）
+  ✔ 错误 token → 401
+  ✔ 带 token 可读配置
+  ✔ 配置视图不泄露 token
+  ✔ 邮件密钥只回布尔
+  ✔ PUT 配置生效
+  ✔ PUT 不能改 token / port
+  ✔ 非法额度被夹回保守值 0
+  ✔ /health 反映能力开关变化
+  ✔ 模型新建触发器 = pending_confirm（需用户确认）
+  ✔ 用户新建触发器 = active
+  ✔ SSE：无 ticket → 401
+  ✔ SSE：token 不再走查询参数（?token= → 401）
+  ✔ SSE：无效 ticket → 401（一次性，用掉即删）
+  ✔ SSE：POST /api/events/ticket 换取一次性凭据
+  ✔ SSE 收到 trigger.fire 实时推送
+  ✔ 到点进入 pending 队列
+  ✔ pending 带触发原因
+  ✔ ack 待办
+  ✔ ack 后队列清空
+  ✔ 触发器列表可读（2 个）
+  ✔ 一次性触发器触发后自动停用
+  ✔ 取消触发器
+  ✔ 一键暂停
+  ✔ 业务错误码按白名单映射 400（BAD_TRIGGER_TYPE）
+  ✔ 审计 ?limit=abc 被夹取（返回列表而非绑定异常）
+  ✔ 未知接口 → 404
+
+sidecar 冒烟测试：31/31 通过
+  ✔ 串行：入队三个后只有第一个开跑
+  ✔ 串行：第一个结束后才开跑第二个
+  ✔ 串行：继续按入队顺序推进到第三个
+  ✔ 串行：三个任务按入队顺序开始 / 结束
+  ✔ 串行：返回值按入队顺序各归各的任务
+  ✔ enqueue 同步返回、不阻塞调用方
+  ✔ enqueue 返回值：任务结束后带出结果
+  ✔ 出错：错误经返回值带出（不 reject 调用方）
+  ✔ 出错：单个任务失败不拖垮后面的任务
+  ✔ 出错：run 同步抛错同样被接住
+  ✔ 锚点 dead：开跑前置位 → 不调用 run（不花额度）
+  ✔ 锚点 dead：开跑前置位 → skipped: true
+  ✔ 锚点 dead：被跳过不影响队列里前后任务
+  ✔ 锚点 dead：run 进行中置位 → run 照常跑完
+  ✔ 锚点 dead：返回值带 dead: true，供调用方写回前丢弃
+  ✔ has/size：入队后立刻可见
+  ✔ size：排队 + 进行中一起计数
+  ✔ has/size：第一个完成后（key 释放、计数回落）
+  ✔ has/size：队列清空后全部归零
+  ✔ onChange：回调次数与数值正确（入队 1,2 → 完成 1,0）
+  ✔ 同 key：调用方用 has 拦截 → 只入队一次
+  ✔ 同 key：队列本身不去重，重复入队都会执行
+  ✔ 同 key：重复入队后 has 语义不变（任一未结即为真）
+
+作画队列单测：23/23 通过
+  ✔ email 校验：缺 to → ok:false
+  ✔ email 校验：非法地址 → ok:false
+  ✔ email 校验：to 含换行 → ok:false
+  ✔ email 校验：subject 含换行 → ok:false
+  ✔ email 校验：正文超长 → ok:false
+  ✔ email 校验：缺 subject → ok:false
+  ✔ email 校验：缺 body → ok:false
+  ✔ email 校验：主题超长 → ok:false
+  ✔ email 校验：合法参数 → ok:true 且参数规范化保留
+  ✔ payment 校验：金额缺失 → ok:false
+  ✔ payment 校验：金额 ≤ 0 → ok:false
+  ✔ payment 校验：金额为负 → ok:false
+  ✔ payment 校验：超过上限 → ok:false
+  ✔ payment 校验：12.34 元 → amountCents === 1234
+  ✔ payment 校验：0.1+0.2 元 → amountCents === 30（浮点换算正确）
+  ✔ payment 校验：items 规范成 {name} 结构
+  ✔ payment 校验：items 超过 5 项 → ok:false
+  ✔ create：状态 pending、expiresAt = now + TTL
+  ✔ isActionable：未过期为真
+  ✔ isActionable：过期后为假
+  ✔ email 确认：调用顺序严格 emailDraft → emailSendDraft
+  ✔ email 确认：emailSend 从未被调用（红线 2）
+  ✔ email 确认：状态 done
+  ✔ email 拒绝：状态 denied
+  ✔ email 拒绝：不调用任何发送类方法（含 emailSend / emailSendDraft）
+  ✔ payment 确认：confirm 之前 paymentPurchase 调用次数为 0（红线 3）
+  ✔ payment 确认：confirm 之后 paymentPurchase 调用次数为 1
+  ✔ payment 确认：返回 charged → 状态 done
+  ✔ payment 确认：直接放行路径没有调用 approve / charge / markPaid
+  ✔ payment 二次确认：confirm 返回 needsSecondConfirm
+  ✔ payment 二次确认：此时 paymentApprove 调用次数为 0（不得自动批准）
+  ✔ payment 二次确认：用户点了确认才调用 paymentApprove（1 次）且状态 done
+  ✔ payment 二次确认：用户拒绝 → 调用 paymentDeny、状态 denied、approve 仍为 0
+  ✔ 幂等：第二次 confirm 立即返回当前状态、不再执行
+  ✔ 幂等：执行类方法（emailDraft + emailSendDraft）总共只被调用一次
+  ✔ 过期：confirm 不调用任何 sidecar 方法
+  ✔ 过期：状态 expired
+  ✔ 异常：状态 failed 且原因可读
+  ✔ 异常：之后再 confirm 不重试执行（sidecar 仍只被调用过那一次）
+  ✔ 零调用：create / isActionable 不碰任何 sidecar 方法
+  ✔ 幂等：done 之后再点拒绝不触发任何 sidecar 调用
+
+提案模块单测：41/41 通过
+  ✔ 离线：probe() 返回 false
+  ✔ 离线：状态 = offline
+  ✔ 离线：能力位全关
+  ✔ 离线：给出可读原因（不是裸异常）
+  ✔ 离线：can() 一律为假
+  ✔ 离线：探测打的是 /health
+  ✔ 在线：probe() 返回 true
+  ✔ 在线：状态 = online
+  ✔ 在线：能力位按 /health 解析
+  ✔ 在线：版本号带出来
+  ✔ 在线：can() 反映后端开关（未开的仍为假）
+  ✔ 状态变化事件按序触发 online=false → true
+  ✔ api()：请求自动带 Bearer token
+  ✔ api()：返回已解析的 JSON
+  ✔ api()：401 抛出错误并带 code
+  ✔ api()：错误消息用后端原文
+  ✔ configure()：新端口反映到请求 URL
+  ✔ configure()：非法端口被夹回默认 4319
+  ✔ 无 EventSource 时 startSSE() 不抛错
+  ✔ start()：离线时返回 false 且状态为 offline
+  ✔ 门控：剧情模式不追加调度工具
+  ✔ 门控：对话模式 + 调度开启 → 下发 5 个调度工具
+  ✔ 门控：后端没开调度 → 不下发调度工具
+  ✔ 门控：扮演模式同样可用
+  ✔ 门控：chat / rp 仍有 request_image / update_memory；剧情模式少了 request_image（P-1）
+  ✔ isScheduleTool 判定正确
+  ✔ 调度工具共 5 个
+  ✔ 工具总量仍受每轮上限约束（常量存在）
+  ✔ request_image：对话模式是直出变体（含 prompt 且必填）
+  ✔ request_image：扮演模式同为直出变体（含 prompt 且必填）
+  ✔ request_image：剧情模式工具名集合不含它（P-1：作画只能点按钮）
+  ✔ 工具名集合：chat / rp 一致；choice = chat 去掉 request_image
+  ✔ 工具说明：choice 的 [可用工具] 措辞不含 request_image（P-1 §3.3）
+  ✔ 剧情系统提示词不再出现「请画师作画 / 供画师作画参考」措辞
+  ✔ 门控：chat + email/payment 开启 → 含 email_propose / payment_propose
+  ✔ 门控：rp 即便传了 true 也不下发邮件 / 下单工具
+  ✔ 门控：choice 即便传了 true 也不下发邮件 / 下单工具
+  ✔ 门控：chat 但标志为假 → 不含邮件 / 下单工具
+  ✔ isScheduleTool(email_propose) === false / isProposalTool(email_propose) === true
+  ✔ 提案工具名固定为 email_propose / payment_propose
+  ✔ 既有工具名断言继续通过（request_image / update_memory / 调度类）
+  ✔ systemForMode(chat)：不含（做）标记说明
+  ✔ systemForMode(chat)：是智能体系统提示（含「智能助手」）
+  ✔ systemForMode(rp)：仍含标记说明
+  ✔ systemForMode(choice)：仍是剧情 JSON 契约（逐字未动）
+  ✔ stripKindMarker：`[玩家行动] （说）你好` → `[玩家行动] 你好`
+  ✔ stripKindMarker：无标记原样不动
+  ✔ stripKindMarker：只剥开头那一个
+  ✔ stripKindMarker：（导演）出现在正文中间不动
+  ✔ stripKindMarker：外层 [玩家行动] 前缀保持不变
+  ✔ 编排：条件不满足时先排队
+  ✔ 编排：条件满足后送出
+  ✔ 编排：同一 fireId 去重（SSE 与补跑可能同时捞到）
+  ✔ 编排：空 prompt 不入队
+
+前端 sidecar 客户端冒烟测试：54/54 通过
+(node:6416) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/eval/app-structure-test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to D:\infinite-reading\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1] index.html 引用顺序与磁盘一致性
+  ok  index.html 引用了 js/app.js
+  ok  js/app.js 在所有 js/app/*.js 之后加载（组合根最后）
+  ok  js/app/core.js 是第一个加载的 app 模块
+  ok  core.js 不会出现在其他模块之后
+  ok  磁盘上的模块都被 index.html 引用
+  ok  index.html 引用的模块都在磁盘上
+[2] 行数上限（js/app/*.js ≤ 800，js/app.js ≤ 600）
+  ok  js/app/backup.js = 439 行 ≤ 800
+  ok  js/app/branch.js = 715 行 ≤ 800
+  ok  js/app/cards.js = 225 行 ≤ 800
+  ok  js/app/core.js = 545 行 ≤ 800
+  ok  js/app/features.js = 774 行 ≤ 800
+  ok  js/app/importer.js = 317 行 ≤ 800
+  ok  js/app/layout.js = 163 行 ≤ 800
+  ok  js/app/library.js = 487 行 ≤ 800
+  ok  js/app/models.js = 251 行 ≤ 800
+  ok  js/app/painter.js = 702 行 ≤ 800
+  ok  js/app/prefsui.js = 783 行 ≤ 800
+  ok  js/app/render.js = 679 行 ≤ 800
+  ok  js/app/round.js = 421 行 ≤ 800
+  ok  js/app/settings.js = 583 行 ≤ 800
+  ok  js/app/shelf.js = 622 行 ≤ 800
+  ok  js/app/sidecar.js = 179 行 ≤ 800
+  ok  js/app/styleanchor.js = 283 行 ≤ 800
+  ok  js/app/turn.js = 620 行 ≤ 800
+  ok  js/app/video.js = 659 行 ≤ 800
+  ok  js/app/wizard.js = 239 行 ≤ 800
+  ok  js/app.js = 545 行 ≤ 600
+[3] A.reg 键名全局唯一
+  ok  共扫描到 236 个 A.reg 键
+  ok  A.reg 键无重复
+[4] 顶层解构白名单
+  ok  core.js 导出 48 个名字（白名单真源）
+  ok  js/app/backup.js 顶层解构的 $ 是 core 导出
+  ok  js/app/backup.js 顶层解构的 Store 是 core 导出
+  ok  js/app/backup.js 顶层解构的 DEMO 是 core 导出
+  ok  js/app/backup.js 顶层解构的 toast 是 core 导出
+  ok  js/app/backup.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/backup.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/backup.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/backup.js 顶层解构的 clone 是 core 导出
+  ok  js/app/backup.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/backup.js 顶层解构的 fmtMB 是 core 导出
+  ok  js/app/backup.js 顶层解构的 persistSettings 是 core 导出
+  ok  js/app/branch.js 顶层解构的 $ 是 core 导出
+  ok  js/app/branch.js 顶层解构的 toast 是 core 导出
+  ok  js/app/branch.js 顶层解构的 motionLevel 是 core 导出
+  ok  js/app/branch.js 顶层解构的 motionMs 是 core 导出
+  ok  js/app/branch.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/branch.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/cards.js 顶层解构的 $ 是 core 导出
+  ok  js/app/cards.js 顶层解构的 Store 是 core 导出
+  ok  js/app/cards.js 顶层解构的 rpPremise 是 core 导出
+  ok  js/app/cards.js 顶层解构的 toast 是 core 导出
+  ok  js/app/cards.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/cards.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/cards.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/cards.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/features.js 顶层解构的 $ 是 core 导出
+  ok  js/app/features.js 顶层解构的 toast 是 core 导出
+  ok  js/app/features.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/features.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/features.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/features.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/importer.js 顶层解构的 $ 是 core 导出
+  ok  js/app/importer.js 顶层解构的 Store 是 core 导出
+  ok  js/app/importer.js 顶层解构的 Cap 是 core 导出
+  ok  js/app/importer.js 顶层解构的 toast 是 core 导出
+  ok  js/app/importer.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/importer.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/importer.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app/layout.js 顶层解构的 $ 是 core 导出
+  ok  js/app/layout.js 顶层解构的 Store 是 core 导出
+  ok  js/app/layout.js 顶层解构的 persistSettings 是 core 导出
+  ok  js/app/library.js 顶层解构的 $ 是 core 导出
+  ok  js/app/library.js 顶层解构的 Store 是 core 导出
+  ok  js/app/library.js 顶层解构的 MODE_LABELS 是 core 导出
+  ok  js/app/library.js 顶层解构的 toast 是 core 导出
+  ok  js/app/library.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/library.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/library.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/library.js 顶层解构的 clone 是 core 导出
+  ok  js/app/library.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/library.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/library.js 顶层解构的 miniBtn 是 core 导出
+  ok  js/app/models.js 顶层解构的 $ 是 core 导出
+  ok  js/app/models.js 顶层解构的 Cap 是 core 导出
+  ok  js/app/models.js 顶层解构的 IMAGE_ASPECTS 是 core 导出
+  ok  js/app/painter.js 顶层解构的 $ 是 core 导出
+  ok  js/app/painter.js 顶层解构的 Store 是 core 导出
+  ok  js/app/painter.js 顶层解构的 STYLE_PRESETS 是 core 导出
+  ok  js/app/painter.js 顶层解构的 IMAGE_ASPECTS 是 core 导出
+  ok  js/app/painter.js 顶层解构的 toast 是 core 导出
+  ok  js/app/painter.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/painter.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/painter.js 顶层解构的 netErrHint 是 core 导出
+  ok  js/app/painter.js 顶层解构的 offlineBlocked 是 core 导出
+  ok  js/app/painter.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/painter.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/painter.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app/painter.js 顶层解构的 imageCfg 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 $ 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 Store 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 toast 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 persistSettings 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 miniBtn 是 core 导出
+  ok  js/app/prefsui.js 顶层解构的 clone 是 core 导出
+  ok  js/app/render.js 顶层解构的 $ 是 core 导出
+  ok  js/app/render.js 顶层解构的 Store 是 core 导出
+  ok  js/app/render.js 顶层解构的 MODE_LABELS 是 core 导出
+  ok  js/app/render.js 顶层解构的 KIND_LABELS 是 core 导出
+  ok  js/app/render.js 顶层解构的 motionLevel 是 core 导出
+  ok  js/app/render.js 顶层解构的 toast 是 core 导出
+  ok  js/app/render.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/render.js 顶层解构的 persistSettings 是 core 导出
+  ok  js/app/render.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/round.js 顶层解构的 $ 是 core 导出
+  ok  js/app/round.js 顶层解构的 KIND_LABELS 是 core 导出
+  ok  js/app/round.js 顶层解构的 isStopError 是 core 导出
+  ok  js/app/round.js 顶层解构的 setSendButtonsBusy 是 core 导出
+  ok  js/app/round.js 顶层解构的 toast 是 core 导出
+  ok  js/app/round.js 顶层解构的 netErrHint 是 core 导出
+  ok  js/app/round.js 顶层解构的 offlineBlocked 是 core 导出
+  ok  js/app/round.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/settings.js 顶层解构的 $ 是 core 导出
+  ok  js/app/settings.js 顶层解构的 Store 是 core 导出
+  ok  js/app/settings.js 顶层解构的 DEMO 是 core 导出
+  ok  js/app/settings.js 顶层解构的 MODE_LABELS 是 core 导出
+  ok  js/app/settings.js 顶层解构的 IMAGE_ASPECTS 是 core 导出
+  ok  js/app/settings.js 顶层解构的 applyMotion 是 core 导出
+  ok  js/app/settings.js 顶层解构的 toast 是 core 导出
+  ok  js/app/settings.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/settings.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/settings.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/settings.js 顶层解构的 miniBtn 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 $ 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 Store 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 MODE_LABELS 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 toast 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 motionLevel 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/shelf.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app/sidecar.js 顶层解构的 $ 是 core 导出
+  ok  js/app/sidecar.js 顶层解构的 toast 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 $ 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 toast 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 offlineBlocked 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app/styleanchor.js 顶层解构的 imageCfg 是 core 导出
+  ok  js/app/turn.js 顶层解构的 $ 是 core 导出
+  ok  js/app/turn.js 顶层解构的 Store 是 core 导出
+  ok  js/app/turn.js 顶层解构的 SCRIBE_SYSTEM 是 core 导出
+  ok  js/app/turn.js 顶层解构的 SCRIBE_COMPRESS_SYSTEM 是 core 导出
+  ok  js/app/turn.js 顶层解构的 SCRIBE_ROLLING_SYSTEM 是 core 导出
+  ok  js/app/turn.js 顶层解构的 isStopError 是 core 导出
+  ok  js/app/turn.js 顶层解构的 setSendButtonsBusy 是 core 导出
+  ok  js/app/turn.js 顶层解构的 motionLevel 是 core 导出
+  ok  js/app/turn.js 顶层解构的 motionMs 是 core 导出
+  ok  js/app/turn.js 顶层解构的 toast 是 core 导出
+  ok  js/app/turn.js 顶层解构的 netErrHint 是 core 导出
+  ok  js/app/turn.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/turn.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app/video.js 顶层解构的 $ 是 core 导出
+  ok  js/app/video.js 顶层解构的 Store 是 core 导出
+  ok  js/app/video.js 顶层解构的 toast 是 core 导出
+  ok  js/app/video.js 顶层解构的 offlineBlocked 是 core 导出
+  ok  js/app/video.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app/video.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app/video.js 顶层解构的 DEMO 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 $ 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 Store 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 DEFAULT_TOPIC 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 CHAT_PREMISE 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 DRAFT_SYSTEM 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 toast 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 openModal 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 netErrHint 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 sleep 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app/wizard.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app.js 顶层解构的 $ 是 core 导出
+  ok  js/app.js 顶层解构的 Store 是 core 导出
+  ok  js/app.js 顶层解构的 Cap 是 core 导出
+  ok  js/app.js 顶层解构的 DEMO 是 core 导出
+  ok  js/app.js 顶层解构的 STYLE_PRESETS 是 core 导出
+  ok  js/app.js 顶层解构的 MODE_LABELS 是 core 导出
+  ok  js/app.js 顶层解构的 KIND_LABELS 是 core 导出
+  ok  js/app.js 顶层解构的 DEFAULT_TOPIC 是 core 导出
+  ok  js/app.js 顶层解构的 CHAT_PREMISE 是 core 导出
+  ok  js/app.js 顶层解构的 rpPremise 是 core 导出
+  ok  js/app.js 顶层解构的 SCRIBE_SYSTEM 是 core 导出
+  ok  js/app.js 顶层解构的 SCRIBE_COMPRESS_SYSTEM 是 core 导出
+  ok  js/app.js 顶层解构的 SCRIBE_ROLLING_SYSTEM 是 core 导出
+  ok  js/app.js 顶层解构的 DRAFT_SYSTEM 是 core 导出
+  ok  js/app.js 顶层解构的 IMAGE_ASPECTS 是 core 导出
+  ok  js/app.js 顶层解构的 requestChatStop 是 core 导出
+  ok  js/app.js 顶层解构的 isStopError 是 core 导出
+  ok  js/app.js 顶层解构的 setSendButtonsBusy 是 core 导出
+  ok  js/app.js 顶层解构的 motionMQ 是 core 导出
+  ok  js/app.js 顶层解构的 motionLevel 是 core 导出
+  ok  js/app.js 顶层解构的 applyMotion 是 core 导出
+  ok  js/app.js 顶层解构的 applyPaused 是 core 导出
+  ok  js/app.js 顶层解构的 motionMs 是 core 导出
+  ok  js/app.js 顶层解构的 toast 是 core 导出
+  ok  js/app.js 顶层解构的 hideToast 是 core 导出
+  ok  js/app.js 顶层解构的 irConfirm 是 core 导出
+  ok  js/app.js 顶层解构的 closeConfirm 是 core 导出
+  ok  js/app.js 顶层解构的 confirmValue 是 core 导出
+  ok  js/app.js 顶层解构的 MODAL_IDS 是 core 导出
+  ok  js/app.js 顶层解构的 modalStack 是 core 导出
+  ok  js/app.js 顶层解构的 openModal 是 core 导出
+  ok  js/app.js 顶层解构的 closeModal 是 core 导出
+  ok  js/app.js 顶层解构的 dismissModal 是 core 导出
+  ok  js/app.js 顶层解构的 closeTopModal 是 core 导出
+  ok  js/app.js 顶层解构的 netErrHint 是 core 导出
+  ok  js/app.js 顶层解构的 offlineBlocked 是 core 导出
+  ok  js/app.js 顶层解构的 sleep 是 core 导出
+  ok  js/app.js 顶层解构的 clone 是 core 导出
+  ok  js/app.js 顶层解构的 fmtTime 是 core 导出
+  ok  js/app.js 顶层解构的 fmtMB 是 core 导出
+  ok  js/app.js 顶层解构的 persistSettings 是 core 导出
+  ok  js/app.js 顶层解构的 saveAll 是 core 导出
+  ok  js/app.js 顶层解构的 resolveSub 是 core 导出
+  ok  js/app.js 顶层解构的 imageCfg 是 core 导出
+  ok  js/app.js 顶层解构的 miniBtn 是 core 导出
+[5] A.xxx 引用闭合性
+  ok  js/app/backup.js 的 A.state 已注册
+  ok  js/app/backup.js 的 A.download 已注册
+  ok  js/app/backup.js 的 A.download 已注册
+  ok  js/app/backup.js 的 A.downloadBlob 已注册
+  ok  js/app/backup.js 的 A.syncSettingsToForm 已注册
+  ok  js/app/backup.js 的 A.renderShelf 已注册
+  ok  js/app/backup.js 的 A.closeStoryPrefs 已注册
+  ok  js/app/backup.js 的 A.syncSettingsToForm 已注册
+  ok  js/app/backup.js 的 A.initSettingsNav 已注册
+  ok  js/app/backup.js 的 A.renderSidecarStatus 已注册
+  ok  js/app/backup.js 的 A.syncAdvPanels 已注册
+  ok  js/app/backup.js 的 A.sidecarReady 已注册
+  ok  js/app/backup.js 的 A.loadFeatureConfig 已注册
+  ok  js/app/backup.js 的 A.syncAdvPanels 已注册
+  ok  js/app/backup.js 的 A.openWizard 已注册
+  ok  js/app/backup.js 的 A.showShelf 已注册
+  ok  js/app/backup.js 的 A.storeOriginal 已注册
+  ok  js/app/backup.js 的 A.renderStage 已注册
+  ok  js/app/backup.js 的 A.renderThumbs 已注册
+  ok  js/app/backup.js 的 A.reg 已注册
+  ok  js/app/branch.js 的 A.state 已注册
+  ok  js/app/branch.js 的 A.closeMenus 已注册
+  ok  js/app/branch.js 的 A.reg 已注册
+  ok  js/app/cards.js 的 A.state 已注册
+  ok  js/app/cards.js 的 A.renderStoryPanels 已注册
+  ok  js/app/cards.js 的 A.renderProfilePanel 已注册
+  ok  js/app/cards.js 的 A.enterGame 已注册
+  ok  js/app/cards.js 的 A.renderChat 已注册
+  ok  js/app/cards.js 的 A.reg 已注册
+  ok  js/app/core.js 的 A.state 已注册
+  ok  js/app/core.js 的 A.reg 已注册
+  ok  js/app/core.js 的 A.state 已注册
+  ok  js/app/core.js 的 A.closeWorkbench 已注册
+  ok  js/app/core.js 的 A.closeAnchor 已注册
+  ok  js/app/core.js 的 A.closeImportText 已注册
+  ok  js/app/core.js 的 A.closeCardEditor 已注册
+  ok  js/app/core.js 的 A.reg 已注册
+  ok  js/app/features.js 的 A.state 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.renderSidecarStatus 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.renderSidecarStatus 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarOffHint 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.featuresAllowed 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarOffHint 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarOffHint 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.irDownloadText 已注册
+  ok  js/app/features.js 的 A.featuresAllowed 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarOffHint 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.pushLog 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.iconEl 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.sidecarReady 已注册
+  ok  js/app/features.js 的 A.sidecarOffHint 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.pushLog 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.pushLog 已注册
+  ok  js/app/features.js 的 A.renderChat 已注册
+  ok  js/app/features.js 的 A.yuan 已注册
+  ok  js/app/features.js 的 A.reg 已注册
+  ok  js/app/importer.js 的 A.state 已注册
+  ok  js/app/importer.js 的 A.chatContextWindow 已注册
+  ok  js/app/importer.js 的 A.chatContextWindow 已注册
+  ok  js/app/importer.js 的 A.charEditor 已注册
+  ok  js/app/importer.js 的 A.enterGame 已注册
+  ok  js/app/importer.js 的 A.openAnchor 已注册
+  ok  js/app/importer.js 的 A.renderChat 已注册
+  ok  js/app/importer.js 的 A.reg 已注册
+  ok  js/app/layout.js 的 A.state 已注册
+  ok  js/app/layout.js 的 A.reg 已注册
+  ok  js/app/library.js 的 A.state 已注册
+  ok  js/app/library.js 的 A.scrollChatBottom 已注册
+  ok  js/app/library.js 的 A.choicesFromHead 已注册
+  ok  js/app/library.js 的 A.renderChat 已注册
+  ok  js/app/library.js 的 A.renderStage 已注册
+  ok  js/app/library.js 的 A.renderThumbs 已注册
+  ok  js/app/library.js 的 A.renderStoryPanels 已注册
+  ok  js/app/library.js 的 A.closeMenus 已注册
+  ok  js/app/library.js 的 A.closeStoryPrefs 已注册
+  ok  js/app/library.js 的 A.renderShelf 已注册
+  ok  js/app/library.js 的 A.closeMenus 已注册
+  ok  js/app/library.js 的 A.closeWorkbench 已注册
+  ok  js/app/library.js 的 A.closeStoryPrefs 已注册
+  ok  js/app/library.js 的 A.openWizard 已注册
+  ok  js/app/library.js 的 A.createStoryImmediate 已注册
+  ok  js/app/library.js 的 A.enterGame 已注册
+  ok  js/app/library.js 的 A.runOpening 已注册
+  ok  js/app/library.js 的 A.stopVideoWaiting 已注册
+  ok  js/app/library.js 的 A.enterGame 已注册
+  ok  js/app/library.js 的 A.resumePendingVideos 已注册
+  ok  js/app/library.js 的 A.markBackedUp 已注册
+  ok  js/app/library.js 的 A.reg 已注册
+  ok  js/app/models.js 的 A.state 已注册
+  ok  js/app/models.js 的 A.reg 已注册
+  ok  js/app/painter.js 的 A.state 已注册
+  ok  js/app/painter.js 的 A.renderChat 已注册
+  ok  js/app/painter.js 的 A.treeHeadNodeId 已注册
+  ok  js/app/painter.js 的 A.nodeIdOwningEntry 已注册
+  ok  js/app/painter.js 的 A.nodeIdOwningScene 已注册
+  ok  js/app/painter.js 的 A.treeHeadNodeId 已注册
+  ok  js/app/painter.js 的 A.refImageDataUrl 已注册
+  ok  js/app/painter.js 的 A.thumb 已注册
+  ok  js/app/painter.js 的 A.storeOriginal 已注册
+  ok  js/app/painter.js 的 A.setStageArt 已注册
+  ok  js/app/painter.js 的 A.sceneSrc 已注册
+  ok  js/app/painter.js 的 A.refreshRollingStyleByModel 已注册
+  ok  js/app/painter.js 的 A.renderChat 已注册
+  ok  js/app/painter.js 的 A.renderStage 已注册
+  ok  js/app/painter.js 的 A.renderThumbs 已注册
+  ok  js/app/painter.js 的 A.imageSceneById 已注册
+  ok  js/app/painter.js 的 A.currentScene 已注册
+  ok  js/app/painter.js 的 A.imageSceneById 已注册
+  ok  js/app/painter.js 的 A.sceneSrc 已注册
+  ok  js/app/painter.js 的 A.renderWorkbenchVideo 已注册
+  ok  js/app/painter.js 的 A.imageSceneById 已注册
+  ok  js/app/painter.js 的 A.imageSceneById 已注册
+  ok  js/app/painter.js 的 A.reg 已注册
+  ok  js/app/prefsui.js 的 A.state 已注册
+  ok  js/app/prefsui.js 的 A.syncSettingsToForm 已注册
+  ok  js/app/prefsui.js 的 A.icon 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.renderChat 已注册
+  ok  js/app/prefsui.js 的 A.renderChat 已注册
+  ok  js/app/prefsui.js 的 A.renderChat 已注册
+  ok  js/app/prefsui.js 的 A.openSettings 已注册
+  ok  js/app/prefsui.js 的 A.onModeChange 已注册
+  ok  js/app/prefsui.js 的 A.icon 已注册
+  ok  js/app/prefsui.js 的 A.scheduleToolsAvailable 已注册
+  ok  js/app/prefsui.js 的 A.proposalToolsAvailable 已注册
+  ok  js/app/prefsui.js 的 A.proposalToolsAvailable 已注册
+  ok  js/app/prefsui.js 的 A.proposalToolsAvailable 已注册
+  ok  js/app/prefsui.js 的 A.proposalToolsAvailable 已注册
+  ok  js/app/prefsui.js 的 A.openCardEditor 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.applyLayout 已注册
+  ok  js/app/prefsui.js 的 A.closeMenus 已注册
+  ok  js/app/prefsui.js 的 A.reg 已注册
+  ok  js/app/render.js 的 A.state 已注册
+  ok  js/app/render.js 的 A.icon 已注册
+  ok  js/app/render.js 的 A.icon 已注册
+  ok  js/app/render.js 的 A.resetLiveDelta 已注册
+  ok  js/app/render.js 的 A.updateHistoryBar 已注册
+  ok  js/app/render.js 的 A.renderFeatureBar 已注册
+  ok  js/app/render.js 的 A.icon 已注册
+  ok  js/app/render.js 的 A.runOpening 已注册
+  ok  js/app/render.js 的 A.sendPlayerAction 已注册
+  ok  js/app/render.js 的 A.sendPlayerAction 已注册
+  ok  js/app/render.js 的 A.sceneSrc 已注册
+  ok  js/app/render.js 的 A.sceneSrc 已注册
+  ok  js/app/render.js 的 A.openWorkbench 已注册
+  ok  js/app/render.js 的 A.iconEl 已注册
+  ok  js/app/render.js 的 A.iconEl 已注册
+  ok  js/app/render.js 的 A.lastNarrationIndex 已注册
+  ok  js/app/render.js 的 A.lastActionEntry 已注册
+  ok  js/app/render.js 的 A.retryLast 已注册
+  ok  js/app/render.js 的 A.icon 已注册
+  ok  js/app/render.js 的 A.switchSiblingFromBubble 已注册
+  ok  js/app/render.js 的 A.icon 已注册
+  ok  js/app/render.js 的 A.switchSiblingFromBubble 已注册
+  ok  js/app/render.js 的 A.proposalBubble 已注册
+  ok  js/app/render.js 的 A.setStageArt 已注册
+  ok  js/app/render.js 的 A.setStageArt 已注册
+  ok  js/app/render.js 的 A.setStageArt 已注册
+  ok  js/app/render.js 的 A.videoSrc 已注册
+  ok  js/app/render.js 的 A.setStageArt 已注册
+  ok  js/app/render.js 的 A.sceneSrc 已注册
+  ok  js/app/render.js 的 A.sceneSrc 已注册
+  ok  js/app/render.js 的 A.renderStoryPrefs 已注册
+  ok  js/app/render.js 的 A.closeMenus 已注册
+  ok  js/app/render.js 的 A.syncKindSwitch 已注册
+  ok  js/app/render.js 的 A.applyLayout 已注册
+  ok  js/app/render.js 的 A.choicesFromHead 已注册
+  ok  js/app/render.js 的 A.choicesFromHead 已注册
+  ok  js/app/render.js 的 A.reg 已注册
+  ok  js/app/round.js 的 A.state 已注册
+  ok  js/app/round.js 的 A.applyToolCall 已注册
+  ok  js/app/round.js 的 A.submitToolPaint 已注册
+  ok  js/app/round.js 的 A.imageBrief 已注册
+  ok  js/app/round.js 的 A.runScheduleTool 已注册
+  ok  js/app/round.js 的 A.runProposalTool 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.renderInjectHint 已注册
+  ok  js/app/round.js 的 A.noToolsFor 已注册
+  ok  js/app/round.js 的 A.scheduleToolsAvailable 已注册
+  ok  js/app/round.js 的 A.proposalToolsAvailable 已注册
+  ok  js/app/round.js 的 A.activeProfileEntries 已注册
+  ok  js/app/round.js 的 A.chatContextWindow 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.streamAI1 已注册
+  ok  js/app/round.js 的 A.toolList 已注册
+  ok  js/app/round.js 的 A.updateLiveReasoning 已注册
+  ok  js/app/round.js 的 A.parseAIReply 已注册
+  ok  js/app/round.js 的 A.toolList 已注册
+  ok  js/app/round.js 的 A.streamAI1 已注册
+  ok  js/app/round.js 的 A.updateLiveReasoning 已注册
+  ok  js/app/round.js 的 A.parseAIReply 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.assistantMessage 已注册
+  ok  js/app/round.js 的 A.pushNarrationEntry 已注册
+  ok  js/app/round.js 的 A.absorbReply 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.postTurn 已注册
+  ok  js/app/round.js 的 A.maybeAutoTitle 已注册
+  ok  js/app/round.js 的 A.ackProactive 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.finishLiveDelta 已注册
+  ok  js/app/round.js 的 A.typewrite 已注册
+  ok  js/app/round.js 的 A.assistantMessage 已注册
+  ok  js/app/round.js 的 A.pushNarrationEntry 已注册
+  ok  js/app/round.js 的 A.absorbReply 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.postTurn 已注册
+  ok  js/app/round.js 的 A.maybeAutoTitle 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.renderChat 已注册
+  ok  js/app/round.js 的 A.syncKindSwitch 已注册
+  ok  js/app/round.js 的 A.reg 已注册
+  ok  js/app/settings.js 的 A.state 已注册
+  ok  js/app/settings.js 的 A.renderLayoutHint 已注册
+  ok  js/app/settings.js 的 A.renderNoToolsHint 已注册
+  ok  js/app/settings.js 的 A.renderCapabilityFields 已注册
+  ok  js/app/settings.js 的 A.renderModelProfiles 已注册
+  ok  js/app/settings.js 的 A.renderSavepoints 已注册
+  ok  js/app/settings.js 的 A.reg 已注册
+  ok  js/app/shelf.js 的 A.state 已注册
+  ok  js/app/shelf.js 的 A.icon 已注册
+  ok  js/app/shelf.js 的 A.icon 已注册
+  ok  js/app/shelf.js 的 A.closeMenus 已注册
+  ok  js/app/shelf.js 的 A.closeMenus 已注册
+  ok  js/app/shelf.js 的 A.openBranch 已注册
+  ok  js/app/shelf.js 的 A.openBranch 已注册
+  ok  js/app/shelf.js 的 A.openExport 已注册
+  ok  js/app/shelf.js 的 A.openExport 已注册
+  ok  js/app/shelf.js 的 A.stopVideoWaiting 已注册
+  ok  js/app/shelf.js 的 A.enterGame 已注册
+  ok  js/app/shelf.js 的 A.resumePendingVideos 已注册
+  ok  js/app/shelf.js 的 A.openBranch 已注册
+  ok  js/app/shelf.js 的 A.reg 已注册
+  ok  js/app/sidecar.js 的 A.state 已注册
+  ok  js/app/sidecar.js 的 A.sendPlayerAction 已注册
+  ok  js/app/sidecar.js 的 A.loadFeatureConfig 已注册
+  ok  js/app/sidecar.js 的 A.renderTriggerList 已注册
+  ok  js/app/sidecar.js 的 A.renderTriggerList 已注册
+  ok  js/app/sidecar.js 的 A.loadFeatureConfig 已注册
+  ok  js/app/sidecar.js 的 A.reg 已注册
+  ok  js/app/styleanchor.js 的 A.state 已注册
+  ok  js/app/styleanchor.js 的 A.reg 已注册
+  ok  js/app/turn.js 的 A.state 已注册
+  ok  js/app/turn.js 的 A.applyProfileEntries 已注册
+  ok  js/app/turn.js 的 A.scribeProfileHint 已注册
+  ok  js/app/turn.js 的 A.applyProfileEntries 已注册
+  ok  js/app/turn.js 的 A.scribeProfileHint 已注册
+  ok  js/app/turn.js 的 A.chatContextWindow 已注册
+  ok  js/app/turn.js 的 A.applyProfileEntries 已注册
+  ok  js/app/turn.js 的 A.renderStoryPanels 已注册
+  ok  js/app/turn.js 的 A.chatContextWindow 已注册
+  ok  js/app/turn.js 的 A.profileOn 已注册
+  ok  js/app/turn.js 的 A.collectProfileLocal 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.renderStoryPanels 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.scrollChatBottom 已注册
+  ok  js/app/turn.js 的 A.scrollChatBottom 已注册
+  ok  js/app/turn.js 的 A.withKindMarker 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.pushLog 已注册
+  ok  js/app/turn.js 的 A.callAI1 已注册
+  ok  js/app/turn.js 的 A.finishNarration 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.maybeAutoTitle 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.renderChat 已注册
+  ok  js/app/turn.js 的 A.renderStage 已注册
+  ok  js/app/turn.js 的 A.renderThumbs 已注册
+  ok  js/app/turn.js 的 A.renderStoryPanels 已注册
+  ok  js/app/turn.js 的 A.renderSavepoints 已注册
+  ok  js/app/turn.js 的 A.reg 已注册
+  ok  js/app/video.js 的 A.state 已注册
+  ok  js/app/video.js 的 A.renderChat 已注册
+  ok  js/app/video.js 的 A.setStageArt 已注册
+  ok  js/app/video.js 的 A.renderChat 已注册
+  ok  js/app/video.js 的 A.renderStage 已注册
+  ok  js/app/video.js 的 A.renderThumbs 已注册
+  ok  js/app/video.js 的 A.composePrompt 已注册
+  ok  js/app/video.js 的 A.styleSuffixText 已注册
+  ok  js/app/video.js 的 A.imageSceneById 已注册
+  ok  js/app/video.js 的 A.painterVideoPrompt 已注册
+  ok  js/app/video.js 的 A.imageSceneById 已注册
+  ok  js/app/video.js 的 A.currentScene 已注册
+  ok  js/app/video.js 的 A.treeHeadNodeId 已注册
+  ok  js/app/video.js 的 A.currentScene 已注册
+  ok  js/app/video.js 的 A.currentScene 已注册
+  ok  js/app/video.js 的 A.currentScene 已注册
+  ok  js/app/video.js 的 A.currentScene 已注册
+  ok  js/app/video.js 的 A.videoSrc 已注册
+  ok  js/app/video.js 的 A.renderStage 已注册
+  ok  js/app/video.js 的 A.renderThumbs 已注册
+  ok  js/app/video.js 的 A.iconEl 已注册
+  ok  js/app/video.js 的 A.reg 已注册
+  ok  js/app/wizard.js 的 A.state 已注册
+  ok  js/app/wizard.js 的 A.charEditor 已注册
+  ok  js/app/wizard.js 的 A.icon 已注册
+  ok  js/app/wizard.js 的 A.enterGame 已注册
+  ok  js/app/wizard.js 的 A.openAnchor 已注册
+  ok  js/app/wizard.js 的 A.renderChat 已注册
+  ok  js/app/wizard.js 的 A.openCardEditor 已注册
+  ok  js/app/wizard.js 的 A.enterGame 已注册
+  ok  js/app/wizard.js 的 A.reg 已注册
+  ok  js/app.js 的 A.state 已注册
+  ok  js/app.js 的 A.openWizard 已注册
+  ok  js/app.js 的 A.createStoryImmediate 已注册
+  ok  js/app.js 的 A.openSettings 已注册
+  ok  js/app.js 的 A.showStart 已注册
+  ok  js/app.js 的 A.initShelf 已注册
+  ok  js/app.js 的 A.handleImportFile 已注册
+  ok  js/app.js 的 A.openImportText 已注册
+  ok  js/app.js 的 A.openImportText 已注册
+  ok  js/app.js 的 A.closeImportText 已注册
+  ok  js/app.js 的 A.closeImportText 已注册
+  ok  js/app.js 的 A.runImportText 已注册
+  ok  js/app.js 的 A.importPlanHint 已注册
+  ok  js/app.js 的 A.importPlanHint 已注册
+  ok  js/app.js 的 A.importPlanHint 已注册
+  ok  js/app.js 的 A.startFromImport 已注册
+  ok  js/app.js 的 A.startFromStart 已注册
+  ok  js/app.js 的 A.showShelf 已注册
+  ok  js/app.js 的 A.openSettings 已注册
+  ok  js/app.js 的 A.continueLast 已注册
+  ok  js/app.js 的 A.handleImportFile 已注册
+  ok  js/app.js 的 A.showStart 已注册
+  ok  js/app.js 的 A.showShelf 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.newStoryFromGame 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.openSettings 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.addSavepoint 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.treeHeadNodeId 已注册
+  ok  js/app.js 的 A.paintQ 已注册
+  ok  js/app.js 的 A.enqueueImage 已注册
+  ok  js/app.js 的 A.treeHeadNodeId 已注册
+  ok  js/app.js 的 A.currentScene 已注册
+  ok  js/app.js 的 A.isVideoScene 已注册
+  ok  js/app.js 的 A.toggleMenu 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.videoFromCurrentImage 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.videoFromPlot 已注册
+  ok  js/app.js 的 A.generateVideo 已注册
+  ok  js/app.js 的 A.cancelActiveVideo 已注册
+  ok  js/app.js 的 A.toggleStagePanel 已注册
+  ok  js/app.js 的 A.openWorkbench 已注册
+  ok  js/app.js 的 A.isImmersive 已注册
+  ok  js/app.js 的 A.exitImmersive 已注册
+  ok  js/app.js 的 A.enterImmersive 已注册
+  ok  js/app.js 的 A.exitImmersive 已注册
+  ok  js/app.js 的 A.toggleMenu 已注册
+  ok  js/app.js 的 A.toggleMenu 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.effectiveLayout 已注册
+  ok  js/app.js 的 A.sendPlayerAction 已注册
+  ok  js/app.js 的 A.syncKindSwitch 已注册
+  ok  js/app.js 的 A.renderChat 已注册
+  ok  js/app.js 的 A.bindSplitter 已注册
+  ok  js/app.js 的 A.bindPrefsUI 已注册
+  ok  js/app.js 的 A.initSettingsNav 已注册
+  ok  js/app.js 的 A.initBranch 已注册
+  ok  js/app.js 的 A.draftWizard 已注册
+  ok  js/app.js 的 A.startFromWizard 已注册
+  ok  js/app.js 的 A.doExport 已注册
+  ok  js/app.js 的 A.closeWorkbench 已注册
+  ok  js/app.js 的 A.closeWorkbench 已注册
+  ok  js/app.js 的 A.closeWorkbench 已注册
+  ok  js/app.js 的 A.redrawFromWorkbench 已注册
+  ok  js/app.js 的 A.forceRedrawByCard 已注册
+  ok  js/app.js 的 A.painterThreadSend 已注册
+  ok  js/app.js 的 A.pwVideoGenerate 已注册
+  ok  js/app.js 的 A.painterThreadSend 已注册
+  ok  js/app.js 的 A.imageSceneById 已注册
+  ok  js/app.js 的 A.composePrompt 已注册
+  ok  js/app.js 的 A.styleSuffixText 已注册
+  ok  js/app.js 的 A.pwShowWh 已注册
+  ok  js/app.js 的 A.pwShowWh 已注册
+  ok  js/app.js 的 A.pwShowWh 已注册
+  ok  js/app.js 的 A.closeAnchor 已注册
+  ok  js/app.js 的 A.runAnchorBatch 已注册
+  ok  js/app.js 的 A.closeAnchor 已注册
+  ok  js/app.js 的 A.anchorDraftCard 已注册
+  ok  js/app.js 的 A.anchorLock 已注册
+  ok  js/app.js 的 A.anchorCardChat 已注册
+  ok  js/app.js 的 A.anchorCardChat 已注册
+  ok  js/app.js 的 A.openAnchor 已注册
+  ok  js/app.js 的 A.closeWorkbench 已注册
+  ok  js/app.js 的 A.openAnchor 已注册
+  ok  js/app.js 的 A.addSavepoint 已注册
+  ok  js/app.js 的 A.renderNoToolsHint 已注册
+  ok  js/app.js 的 A.applyAspectToFields 已注册
+  ok  js/app.js 的 A.applyImageProviderHint 已注册
+  ok  js/app.js 的 A.saveCardNote 已注册
+  ok  js/app.js 的 A.onModeChange 已注册
+  ok  js/app.js 的 A.saveWorldFromForm 已注册
+  ok  js/app.js 的 A.toggleInjectMemory 已注册
+  ok  js/app.js 的 A.openCardEditor 已注册
+  ok  js/app.js 的 A.closeCardEditor 已注册
+  ok  js/app.js 的 A.closeCardEditor 已注册
+  ok  js/app.js 的 A.saveCardFromEditor 已注册
+  ok  js/app.js 的 A.importCardFile 已注册
+  ok  js/app.js 的 A.closeCardEditor 已注册
+  ok  js/app.js 的 A.clearProfile 已注册
+  ok  js/app.js 的 A.TEST_TARGETS 已注册
+  ok  js/app.js 的 A.testConnection 已注册
+  ok  js/app.js 的 A.applyFormToSettings 已注册
+  ok  js/app.js 的 A.sidecarReady 已注册
+  ok  js/app.js 的 A.saveFeatureConfig 已注册
+  ok  js/app.js 的 A.renderSidecarStatus 已注册
+  ok  js/app.js 的 A.loadFeatureConfig 已注册
+  ok  js/app.js 的 A.renderTriggerList 已注册
+  ok  js/app.js 的 A.renderPayLedger 已注册
+  ok  js/app.js 的 A.openEmailModal 已注册
+  ok  js/app.js 的 A.openPaymentModal 已注册
+  ok  js/app.js 的 A.featuresAllowed 已注册
+  ok  js/app.js 的 A.initSettingsNav 已注册
+  ok  js/app.js 的 A.openSettingsGroup 已注册
+  ok  js/app.js 的 A.sidecarReady 已注册
+  ok  js/app.js 的 A.loadFeatureConfig 已注册
+  ok  js/app.js 的 A.doEmailSend 已注册
+  ok  js/app.js 的 A.doPaymentSubmit 已注册
+  ok  js/app.js 的 A.doBackupAll 已注册
+  ok  js/app.js 的 A.renderStoragePanel 已注册
+  ok  js/app.js 的 A.syncSettingsToForm 已注册
+  ok  js/app.js 的 A.showStart 已注册
+  ok  js/app.js 的 A.renderCapabilityFields 已注册
+  ok  js/app.js 的 A.renderCapabilityFields 已注册
+  ok  js/app.js 的 A.showImageWh 已注册
+  ok  js/app.js 的 A.closeLightbox 已注册
+  ok  js/app.js 的 A.closeLightbox 已注册
+  ok  js/app.js 的 A.closeMenus 已注册
+  ok  js/app.js 的 A.exitImmersive 已注册
+  ok  js/app.js 的 A.renderStage 已注册
+  ok  js/app.js 的 A.renderThumbs 已注册
+  ok  js/app.js 的 A.watchStageVisibility 已注册
+  ok  js/app.js 的 A.syncSettingsToForm 已注册
+  ok  js/app.js 的 A.initFeatures 已注册
+  ok  js/app.js 的 A.initSidecar 已注册
+  ok  js/app.js 的 A.startDemo 已注册
+  ok  js/app.js 的 A.showStart 已注册
+  ok  js/app.js 的 A.renderShelf 已注册
+  ok  js/app.js 的 A.initStorageGuard 已注册
+  ok  js/app.js 的 A.renderStoragePanel 已注册
+  ok  js/app.js 的 A.remindBackupIfNeeded 已注册
+[6] node --check 语法
+  ok  js/app/backup.js 语法通过
+  ok  js/app/branch.js 语法通过
+  ok  js/app/cards.js 语法通过
+  ok  js/app/core.js 语法通过
+  ok  js/app/features.js 语法通过
+  ok  js/app/importer.js 语法通过
+  ok  js/app/layout.js 语法通过
+  ok  js/app/library.js 语法通过
+  ok  js/app/models.js 语法通过
+  ok  js/app/painter.js 语法通过
+  ok  js/app/prefsui.js 语法通过
+  ok  js/app/render.js 语法通过
+  ok  js/app/round.js 语法通过
+  ok  js/app/settings.js 语法通过
+  ok  js/app/shelf.js 语法通过
+  ok  js/app/sidecar.js 语法通过
+  ok  js/app/styleanchor.js 语法通过
+  ok  js/app/turn.js 语法通过
+  ok  js/app/video.js 语法通过
+  ok  js/app/wizard.js 语法通过
+  ok  js/app.js 语法通过
+app-structure-test：全部通过
+check-free-calls 通过：21 个文件，无未解析裸调用

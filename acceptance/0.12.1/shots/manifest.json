@@ -1,0 +1,751 @@
+{
+  "project": "infinite-reading",
+  "version": "0.12.1",
+  "stage": "0（迁移基线）",
+  "generatedAt": "2026-10-25T07:30:19.808Z",
+  "tool": "acceptance/tools/shoot.mjs",
+  "entry": "file:///D:/infinite-reading/index.html",
+  "demoEntry": "file:///D:/infinite-reading/index.html?demo=1",
+  "naming": "{序号}-{状态}-{屏幕}-{宽度}.png，状态 ∈ empty|seeded，序号 = PLAN 顺序",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 1
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "deviceScaleFactor": 1
+    }
+  ],
+  "states": {
+    "empty": "干净浏览器上下文（无 localStorage / IndexedDB 存档），普通模式打开 index.html",
+    "seeded": "干净上下文 + ?demo=1 离线演示：开场 → 点选项 → 发消息 → 回到早前节点分叉再发一条 → 两幕作画 → 打存档点"
+  },
+  "motion": {
+    "level": "off",
+    "how": "context(reducedMotion:'reduce') + 页面里把 settings.ui.motion 置 'off' 后 applyMotion()，截图前校验 html[data-motion]"
+  },
+  "notes": [
+    "截图前隐藏瞬态 toast、鼠标移到 (2,2) 中性点（阅读页特意悬停舞台以完整显示舞台按钮），避免半悬停态。",
+    "modal-email / modal-payment / 定时主动的入口只在智能体(chat)/扮演(rp)模式出现：seeded 尾段用「本对话设置 → 推进模式」把演示故事切到智能体后再截，其余截图都保持演示默认的剧情(choice)模式。",
+    "全部截图只截 viewport（fullPage:false）。"
+  ],
+  "shots": [
+    {
+      "seq": 1,
+      "file": "01-empty-start-390.png",
+      "state": "empty",
+      "screen": "start",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "首页（无「继续上次」）：ASCII 无限符号 + 三张模式卡 + 底部文字入口"
+    },
+    {
+      "seq": 1,
+      "file": "01-empty-start-1280.png",
+      "state": "empty",
+      "screen": "start",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "首页（无「继续上次」）：ASCII 无限符号 + 三张模式卡 + 底部文字入口"
+    },
+    {
+      "seq": 2,
+      "file": "02-empty-shelf-390.png",
+      "state": "empty",
+      "screen": "shelf",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "书架空态"
+    },
+    {
+      "seq": 2,
+      "file": "02-empty-shelf-1280.png",
+      "state": "empty",
+      "screen": "shelf",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "书架空态"
+    },
+    {
+      "seq": 3,
+      "file": "03-empty-settings-nav-390.png",
+      "state": "empty",
+      "screen": "settings-nav",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置弹窗 · 分组列表（仅窄屏 ≤720px 是「列表→下钻」态）"
+    },
+    {
+      "seq": 4,
+      "file": "04-empty-settings-models-390.png",
+      "state": "empty",
+      "screen": "settings-models",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 模型（剧情对话模型 / 模型库）"
+    },
+    {
+      "seq": 4,
+      "file": "04-empty-settings-models-1280.png",
+      "state": "empty",
+      "screen": "settings-models",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 模型（剧情对话模型 / 模型库）"
+    },
+    {
+      "seq": 5,
+      "file": "05-empty-settings-subs-390.png",
+      "state": "empty",
+      "screen": "settings-subs",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 辅助模型（画师子代理 / 书记员 / 起草模型）"
+    },
+    {
+      "seq": 5,
+      "file": "05-empty-settings-subs-1280.png",
+      "state": "empty",
+      "screen": "settings-subs",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 辅助模型（画师子代理 / 书记员 / 起草模型）"
+    },
+    {
+      "seq": 6,
+      "file": "06-empty-settings-image-390.png",
+      "state": "empty",
+      "screen": "settings-image",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 生图与画风"
+    },
+    {
+      "seq": 6,
+      "file": "06-empty-settings-image-1280.png",
+      "state": "empty",
+      "screen": "settings-image",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 生图与画风"
+    },
+    {
+      "seq": 7,
+      "file": "07-empty-settings-tools-390.png",
+      "state": "empty",
+      "screen": "settings-tools",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 工具与服务（生成过程 / 本地服务 / 邮件 / 定时主动 / 购物支付）"
+    },
+    {
+      "seq": 7,
+      "file": "07-empty-settings-tools-1280.png",
+      "state": "empty",
+      "screen": "settings-tools",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 工具与服务（生成过程 / 本地服务 / 邮件 / 定时主动 / 购物支付）"
+    },
+    {
+      "seq": 8,
+      "file": "08-empty-settings-data-390.png",
+      "state": "empty",
+      "screen": "settings-data",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 数据（用户画像 / 本地存储）"
+    },
+    {
+      "seq": 8,
+      "file": "08-empty-settings-data-1280.png",
+      "state": "empty",
+      "screen": "settings-data",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 数据（用户画像 / 本地存储）"
+    },
+    {
+      "seq": 9,
+      "file": "09-empty-settings-look-390.png",
+      "state": "empty",
+      "screen": "settings-look",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 外观（界面）"
+    },
+    {
+      "seq": 9,
+      "file": "09-empty-settings-look-1280.png",
+      "state": "empty",
+      "screen": "settings-look",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 外观（界面）"
+    },
+    {
+      "seq": 10,
+      "file": "10-empty-settings-story-390.png",
+      "state": "empty",
+      "screen": "settings-story",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 当前故事（无故事时为空/禁用态）"
+    },
+    {
+      "seq": 10,
+      "file": "10-empty-settings-story-1280.png",
+      "state": "empty",
+      "screen": "settings-story",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "设置 · 当前故事（无故事时为空/禁用态）"
+    },
+    {
+      "seq": 11,
+      "file": "11-empty-modal-new-390.png",
+      "state": "empty",
+      "screen": "modal-new",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "新故事弹窗（三张模式卡）"
+    },
+    {
+      "seq": 11,
+      "file": "11-empty-modal-new-1280.png",
+      "state": "empty",
+      "screen": "modal-new",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "新故事弹窗（三张模式卡）"
+    },
+    {
+      "seq": 12,
+      "file": "12-empty-modal-wizard-390.png",
+      "state": "empty",
+      "screen": "modal-wizard",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "开局设定向导（剧情模式）"
+    },
+    {
+      "seq": 12,
+      "file": "12-empty-modal-wizard-1280.png",
+      "state": "empty",
+      "screen": "modal-wizard",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "开局设定向导（剧情模式）"
+    },
+    {
+      "seq": 13,
+      "file": "13-empty-modal-import-text-390.png",
+      "state": "empty",
+      "screen": "modal-import-text",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "粘贴剧情文本导入弹窗（第 1 步）"
+    },
+    {
+      "seq": 13,
+      "file": "13-empty-modal-import-text-1280.png",
+      "state": "empty",
+      "screen": "modal-import-text",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "粘贴剧情文本导入弹窗（第 1 步）"
+    },
+    {
+      "seq": 14,
+      "file": "14-empty-modal-confirm-390.png",
+      "state": "empty",
+      "screen": "modal-confirm",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "确认弹窗（设置→数据→清空本地存档与设置 触发，无输入框）"
+    },
+    {
+      "seq": 14,
+      "file": "14-empty-modal-confirm-1280.png",
+      "state": "empty",
+      "screen": "modal-confirm",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html",
+      "note": "确认弹窗（设置→数据→清空本地存档与设置 触发，无输入框）"
+    },
+    {
+      "seq": 15,
+      "file": "15-seeded-start-390.png",
+      "state": "seeded",
+      "screen": "start",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "首页（有「继续上次」，带最近故事名）"
+    },
+    {
+      "seq": 15,
+      "file": "15-seeded-start-1280.png",
+      "state": "seeded",
+      "screen": "start",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "首页（有「继续上次」，带最近故事名）"
+    },
+    {
+      "seq": 16,
+      "file": "16-seeded-shelf-390.png",
+      "state": "seeded",
+      "screen": "shelf",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "书架（有故事卡片）"
+    },
+    {
+      "seq": 16,
+      "file": "16-seeded-shelf-1280.png",
+      "state": "seeded",
+      "screen": "shelf",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "书架（有故事卡片）"
+    },
+    {
+      "seq": 17,
+      "file": "17-seeded-game-390.png",
+      "state": "seeded",
+      "screen": "game",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "阅读页：聊天记录 / 舞台占位图 / 缩略图条 / 选项托盘展开；鼠标悬停舞台以完整显示舞台按钮"
+    },
+    {
+      "seq": 17,
+      "file": "17-seeded-game-1280.png",
+      "state": "seeded",
+      "screen": "game",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "阅读页：聊天记录 / 舞台占位图 / 缩略图条 / 选项托盘展开；鼠标悬停舞台以完整显示舞台按钮"
+    },
+    {
+      "seq": 18,
+      "file": "18-seeded-hud-more-390.png",
+      "state": "seeded",
+      "screen": "hud-more",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "阅读页顶栏「⋯」更多菜单（存档点 / 分支 / 作画 / 本对话设置 / 全局设置）"
+    },
+    {
+      "seq": 18,
+      "file": "18-seeded-hud-more-1280.png",
+      "state": "seeded",
+      "screen": "hud-more",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "阅读页顶栏「⋯」更多菜单（存档点 / 分支 / 作画 / 本对话设置 / 全局设置）"
+    },
+    {
+      "seq": 19,
+      "file": "19-seeded-branch-390.png",
+      "state": "seeded",
+      "screen": "branch",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "分支页：SVG 分支树（含一次分叉）+ 右侧节点详情面板"
+    },
+    {
+      "seq": 19,
+      "file": "19-seeded-branch-1280.png",
+      "state": "seeded",
+      "screen": "branch",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "分支页：SVG 分支树（含一次分叉）+ 右侧节点详情面板"
+    },
+    {
+      "seq": 20,
+      "file": "20-seeded-painter-390.png",
+      "state": "seeded",
+      "screen": "painter",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "画师工作台（看 / 改这张图的提示词）"
+    },
+    {
+      "seq": 20,
+      "file": "20-seeded-painter-1280.png",
+      "state": "seeded",
+      "screen": "painter",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "画师工作台（看 / 改这张图的提示词）"
+    },
+    {
+      "seq": 21,
+      "file": "21-seeded-anchor-390.png",
+      "state": "seeded",
+      "screen": "anchor",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "画风锚定：4 张候选试画（本地占位图）"
+    },
+    {
+      "seq": 21,
+      "file": "21-seeded-anchor-1280.png",
+      "state": "seeded",
+      "screen": "anchor",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "画风锚定：4 张候选试画（本地占位图）"
+    },
+    {
+      "seq": 22,
+      "file": "22-seeded-card-390.png",
+      "state": "seeded",
+      "screen": "card",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "角色卡编辑弹窗"
+    },
+    {
+      "seq": 22,
+      "file": "22-seeded-card-1280.png",
+      "state": "seeded",
+      "screen": "card",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "角色卡编辑弹窗"
+    },
+    {
+      "seq": 23,
+      "file": "23-seeded-story-prefs-390.png",
+      "state": "seeded",
+      "screen": "story-prefs",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "本对话设置面板（剧情模式：模型/画风/推进模式/选项/布局）"
+    },
+    {
+      "seq": 23,
+      "file": "23-seeded-story-prefs-1280.png",
+      "state": "seeded",
+      "screen": "story-prefs",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "本对话设置面板（剧情模式：模型/画风/推进模式/选项/布局）"
+    },
+    {
+      "seq": 24,
+      "file": "24-seeded-modal-confirm-390.png",
+      "state": "seeded",
+      "screen": "modal-confirm",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "确认弹窗（打一个存档点，带名字输入框）"
+    },
+    {
+      "seq": 24,
+      "file": "24-seeded-modal-confirm-1280.png",
+      "state": "seeded",
+      "screen": "modal-confirm",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "确认弹窗（打一个存档点，带名字输入框）"
+    },
+    {
+      "seq": 25,
+      "file": "25-seeded-toast-390.png",
+      "state": "seeded",
+      "screen": "toast",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "提示条（打完存档点的「已打存档点」）"
+    },
+    {
+      "seq": 25,
+      "file": "25-seeded-toast-1280.png",
+      "state": "seeded",
+      "screen": "toast",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "提示条（打完存档点的「已打存档点」）"
+    },
+    {
+      "seq": 26,
+      "file": "26-seeded-modal-export-390.png",
+      "state": "seeded",
+      "screen": "modal-export",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "导出弹窗（书架行「⋯」→ 导出）"
+    },
+    {
+      "seq": 26,
+      "file": "26-seeded-modal-export-1280.png",
+      "state": "seeded",
+      "screen": "modal-export",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "导出弹窗（书架行「⋯」→ 导出）"
+    },
+    {
+      "seq": 27,
+      "file": "27-seeded-modal-email-390.png",
+      "state": "seeded",
+      "screen": "modal-email",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "写邮件弹窗（入口仅智能体/扮演模式：先在「本对话设置→推进模式」切到智能体）"
+    },
+    {
+      "seq": 27,
+      "file": "27-seeded-modal-email-1280.png",
+      "state": "seeded",
+      "screen": "modal-email",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "写邮件弹窗（入口仅智能体/扮演模式：先在「本对话设置→推进模式」切到智能体）"
+    },
+    {
+      "seq": 28,
+      "file": "28-seeded-modal-payment-390.png",
+      "state": "seeded",
+      "screen": "modal-payment",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "代下单弹窗（同上，智能体模式）"
+    },
+    {
+      "seq": 28,
+      "file": "28-seeded-modal-payment-1280.png",
+      "state": "seeded",
+      "screen": "modal-payment",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "代下单弹窗（同上，智能体模式）"
+    },
+    {
+      "seq": 29,
+      "file": "29-seeded-settings-schedule-390.png",
+      "state": "seeded",
+      "screen": "settings-schedule",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "定时主动（「＋」→ 定时主动：设置·工具与服务，滚动到「定时主动」分区）"
+    },
+    {
+      "seq": 29,
+      "file": "29-seeded-settings-schedule-1280.png",
+      "state": "seeded",
+      "screen": "settings-schedule",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "定时主动（「＋」→ 定时主动：设置·工具与服务，滚动到「定时主动」分区）"
+    },
+    {
+      "seq": 30,
+      "file": "30-seeded-lightbox-390.png",
+      "state": "seeded",
+      "screen": "lightbox",
+      "width": 390,
+      "height": 844,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "图片灯箱（智能体模式内联图气泡点开的大图）"
+    },
+    {
+      "seq": 30,
+      "file": "30-seeded-lightbox-1280.png",
+      "state": "seeded",
+      "screen": "lightbox",
+      "width": 1280,
+      "height": 800,
+      "url": "file:///D:/infinite-reading/index.html?demo=1",
+      "note": "图片灯箱（智能体模式内联图气泡点开的大图）"
+    }
+  ],
+  "skipped": [
+    {
+      "item": "empty/settings-nav",
+      "state": "empty",
+      "width": 1280,
+      "reason": "该形态只有窄屏有：设置弹窗 · 分组列表（仅窄屏 ≤720px 是「列表→下钻」态）"
+    },
+    {
+      "item": "modal-painter / modal-export / modal-card / lightbox / toast",
+      "state": "empty",
+      "reason": "依赖故事数据（要有存档、图片或角色卡），empty 上游入口直接拦掉"
+    },
+    {
+      "item": "modal-anchor（画风锚定）",
+      "state": "empty",
+      "reason": "试画 4 张候选要生图适配器；empty 是未配置的普通模式，点了只会报「没配模型」"
+    },
+    {
+      "item": "modal-email / modal-payment / 定时主动",
+      "state": "empty",
+      "reason": "入口只在智能体/扮演模式出现，empty 无故事可切模式"
+    },
+    {
+      "item": "settings-nav（设置分组列表）",
+      "state": "seeded",
+      "reason": "与 empty 的设置弹窗同构，全局设置只在 empty 逐分组截；seeded 只补「本对话设置」与「定时主动」"
+    },
+    {
+      "item": "作画 第 2 张（分叉回合后）",
+      "state": "seeded",
+      "width": 0,
+      "reason": "作画没出图（第 2 张（分叉回合后））：点「为当前场景作画」后提示「已加入作画队列」，现场={\"turn\":2,\"head\":\"nmvnid4x5b3nt\",\"scenes\":[{\"id\":\"scmvnid6j8dyvm\",\"thumb\":true,\"imageId\":true}],\"queue\":0,\"logTail\":[\"narration:车门合拢，顶灯闪了一下。整节车厢只剩三个人：你、一个抱着蒙布鸟笼的老人，和一个靠在门边打盹的乘务员。广播报出下一站，声音\",\"player:我没有回答，先在那扇门上敲了三下。\",\"tool:自动带上相关记忆：那扇门\",\"narration:你走到车厢尽头。那扇门虚掩着，缝里透出暖黄的灯，还有关东煮的味道——像某条街的深夜，从很远的地方漏了一点进来。\",\"image:\"]}"
+    }
+  ],
+  "console": [
+    {
+      "state": "seeded",
+      "width": 1280,
+      "dataMotion": "off",
+      "navigatorOnLine": true,
+      "errors": [],
+      "failedRequests": []
+    },
+    {
+      "state": "empty",
+      "width": 390,
+      "dataMotion": "off",
+      "navigatorOnLine": true,
+      "errors": [
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        },
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        },
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        }
+      ],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:4319/health",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        }
+      ]
+    },
+    {
+      "state": "empty",
+      "width": 1280,
+      "dataMotion": "off",
+      "navigatorOnLine": true,
+      "errors": [
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        },
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        },
+        {
+          "kind": "console",
+          "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+          "at": "http://127.0.0.1:4319/health"
+        }
+      ],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:4319/health",
+          "error": "net::ERR_CONNECTION_REFUSED"
+        }
+      ]
+    },
+    {
+      "state": "seeded",
+      "width": 390,
+      "dataMotion": "off",
+      "navigatorOnLine": true,
+      "errors": [],
+      "failedRequests": []
+    }
+  ],
+  "summary": {
+    "shots": 59,
+    "byState": {
+      "empty": 27,
+      "seeded": 32
+    },
+    "byWidth": {
+      "390": 30,
+      "1280": 29
+    },
+    "screens": 30,
+    "consoleErrors": 6,
+    "skipped": 6
+  }
+}

@@ -1,0 +1,1051 @@
+{
+ "format": "ir-story",
+ "schema": 2,
+ "kind": "full",
+ "app": "无限阅读 v0.12.1",
+ "title": "雨夜便利店",
+ "premise": "标题：雨夜便利店\n世界：现代都市，深夜的便利店，外面下着大雨，店里灯光昏黄，收音机放着老歌。\n你的角色：一位进来避雨的夜班顾客（你可以随时扮演成任何人、做任何事）。\nAI 扮演：旁白，以及店里的一切——店员、常客、广播里的声音……\n风格：克制的悬疑，日常里藏着一丝奇异。剧情随玩家的行动自由生长。\n人物：周叙｜话里有话、克制、爱反问｜简短、喜欢反问\n伏笔：锅边便签；挑便宜的就走",
+ "mode": "choice",
+ "styleTone": "克制的悬疑，日常里藏着一丝奇异",
+ "world": {
+  "place": "便利店储物间过道",
+  "time": "挂钟停在 2:47；传闻凌晨三点有事发生",
+  "characters": [
+   {
+    "presence": "在场",
+    "personality": "话里有话、克制、爱反问",
+    "speech": "简短、喜欢反问",
+    "note": "今晚看店的年轻店员",
+    "noteLocked": false,
+    "name": "周叙"
+   }
+  ],
+  "threads": [
+   "锅边便签：过了三点就别再添汤",
+   "周叙的劝告：挑便宜的就走"
+  ],
+  "relationship": {
+   "stage": "",
+   "bonds": [],
+   "notes": "周叙话里有话，似乎知道凌晨三点的事"
+  },
+  "scene": "灯泡忽明忽暗，尽头堆着纸箱",
+  "updatedAt": 1792914596455,
+  "scribeAt": 0
+ },
+ "styleCard": {
+  "id": "stylemvnj24hs25hc",
+  "version": 2,
+  "locked": true,
+  "updatedAt": 1790322840415,
+  "styleKeywords": [
+   "cinematic",
+   "warm amber light",
+   "rainy night"
+  ],
+  "medium": "watercolor",
+  "palette": "amber, deep blue",
+  "characters": [
+   {
+    "name": "周叙",
+    "appearanceEn": "young clerk",
+    "outfit": "store uniform",
+    "features": "calm eyes"
+   }
+  ],
+  "negative": "text, watermark",
+  "note": "暖黄灯光，冷蓝雨夜"
+ },
+ "rollingStyle": {
+  "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+  "scenes": "便利店内部，收银台与货架之间",
+  "wardrobe": "便利店制服、深色雨衣",
+  "updatedAt": 1790322901415
+ },
+ "characterCard": null,
+ "createdAt": 1792914596416,
+ "updatedAt": 1792914596473,
+ "images": [
+  {
+   "id": "scmvnj24irf70z",
+   "alt": "雨夜便利店场景图 1",
+   "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+   "promptRaw": "fixture prompt raw #0",
+   "thumb": "data:image/jpeg;base64,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",
+   "aspect": "3:2",
+   "width": 120,
+   "height": 80,
+   "src": "data:image/png;base64,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"
+  },
+  {
+   "id": "scmvnj24izl56l",
+   "alt": "雨夜便利店场景图 1",
+   "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+   "promptRaw": "fixture prompt raw #0",
+   "thumb": "data:image/jpeg;base64,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",
+   "kind": "video",
+   "videoOmitted": true,
+   "mode": "i2v",
+   "duration": 6,
+   "ts": 1790323511415
+  }
+ ],
+ "log": [
+  {
+   "type": "narration",
+   "text": "凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。",
+   "versions": [
+    "凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。"
+   ],
+   "activeVersion": 0,
+   "ts": 1790322962415,
+   "nid": "nmvnj24ht5e27"
+  },
+  {
+   "type": "player",
+   "text": "走到关东煮的柜台前，看了看锅边的便签",
+   "kind": "do",
+   "ts": 1790323023415
+  },
+  {
+   "type": "narration",
+   "text": "锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。",
+   "versions": [
+    "锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。"
+   ],
+   "activeVersion": 0,
+   "ts": 1790323023415,
+   "nid": "nmvnj24ht7gnd"
+  },
+  {
+   "type": "tool",
+   "tool": "recall_world_state",
+   "summary": "查阅了世界状态卡",
+   "ts": 1790323023415
+  },
+  {
+   "type": "choice",
+   "text": "和店员搭话",
+   "kind": "do",
+   "ts": 1790323084415
+  },
+  {
+   "type": "narration",
+   "text": "店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。",
+   "versions": [
+    "店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。"
+   ],
+   "activeVersion": 0,
+   "ts": 1790323084415,
+   "reasoning": "玩家选了「和店员搭话」。店员是关键线索人物，给他起个名字周叙，说话带点反问，把「凌晨三点」的传闻递出去。",
+   "nid": "nmvnj24ht9zin"
+  },
+  {
+   "type": "player",
+   "text": "「这场雨要下到凌晨三点？」我重复了一遍他的话。",
+   "kind": "say",
+   "ts": 1790323145415
+  },
+  {
+   "type": "narration",
+   "text": "周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」",
+   "versions": [
+    "周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」"
+   ],
+   "activeVersion": 0,
+   "ts": 1790323145415,
+   "nid": "nmvnj24hublys"
+  },
+  {
+   "type": "tool",
+   "tool": "update_memory",
+   "summary": "更新记忆：周叙话里有话，似乎知道凌晨三点的事",
+   "ts": 1790323145415
+  },
+  {
+   "type": "player",
+   "text": "抬头看墙上的挂钟",
+   "kind": "do",
+   "ts": 1790323206415
+  },
+  {
+   "type": "narration",
+   "text": "墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」",
+   "versions": [
+    "墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」"
+   ],
+   "activeVersion": 0,
+   "ts": 1790323206415,
+   "nid": "nmvnj24hudu9p"
+  },
+  {
+   "type": "image",
+   "id": "scmvnj24irf70z",
+   "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+   "promptRaw": "fixture prompt raw #0",
+   "alt": "雨夜便利店场景图 1",
+   "thumb": "data:image/jpeg;base64,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",
+   "imageId": "img:scmvnj24irf70z",
+   "model": "fixture-image-model",
+   "size": "120x80",
+   "aspect": "3:2",
+   "width": 120,
+   "height": 80,
+   "styleCardId": "stylemvnj24hs25hc@2",
+   "ts": 1790323267415
+  },
+  {
+   "type": "player",
+   "text": "我没有理会收音机，先去把那扇虚掩的门推开了",
+   "kind": "do",
+   "ts": 1790323450415
+  },
+  {
+   "type": "narration",
+   "text": "门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。",
+   "versions": [
+    "门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。"
+   ],
+   "activeVersion": 0,
+   "ts": 1790323450415,
+   "nid": "nmvnj24ivjsyl"
+  },
+  {
+   "type": "video",
+   "id": "scmvnj24izl56l",
+   "alt": "雨夜便利店场景图 1",
+   "thumb": "data:image/jpeg;base64,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",
+   "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+   "promptRaw": "fixture prompt raw #0",
+   "mode": "i2v",
+   "model": "minimax-video",
+   "duration": 6,
+   "resolution": "768P",
+   "ts": 1790323511415,
+   "videoOmitted": true
+  }
+ ],
+ "messages": [
+  {
+   "role": "user",
+   "content": "[设定]\n标题：雨夜便利店\n世界：现代都市，深夜的便利店，外面下着大雨，店里灯光昏黄，收音机放着老歌。\n你的角色：一位进来避雨的夜班顾客（你可以随时扮演成任何人、做任何事）。\nAI 扮演：旁白，以及店里的一切——店员、常客、广播里的声音……\n风格：克制的悬疑，日常里藏着一丝奇异。剧情随玩家的行动自由生长。\n人物：周叙｜话里有话、克制、爱反问｜简短、喜欢反问\n伏笔：锅边便签；挑便宜的就走\n\n[玩家行动] （故事开场。请描写第一幕，把玩家带进场景。）"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。\",\"choices\":[\"走向关东煮的柜台\",\"和店员搭话\",\"随意浏览货架\"],\"scene_change\":true,\"scene_summary\":\"雨夜便利店内部，暖黄灯光，收银台旁一台红色旋钮的旧收音机，落地玻璃外是湿漉漉反光的街道\"}"
+  },
+  {
+   "role": "user",
+   "content": "[玩家行动] （做）走到关东煮的柜台前，看了看锅边的便签"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。\",\"choices\":[\"问店员便签是谁写的\",\"夹一串萝卜\",\"回到收银台那边\"],\"scene_change\":false,\"scene_summary\":\"第三排货架前冒着热气的关东煮锅，锅边一张手写便签\"}"
+  },
+  {
+   "role": "user",
+   "content": "[玩家行动] （做）和店员搭话"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。\",\"choices\":[\"问他凌晨三点会发生什么\",\"买一杯热咖啡\",\"假装没听见，继续逛\"],\"scene_change\":true,\"scene_summary\":\"便利店收银台附近，年轻店员周叙在货架间补货，暖光\"}",
+   "reasoning": "玩家选了「和店员搭话」。店员是关键线索人物，给他起个名字周叙，说话带点反问，把「凌晨三点」的传闻递出去。"
+  },
+  {
+   "role": "user",
+   "content": "[玩家行动] （说）「这场雨要下到凌晨三点？」我重复了一遍他的话。"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」\",\"choices\":[\"追问为什么是便宜的东西\",\"换个话题聊聊这场雨\"],\"scene_change\":false,\"scene_summary\":\"货架间，店员回头看向镜头，表情介于笑意与警惕之间\"}"
+  },
+  {
+   "role": "user",
+   "content": "[玩家行动] （做）抬头看墙上的挂钟"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」\",\"choices\":[\"问他店里的钟为什么坏了\",\"继续盯着挂钟看\"],\"scene_change\":true,\"scene_summary\":\"墙上停摆的挂钟，指针凝固在 2:47，暖光边缘泛着冷\"}"
+  },
+  {
+   "role": "user",
+   "content": "[玩家行动] （做）我没有理会收音机，先去把那扇虚掩的门推开了"
+  },
+  {
+   "role": "assistant",
+   "content": "{\"narration\":\"门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。\",\"choices\":[\"拆开那只箱子\",\"退回店里\"],\"scene_change\":true,\"scene_summary\":\"储物间过道，忽明忽暗的灯泡，尽头堆着纸箱\"}"
+  }
+ ],
+ "summaries": [],
+ "painterThread": [],
+ "userProfile": [],
+ "turn": 6,
+ "lastSceneSummary": "储物间过道，忽明忽暗的灯泡，尽头堆着纸箱",
+ "tree": {
+  "v": 1,
+  "root": "nmvnj24hs3jfh",
+  "head": "nmvnj24ivjsyl",
+  "nodes": {
+   "nmvnj24hs3jfh": {
+    "id": "nmvnj24hs3jfh",
+    "parent": null,
+    "children": [
+     "nmvnj24ht5e27"
+    ],
+    "active": "nmvnj24ht5e27",
+    "kind": "root",
+    "action": null,
+    "userMsg": null,
+    "assistantMsg": null,
+    "entries": [],
+    "scenes": [],
+    "sid": "stmvnj24ht4e18",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 0,
+    "ts": 1792914596416,
+    "meta": {}
+   },
+   "nmvnj24ht5e27": {
+    "id": "nmvnj24ht5e27",
+    "parent": "nmvnj24hs3jfh",
+    "children": [
+     "nmvnj24ht7gnd"
+    ],
+    "active": "nmvnj24ht7gnd",
+    "kind": "turn",
+    "action": {
+     "type": "opening",
+     "text": "（故事开场。请描写第一幕，把玩家带进场景。）",
+     "kind": null,
+     "sent": "（故事开场。请描写第一幕，把玩家带进场景。）"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[设定]\n标题：雨夜便利店\n世界：现代都市，深夜的便利店，外面下着大雨，店里灯光昏黄，收音机放着老歌。\n你的角色：一位进来避雨的夜班顾客（你可以随时扮演成任何人、做任何事）。\nAI 扮演：旁白，以及店里的一切——店员、常客、广播里的声音……\n风格：克制的悬疑，日常里藏着一丝奇异。剧情随玩家的行动自由生长。\n人物：周叙｜话里有话、克制、爱反问｜简短、喜欢反问\n伏笔：锅边便签；挑便宜的就走\n\n[玩家行动] （故事开场。请描写第一幕，把玩家带进场景。）"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。\",\"choices\":[\"走向关东煮的柜台\",\"和店员搭话\",\"随意浏览货架\"],\"scene_change\":true,\"scene_summary\":\"雨夜便利店内部，暖黄灯光，收银台旁一台红色旋钮的旧收音机，落地玻璃外是湿漉漉反光的街道\"}"
+    },
+    "entries": [
+     {
+      "type": "narration",
+      "text": "凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。",
+      "versions": [
+       "凌晨的雨把街道泡成深色。自动门「叮」地一声为你让开，暖气混着关东煮的味道扑面而来。收银台旁立着一台旧收音机，红色旋钮被磨得发亮，沙沙地放着老歌。"
+      ],
+      "activeVersion": 0,
+      "ts": 1790322962415,
+      "nid": "nmvnj24ht5e27"
+     }
+    ],
+    "scenes": [],
+    "sid": "stmvnj24ht6xvq",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 1,
+    "ts": 1792914596417,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24ht7gnd": {
+    "id": "nmvnj24ht7gnd",
+    "parent": "nmvnj24ht5e27",
+    "children": [
+     "nmvnj24ht9zin"
+    ],
+    "active": "nmvnj24ht9zin",
+    "kind": "turn",
+    "action": {
+     "type": "player",
+     "text": "走到关东煮的柜台前，看了看锅边的便签",
+     "kind": "do",
+     "sent": "（做）走到关东煮的柜台前，看了看锅边的便签"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （做）走到关东煮的柜台前，看了看锅边的便签"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。\",\"choices\":[\"问店员便签是谁写的\",\"夹一串萝卜\",\"回到收银台那边\"],\"scene_change\":false,\"scene_summary\":\"第三排货架前冒着热气的关东煮锅，锅边一张手写便签\"}"
+    },
+    "entries": [
+     {
+      "type": "player",
+      "text": "走到关东煮的柜台前，看了看锅边的便签",
+      "kind": "do",
+      "ts": 1790323023415
+     },
+     {
+      "type": "narration",
+      "text": "锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。",
+      "versions": [
+       "锅咕嘟咕嘟地翻着小泡。锅边贴着一张手写便签：「过了三点，就别再添汤了。」你余光瞥见便签背面还有一行小字，被蒸汽熏得快看不清了。"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323023415,
+      "nid": "nmvnj24ht7gnd"
+     },
+     {
+      "type": "tool",
+      "tool": "recall_world_state",
+      "summary": "查阅了世界状态卡",
+      "ts": 1790323023415
+     }
+    ],
+    "scenes": [],
+    "sid": "stmvnj24ht86x3",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 2,
+    "ts": 1792914596417,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24ht9zin": {
+    "id": "nmvnj24ht9zin",
+    "parent": "nmvnj24ht7gnd",
+    "children": [
+     "nmvnj24hublys"
+    ],
+    "active": "nmvnj24hublys",
+    "kind": "turn",
+    "action": {
+     "type": "choice",
+     "text": "和店员搭话",
+     "kind": "do",
+     "sent": "（做）和店员搭话"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （做）和店员搭话"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。\",\"choices\":[\"问他凌晨三点会发生什么\",\"买一杯热咖啡\",\"假装没听见，继续逛\"],\"scene_change\":true,\"scene_summary\":\"便利店收银台附近，年轻店员周叙在货架间补货，暖光\"}",
+     "reasoning": "玩家选了「和店员搭话」。店员是关键线索人物，给他起个名字周叙，说话带点反问，把「凌晨三点」的传闻递出去。"
+    },
+    "entries": [
+     {
+      "type": "choice",
+      "text": "和店员搭话",
+      "kind": "do",
+      "ts": 1790323084415
+     },
+     {
+      "type": "narration",
+      "text": "店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。",
+      "versions": [
+       "店员是个二十出头的年轻人，正在给饭团补货。他抬头看你一眼：「避雨？这场雨要下到凌晨三点。」——凌晨三点。他说这三个字时，收音机的沙沙声恰好停了一拍。"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323084415,
+      "reasoning": "玩家选了「和店员搭话」。店员是关键线索人物，给他起个名字周叙，说话带点反问，把「凌晨三点」的传闻递出去。",
+      "nid": "nmvnj24ht9zin"
+     }
+    ],
+    "scenes": [],
+    "sid": "stmvnj24huahf2",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 3,
+    "ts": 1792914596418,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24hublys": {
+    "id": "nmvnj24hublys",
+    "parent": "nmvnj24ht9zin",
+    "children": [
+     "nmvnj24hudu9p"
+    ],
+    "active": "nmvnj24hudu9p",
+    "kind": "turn",
+    "action": {
+     "type": "player",
+     "text": "「这场雨要下到凌晨三点？」我重复了一遍他的话。",
+     "kind": "say",
+     "sent": "（说）「这场雨要下到凌晨三点？」我重复了一遍他的话。"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （说）「这场雨要下到凌晨三点？」我重复了一遍他的话。"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」\",\"choices\":[\"追问为什么是便宜的东西\",\"换个话题聊聊这场雨\"],\"scene_change\":false,\"scene_summary\":\"货架间，店员回头看向镜头，表情介于笑意与警惕之间\"}"
+    },
+    "entries": [
+     {
+      "type": "player",
+      "text": "「这场雨要下到凌晨三点？」我重复了一遍他的话。",
+      "kind": "say",
+      "ts": 1790323145415
+     },
+     {
+      "type": "narration",
+      "text": "周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」",
+      "versions": [
+       "周叙码饭团的手停了一下，胶带撕开的声音格外清晰。「传闻嘛，听听就好。」他把一排饭团码得整整齐齐，忽然抬眼盯着你，「不过——你要是非得在凌晨三点买东西，我劝你，挑便宜的就走。」"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323145415,
+      "nid": "nmvnj24hublys"
+     },
+     {
+      "type": "tool",
+      "tool": "update_memory",
+      "summary": "更新记忆：周叙话里有话，似乎知道凌晨三点的事",
+      "ts": 1790323145415
+     }
+    ],
+    "scenes": [],
+    "sid": "stmvnj24huc6i1",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 4,
+    "ts": 1792914596418,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24hudu9p": {
+    "id": "nmvnj24hudu9p",
+    "parent": "nmvnj24hublys",
+    "children": [
+     "nmvnj24isg06z",
+     "nmvnj24ivjsyl"
+    ],
+    "active": "nmvnj24ivjsyl",
+    "kind": "turn",
+    "action": {
+     "type": "player",
+     "text": "抬头看墙上的挂钟",
+     "kind": "do",
+     "sent": "（做）抬头看墙上的挂钟"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （做）抬头看墙上的挂钟"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」\",\"choices\":[\"问他店里的钟为什么坏了\",\"继续盯着挂钟看\"],\"scene_change\":true,\"scene_summary\":\"墙上停摆的挂钟，指针凝固在 2:47，暖光边缘泛着冷\"}"
+    },
+    "entries": [
+     {
+      "type": "player",
+      "text": "抬头看墙上的挂钟",
+      "kind": "do",
+      "ts": 1790323206415
+     },
+     {
+      "type": "narration",
+      "text": "墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」",
+      "versions": [
+       "墙上的挂钟停在 2:47，秒针纹丝不动，像是被人按住了。可窗外的雨声分明还在走。周叙顺着你的视线看过去，笑了笑：「那钟早坏了，别管它。」"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323206415,
+      "nid": "nmvnj24hudu9p"
+     },
+     {
+      "type": "image",
+      "id": "scmvnj24irf70z",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #0",
+      "alt": "雨夜便利店场景图 1",
+      "thumb": "data:image/jpeg;base64,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",
+      "imageId": "img:scmvnj24irf70z",
+      "model": "fixture-image-model",
+      "size": "120x80",
+      "aspect": "3:2",
+      "width": 120,
+      "height": 80,
+      "styleCardId": "stylemvnj24hs25hc@2",
+      "ts": 1790323267415
+     }
+    ],
+    "scenes": [
+     {
+      "id": "scmvnj24irf70z",
+      "alt": "雨夜便利店场景图 1",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #0",
+      "aspect": "3:2",
+      "width": 120,
+      "height": 80,
+      "styleCardId": "stylemvnj24hs25hc@2",
+      "thumb": "data:image/jpeg;base64,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",
+      "imageId": "img:scmvnj24irf70z",
+      "model": "fixture-image-model",
+      "ts": 1790323267415
+     }
+    ],
+    "sid": "stmvnj24huezks",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 5,
+    "ts": 1792914596418,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24isg06z": {
+    "id": "nmvnj24isg06z",
+    "parent": "nmvnj24hudu9p",
+    "children": [],
+    "active": null,
+    "kind": "turn",
+    "action": {
+     "type": "player",
+     "text": "回到收银台旁听收音机",
+     "kind": "do",
+     "sent": "（做）回到收银台旁听收音机"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （做）回到收银台旁听收音机"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"收音机里的老歌忽然断了，插进一段听不清的电流声，隐约像有人在数数：一、二、三、四……数到七就没了下文。\",\"choices\":[\"凑近收音机听清楚\",\"伸手去转调频旋钮\"],\"scene_change\":false,\"scene_summary\":\"收银台旁那台红色旋钮的旧收音机，电流声里的模糊人影\"}"
+    },
+    "entries": [
+     {
+      "type": "player",
+      "text": "回到收银台旁听收音机",
+      "kind": "do",
+      "ts": 1790323328415
+     },
+     {
+      "type": "narration",
+      "text": "收音机里的老歌忽然断了，插进一段听不清的电流声，隐约像有人在数数：一、二、三、四……数到七就没了下文。",
+      "versions": [
+       "收音机里的老歌忽然断了，插进一段听不清的电流声，隐约像有人在数数：一、二、三、四……数到七就没了下文。"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323328415,
+      "nid": "nmvnj24isg06z"
+     },
+     {
+      "type": "image",
+      "id": "scmvnj24ivi30w",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #1",
+      "alt": "雨夜便利店场景图 2",
+      "thumb": "data:image/jpeg;base64,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",
+      "imageId": "img:scmvnj24ivi30w",
+      "model": "fixture-image-model",
+      "size": "120x80",
+      "aspect": "3:2",
+      "width": 120,
+      "height": 80,
+      "styleCardId": "stylemvnj24hs25hc@2",
+      "ts": 1790323389415
+     }
+    ],
+    "scenes": [
+     {
+      "id": "scmvnj24ivi30w",
+      "alt": "雨夜便利店场景图 2",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #1",
+      "aspect": "3:2",
+      "width": 120,
+      "height": 80,
+      "styleCardId": "stylemvnj24hs25hc@2",
+      "thumb": "data:image/jpeg;base64,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",
+      "imageId": "img:scmvnj24ivi30w",
+      "model": "fixture-image-model",
+      "ts": 1790323389415
+     }
+    ],
+    "sid": "stmvnj24ish7lw",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 6,
+    "ts": 1792914596452,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   },
+   "nmvnj24ivjsyl": {
+    "id": "nmvnj24ivjsyl",
+    "parent": "nmvnj24hudu9p",
+    "children": [],
+    "active": null,
+    "kind": "turn",
+    "action": {
+     "type": "player",
+     "text": "我没有理会收音机，先去把那扇虚掩的门推开了",
+     "kind": "do",
+     "sent": "（做）我没有理会收音机，先去把那扇虚掩的门推开了"
+    },
+    "userMsg": {
+     "role": "user",
+     "content": "[玩家行动] （做）我没有理会收音机，先去把那扇虚掩的门推开了"
+    },
+    "assistantMsg": {
+     "role": "assistant",
+     "content": "{\"narration\":\"门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。\",\"choices\":[\"拆开那只箱子\",\"退回店里\"],\"scene_change\":true,\"scene_summary\":\"储物间过道，忽明忽暗的灯泡，尽头堆着纸箱\"}"
+    },
+    "entries": [
+     {
+      "type": "player",
+      "text": "我没有理会收音机，先去把那扇虚掩的门推开了",
+      "kind": "do",
+      "ts": 1790323450415
+     },
+     {
+      "type": "narration",
+      "text": "门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。",
+      "versions": [
+       "门后是一条窄得不像话的储物间过道，灯泡在头顶忽明忽暗。尽头堆着没拆封的纸箱，最上面那只箱子的胶带被人重新贴过，边缘还留着指甲的划痕。"
+      ],
+      "activeVersion": 0,
+      "ts": 1790323450415,
+      "nid": "nmvnj24ivjsyl"
+     },
+     {
+      "type": "video",
+      "id": "scmvnj24izl56l",
+      "alt": "雨夜便利店场景图 1",
+      "thumb": "data:image/jpeg;base64,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",
+      "videoId": "vid:scmvnj24izl56l",
+      "remoteUrl": "https://video.invalid/fixture/scmvnj24izl56l.mp4",
+      "mode": "i2v",
+      "sourceSceneId": "scmvnj24irf70z",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #0",
+      "model": "minimax-video",
+      "duration": 6,
+      "resolution": "768P",
+      "ratio": "16:9",
+      "taskId": "vid-task-fixture-0",
+      "ts": 1790323511415
+     }
+    ],
+    "scenes": [
+     {
+      "id": "scmvnj24izl56l",
+      "alt": "雨夜便利店场景图 1",
+      "prompt": "cinematic still, rainy convenience store at night, warm amber light, watercolor",
+      "promptRaw": "fixture prompt raw #0",
+      "kind": "video",
+      "aspect": "3:2",
+      "width": 120,
+      "height": 80,
+      "thumb": "data:image/jpeg;base64,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",
+      "videoId": "vid:scmvnj24izl56l",
+      "sourceSceneId": "scmvnj24irf70z",
+      "mode": "i2v",
+      "taskId": "vid-task-fixture-0",
+      "remoteUrl": "https://video.invalid/fixture/scmvnj24izl56l.mp4",
+      "duration": 6,
+      "resolution": "768P",
+      "ratio": "16:9",
+      "model": "minimax-video",
+      "ts": 1790323511415
+     }
+    ],
+    "sid": "stmvnj24ivkheb",
+    "msgFloor": 0,
+    "msgSnap": null,
+    "sealed": true,
+    "turn": 6,
+    "ts": 1792914596455,
+    "meta": {
+     "model": "fixture-chat-model"
+    }
+   }
+  },
+  "states": {
+   "stmvnj24ht4e18": {
+    "world": {
+     "place": "",
+     "time": "",
+     "characters": [],
+     "threads": [],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": ""
+     },
+     "scene": "",
+     "updatedAt": 0,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "",
+    "lastBg": null
+   },
+   "stmvnj24ht6xvq": {
+    "world": {
+     "place": "雨夜便利店（收银台与货架区）",
+     "time": "深夜·雨夜",
+     "characters": [],
+     "threads": [],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": ""
+     },
+     "scene": "收银台旁一台红色旋钮的旧收音机，暖黄灯光",
+     "updatedAt": 1792914596417,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "雨夜便利店内部，暖黄灯光，收银台旁一台红色旋钮的旧收音机，落地玻璃外是湿漉漉反光的街道",
+    "lastBg": null
+   },
+   "stmvnj24ht86x3": {
+    "world": {
+     "place": "雨夜便利店·第三排货架（关东煮）",
+     "time": "深夜·雨夜",
+     "characters": [],
+     "threads": [
+      "锅边便签：过了三点就别再添汤"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": ""
+     },
+     "scene": "收银台旁一台红色旋钮的旧收音机，暖黄灯光",
+     "updatedAt": 1792914596417,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "第三排货架前冒着热气的关东煮锅，锅边一张手写便签",
+    "lastBg": null
+   },
+   "stmvnj24huahf2": {
+    "world": {
+     "place": "雨夜便利店·第三排货架（关东煮）",
+     "time": "凌晨两点多；传闻凌晨三点有事发生",
+     "characters": [
+      {
+       "presence": "在场",
+       "personality": "话里有话、克制、爱反问",
+       "speech": "简短、喜欢反问",
+       "note": "今晚看店的年轻店员",
+       "noteLocked": false,
+       "name": "周叙"
+      }
+     ],
+     "threads": [
+      "锅边便签：过了三点就别再添汤"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": ""
+     },
+     "scene": "收银台旁一台红色旋钮的旧收音机，暖黄灯光",
+     "updatedAt": 1792914596417,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "便利店收银台附近，年轻店员周叙在货架间补货，暖光",
+    "lastBg": null
+   },
+   "stmvnj24huc6i1": {
+    "world": {
+     "place": "雨夜便利店·第三排货架（关东煮）",
+     "time": "凌晨两点多；传闻凌晨三点有事发生",
+     "characters": [
+      {
+       "presence": "在场",
+       "personality": "话里有话、克制、爱反问",
+       "speech": "简短、喜欢反问",
+       "note": "今晚看店的年轻店员",
+       "noteLocked": false,
+       "name": "周叙"
+      }
+     ],
+     "threads": [
+      "锅边便签：过了三点就别再添汤",
+      "周叙的劝告：挑便宜的就走"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": "周叙话里有话，似乎知道凌晨三点的事"
+     },
+     "scene": "收银台旁一台红色旋钮的旧收音机，暖黄灯光",
+     "updatedAt": 1792914596418,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "货架间，店员回头看向镜头，表情介于笑意与警惕之间",
+    "lastBg": null
+   },
+   "stmvnj24huezks": {
+    "world": {
+     "place": "雨夜便利店·第三排货架（关东煮）",
+     "time": "挂钟停在 2:47；传闻凌晨三点有事发生",
+     "characters": [
+      {
+       "presence": "在场",
+       "personality": "话里有话、克制、爱反问",
+       "speech": "简短、喜欢反问",
+       "note": "今晚看店的年轻店员",
+       "noteLocked": false,
+       "name": "周叙"
+      }
+     ],
+     "threads": [
+      "锅边便签：过了三点就别再添汤",
+      "周叙的劝告：挑便宜的就走"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": "周叙话里有话，似乎知道凌晨三点的事"
+     },
+     "scene": "墙上停摆的挂钟，指针凝固在 2:47",
+     "updatedAt": 1792914596418,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "墙上停摆的挂钟，指针凝固在 2:47，暖光边缘泛着冷",
+    "lastBg": null
+   },
+   "stmvnj24ish7lw": {
+    "world": {
+     "place": "雨夜便利店·第三排货架（关东煮）",
+     "time": "挂钟停在 2:47；传闻凌晨三点有事发生",
+     "characters": [
+      {
+       "presence": "在场",
+       "personality": "话里有话、克制、爱反问",
+       "speech": "简短、喜欢反问",
+       "note": "今晚看店的年轻店员",
+       "noteLocked": false,
+       "name": "周叙"
+      }
+     ],
+     "threads": [
+      "锅边便签：过了三点就别再添汤",
+      "周叙的劝告：挑便宜的就走"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": "周叙话里有话，似乎知道凌晨三点的事"
+     },
+     "scene": "墙上停摆的挂钟，指针凝固在 2:47",
+     "updatedAt": 1792914596418,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "收银台旁那台红色旋钮的旧收音机，电流声里的模糊人影",
+    "lastBg": null
+   },
+   "stmvnj24ivkheb": {
+    "world": {
+     "place": "便利店储物间过道",
+     "time": "挂钟停在 2:47；传闻凌晨三点有事发生",
+     "characters": [
+      {
+       "presence": "在场",
+       "personality": "话里有话、克制、爱反问",
+       "speech": "简短、喜欢反问",
+       "note": "今晚看店的年轻店员",
+       "noteLocked": false,
+       "name": "周叙"
+      }
+     ],
+     "threads": [
+      "锅边便签：过了三点就别再添汤",
+      "周叙的劝告：挑便宜的就走"
+     ],
+     "relationship": {
+      "stage": "",
+      "bonds": [],
+      "notes": "周叙话里有话，似乎知道凌晨三点的事"
+     },
+     "scene": "灯泡忽明忽暗，尽头堆着纸箱",
+     "updatedAt": 1792914596455,
+     "scribeAt": 0
+    },
+    "summaries": [],
+    "rollingStyle": {
+     "style": "暖黄灯光的水彩，冷蓝雨夜的反光，克制构图",
+     "scenes": "便利店内部，收银台与货架之间",
+     "wardrobe": "便利店制服、深色雨衣",
+     "updatedAt": 1790322901415
+    },
+    "painterThread": [],
+    "lastSceneSummary": "储物间过道，忽明忽暗的灯泡，尽头堆着纸箱",
+    "lastBg": null
+   }
+  }
+ },
+ "prefs": {
+  "profileId": "pf-fixture-main",
+  "profileLabel": "主模型 · 固定档"
+ }
+}
