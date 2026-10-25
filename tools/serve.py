@@ -4,9 +4,11 @@
 tools/serve.py —— 「无限阅读」便携静态服务（Python 3，零依赖）
 
 被根目录的启动.bat 调用（机器上有 Python 时优先用它）。
+服务目录是构建产物 dist/site（阶段 1 起源码经 Vite 构建；先 npm run build）。
 为什么不用 `python -m http.server`：它没有任何排除能力，服务仓库根会把
 sidecar/data/（本地服务的 token、Resend API Key、SQLite 库）直接端出去。
-这里以仓库根为服务目录、只监听 127.0.0.1，但对两类敏感路径统一拒绝：
+这里只监听 127.0.0.1，且对两类敏感路径统一拒绝（纵深防御；正常情况下
+它们根本不在 dist/site 里）：
   - sidecar/data/   本地服务的凭证与数据
   - .git/           仓库内部
 
@@ -16,7 +18,7 @@ import os
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dist', 'site')
 BLOCKED = ('sidecar/data', '.git')
 DEFAULT_PORT = 8000
 
@@ -52,6 +54,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
+    if not os.path.isfile(os.path.join(ROOT, 'index.html')):
+        print('没找到 ' + ROOT)
+        print('先构建站点：npm run build（或 npm run build:site）')
+        sys.exit(1)
     port = DEFAULT_PORT
     if len(sys.argv) > 1:
         try:

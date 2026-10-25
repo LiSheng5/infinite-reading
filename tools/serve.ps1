@@ -2,9 +2,10 @@
   Infinite Reading - portable static server (Windows PowerShell, no dependencies).
 
   Used by the repo-root one-click launcher (*.bat) as a fallback when Python
-  is not installed. Serves the repository root on http://localhost:<Port>/ ,
+  is not installed. Serves the build output dist\site on http://localhost:<Port>/ ,
   bound to loopback only (nothing is exposed to the local network).
-  Sensitive paths (sidecar/data = local-service token & keys, .git) are refused.
+  Sensitive paths (sidecar/data = local-service token & keys, .git) are refused
+  as defense in depth - normally they are not under dist\site at all.
 
   Notes: keep this file ASCII-only. Windows PowerShell 5.1 reads .ps1 files as ANSI
   unless they carry a UTF-8 BOM, so non-ASCII text here can be mis-decoded.
@@ -15,13 +16,20 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
+$repoRoot = Split-Path -Parent $PSScriptRoot
+if (-not $Root) { $Root = Join-Path $repoRoot 'dist\site' }
 $rootFull = [System.IO.Path]::GetFullPath($Root)
+
+if (-not (Test-Path -LiteralPath (Join-Path $rootFull 'index.html') -PathType Leaf)) {
+  Write-Host "Not found: $rootFull\index.html"
+  Write-Host "Build the site first:  npm run build"
+  exit 1
+}
 
 # Never served: sidecar/data holds the local-service token / API keys, .git is repo internals
 $blockRoots = @(
-  [System.IO.Path]::GetFullPath((Join-Path $rootFull 'sidecar/data')),
-  [System.IO.Path]::GetFullPath((Join-Path $rootFull '.git'))
+  [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'sidecar/data')),
+  [System.IO.Path]::GetFullPath((Join-Path $repoRoot '.git'))
 )
 
 $mime = @{

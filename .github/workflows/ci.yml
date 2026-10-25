@@ -6,11 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
-# 本项目零依赖、零构建，CI 只做四件事：语法检查、版本号一致性、离线评测、功能单测。
+# 阶段 1 起经 Vite 构建：CI 做五件事——语法检查、构建产物自检、版本号一致性、离线评测、功能单测。
 # Node 版本与 package.json 的 engines 对齐（>=22）：可选本地服务用 node:sqlite。
 jobs:
   check:
-    name: 语法 + 版本号
+    name: 语法 + 构建 + 版本号
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
       - name: 裸调用检查（node tools/check-free-calls.mjs）
         run: node tools/check-free-calls.mjs
 
-      - name: 版本号一致性（VERSION 为真源）
+      - name: 版本号一致性（VERSION 为真源；index.html 走构建注入）
         run: node tools/sync-version.mjs --check
 
       # UI-1 护栏：对比度（WCAG）/ 令牌回归 / 动效强度解析
@@ -47,7 +47,32 @@ jobs:
         run: |
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8'));if(!m.name||!m.icons||!m.icons.length)throw new Error('manifest 字段不全');m.icons.forEach(i=>{if(!fs.existsSync(i.src))throw new Error('图标缺失: '+i.src)});console.log('manifest ok -> '+m.name+'（'+m.icons.length+' 个图标）')"
 
-      # 单文件打包是「可选工具」，但坏了要早知道：跑一遍并检查产物
+      - name: 安装构建依赖
+        run: npm ci
+
+      # 构建产物自检（任务书 §4 的坑）：sw.js 预缓存清单是构建期生成的，
+      # 必须与 dist/site 磁盘真实文件名逐一对上——正则时代「清单与产物脱节」不允许重演。
+      - name: 构建 + sw 预缓存清单自检
+        run: |
+          npm run build
+          node -e "
+            const fs=require('fs'),path=require('path');
+            const out='dist/site';
+            const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.relative(out,path.join(d,e.name)).split(path.sep).join('/')]);
+            const disk=walk(out).filter(f=>f!=='sw.js').map(f=>'./'+f).sort();
+            const sw=fs.readFileSync(path.join(out,'sw.js'),'utf8');
+            const m=sw.match(/const PRECACHE = (\[[\s\S]*?\]);/);
+            if(!m)throw new Error('sw.js 里没有 PRECACHE 清单');
+            const list=JSON.parse(m[1]).slice().sort();
+            const miss=list.filter(f=>!disk.includes(f)), extra=disk.filter(f=>!list.includes(f));
+            if(miss.length||extra.length)throw new Error('预缓存清单与产物脱节 缺:'+miss+' 多:'+extra);
+            const html=fs.readFileSync(path.join(out,'index.html'),'utf8');
+            if(html.includes('__IR_VERSION__'))throw new Error('版本占位符未注入');
+            if(html.includes('assets/manifest-'))throw new Error('manifest 未回写稳定名');
+            console.log('sw 预缓存清单 ok -> '+list.length+' 个文件与产物一致');
+          "
+
+      # 单文件产物是发给用户手里的形态，坏了要早知道：跑一遍并检查产物
       - name: 单文件打包冒烟
         run: |
           node tools/bundle-single-file.mjs

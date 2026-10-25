@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: tag 与 VERSION 必须一致
         run: |
@@ -39,11 +39,21 @@ jobs:
           git archive --format=zip --prefix="infinite-reading-${GITHUB_REF_NAME}/" \
             -o "dist/infinite-reading-${GITHUB_REF_NAME}.zip" HEAD
 
+      # 产物一并挂进 Release：单文件（双击即玩）+ 多文件站点（自托管可直接丢给 nginx）
+      - name: 构建发布产物
+        run: |
+          npm ci
+          npm run build
+          cp dist/single/index.html "dist/infinite-reading-${GITHUB_REF_NAME}-single.html"
+          (cd dist/site && zip -qr "../../dist/infinite-reading-${GITHUB_REF_NAME}-site.zip" .)
+
       - name: 创建 GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "dist/infinite-reading-${GITHUB_REF_NAME}.zip" \
+            "dist/infinite-reading-${GITHUB_REF_NAME}-single.html" \
+            "dist/infinite-reading-${GITHUB_REF_NAME}-site.zip" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes

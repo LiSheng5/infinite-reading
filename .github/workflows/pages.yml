@@ -25,14 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - name: 打包静态站点（排除开发文件）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: 打包静态站点（构建 dist/site，排除开发文件）
         run: |
-          mkdir -p _site
-          cp -r index.html css js icons manifest.webmanifest sw.js _site/
-          cp LICENSE README.md _site/ 2>/dev/null || true
+          npm ci
+          npm run build:site
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: dist/site
 
   deploy:
     needs: build
