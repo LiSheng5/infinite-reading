@@ -1302,57 +1302,7 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.12.1"></script>
-<script src="js/prefs.js?v=0.12.1"></script>
-<script src="js/context.js?v=0.12.1"></script>
-<!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.12.1"></script>
-<!-- 分支树布局（分支页画布几何：泳道 / 折叠 / 标签，纯逻辑 Node 可测）：必须在 app.js 之前 -->
-<script src="js/treeLayout.js?v=0.12.1"></script>
-<!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.12.1"></script>
-<script src="js/store.js?v=0.12.1"></script>
-<script src="js/modelCapabilities.js?v=0.12.1"></script>
-<script src="js/roleCard.js?v=0.12.1"></script>
-<!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.12.1"></script>
-<!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.12.1"></script>
-<!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.12.1"></script>
-<!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.12.1"></script>
-<!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.12.1"></script>
-<!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.12.1"></script>
-<!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.12.1"></script>
-<script src="js/titles.js?v=0.12.1"></script>
-<script src="js/search.js?v=0.12.1"></script>
-<!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.12.1"></script>
-<script src="js/app/branch.js?v=0.12.1"></script>
-<script src="js/app/models.js?v=0.12.1"></script>
-<script src="js/app/library.js?v=0.12.1"></script>
-<script src="js/app/shelf.js?v=0.12.1"></script>
-<script src="js/app/backup.js?v=0.12.1"></script>
-<script src="js/app/importer.js?v=0.12.1"></script>
-<script src="js/app/cards.js?v=0.12.1"></script>
-<script src="js/app/wizard.js?v=0.12.1"></script>
-<script src="js/app/sidecar.js?v=0.12.1"></script>
-<script src="js/app/features.js?v=0.12.1"></script>
-<script src="js/app/styleanchor.js?v=0.12.1"></script>
-<script src="js/app/painter.js?v=0.12.1"></script>
-<script src="js/app/video.js?v=0.12.1"></script>
-<script src="js/app/turn.js?v=0.12.1"></script>
-<script src="js/app/round.js?v=0.12.1"></script>
-<script src="js/app/render.js?v=0.12.1"></script>
-<script src="js/app/layout.js?v=0.12.1"></script>
-<script src="js/app/settings.js?v=0.12.1"></script>
-<script src="js/app/prefsui.js?v=0.12.1"></script>
-<script src="js/app.js?v=0.12.1"></script>
-<!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.12.1"></script>
+<!-- legacy 入口（阶段 1 起经 ES module 加载）：旧脚本一个不改，加载顺序与依赖注释见 src/legacy.js -->
+<script type="module" src="src/legacy.js"></script>
 </body>
 </html>

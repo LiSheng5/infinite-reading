@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // eval/app-structure-test.js —— 拆分结构门禁（任务书 §7）
-//   1. index.html 中 js/app/*.js 的出现顺序：core.js 在所有其他 app 模块之前，js/app.js 在最后；
-//      磁盘上的每个 js/app/*.js 都被 index.html 引用，反之亦然。
+//   1. legacy 入口（src/legacy.js，阶段 1 起 index.html 只引这一个模块）中 js/app/*.js 的
+//      出现顺序：core.js 在所有其他 app 模块之前，js/app.js 在最后；
+//      磁盘上的每个 js/app/*.js 都被 legacy 入口引用，反之亦然。
 //   2. 每个 js/app/*.js 行数 ≤ 800；js/app.js ≤ 600。
 //   3. 各模块 A.reg({ … }) 的键名在全局范围内不重复（静态扫描）。
 //   4. 除 core.js 外，任何模块的顶层解构 const { … } = A 只允许取 core.js 的导出
@@ -23,20 +24,22 @@ const ok = (cond, msg) => {
 const appJs = 'js/app.js';
 const diskMods = fs.readdirSync(APP_DIR).filter(f => f.endsWith('.js')).sort().map(f => 'js/app/' + f);
 
-// ---------- 1. index.html 引用顺序与双向一致 ----------
-console.log('[1] index.html 引用顺序与磁盘一致性');
+// ---------- 1. legacy 入口引用顺序与双向一致 ----------
+console.log('[1] legacy 入口（src/legacy.js）引用顺序与磁盘一致性');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const cited = [...html.matchAll(/<script[^>]+src="(js\/app(?:\/[^"]+)?\.js)[^"]*"/g)].map(m => m[1]);
+ok(html.includes('src/legacy.js'), 'index.html 引用了 src/legacy.js（legacy 入口唯一）');
+const legacy = fs.readFileSync(path.join(ROOT, 'src', 'legacy.js'), 'utf8');
+const cited = [...legacy.matchAll(/import '\.\.\/(js\/app(?:\/[^']+)?\.js)';/g)].map(m => m[1]);
 const citedMods = cited.filter(p => p !== appJs);
-ok(cited.includes(appJs), 'index.html 引用了 js/app.js');
+ok(cited.includes(appJs), 'legacy 入口引用了 js/app.js');
 ok(cited[cited.length - 1] === appJs, 'js/app.js 在所有 js/app/*.js 之后加载（组合根最后）');
 const coreIdx = citedMods.indexOf('js/app/core.js');
 ok(coreIdx === 0, 'js/app/core.js 是第一个加载的 app 模块');
 ok(citedMods.every((p, i) => i <= coreIdx || p !== 'js/app/core.js'), 'core.js 不会出现在其他模块之后');
 const missing = diskMods.filter(p => !citedMods.includes(p));
 const extra = citedMods.filter(p => !diskMods.includes(p));
-ok(!missing.length, '磁盘上的模块都被 index.html 引用' + (missing.length ? '（缺：' + missing.join(', ') + '）' : ''));
-ok(!extra.length, 'index.html 引用的模块都在磁盘上' + (extra.length ? '（多：' + extra.join(', ') + '）' : ''));
+ok(!missing.length, '磁盘上的模块都被 legacy 入口引用' + (missing.length ? '（缺：' + missing.join(', ') + '）' : ''));
+ok(!extra.length, 'legacy 入口引用的模块都在磁盘上' + (extra.length ? '（多：' + extra.join(', ') + '）' : ''));
 
 // ---------- 2. 行数上限 ----------
 console.log('[2] 行数上限（js/app/*.js ≤ 800，js/app.js ≤ 600）');

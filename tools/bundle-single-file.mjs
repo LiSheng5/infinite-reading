@@ -1,21 +1,18 @@
 #!/usr/bin/env node
 /**
- * 单文件打包（开源路线图 W2 / L1）
+ * 单文件打包（阶段 1 起改走 Vite + vite-plugin-singlefile，本脚本只是契约不变的薄封装）
  *
- * 把 index.html + css/style.css + js/*.js 内联成一个 `dist/ir.html`：
- *   - 一个文件即可运行，能当附件发、能塞进邮件、能直接双击（仍是 file://）
- *   - 依然零依赖、零构建：这个脚本只是「可选工具」，运行时源码不依赖它
+ * 历史：这个文件原先是「正则把 <script src="js/…"> 内联进 HTML」的零构建打包器。
+ * 阶段 1 接入 Vite 后脚本改成 ES module 入口（src/legacy.js），正则内联不再适用；
+ * 单文件产物改由 vite-plugin-singlefile 生成（全部内联、file:// 双击可开、图片也内联）。
+ * 对外契约保持不变：`npm run bundle` / `node tools/bundle-single-file.mjs` 仍产出 dist/ir.html。
  *
  * 用法：
  *   node tools/bundle-single-file.mjs                  # 输出 dist/ir.html
  *   node tools/bundle-single-file.mjs --out dist/x.html
- *
- * 已知取舍（写进 README）：
- *   - 内联后 ?v= 缓存击穿串失效（不再有多文件版的增量更新）
- *   - file:// 下的 localStorage 与「本地服务 / 在线版」互不相通，迁移请用导出导入
- *   - 字体仍走 CDN；断网时自动退回系统字体
  */
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, statSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
@@ -29,51 +26,28 @@ if (!outVal) {
 }
 const OUT = resolve(ROOT, outVal);
 
-const readRel = rel => readFileSync(join(ROOT, rel.split('?')[0]), 'utf8');
-
-let html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const inlined = [];
-const skipped = [];
-
-// 1) 内联样式表：<link rel="stylesheet" href="css/style.css?v=…">
-html = html.replace(/<link\b[^>]*href="(css\/[^"]+)"[^>]*>/g, (m, href) => {
-  inlined.push(href.split('?')[0]);
-  // CSS 里若出现 </style> 字面量，会提前截断样式块 → 转义（审查 可简化 #8）
-  const css = readRel(href).replace(/<\/style>/gi, '<\\/style>');
-  return '<style>\n' + css + '\n</style>';
-});
-
-// 2) 内联脚本：<script src="js/x.js?v=…"></script>（顺序即加载顺序，原样保留）
-//    PWA 注册脚本跳过：单文件版旁边没有 sw.js，注册只会 404（它的 catch 是静默的，但没必要留着）
-const SKIP = ['js/pwa.js'];
-html = html.replace(/<script\b[^>]*src="(js\/[^"]+)"[^>]*><\/script>/g, (m, src) => {
-  const rel = src.split('?')[0];
-  if (SKIP.indexOf(rel) !== -1) {
-    skipped.push(rel);
-    return '';
-  }
-  inlined.push(rel);
-  // 脚本里若出现 </script> 字面量（如字符串拼接），会提前截断标签 → 转义
-  const js = readRel(src).replace(/<\/script>/gi, '<\\/script>');
-  return '<script>\n' + js + '\n</script>';
-});
-
-if (!inlined.length) {
-  console.error('没有内联到任何文件：index.html 结构变了？请检查 <link href="css/…"> 与 <script src="js/…">');
-  process.exit(1);
+// 1) 交给 Vite 打单文件产物（dist/single/index.html，JS/CSS/图片全内联）
+const vite = resolve(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'vite.cmd' : 'vite');
+const r = spawnSync(vite, ['build', '--mode', 'single'], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
+if (r.status !== 0) {
+  console.error('vite 单文件构建失败');
+  process.exit(r.status || 1);
 }
 
-// 3) 自检：不该再有指向本地 css/js 的外部引用
-const left = html.match(/<(?:script|link)\b[^>]*(?:src|href)="(?:css|js)\//g) || [];
+// 2) 自检 + 落到契约路径：产物里不该再有指向本地 css/js 的外部引用
+const single = join(ROOT, 'dist', 'single', 'index.html');
+let html;
+try { html = readFileSync(single, 'utf8'); } catch (e) {
+  console.error('没找到构建产物 ' + single + '：' + e.message);
+  process.exit(1);
+}
+const left = html.match(/<(?:script|link)\b[^>]*(?:src|href)="(?:css|js|src)\//g) || [];
 if (left.length) {
-  console.error('仍有未内联的本地引用（' + left.length + ' 处）：' + left.join(' , '));
+  console.error('单文件产物里仍有未内联的本地引用（' + left.length + ' 处）：' + left.join(' , '));
   process.exit(1);
 }
 
 mkdirSync(dirname(OUT), { recursive: true });
-writeFileSync(OUT, html);
-
+copyFileSync(single, OUT);
 const kb = (statSync(OUT).size / 1024).toFixed(1);
-console.log('已生成 ' + OUT.replace(ROOT + '\\', '').replace(ROOT + '/', '') + '（' + kb + ' KB，内联 ' + inlined.length + ' 个文件）');
-console.log('内联清单：' + inlined.join(' , '));
-if (skipped.length) console.log('已跳过：' + skipped.join(' , ') + '（单文件版不带 Service Worker）');
+console.log('已生成 ' + OUT.replace(ROOT + '\\', '').replace(ROOT + '/', '') + '（' + kb + ' KB，vite-plugin-singlefile 内联）');

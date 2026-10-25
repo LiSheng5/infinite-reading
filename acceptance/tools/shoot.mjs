@@ -26,7 +26,9 @@ const { chromium } = require('playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
-const APP_URL = pathToFileURL(path.join(ROOT, 'index.html')).href;
+// 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
+// file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
+const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 
 const VIEWPORTS = [
   { width: 390, height: 844 },

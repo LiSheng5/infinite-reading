@@ -43,7 +43,9 @@ const { chromium } = require('playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'fixture');
-const APP_URL = pathToFileURL(path.join(ROOT, 'index.html')).href;
+// 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
+// file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
+const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 
 // zip 读写用应用自己的 js/zip.js（Node 里 require 与 eval/zip-smoke.js 同款用法）：
 // 夹具比对的是「同一份代码打出的包」，解析器也必须是同一份，避免两套 zip 实现各自有偏差。
