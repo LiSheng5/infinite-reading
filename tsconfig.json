@@ -1,0 +1,17 @@
+{
+  "//": "阶段 2 核心类型门禁：src/core/**/*.ts 由 tsc --noEmit 静态检查（npm run check:types，挂在 npm test 里）。",
+  "//2": "宽松策略：函数体是 0.12.1 逐字搬来的（铁律「不改行为」），不做全量标注；类型只落在档案形状（src/core/schema.ts）与 store/providers/tree 的公开 API 签名上。strict 关、noImplicitAny 关——渐进收紧留给后续阶段。",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/core/**/*.ts"]
+}

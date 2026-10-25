@@ -50,6 +50,10 @@ jobs:
       - name: 安装构建依赖
         run: npm ci
 
+      # 阶段 2：src/core/*.ts 是 TS（Node 24 原生剥类型执行），静态检查走 tsc --noEmit
+      - name: 核心类型检查（tsc --noEmit）
+        run: npx tsc --noEmit
+
       # 构建产物自检（任务书 §4 的坑）：sw.js 预缓存清单是构建期生成的，
       # 必须与 dist/site 磁盘真实文件名逐一对上——正则时代「清单与产物脱节」不允许重演。
       - name: 构建 + sw 预缓存清单自检
@@ -106,6 +110,10 @@ jobs:
         run: |
           node eval/prefs-test.js
           node eval/settings-ids-test.js
+
+      # 阶段 2 验收：schema 回归（真实夹具过检 + 导入→还原→导出逐字段一致 + 0.11 及更早存档迁移）
+      - name: schema 回归（node eval/schema-test.js）
+        run: node eval/schema-test.js
 
       # P-1 画师上下文规则（assemblePainter scene 模式隔离 / 最近 3 回合 / 静态断言），不联网
       - name: 画师上下文（node eval/painter-context-test.js）
