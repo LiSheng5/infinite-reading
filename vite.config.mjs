@@ -96,6 +96,8 @@ export default defineConfig(({ mode }) => {
   return {
     base: './',
     plugins: [svelte(), irShell({ single }), ...(single ? [viteSingleFile()] : [])],
+    // 版本号构建注入（JS 侧）：Svelte 屏幕里的 `__IR_VERSION__` 标识符 → VERSION 真源
+    define: { __IR_VERSION__: JSON.stringify(VERSION) },
     build: {
       outDir: single ? 'dist/single' : 'dist/site',
       emptyOutDir: true,

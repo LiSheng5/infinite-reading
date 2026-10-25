@@ -35,7 +35,9 @@
 
     // —— 剧情文本导入（R12 路径②，§4.11 / T-P6-1） ——
     $('#btn-import-text').onclick = A.openImportText;
-    $('#btn-start-import').onclick = A.openImportText;
+    // 首页已换 Svelte 实现（src/screens/home，容器打 data-impl="svelte"）时跳过旧 DOM 绑定，避免双重触发
+    const startSvelte = !!document.querySelector('#screen-start[data-impl="svelte"]');
+    if (!startSvelte) $('#btn-start-import').onclick = A.openImportText;
     $('#btn-close-import-text').onclick = A.closeImportText;
     $('#btn-it-cancel').onclick = A.closeImportText;
     $('#btn-it-run').onclick = A.runImportText;
@@ -54,14 +56,17 @@
     $('#btn-it-start').onclick = A.startFromImport;
 
     // —— 开始页：三张模式卡即三个开局入口，点哪张就按哪种模式开局（无「开始」按钮）——
-    document.querySelectorAll('#start-modes .mode-card').forEach(b => {
-      b.onclick = () => A.startFromStart(b.dataset.mode);
-    });
-    $('#btn-start-shelf').onclick = A.showShelf;
-    $('#btn-open-settings').onclick = A.openSettings;
-    $('#btn-continue').onclick = A.continueLast;
-    // 「离线演示」：带上 ?demo=1 重开一次（演示模式靠查询参数判定，刷新即回到普通模式）
-    $('#btn-start-demo').onclick = () => { location.href = '?demo=1'; };
+    //（新首页是 Svelte 自带 handler，见 src/screens/home；旧 DOM 保留到阶段 6）
+    if (!startSvelte) {
+      document.querySelectorAll('#start-modes .mode-card').forEach(b => {
+        b.onclick = () => A.startFromStart(b.dataset.mode);
+      });
+      $('#btn-start-shelf').onclick = A.showShelf;
+      $('#btn-open-settings').onclick = A.openSettings;
+      $('#btn-continue').onclick = A.continueLast;
+      // 「离线演示」：带上 ?demo=1 重开一次（演示模式靠查询参数判定，刷新即回到普通模式）
+      $('#btn-start-demo').onclick = () => { location.href = '?demo=1'; };
+    }
 
     // 拖进窗口即可导入（书架与开始页都支持）
     [$('#screen-shelf'), $('#screen-start')].forEach(scr => {

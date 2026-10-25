@@ -355,8 +355,13 @@
     $('#screen-start').classList.remove('hidden');
     // 有存档才出现「继续上次」，并带上最近那个故事的名字
     const recent = Store.listStories()[0];
-    $('#btn-continue').classList.toggle('hidden', !recent);
-    $('#continue-title').textContent = recent && recent.title ? '《' + recent.title + '》' : '';
+    const label = recent && recent.title ? '《' + recent.title + '》' : '';
+    if (IR.HomeScreen) {
+      IR.HomeScreen.setRecent(recent ? label : null);   // 新首页（Svelte）：状态桥
+    } else {
+      $('#btn-continue').classList.toggle('hidden', !recent);
+      $('#continue-title').textContent = label;
+    }
   }
 
   // 阅读页「＋ 新故事」：先把当前这一幕落盘，再开「新故事」选模式弹窗（三个模式共用同一入口）

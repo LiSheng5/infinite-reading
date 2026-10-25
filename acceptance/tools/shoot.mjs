@@ -6,6 +6,9 @@
  *   acceptance/0.12.1/shots/manifest.json（每张图的元信息 + 未能截图项及原因 + console error / pageerror）
  *
  * 用法：node acceptance/tools/shoot.mjs [--state=empty|seeded] [--width=390|1280]
+ *                                [--out=acceptance/…/shots] [--only=<PLAN.key>]
+ *       --out：产出目录（相对仓库根；默认 acceptance/0.12.1/shots 基线）；
+ *       --only：只落这个 key 的图（其余步骤照走，只是不截图）——阶段 4 逐屏前后截图用。
  *
  * 约定：
  *  - 只新增文件，不改任何现有源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
@@ -25,7 +28,9 @@ const { chromium } = require('playwright');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
-const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
+// 产出目录默认是 0.12.1 基线；--out=<相对 ROOT 的目录> 可改写（阶段 4 逐屏前后截图用）
+let OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
+let ONLY = null;   // --only=<PLAN.key>：只拍这个 key 的图（其余步骤照走，只是不落图）
 // 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
@@ -85,7 +90,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const pad2 = (n) => String(n).padStart(2, '0');
 
 function parseArgs() {
-  const out = { state: null, width: null };
+  const out = { state: null, width: null, out: null, only: null };
   for (const a of process.argv.slice(2)) {
     const m = a.match(/^--([\w-]+)=(.+)$/);
     if (m) out[m[1]] = m[2];
@@ -197,6 +202,8 @@ async function clickBranchNode(page, idx) {
 /* ================= 主流程 ================= */
 async function main() {
   const args = parseArgs();
+  if (args.out) OUT = path.resolve(ROOT, args.out);
+  if (args.only) ONLY = args.only;
   fs.mkdirSync(OUT, { recursive: true });
   // 增量安全：只删本轮要重拍的图（按 --state / --width 过滤），别的产物原样保留——
   // 中途被打断也不会把已拍好的图全丢掉。
@@ -309,6 +316,7 @@ async function runPass(browser, state, vp, manifest) {
     const idx = PLAN.findIndex(p => p.key === key && p.state === state);
     if (idx < 0) throw new Error('PLAN 里没有 ' + state + '/' + key);
     const item = PLAN[idx];
+    if (ONLY && item.key !== ONLY) return;   // --only：这一步不落图，流程照走
     if (item.widths && item.widths.indexOf(vp.width) < 0) {
       manifest.skipped.push({
         item: state + '/' + item.screen, state, width: vp.width,

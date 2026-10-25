@@ -62,3 +62,6 @@ import './spike/index.js';
 
 // 阶段 3：基础组件库展示页，仅在 ?ui=1 时挂载（组件库与动效模块的视觉 / 动效自查）
 import './ui/gallery.js';
+
+// 阶段 4 · 屏 1：首页 Svelte 重写（默认挂新屏；?ui=legacy 退回旧首页，阶段 6 删）
+import './screens/home/index.js';
