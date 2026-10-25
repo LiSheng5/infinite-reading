@@ -55,3 +55,6 @@ import '../js/app.js';             // 组合根：事件绑定 + 启动，必须
 
 // PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，放最后「装个帽子」
 import '../js/pwa.js';
+
+// 阶段 1 spike：Svelte 5 设置切片，仅在 ?spike=1 时挂载（默认形态零像素变化，铁律 3）
+import './spike/index.js';
