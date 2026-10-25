@@ -24,8 +24,13 @@
  * 纯逻辑、零依赖；IIFE 挂 window.IR，Node 亦可加载（评测/迁移自测用：
  * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与 v0.2 一致）。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+import type { Story, StoryPack, StoryPrefs, BackupImageEntry } from './schema.ts';
+
+/* ↑ 阶段 2 搬迁自 js/store.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 IR.Tree.ensure
   const SCHEMA = 3;
@@ -179,7 +184,7 @@
 
   // ID 生成统一走 IR.genId（js/tree.js，审查 可维护性 #5）：不再各写时间戳+随机变体。
   // 默认前缀 's'（故事），需要别的前缀时显式传（如 genId('pf')）。
-  function genId(prefix) {
+  function genId(prefix?) {
     return IR.genId(prefix || 's');
   }
 
@@ -371,7 +376,7 @@
     const d = defaultSettings();
     raw = (raw && typeof raw === 'object') ? raw : {};
 
-    const out = {
+    const out: any = {
       chat: Object.assign({}, d.chat, raw.chat || {}),
       painter: Object.assign({}, d.painter, raw.painter || {}),
       scribe: Object.assign({}, d.scribe, raw.scribe || {}),
@@ -480,7 +485,7 @@
 
   /* ---------------- story v2 ---------------- */
 
-  function newStory(opts) {
+  function newStory(opts): Story {
     opts = opts || {};
     const now = Date.now();
     const mode = opts.mode || 'choice';         // choice | chat | rp
@@ -522,7 +527,7 @@
   }
 
   // v1 / 任意旧档 → v2（幂等）
-  function migrateStory(raw) {
+  function migrateStory(raw: any): Story | null {
     if (!raw || typeof raw !== 'object') return null;
     // 先深拷贝再组装：loadStory 拿到的是 MEM 里的「已保存」对象，tree / messages / savepoints 等
     // 若原样透传引用，现场改动会把已保存快照带脏（normVideoFields 还会就地归一）。拷贝一次，两侧解耦。
@@ -580,10 +585,10 @@
   }
 
   // prefs 清洗统一入口：IR.Prefs 缺位时的兜底（只放行白名单键，安全上只会更严）
-  function sanitizePrefsSafe(raw) {
+  function sanitizePrefsSafe(raw: any): StoryPrefs {
     const P = (global.IR && global.IR.Prefs) || null;
     if (P && typeof P.sanitizePrefs === 'function') return P.sanitizePrefs(raw);
-    const out = {};
+    const out: StoryPrefs = {};
     if (typeof raw.profileId === 'string' && raw.profileId) out.profileId = raw.profileId.trim().slice(0, 64);
     if (typeof raw.profileLabel === 'string' && raw.profileLabel) out.profileLabel = raw.profileLabel.trim().slice(0, 120);
     return out;
@@ -672,7 +677,7 @@
       missing.push('IR.Storage（storage.js）');
     }
     if (missing.length) {
-      const e = new Error('store.js 关键依赖未就绪：' + missing.join('、') + '——请按 ARCHITECTURE.md 的加载顺序先引入');
+      const e: any = new Error('store.js 关键依赖未就绪：' + missing.join('、') + '——请按 ARCHITECTURE.md 的加载顺序先引入');
       e.code = 'IR_DEP_MISSING';
       throw e;
     }
@@ -774,7 +779,7 @@
     return (/^(data|blob):/i.test(s)) ? s : null;
   }
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
-  function serializeStory(story) {
+  function serializeStory(story: Story): Story {
     // 裁剪窗口的唯一口径在 IR.Tree（tree.js 必须先于 store.js 加载；缺了直接报错，不静默用错窗口）
     const T = global.IR && global.IR.Tree;
     if (!T || !T.LOG_WINDOW) throw new Error('IR.Tree 未加载：tree.js 必须先于 store.js（见 ARCHITECTURE 加载顺序）');
@@ -787,14 +792,14 @@
         aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
         styleCardId: s.styleCardId || undefined,   // 每张图记录锚定版本（P4）
         supersededBy: s.supersededBy || undefined,
-        thumb: s.thumb || s.poster || null,        // 图片缩略图 / 视频封面（JPEG dataURL）
+        thumb: s.thumb || (s as any).poster || null,        // 图片缩略图 / 视频封面（JPEG dataURL）
         imageId: s.imageId || undefined,           // 原图在 IndexedDB images 里的键
         // —— 视频场景（kind:'video'）字段（§5）——
         videoId: s.videoId || undefined,           // 视频 Blob 键（vid:<sceneId>）
         sourceSceneId: s.sourceSceneId || undefined, // 图生才有：首帧来自哪张图
         mode: s.mode || undefined,                 // 'i2v' | 't2v'
         taskId: s.taskId || undefined,             // 云端任务 id（续查用）
-        remoteUrl: s.remoteUrl || s.videoUrl || undefined, // 仅降级用（限时链接）
+        remoteUrl: s.remoteUrl || (s as any).videoUrl || undefined, // 仅降级用（限时链接）
         duration: s.duration || undefined, resolution: s.resolution || undefined,
         ratio: s.ratio || undefined, model: s.model || undefined,
         ts: s.ts,
@@ -814,9 +819,9 @@
    * 纯函数：images 由调用方（library.js）从 IndexedDB 取回后传入。
    * 安全红线：prefs 只带 profileId（不透明 id）与 profileLabel（仅显示）；
    * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
-  function buildStoryPack(st, kind, images, settings) {
+  function buildStoryPack(st: Story, kind: string, images: any[], settings: any): StoryPack {
     const P = (global.IR && global.IR.Prefs) || null;
-    const pack = {
+    const pack: StoryPack = {
       format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.12.1',
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
@@ -828,7 +833,7 @@
       // §0/§10：视频条目只留封面 + 说明（videoOmitted），本体与限时链接都不进导出包
       pack.log = (st.log || []).map(e => (e && e.type === 'video')
         ? {
-          type: 'video', id: e.id, alt: e.alt || '', thumb: e.thumb || e.poster || null,
+          type: 'video', id: e.id, alt: e.alt || '', thumb: e.thumb || (e as any).poster || null,
           prompt: e.prompt || '', promptRaw: e.promptRaw || '', mode: e.mode || undefined,
           model: e.model || undefined, duration: e.duration || undefined,
           resolution: e.resolution || undefined, ts: e.ts, videoOmitted: true,
@@ -851,7 +856,7 @@
     // 兜底剥凭证：整棵树（含 log / tree / world）任意层级的凭证形键名一律去掉
     return P && typeof P.stripSecrets === 'function' ? P.stripSecrets(pack) : pack;
   }
-  function saveStory(story) {
+  function saveStory(story: Story): boolean {
     if (!story || !story.id) return false;
     story.updatedAt = Date.now();
     const ok = writeStoryRaw(story.id, serializeStory(story));
@@ -875,7 +880,7 @@
     }
     return ok;
   }
-  function loadStory(id) {
+  function loadStory(id: string): Story | null {
     if (!id) return null;
     return migrateStory(readStoryRaw(id));
   }
@@ -1192,7 +1197,7 @@
     } catch (_) {}
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     Store: {
       SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
@@ -1218,5 +1223,6 @@
       // 视频（Blob，键名 vid:<sceneId>，§5④）
       putVideo, getVideo, videoURL, releaseVideo,
     },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { Store } = __irApi;

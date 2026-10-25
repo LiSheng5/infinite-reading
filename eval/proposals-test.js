@@ -16,8 +16,8 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'tree.js'));   // IR.genId 在 tree.js（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'js', 'proposals.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.genId 在 tree.js（加载顺序同 index.html）
+require(path.join(__dirname, '..', 'src', 'core', 'proposals.ts'));
 
 const P = (global.IR || {}).Proposals;
 if (!P) {

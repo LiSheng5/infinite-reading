@@ -6,8 +6,12 @@
  *
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/providers.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   async function readError(res) {
     let detail = '';
@@ -163,7 +167,33 @@
     return body;
   }
 
-  const ChatProviders = {
+  /* ---------------- 适配器登记表的公开形状（以各适配器真实方法名为准） ---------------- */
+
+  export interface ChatProvider {
+    label: string;
+    chat(cfg: any, messages: any[], hooks?: any): Promise<any>;
+    test?(cfg: any): Promise<any>;
+    probe?(cfg: any): Promise<any>;
+  }
+
+  export interface ImageProvider {
+    label: string;
+    generate(cfg: any, prompt: any): Promise<any>;
+    test?(cfg: any): Promise<any>;
+    supportsReference?: boolean;
+  }
+
+  export interface VideoProvider {
+    label: string;
+    submit?(cfg: any, opts: any): Promise<any>;
+    poll?(cfg: any, taskId: any): Promise<any>;
+    generate?(cfg: any, req: any, hooks?: any): Promise<any>;
+    test?(cfg: any): Promise<any>;
+    params?(cfg: any, mode: any): any;
+    VIDEO_TOTAL_TIMEOUT_MS?: number;
+  }
+
+  const ChatProviders: Record<string, ChatProvider> = {
 
     // OpenAI 兼容 /chat/completions：覆盖所有提供该格式接口的服务商（云端 / 本地，模型名由用户自填）
     'openai-compatible': {
@@ -206,7 +236,7 @@
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
         const cap = capOf('chat', cfg);
-        const body = { model: cfg.model, messages };
+        const body: any = { model: cfg.model, messages };
         // 采样温度：登记表声明不支持（如思考常开的推理模型）就不发
         if (!cap || cap.temperature !== false) {
           body.temperature = Number.isFinite(+cfg.temperature) ? +cfg.temperature : 0.8;
@@ -425,7 +455,7 @@
     return 'data:' + mime + ';base64,' + s;
   }
 
-  const ImageProviders = {
+  const ImageProviders: Record<string, ImageProvider> = {
 
     // OpenAI 兼容 /images/generations：
     //  返回形态不一：有的给 b64_json（直接转 dataURL），有的给 url；
@@ -461,7 +491,7 @@
         const url = cfg.baseUrl.replace(/\/+$/, '') + '/images/generations';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-        const body = { model: cfg.model, prompt, n: 1 };
+        const body: any = { model: cfg.model, prompt, n: 1 };
         // 尺寸：预填表命中的模型默认只发列表内的档位；用户选了「自定义尺寸」则强制下发
         const cap = capOf('image', cfg);
         const sizes = cap && cap.image && Array.isArray(cap.image.sizes) ? cap.image.sizes : null;
@@ -547,7 +577,7 @@
 
         const model = String(cfg.model || '').trim();
         const live = /live/i.test(model);          // image-01-live：只认比例 + 画风，不认自定义宽高
-        const body = {
+        const body: any = {
           model: model,
           prompt: clipPromptText(text, MINIMAX_IMAGE_PROMPT_MAX),
           response_format: 'base64',               // 官方 url 只有 24 小时有效期，且下载还要过 CORS（缩略图会画不出来）
@@ -648,7 +678,7 @@
     if (typeof document === 'undefined' || typeof Image === 'undefined') return src;
     if (/^https?:\/\//i.test(src)) return src;   // 公网 URL 原样交服务端取
     try {
-      const img = await new Promise((resolve, reject) => {
+      const img: any = await new Promise((resolve, reject) => {
         const im = new Image();
         im.onload = () => resolve(im);
         im.onerror = () => reject(new Error('图片解码失败'));
@@ -690,7 +720,7 @@
 
   // 提交前的生效参数（默认 + 用户 extraParams 合并；供确认弹窗与留痕用，与 submit 同一套规则）
   function videoEffectiveParams(cfg, mode) {
-    const body = { model: String((cfg && cfg.model) || '') };
+    const body: any = { model: String((cfg && cfg.model) || '') };
     mergeExtraParams(body, cfg && cfg.extraParams);
     applyVideoControlParams(body, cfg, mode);
     return { model: body.model, duration: body.duration, resolution: body.resolution, ratio: body.ratio };
@@ -748,7 +778,7 @@
       if (mode === 'i2v' && !image) throw new Error('图生视频没有拿到首帧图。');
 
       const p = videoEffectiveParams(cfg, mode);
-      const content = [{ type: 'text', text: prompt.slice(0, VIDEO_PROMPT_MAX) }];
+      const content: any[] = [{ type: 'text', text: prompt.slice(0, VIDEO_PROMPT_MAX) }];
       if (image) content.push({ type: 'image_url', image_url: { url: image }, role: 'first_frame' });
       const body = {
         model: p.model,
@@ -859,15 +889,16 @@
     },
   };
 
-  const VideoProviders = {
+  const VideoProviders: Record<string, VideoProvider> = {
     'minimax-video': MiniMaxVideo,
     minimax: MiniMaxVideo,          // 旧值别名（migrateSettings 会迁成 minimax-video）
     'openai-videos': MiniMaxVideo,  // 旧值别名（同上）
   };
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     ChatProviders,
     ImageProviders,
     VideoProviders,
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export { ChatProviders, ImageProviders, VideoProviders };

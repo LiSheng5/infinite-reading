@@ -20,8 +20,12 @@
  *
  * 纯函数、零依赖；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/context.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   /* 上下文预算表（C-C，token 估算；中文 1 字 ≈ 1 token） */
   const BUDGET = {
@@ -96,7 +100,7 @@
     return s.replace(/(\[玩家行动\] )（(?:做|说|导演)）/, '$1');
   }
 
-  function systemForMode(mode, opts) {
+  function systemForMode(mode, opts?) {
     if (mode === 'chat') return CHAT_SYSTEM;
     if (mode === 'rp') return ((opts && opts.noCharacterCard) ? RP_SYSTEM_FALLBACK : RP_SYSTEM) + KIND_MARK_HINT_SHORT;
     return STORY_RULES;
@@ -415,7 +419,7 @@
 
   const EMAIL_TOOLS = [EMAIL_PROPOSE_TOOL];
   const PAYMENT_TOOLS = [PAYMENT_PROPOSE_TOOL];
-  const TOOL_NAMES_PROPOSAL = EMAIL_TOOLS.concat(PAYMENT_TOOLS).map(t => t.function.name);
+  const TOOL_NAMES_PROPOSAL = EMAIL_TOOLS.concat(PAYMENT_TOOLS as any).map(t => t.function.name);
   const PROPOSAL_TOOL_SET = new Set(TOOL_NAMES_PROPOSAL);
   function isProposalTool(name) { return PROPOSAL_TOOL_SET.has(String(name)); }
 
@@ -442,7 +446,7 @@
     const wantPayment = !!opts.payment && mode === 'chat';
     const base = (mode === 'chat' || mode === 'rp') ? TOOLS_AI1_DIRECT : TOOLS_AI1;
     let out = base;
-    if (wantSchedule) out = out.concat(SCHEDULE_TOOLS);
+    if (wantSchedule) out = out.concat(SCHEDULE_TOOLS as any);
     if (wantEmail) out = out.concat(EMAIL_TOOLS);
     if (wantPayment) out = out.concat(PAYMENT_TOOLS);
     return out;
@@ -949,7 +953,7 @@
 
   // 浅合并 world 自报增量；数组整段替换；保护用户手改的 note（noteLocked）
   // opts.allowEmpty=true 时允许空数组清空（书记员整卡重写用）；AI1 自报的空数组视为「未提供」，不覆盖既有值
-  function mergeWorld(world, delta, opts) {
+  function mergeWorld(world, delta, opts?) {
     const out = world || {};
     if (!delta || typeof delta !== 'object') return out;
     const allowEmpty = !!(opts && opts.allowEmpty);
@@ -1029,7 +1033,7 @@
   // chat / rp 纯文本没有 scene_change：按固定条数切幕（4 条 = 2 个回合），
   // 避免整个积压被压成一条摘要，保留「越老越模糊」的层次
   const PLAIN_SCENE_MESSAGES = 4;
-  function groupByTurns(msgs, size) {
+  function groupByTurns(msgs, size?) {
     const n = Math.max(2, size || PLAIN_SCENE_MESSAGES);
     const groups = [];
     for (let i = 0; i < msgs.length; i += n) groups.push(msgs.slice(i, i + n));
@@ -1050,7 +1054,7 @@
   // 动态组装窗口（P1-3，2026-10-14）：已知 contextWindow 时按 token 从最近往前装，
   // 装到窗口一半为止，条数 ∈ [4, 40]；未知容量退回 fallback（评测与旧档口径不变）。
   // 组装（assembleAI1）与压缩保留（planCompression）共用同一函数，保证「压多少 / 留多少」同口径。
-  function fitWindow(msgs, contextWindow, fallback) {
+  function fitWindow(msgs, contextWindow, fallback?) {
     const cw = +contextWindow;
     if (!Number.isFinite(cw) || cw <= 0) return fallback || DEFAULT_KEEP_MESSAGES;
     const budget = Math.floor(cw * WINDOW_TOKEN_RATIO);
@@ -1365,7 +1369,7 @@
   }
 
   // 画像注入块 = 一行摘要（常驻）+ 与当前话题相关的 Top-N 条
-  function profileBlock(entries, playerAction, max) {
+  function profileBlock(entries, playerAction, max?) {
     const list = normalizeProfile(entries);
     if (!list.length) return '';
     const parts = [profileSummaryLine(list)];
@@ -1483,14 +1487,14 @@
       personality: str(c['性格'] || c.personality),
       speech: str(c['说话方式'] || c.speech),
     })).filter(c => c.name) : [];
-    const world = {};
+    const world: any = {};
     if (j['地点'] != null && str(j['地点'])) world.place = str(j['地点']);
     if (j['时间'] != null && str(j['时间'])) world.time = str(j['时间']);
     if (Array.isArray(j['伏笔'])) world.threads = j['伏笔'].filter(Boolean).map(str);
     if (str(j['画面'])) world.scene = str(j['画面']);
     if (chars.length) world.characters = chars;
 
-    const out = {
+    const out: any = {
       narration: str(j['旁白'] || j.narration),
       choices: Array.isArray(j['选项']) ? j['选项'] : (Array.isArray(j.choices) ? j.choices : []),
       scene_change: !!(Object.prototype.hasOwnProperty.call(j, '场景切换') ? j['场景切换'] : j.scene_change),
@@ -1685,7 +1689,7 @@
     return estimateTokens(messagesToText(messages));
   }
 
-  function estimateContextTokens(story, playerAction, opts) {
+  function estimateContextTokens(story, playerAction, opts?) {
     return estimateTokensOf(assembleAI1(story, playerAction, opts));
   }
 
@@ -1710,14 +1714,14 @@
 
   // 旁白日志条目（versions = 版本栈）；思考链随条目一起存，供折叠块渲染与以后带 tools 回传
   function narrationEntry(text, reasoning, now) {
-    const e = { type: 'narration', text: text, versions: [text], activeVersion: 0, ts: now || Date.now() };
+    const e: any = { type: 'narration', text: text, versions: [text], activeVersion: 0, ts: now || Date.now() };
     if (reasoning) e.reasoning = clipReasoning(reasoning);
     return e;
   }
 
   // AI1 原始对话里的 assistant 条目：reasoning 一并存档（不进请求体，§4.5）
   function assistantEntry(reply, reasoning) {
-    const m = { role: 'assistant', content: JSON.stringify(slimReply(reply)) };
+    const m: any = { role: 'assistant', content: JSON.stringify(slimReply(reply)) };
     if (reasoning) m.reasoning = clipReasoning(reasoning);
     return m;
   }
@@ -1745,7 +1749,7 @@
     for (const c of calls) {
       const fn = (c && c.function) ? c.function : c;
       const name = (fn && fn.name) || '';
-      let args = {};
+      let args: any = {};
       try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments || {}); } catch (_) { args = {}; }
       if (isProposalTool(name)) continue;   // 提案留痕跳过（提案卡本身就是留痕）
       if (name === 'update_memory') {
@@ -1757,8 +1761,7 @@
     }
   }
 
-  global.IR = global.IR || {};
-  global.IR.Context = {
+  const Context = {
     BUDGET, COMPRESS_RATIO,
     DEFAULT_KEEP_MESSAGES, DEFAULT_MAX_MESSAGES, DEFAULT_MAX_SUMMARIES,
     TONE_MAX_CHARS, PREMISE_MAX_CHARS,
@@ -1794,4 +1797,5 @@
     assembleAI1, messagesToText, estimateContextTokens, estimateTokensOf,
     slimReply, narrationEntry, assistantEntry, toolSummary, absorbToolCalls,
   };
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  registerIR({ Context });
+  export { Context };

@@ -13,8 +13,12 @@
  *   2. applyTo(settings) 只改内存副本，绝不写回 localStorage（真实配置不会被污染）。
  *   3. 剧本与画师脚本都是常量数据，不含任何外部请求；断网、file:// 下同样可用。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/demo.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   /* ==================== 内置剧本（10 回合 + 收尾） ====================
    * 与真实 AI1 回包同构：narration / choices / scene_change / scene_summary / world（自报世界卡）。
@@ -231,7 +235,7 @@
     return s;
   }
 
-  function replyOf(o, extra) {
+  function replyOf(o, extra?) {
     return JSON.stringify(Object.assign({
       narration: o.narration,
       choices: o.choices || [],
@@ -497,7 +501,7 @@
     }
   }
 
-  const Demo = {
+  const Demo: any = {
     enabled: enabled,
     applyTo: applyTo,
     reset: reset,
@@ -530,7 +534,7 @@
     // 与真实客户端同语义（审查 可维护性 #7）：业务失败 = reject 一个带 code 的 Error，
     // 就像 js/sidecar.js 的 api() 把 400 + {ok:false,code} 抛出来那样——调用方的 catch 路径两边一致。
     const sidecarFail = (code, message) => {
-      const e = new Error(message || code);
+      const e: any = new Error(message || code);
       e.code = code;
       e.status = 400;
       return Promise.reject(e);
@@ -665,7 +669,7 @@
       if (amount <= 0) return Promise.resolve({ ok: false, code: 'BAD_AMOUNT', message: '金额必须大于 0。' });
       if (amount > cfg.payment.perTx) return Promise.resolve({ ok: false, code: 'AMOUNT_EXCEEDS_LIMIT', message: '超过单笔上限。' });
       if (committed() + amount > cfg.payment.daily) return Promise.resolve({ ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '超过每日上限。' });
-      const tx = {
+      const tx: any = {
         intentId: nid('pi'), agent: p.agent || 'agent', amountCents: amount, currency: cfg.payment.currency,
         merchant: p.merchant || '', category: p.category || '', items: p.items || [],
         status: 'pending', code: '', providerRef: '', createdAt: Date.now(),
@@ -756,9 +760,10 @@
 
   Demo.installSidecarMock = installSidecarMock;
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     ChatProviders: ChatProviders,
     ImageProviders: ImageProviders,
     Demo: Demo,
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export { ChatProviders, ImageProviders, Demo };

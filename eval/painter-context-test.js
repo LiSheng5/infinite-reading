@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 
-require(path.join(__dirname, '..', 'js', 'context.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
 const C = global.IR.Context;
 
 let failed = 0;

@@ -4,7 +4,7 @@
  *   - package.json 的 version 字段
  *   - sw.js 里 Service Worker 的缓存名（ir-v…）
  *   - README.md / README.en.md 的版本徽章与「当前版本 vX」文字行
- *   - js/store.js / js/app/backup.js 里导出包的版本戳（「无限阅读 v…」）
+ *   - js/store.js（阶段 2 起 src/core/store.ts）与 src/core/backupPack.ts 里导出包的版本戳（「无限阅读 v…」）
  *
  * 阶段 1 起不再管 index.html 的版本串：缓存击穿 `?v=` 已随构建期 hash 文件名消失，
  * 首页版本文字改由构建注入（index.html 写 `v__IR_VERSION__` 占位符，
@@ -65,12 +65,12 @@ const TARGETS = [
   },
   {
     // 导出包的版本戳（曾因不在同步范围停在 v0.4）
-    file: 'js/store.js',
+    file: 'src/core/store.ts',
     find: () => /无限阅读 v[0-9A-Za-z.\-]+/g,
     replace: () => '无限阅读 v' + version,
   },
   {
-    file: 'js/app/backup.js',
+    file: 'src/core/backupPack.ts',
     find: () => /无限阅读 v[0-9A-Za-z.\-]+/g,
     replace: () => '无限阅读 v' + version,
   },

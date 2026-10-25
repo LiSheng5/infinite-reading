@@ -9,15 +9,20 @@
  * 合规（§4.12）：只兼容**格式**，不复制任何代码与内容；解析的是用户自己的卡。
  * 纯逻辑、零依赖；IIFE 挂 window.IR，Node 亦可加载（评测用）。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/roleCard.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
+declare const Buffer: any;
 
   const CARD_FIELDS = ['name', 'appearance', 'personality', 'scene', 'opening', 'exampleDialogue', 'systemNote'];
   const SOURCES = ['builtin', 'st-import', 'custom'];
   const TEXT_KEYWORDS = ['ccv3', 'chara'];   // V3 优先，其次 V2
   const FIELD_MAX = 4000;                    // 单字段入库截断（防呆；控 localStorage 体积）
 
-  function str(v, max) {
+  function str(v, max?) {
     const s = String(v == null ? '' : v).replace(/\r\n?/g, '\n').trim();
     const cap = max || FIELD_MAX;
     return s.length > cap ? s.slice(0, cap) : s;
@@ -202,11 +207,12 @@
     return '自建';
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     RoleCard: {
       CARD_FIELDS, SOURCES, TEXT_KEYWORDS,
       emptyCard, normalize, fromST, parsePNG, readTextChunks,
       speechHint, worldCharacter, sourceLabel,
     },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { RoleCard } = __irApi;

@@ -29,7 +29,7 @@ function check(name, ok, detail) {
 /* ---------- 允许名单：确实不能用令牌的色值（每条带理由） ---------- */
 const ALLOW_COLORS = [
   {
-    file: 'js/demo.js',
+    file: 'src/core/demo.ts',
     reason: '离线演示占位图是 canvas 现画的「图片内容」（天空渐变 / 光源 / 剪影 / 雨丝 / 信息条），不是 UI 配色，走不了 CSS 令牌；其中信息条的深色遮罩与白字属于任务书 §2 的「图片上叠字」允许情形',
   },
 ];
@@ -111,18 +111,24 @@ eachDeclaration(cssNoRoot, (prop, value) => {
 });
 check('style.css :root 之外无颜色字面量', cssHits.length === 0, cssHits.join(' | '));
 
-// js/*.js：业务 JS 不得写死颜色（canvas 画图内容进允许名单）
-const jsDir = path.join(ROOT, 'js');
+// js/*.js 与 src/core/*.ts：业务代码不得写死颜色（canvas 画图内容进允许名单）
 const jsHits = [];
-for (const f of fs.readdirSync(jsDir).filter(f => f.endsWith('.js'))) {
-  const rel = 'js/' + f;
-  const text = fs.readFileSync(path.join(jsDir, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)) {
-    const line = text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ');
-    if (!allowedFor(rel, line)) jsHits.push(rel + ' …' + line + '…');
+const SCAN_DIRS = [
+  { dir: path.join(ROOT, 'js'), rel: 'js', exts: ['.js'] },
+  { dir: path.join(ROOT, 'src', 'core'), rel: 'src/core', exts: ['.js', '.ts'] },
+];
+for (const { dir, rel, exts } of SCAN_DIRS) {
+  if (!fs.existsSync(dir)) continue;
+  for (const f of fs.readdirSync(dir).filter(f => exts.some(e => f.endsWith(e)))) {
+    const rf = rel + '/' + f;
+    const text = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)) {
+      const line = text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ');
+      if (!allowedFor(rf, line)) jsHits.push(rf + ' …' + line + '…');
+    }
   }
 }
-check('js/*.js 无未允许的颜色字面量', jsHits.length === 0, jsHits.slice(0, 5).join(' | '));
+check('js/*.js 与 src/core 无未允许的颜色字面量', jsHits.length === 0, jsHits.slice(0, 5).join(' | '));
 
 /* ---------- 3. @keyframes 只动合成层属性 ---------- */
 

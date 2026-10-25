@@ -15,9 +15,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'sidecar.js'));
-require(path.join(__dirname, '..', 'js', 'context.js'));
-require(path.join(__dirname, '..', 'js', 'features.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'sidecar.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'features.ts'));
 
 const S = (global.IR || {}).Sidecar;
 if (!S) {

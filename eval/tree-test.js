@@ -32,8 +32,8 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'tree.js'));
-require(path.join(__dirname, '..', 'js', 'store.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
 
 const T = (global.IR || {}).Tree;
 const S = (global.IR || {}).Store;

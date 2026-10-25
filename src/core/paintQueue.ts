@@ -20,8 +20,12 @@
  *  - run 进行中置 dead → run 照常跑完，返回值带 dead: true，供调用方写回前丢弃
  *  - enqueue 本身同步返回、不阻塞调用方；key 只用于 has()，队列本身不去重
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/paintQueue.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   function create(opts) {
     const onChange = opts && typeof opts.onChange === 'function' ? opts.onChange : null;
@@ -95,7 +99,8 @@
     return { enqueue: enqueue, has: has, size: size };
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     PaintQueue: { create: create },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { PaintQueue } = __irApi;

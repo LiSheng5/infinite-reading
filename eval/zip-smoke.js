@@ -15,7 +15,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'zip.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'zip.ts'));
 
 const Zip = (global.IR || {}).Zip;
 if (!Zip || typeof Zip.build !== 'function' || typeof Zip.read !== 'function') {

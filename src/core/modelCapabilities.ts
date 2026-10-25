@@ -19,8 +19,12 @@
  * 需要临时预填：在下面按 { provider, model, contextWindow } 结构加一行即可，逻辑不用动
  * （image / video 也支持同样结构）——但默认留空，避免跟着厂商模型变动一直维护。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/modelCapabilities.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const VERSION = '0.2.0';
   const RECORDED_AT = '2026-10-04';
@@ -105,11 +109,12 @@
     return String(n);
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     ModelCapabilities: {
       VERSION, RECORDED_AT,
       chat: CHAT, image: IMAGE, video: VIDEO,
       find, findAny, contextWindowOf, summarize, formatWindow,
     },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { ModelCapabilities } = __irApi;

@@ -16,7 +16,7 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'paintQueue.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts'));
 
 const PaintQueue = (global.IR || {}).PaintQueue;
 if (!PaintQueue || !PaintQueue.create) {

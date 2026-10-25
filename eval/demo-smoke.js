@@ -15,11 +15,11 @@ const path = require('path');
 global.window = global;
 global.location = { search: '?demo=1' };          // 演示模式靠查询参数判定
 
-require(path.join(__dirname, '..', 'js', 'context.js'));
-require(path.join(__dirname, '..', 'js', 'tree.js'));
-require(path.join(__dirname, '..', 'js', 'store.js'));
-require(path.join(__dirname, '..', 'js', 'roleCard.js'));
-require(path.join(__dirname, '..', 'js', 'demo.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'roleCard.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'demo.ts'));
 
 const { Context, Store, Demo, ChatProviders, ImageProviders, Tree } = global.IR || {};
 if (!Context || !Demo || !ChatProviders || !ImageProviders || !Tree) {

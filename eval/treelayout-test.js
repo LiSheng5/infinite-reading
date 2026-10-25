@@ -19,7 +19,7 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'treeLayout.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'treeLayout.ts'));
 
 const TL = (global.IR || {}).TreeLayout;
 if (!TL) {

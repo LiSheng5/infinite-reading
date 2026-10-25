@@ -9,7 +9,7 @@
  */
 'use strict';
 
-const Motion = require('../js/motion.js');
+const Motion = require('../src/core/motion.ts').Motion;
 
 let failed = 0;
 function eq(name, actual, expected) {

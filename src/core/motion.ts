@@ -8,8 +8,12 @@
  * 强度档位的视觉规则见 css/style.css 的 html[data-motion] 规则块；
  * 应用层（app.js）启动时与 prefers-reduced-motion 变化时，
  * 把 resolve 的结果写进 document.documentElement.dataset.motion。 */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/motion.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   var LEVELS = ['off', 'standard', 'rich'];
 
@@ -18,11 +22,8 @@
     return prefersReduced ? 'off' : 'rich';
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     Motion: { resolve: resolve, LEVELS: LEVELS.slice() },
-  });
-
-  if (typeof module !== 'undefined' && module.exports) {
-    module.exports = global.IR.Motion;
-  }
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { Motion } = __irApi;

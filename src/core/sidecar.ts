@@ -12,8 +12,12 @@
  *
  * 零依赖，纯浏览器原生；在 Node 下也能加载（看不到 EventSource 就跳过订阅），便于单测。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/sidecar.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const DEFAULT_PORT = 4319;
   const PROBE_TIMEOUT_MS = 1500;
@@ -211,8 +215,8 @@
     return cfg;
   }
 
-  async function api(method, path, body) {
-    const headers = { 'Content-Type': 'application/json' };
+  async function api(method, path, body?) {
+    const headers: any = { 'Content-Type': 'application/json' };
     if (cfg.token) headers.Authorization = 'Bearer ' + cfg.token;
     const res = await fetchWithTimeout(base() + path, {
       method: method || 'GET',
@@ -223,7 +227,7 @@
     let data = null;
     try { data = await res.json(); } catch (_) {}
     if (!res.ok) {
-      const err = new Error((data && data.message) || ('HTTP ' + res.status));
+      const err: any = new Error((data && data.message) || ('HTTP ' + res.status));
       err.code = (data && data.code) || ('HTTP_' + res.status);
       err.status = res.status;
       throw err;
@@ -270,7 +274,7 @@
   //（err.code / err.status），调用方只用写一套 catch。成功则解包 body[key]。
   function unwrap(r, key) {
     if (r && r.ok === false) {
-      const e = new Error(r.message || r.code || '请求失败');
+      const e: any = new Error(r.message || r.code || '请求失败');
       e.code = r.code || 'FAILED';
       e.status = 400;
       throw e;
@@ -308,7 +312,7 @@
   function paymentMandates() { return api('GET', '/api/payment/mandates'); }
   function paymentCreateMandate(m) { return api('POST', '/api/payment/mandates', m).then(r => unwrap(r, 'mandate')); }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     Sidecar: {
       DEFAULT_PORT: DEFAULT_PORT,
       configure: configure,
@@ -353,5 +357,6 @@
       paymentMandates: paymentMandates,
       paymentCreateMandate: paymentCreateMandate,
     },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { Sidecar } = __irApi;

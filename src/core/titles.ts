@@ -10,10 +10,12 @@
  *
  * 硬约束：零依赖、无 DOM、无网络；IIFE 挂 window.IR，Node 里 require 也能跑。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
 
-  var IR = global.IR || {};
+/* ↑ 阶段 2 搬迁自 js/titles.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   /* ---------------- 码点安全的小工具 ---------------- */
 
@@ -89,7 +91,7 @@
       if (m.role !== 'user' && m.role !== 'assistant') continue;   // system / tool 一律不带
       valid.push({
         role: m.role,
-        content: m.role === 'user' ? userText(m.content) : assistantText(m.content, mode),
+        content: m.role === 'user' ? userText(m.content) : (assistantText as any)(m.content, mode),
       });
     }
     var slice = valid.slice(-6);   // 最近 3 轮 = 最多 6 条（用户话 + 助手回复）
@@ -174,7 +176,7 @@
     return true;
   }
 
-  IR.Titles = {
+  const Titles = {
     TITLE_SYSTEM: TITLE_SYSTEM,
     needsTitle: needsTitle,
     buildPrompt: buildPrompt,
@@ -182,5 +184,5 @@
     fallback: fallback,
     applyTitle: applyTitle,
   };
-  global.IR = IR;
-})(typeof window !== 'undefined' ? window : global);
+  registerIR({ Titles });
+  export { Titles };

@@ -27,9 +27,9 @@ const path = require('path');
 })();
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'js', 'store.js'));
-require(path.join(__dirname, '..', 'js', 'search.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
+require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'search.ts'));
 
 const Store = (global.IR || {}).Store;
 const Search = (global.IR || {}).Search;

@@ -16,7 +16,7 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'titles.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'titles.ts'));
 
 const T = (global.IR || {}).Titles;
 if (!T) {

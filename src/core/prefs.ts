@@ -9,8 +9,12 @@
  *
  * 硬约束：不碰 DOM、不碰存储、无依赖；Node 里 require 后挂到 global.IR.Prefs。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/prefs.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   /* ---------------- 白名单 ---------------- */
 
@@ -49,7 +53,7 @@
     return !!v && typeof v === 'object' && !Array.isArray(v);
   }
 
-  function stripSecrets(value, depth) {
+  function stripSecrets(value, depth?) {
     if (value == null || typeof value !== 'object') return value;
     if (depth == null) depth = 0;
     if (depth > 12) return Array.isArray(value) ? [] : {};   // 防环 / 防爆深
@@ -72,7 +76,7 @@
   }
 
   function sanitizeUi(raw) {
-    const out = {};
+    const out: any = {};
     if (!isPlainObject(raw)) return out;
     if (LAYOUT_VALUES.indexOf(raw.layout) >= 0) out.layout = raw.layout;
     const r = +raw.splitRatio;
@@ -89,7 +93,7 @@
   function sanitizePrefs(raw) {
     if (!isPlainObject(raw)) return {};
     const src = stripSecrets(raw);          // 先剥凭证，再按白名单收窄
-    const out = {};
+    const out: any = {};
     if (typeof src.profileId === 'string' && src.profileId.trim()) {
       out.profileId = src.profileId.trim().slice(0, 64);
     }
@@ -294,13 +298,12 @@
     const label = (typeof p.profileLabel === 'string' && p.profileLabel)
       ? p.profileLabel
       : profileLabel(settings, p.profileId);
-    const out = { profileId: p.profileId };
+    const out: any = { profileId: p.profileId };
     if (label) out.profileLabel = label;
     return out;
   }
 
-  global.IR = global.IR || {};
-  global.IR.Prefs = {
+  const Prefs = {
     PREF_KEYS, TOOL_KEYS, UI_KEYS,
     SECRET_KEY_RE,
     toolCategory,
@@ -311,4 +314,5 @@
     visibleFor,
     exportPrefs,
   };
-})(typeof globalThis !== 'undefined' ? globalThis : this);
+  registerIR({ Prefs });
+  export { Prefs };

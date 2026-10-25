@@ -14,8 +14,12 @@
  *
  * 纯函数、零外部依赖（ID 生成共用 js/tree.js 的 IR.genId）；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/proposals.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 提案有效期（默认 30 分钟，常量可调）
   const MAX_AMOUNT_CENTS = 200000;        // 客户端金额兜底上限（2000 元）；真额度由 sidecar mandate 管
@@ -256,11 +260,11 @@
     return settled(p, 'denied');
   }
 
-  global.IR = global.IR || {};
-  global.IR.Proposals = {
+  const Proposals = {
     DEFAULT_TTL_MS, MAX_AMOUNT_CENTS,
     MAX_SUBJECT, MAX_BODY, MAX_MERCHANT, MAX_CATEGORY, MAX_ITEMS, MAX_ITEM_NAME,
     yuanToCents,
     create, isActionable, markExpired, confirm, approveSecond, deny,
   };
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  registerIR({ Proposals });
+  export { Proposals };

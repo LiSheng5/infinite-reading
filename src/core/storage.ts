@@ -17,8 +17,12 @@
  *
  * 零依赖；Node 下加载也不会报错（available = false）。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/storage.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const DB_NAME = 'ir-db';
   const DB_VERSION = 1;
@@ -142,5 +146,6 @@
     },
   };
 
-  global.IR = Object.assign(global.IR || {}, { Storage });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  const __irApi = { Storage };
+registerIR(__irApi);
+export { Storage };

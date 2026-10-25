@@ -11,10 +11,12 @@
  * 硬约束：零依赖、无 DOM、无网络；输出里不含任何 HTML（高亮由 UI 用 createElement('mark') 做）；
  * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
 
-  var IR = global.IR || {};
+/* ↑ 阶段 2 搬迁自 js/search.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */
 
@@ -280,7 +282,7 @@
     index.remove(id);
   }
 
-  IR.Search = {
+  const Search = {
     normalize: normalize,
     normWithMap: normWithMap,
     plainReply: plainReply,
@@ -291,5 +293,5 @@
     notifySave: notifySave,
     drop: drop,
   };
-  global.IR = IR;
-})(typeof window !== 'undefined' ? window : global);
+  registerIR({ Search });
+  export { Search };

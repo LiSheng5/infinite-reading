@@ -18,8 +18,8 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'tree.js'));   // IR.sleep 在 tree.js（providers 轮询依赖，三·5）
-require(path.join(__dirname, '..', 'js', 'providers.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.sleep 在 tree.js（providers 轮询依赖，三·5）
+require(path.join(__dirname, '..', 'src', 'core', 'providers.ts'));
 
 const V = (global.IR || {}).VideoProviders;
 const mm = V && V['minimax-video'];

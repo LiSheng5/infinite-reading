@@ -22,8 +22,12 @@
  *   - pathEdgeD = 当前路径合成一条 SVG path 的 d（流光动画只挂这一条）；
  *   - 确定性：同一棵树同一参数 → 输出完全相同。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+
+/* ↑ 阶段 2 搬迁自 js/treeLayout.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const DEFAULTS = {
     collapseRun: 8,
@@ -335,7 +339,7 @@
       const sup = supers.get(id);
       const n = map[id];
       const x = xOf(id), y = yOf(id);
-      const base = {
+      const base: any = {
         id: id, x: x, y: y,
         lane: laneOf.get(id) || 0,
         row: row.get(id) || 0,
@@ -421,7 +425,8 @@
     return geometryOf(L, F, cfg);            // 几何
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     TreeLayout: { DEFAULTS: DEFAULTS, compute: compute, pointsToD: pointsToD, codeSlice: codeSlice },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export const { TreeLayout } = __irApi;

@@ -47,9 +47,9 @@ const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'fixture');
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 
-// zip 读写用应用自己的 js/zip.js（Node 里 require 与 eval/zip-smoke.js 同款用法）：
+// zip 读写用应用自己的 src/core/zip.ts（Node 里 require 与 eval/zip-smoke.js 同款用法）：
 // 夹具比对的是「同一份代码打出的包」，解析器也必须是同一份，避免两套 zip 实现各自有偏差。
-require(path.join(ROOT, 'js', 'zip.js'));
+require(path.join(ROOT, 'src', 'core', 'zip.ts'));
 const Zip = (globalThis.IR && globalThis.IR.Zip) || null;
 
 const log = (...a) => console.log('[fixture]', ...a);
@@ -691,7 +691,7 @@ function stabilizeBackup(obj) {
 }
 
 async function readZipEntries(buf) {
-  if (!Zip || !Zip.read) throw new Error('IR.Zip 未加载（js/zip.js require 失败）');
+  if (!Zip || !Zip.read) throw new Error('IR.Zip 未加载（src/core/zip.ts require 失败）');
   return Zip.read(new Blob([buf]));
 }
 

@@ -33,8 +33,13 @@
  *     messages 窗口 = 从第 msgFloor 个 turn 节点起，依次展开 [userMsg, assistantMsg]。
  *   - 窗口对不上（messages 奇数条 / 与路径末尾对不齐）→ 节点退化存整窗口快照 msgSnap。
  */
-(function (global) {
-  'use strict';
+import { IR, registerIR } from './ir.ts';
+import type { Story, StoryTree } from './schema.ts';
+
+/* ↑ 阶段 2 搬迁自 js/tree.js（IIFE → ES module，函数体逐字未动）。
+ * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
+ * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+const global = globalThis as any;
 
   const TREE_V = 1;
   // story 裁剪窗口的唯一口径：store.js 的 serializeStory 与书架导出一律引用这里的导出，
@@ -50,7 +55,7 @@
   //   prefix —— 实体前缀（n/st/s/pf/sc/sp/vd/style/pp…）；
   //   now    —— 可选时间戳（提案等需要「以注入时间为准」的确定性场景），缺省 Date.now()。
   // seq 自增 + 3 位随机，保证同一毫秒内多次调用也不撞 id。
-  function genId(prefix, now) {
+  function genId(prefix, now?) {
     seq += 1;
     return prefix + Number(now || Date.now()).toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 5);
   }
@@ -401,7 +406,7 @@
     }
   }
 
-  function ensure(story) {
+  function ensure(story: Story) {
     if (!story || typeof story !== 'object') return null;
     const t = story.tree;
     if (t && t.v === TREE_V && t.nodes && t.nodes[t.root] && t.nodes[t.head]) {
@@ -418,7 +423,7 @@
   /* ---------------- 回合生命周期（§4.1） ---------------- */
 
   // 回合开始：记下 logMark（必须在 pushLog(player) 之前调）
-  function begin(story) {
+  function begin(story: Story) {
     ensure(story);
     return { logMark: (story.log || []).length };
   }
@@ -426,7 +431,7 @@
   // 回合成功：落一个 turn 节点（parent = 当前 head），head 前移。
   // UI-4 §2.1：head 停在非叶子节点（switchTo 回到历史位置后再发送）时同样以它为 parent——
   // 新节点追加到该节点 children 末尾并更新 parent.active，天然产生一条新分支（测试固定）。
-  function commit(story, opts) {
+  function commit(story: Story, opts) {
     opts = opts || {};
     const tree = ensure(story);
     if (typeof opts.logMark !== 'number') throw new Error('Tree.commit：缺少 logMark（先调 Tree.begin）');
@@ -455,7 +460,7 @@
 
   // 回合结算后封存（必须在 postTurn 之后：书记员 / 压缩会改 world / summaries / messages，
   // 并往 log 追加 tool 条目——先 seal 会存到「半结算」状态，§10）
-  function seal(story, nodeId) {
+  function seal(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node) { console.warn('IR.Tree.seal：节点不存在', nodeId); return null; }
@@ -482,7 +487,7 @@
 
   // 手改世界卡 / 摘要栈等「派生数据」后调用：把 head 的内联状态换成当前值。
   // 否则下一次 project（进入故事 / 切分支）会用旧快照把手改回滚掉。
-  function resyncState(story) {
+  function resyncState(story: Story) {
     const tree = ensure(story);
     const head = tree.nodes[tree.head];
     if (!head) return null;
@@ -490,7 +495,7 @@
     return head.sid;
   }
 
-  function project(story) {
+  function project(story: Story) {
     const tree = ensure(story);
     const path = pathNodes(tree, tree.head);
     const head = tree.nodes[tree.head];
@@ -504,7 +509,7 @@
     // 消息对象按引用共享（就地修改落在树上），但数组本身是新的——
     // 后续 push / splice（比如回合进行中往窗口里加消息）不会污染树上的快照。
     if (head.msgSnap) {
-      story.messages = head.msgSnap.slice();
+      story.messages = (head.msgSnap as any).slice();
     } else {
       const turns = path.filter(n => n.kind === 'turn');
       const floor = Math.max(0, Math.min(turns.length, +head.msgFloor || 0));
@@ -536,7 +541,7 @@
     return story;
   }
 
-  function pathOf(story, nodeId) {
+  function pathOf(story: Story, nodeId) {
     const tree = ensure(story);
     return pathNodes(tree, nodeId).map(n => n.id);
   }
@@ -562,7 +567,7 @@
   }
 
   // 某节点的兄弟 id 列表（含自身，按创建序 = children 下标序）；根节点没有兄弟
-  function siblings(story, nodeId) {
+  function siblings(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node) return [];
@@ -572,7 +577,7 @@
 
   // dir = -1 | +1：切到相邻兄弟，parent.active 记住它，再沿 active 下探到叶子（§4.3）。
   // 越界 / 根节点 / 未知节点 → 返回 null 且完全不动；成功返回新的 head 节点。
-  function switchSibling(story, nodeId, dir) {
+  function switchSibling(story: Story, nodeId, dir) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node || !node.parent || !tree.nodes[node.parent]) return null;
@@ -590,7 +595,7 @@
 
   // 直接落到某节点（存档点回档，§4.6）：head + 投影，并把路径上的 active 记忆对齐到目标——
   // 回到哪条支线，active 就指哪条；之后再切兄弟回来，落在当前所在的位置。
-  function switchTo(story, nodeId) {
+  function switchTo(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node) return null;
@@ -604,7 +609,7 @@
   /* ---------------- UI-4 §2：任意节点继续 / 分叉 ---------------- */
 
   // §2.2：沿 active 下探到叶子（descend 的公开版本，纯读不改）；无 active 时取最后一个孩子
-  function latestLeaf(story, nodeId) {
+  function latestLeaf(story: Story, nodeId) {
     const tree = story && story.tree;
     if (!tree || !tree.nodes) return null;
     return descend(tree, nodeId == null ? tree.head : nodeId);
@@ -612,7 +617,7 @@
 
   // §2.3：站在「这一回合发生之前」= 把 head 落到 node.parent，供「改我说的」预填原话后分叉。
   // 根节点（没有 parent）与开局节点（action.type === 'opening'）不可改写 → { ok:false, reason }。
-  function forkBefore(story, nodeId) {
+  function forkBefore(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree && tree.nodes[nodeId];
     if (!node) return { ok: false, reason: '节点不存在' };
@@ -632,7 +637,7 @@
   // §2.4（纯函数）：sid === null（旧档迁移来的早期回合，状态未知）→ 只能看，不能落到这里继续。
   // project 对 sid === null 会保持当前状态不动，落到这种节点世界卡 / 摘要就是错的（§9）。
   // 兼容两种调用：canResume(story, nodeId) / canResume(node)。
-  function canResume(story, nodeId) {
+  function canResume(story: any, nodeId?) {
     let node = null;
     if (story && typeof story === 'object') {
       if (nodeId == null && story.kind && Array.isArray(story.children)) node = story;
@@ -647,7 +652,7 @@
   // 节点在当前路径上 → 同一个对象插进 story.log / story.scenes 里该节点末条**之后**
   //（不是追加到末尾，否则回合顺序错乱）；不在路径上 → 只写节点，不得泄漏进当前投影。
   // 节点不存在 → 丢弃，返回 false。
-  function pushLate(story, nodeId, item) {
+  function pushLate(story: Story, nodeId, item) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node || !item || typeof item !== 'object') return false;
@@ -682,7 +687,7 @@
 
   // tree.nodes[*].scenes 与 entries 里的 imageId 都算进去（含非当前分支），去重后返回。
   // 漏掉树内引用就会**静默删掉别的分支的图**（§10）。
-  function imageIdsOf(tree) {
+  function imageIdsOf(tree: StoryTree | null): string[] {
     const out = [];
     const seen = new Set();
     const add = id => { if (id && !seen.has(id)) { seen.add(id); out.push(id); } };
@@ -691,12 +696,12 @@
       const n = tree.nodes[id];
       if (!n) continue;
       for (const s of (n.scenes || [])) if (s) { add(s.imageId); add(s.videoId); }
-      for (const e of (n.entries || [])) if (e) { add(e.imageId); add(e.videoId); }
+      for (const e of (n.entries || [])) if (e) { add((e as any).imageId); add((e as any).videoId); }
     }
     return out;
   }
 
-  global.IR = Object.assign(global.IR || {}, {
+  const __irApi = {
     // IR 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
     genId: genId,
     clone: clone,
@@ -708,5 +713,7 @@
       siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
       pushLate, imageIdsOf,
     },
-  });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+  };
+  registerIR(__irApi);
+  export { genId, clone, sleep, plainReply };
+  export const { Tree } = __irApi;

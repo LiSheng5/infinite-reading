@@ -6,10 +6,10 @@
 'use strict';
 const path = require('path');
 
-require(path.join(__dirname, '..', 'js', 'prefs.js'));
-require(path.join(__dirname, '..', 'js', 'context.js'));
-require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'js', 'store.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'prefs.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
+require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
 
 const P = global.IR.Prefs;
 const C = global.IR.Context;

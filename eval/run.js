@@ -17,11 +17,11 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'js', 'context.js'));
-require(path.join(__dirname, '..', 'js', 'tree.js'));   // store.js 依赖 IR.Tree 的裁剪窗口/树遍历（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'js', 'store.js'));
-require(path.join(__dirname, '..', 'js', 'zip.js'));     // RoleCard.parsePNG 的 CRC 走 IR.Zip.crc32（三·5）
-require(path.join(__dirname, '..', 'js', 'roleCard.js'));
+require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree 的裁剪窗口/树遍历（加载顺序同 index.html）
+require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
+require(path.join(__dirname, '..', 'src', 'core', 'zip.ts'));     // RoleCard.parsePNG 的 CRC 走 IR.Zip.crc32（三·5）
+require(path.join(__dirname, '..', 'src', 'core', 'roleCard.ts'));
 require(path.join(__dirname, 'mock-story.js'));
 
 const { Context, MockStory, Store, RoleCard } = global.IR || {};
