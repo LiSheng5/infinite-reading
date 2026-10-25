@@ -619,7 +619,8 @@
 
     const title = document.createElement('div');
     title.className = 'proposal-title';
-    title.textContent = (p.kind === 'email' ? '✉ 邮件提案' : '🛒 下单提案') + '（要你确认才执行）';
+    title.appendChild(A.iconEl(p.kind === 'email' ? 'mail' : 'cart', 'ic-l'));
+    title.appendChild(document.createTextNode((p.kind === 'email' ? '邮件提案' : '下单提案') + '（要你确认才执行）'));
     d.appendChild(title);
 
     const table = document.createElement('div');

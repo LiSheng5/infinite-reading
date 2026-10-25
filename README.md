@@ -1,14 +1,14 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![version](https://img.shields.io/badge/version-0.12.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.12.1-blue.svg)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
 
 **在这里你可以体验与创作各种优秀且令人难忘的剧情，无论是什么样剧情都尽情的在这体验吧，包括你心中所想的世界**
 
-**当前版本 v0.12.0** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
+**当前版本 v0.12.1** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
 
 ## 特色
 

@@ -1,7 +1,7 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![version](https://img.shields.io/badge/version-0.12.0-blue.svg)
+![version](https://img.shields.io/badge/version-0.12.1-blue.svg)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
 [![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
 
@@ -11,7 +11,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 
 **Pure front-end · no build · no dependencies · no backend.** Double-click `index.html` and you are playing. All data stays in your own browser.
 
-**Current version: v0.12.0** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [中文说明](README.md)
+**Current version: v0.12.1** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [中文说明](README.md)
 
 ## Features
 

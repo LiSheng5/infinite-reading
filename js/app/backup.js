@@ -91,7 +91,7 @@
       } else {
         st.textContent = '本应用存档已用约 ' + pct + '%（' + n + ' 个故事 / ' + u.keys + ' 个键位）——'
           + (pct >= 70
-            ? '⚠ 接近写入上限，先「一键导出全部备份」，再删掉不用的故事腾空间。'
+            ? '接近写入上限，先「一键导出全部备份」，再删掉不用的故事腾空间。'
             : '每个站点约 5MB，到 70% 以上就该收拾一下了。')
           + (info.bootError
             ? '（升级到 IndexedDB 时出错，已安全退回：' + info.bootError + ' —— 数据没丢，但容量仍是约 5MB）'
@@ -105,7 +105,7 @@
       ps.textContent = persistGranted === true
         ? '已获得「持久化存储」授权：浏览器的自动淘汰会跳过本站（手动清除数据、Safari 的 7 天规则仍会删）。'
         : (persistGranted === false
-          ? '⚠ 未获得「持久化存储」授权：磁盘紧张时浏览器可能自动淘汰本站数据。多与页面交互、或把页面加为书签 / 应用，再刷新有机会获批。'
+          ? '未获得「持久化存储」授权：磁盘紧张时浏览器可能自动淘汰本站数据。多与页面交互、或把页面加为书签 / 应用，再刷新有机会获批。'
           : '（当前浏览器不支持，或暂时查不到持久化存储授权状态。）');
       ps.classList.toggle('alert', persistGranted === false);
     }
@@ -121,7 +121,7 @@
       if (Array.isArray(s.profiles)) s.profiles.forEach(p => { if (p) p.apiKey = ''; });
     }
     return {
-      format: 'ir-backup', schema: 1, app: '无限阅读 v0.12.0',
+      format: 'ir-backup', schema: 1, app: '无限阅读 v0.12.1',
       exportedAt: Date.now(),
       settings: s,
       userProfile: Store.loadUserProfile(),
@@ -288,7 +288,10 @@
     openModal('modal-settings');
     A.initSettingsNav();   // UI-3 §4.1：分组导航态（窄屏列表 / 桌面左导航）
     A.renderSidecarStatus();
-    if (A.sidecarReady()) A.loadFeatureConfig();   // 打开设置时刷新一次安全项（真源在侧车）
+    A.syncAdvPanels();     // 已有内容的折叠块（单独配置 / 高级参数）自动展开
+    if (A.sidecarReady()) {   // 打开设置时刷新一次安全项（真源在侧车）；填完再同步一次折叠块
+      Promise.resolve(A.loadFeatureConfig()).then(() => A.syncAdvPanels(), () => {});
+    }
   }
 
   function isZipFile(file) {

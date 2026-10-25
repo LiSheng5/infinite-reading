@@ -169,7 +169,7 @@
     const parts = [];
     if (cap) {
       parts.push('预填参考：' + cap.model + (Cap.summarize ? '（' + Cap.summarize('chat', cap) + '）' : ''));
-      if (cap.deprecated) parts.push('⚠ 该模型名可能已弃用，可改填新的');
+      if (cap.deprecated) parts.push('注意：该模型名可能已弃用，可改填新的');
     } else {
       parts.push('参数全部手填即可，不影响使用：上下文容量可在服务商「模型广场 / 文档」查到，不知道就留空（回退按条数压缩）；思考档位等厂商参数写进上面的「自定义请求参数」');
     }

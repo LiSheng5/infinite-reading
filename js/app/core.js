@@ -29,14 +29,6 @@
 
   const DEFAULT_TOPIC = '雨夜便利店：凌晨三点的第八个货架，与一场没有说出口的告别。';
 
-  // 开始页「故事设定」框的默认文字（v0.1 原样保留）
-  const DEFAULT_SETUP = [
-    '标题：雨夜便利店',
-    '世界：现代都市，深夜的便利店。外面下着大雨，店里灯光昏黄，收音机放着老歌。传闻这家店在凌晨三点会出现「第八个货架」。',
-    '你的角色：一位进来避雨的夜班顾客（你可以随时扮演成任何人、做任何事）。',
-    'AI 扮演：旁白，以及店里的一切——店员、常客、广播里的声音……',
-    '风格：克制的悬疑，日常里藏着一丝奇异。剧情随玩家的行动自由生长，不要拒绝玩家的任何尝试。',
-  ].join('\n');
   const CHAT_PREMISE = '对话模式：没有剧本，随性聊天。对话的走向由你们共同决定。';
   // R13 rp：premise 与角色卡绑定（卡常驻系统提示词；开场白由卡写、直接进日志，§4.12）
   function rpPremise(card) {
@@ -402,6 +394,17 @@
     return Object.assign({}, im, { size: size, width: w, height: h, customSize: customSize });
   }
 
+  /* 图标：sprite 在 index.html 顶部（#ir-icons）。icon() 返回静态 SVG 字符串（只拼固定名字，不含用户数据），
+   * iconEl() 返回元素。cls 例：'ic-l' = 图标在文字左边留一点空隙。 */
+  function icon(name, cls) {
+    return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+  }
+  function iconEl(name, cls) {
+    const t = document.createElement('template');
+    t.innerHTML = icon(name, cls);
+    return t.content.firstChild;
+  }
+
   function miniBtn(text, fn, cls) {
     const b = document.createElement('button');
     b.className = 'mini-btn' + (cls ? ' ' + cls : '');
@@ -442,7 +445,10 @@
         inp.value = vals && vals[f.key] != null ? String(vals[f.key]) : '';
         row.appendChild(inp);
       });
-      row.appendChild(miniBtn('×', () => row.remove(), 'char-del'));
+      const del = miniBtn('', () => row.remove(), 'char-del');
+      del.innerHTML = icon('x');
+      del.title = '删除这一行'; del.setAttribute('aria-label', '删除这一行');
+      row.appendChild(del);
       return row;
     }
     function rows() { return Array.prototype.slice.call(container.querySelectorAll('.char-row')); }
@@ -494,7 +500,6 @@
     MODE_LABELS,
     KIND_LABELS,
     DEFAULT_TOPIC,
-    DEFAULT_SETUP,
     CHAT_PREMISE,
     rpPremise,
     SCRIBE_SYSTEM,
@@ -512,6 +517,8 @@
     motionMs,
     toast,
     hideToast,
+    icon,
+    iconEl,
     irConfirm,
     closeConfirm,
     confirmValue,

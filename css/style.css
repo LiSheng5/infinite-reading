@@ -83,6 +83,11 @@
   --loop-kb: 20s;
   --loop-ambient: 40s;
 
+  /* 首页无限符号：深蓝 → 浅蓝（两端色；中间过渡靠两层叠加的 opacity） */
+  --inf-deep:      #1E3A8A;
+  --inf-light:     #60A5FA;
+  --loop-inf:      5.5s;      /* 色带流过整个符号一圈的时长 */
+
   /* 环境光（仅 data-motion="rich"）：白底上的极淡蓝，alpha ≤ .08 */
   --ambient-glow:
     radial-gradient(60% 50% at 30% 35%, rgba(37, 99, 235, .08), rgba(37, 99, 235, 0) 70%),
@@ -435,39 +440,122 @@ html[data-branch="open"] #screen-game *::after {
   }
 }
 
-/* ==================== 开始页 ==================== */
+/* ==================== 开始页 ====================
+   版式：无限符号（主视觉）→ 「继续上次」（有存档才出现）→ 三张模式卡 → 底部一排安静的文字入口。
+   不再套一层带框的卡片：符号直接浮在白底上。 */
 #screen-start {
   display: flex; align-items: center; justify-content: center;
   overflow-y: auto;
 }
 .start-card {
-  width: min(680px, 92vw);         /* 版心 */
+  width: min(560px, 92vw);         /* 版心 */
   margin: auto;
-  padding: 56px 48px 34px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-1);
-}
-#screen-start .title {
-  font-family: var(--font-title);
-  font-size: 46px;
-  font-weight: 400;
-  line-height: 1.35;
-  letter-spacing: .16em;
-  color: var(--ink);
+  padding: 44px 0 30px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   text-align: center;
 }
-/* 开始页的三个模式：横排三栏，只有名字，每张卡本身就是一个开局入口（点哪张就按哪种模式开局；
-   无介绍、无「开始」按钮）——反馈交给 .mode-card:hover 的朱砂左脊 + 淡底
-   （.mode-cards 的竖排规则在后面，这里要压过它） */
-.mode-cards.start-mode-cards {
-  flex-direction: row;
-  gap: 10px;
-  margin: 24px 0 16px;
+.start-mark { margin: 0 0 38px; font-weight: 400; line-height: 1; }
+
+/* ASCII 无限符号：深色在底，浅色在 ::after 叠层；只改叠层 opacity（动画白名单），
+   每个字符按所在列错开相位 → 深浅色带从左往右流过整个符号。
+   --t 是静态时的浅色占比（JS 按列算的一道「深 → 浅 → 深」渐变）。 */
+.inf {
+  display: inline-block;
+  margin: 0 auto;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(11px, calc((min(560px, 92vw) - 24px) / 21), 24px);
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: pre;
+  color: var(--inf-deep);
+  user-select: none;
 }
-.start-mode-cards .mode-card { position: relative; flex: 1 1 0; min-width: 0; padding: 11px 10px; text-align: center; }
-.start-mode-cards .mode-card b { font-size: 15.5px; margin-bottom: 0; letter-spacing: 0.2em; }
+.inf .c { position: relative; color: var(--inf-deep); }
+.inf .c::after {
+  content: attr(data-c);
+  position: absolute; left: 0; top: 0;
+  color: var(--inf-light);
+  opacity: var(--t, .5);
+}
+@keyframes infWave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+/* 只有「丰富」档循环；其余档停在静态渐变（全局 off / standard 规则会改写 animation，这里显式压住） */
+html[data-motion] .inf .c::after { animation: none !important; }
+html[data-motion="rich"] .inf .c::after {
+  animation: infWave var(--loop-inf) var(--ease-inout) infinite !important;
+  animation-delay: calc(var(--x, 0) * -0.14s) !important;
+}
+
+/* 继续上次：主操作（黑底白字），带最近那个故事的名字 */
+.start-continue {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 13px 18px;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  letter-spacing: .06em;
+  color: var(--on-ink);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.start-continue:hover { background: var(--ink-hover); transform: translateY(-1px); }
+.start-continue:active { transform: scale(.985); }
+.start-continue .sc-label { font-weight: 600; flex: none; }
+.start-continue .sc-title {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  opacity: .72;
+}
+.start-continue .ic { width: 18px; height: 18px; flex: none; }
+
+/* 三个模式：一行三张，图标 + 名字；每张卡本身就是一个开局入口 */
+.mode-cards.start-mode-cards { flex-direction: row; gap: 12px; margin: 0; }
+.start-mode-cards .mode-card {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 20px 8px 17px;
+  text-align: center;
+  background: var(--surface);
+  border-color: var(--line);
+}
+.start-mode-cards .mode-card .ic { width: 28px; height: 28px; color: var(--accent); }
+.start-mode-cards .mode-card b { margin: 0; padding-left: .2em; font-size: 15px; letter-spacing: .2em; }
+
+/* 底部入口：一排文字链接，不抢三张卡的戏 */
+.start-links {
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: 2px 4px;
+  margin-top: 22px;
+}
+.link-btn {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: .06em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.link-btn:hover { color: var(--accent); background: var(--accent-soft); }
+#screen-start .version {
+  font-family: var(--font-en);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  margin-top: 22px;
+  text-align: center;
+}
 .field-label {
   display: block;
   font-family: var(--font-ui);
@@ -476,50 +564,11 @@ html[data-branch="open"] #screen-game *::after {
   margin-bottom: 8px;
   letter-spacing: 0.08em;
 }
-#setup-premise {
-  width: 100%;
-  min-height: 150px;
-  resize: vertical;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.85;
-  letter-spacing: .01em;
-  color: var(--ink);
-  background: var(--field-bg);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 14px;
-  outline: none;
-  transition: border-color var(--dur-base) var(--ease-out);
-}
-#setup-premise:focus { border-color: var(--accent-line); box-shadow: var(--field-inset), 0 0 0 3px var(--accent-soft); }
 .row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
-/* 首页入口按钮紧跟在三张模式卡下面，与模式卡聚成一块：
-   首排的间距交给 .start-mode-cards 的下边距，往下再与「故事设定」框拉开；
-   按钮尺寸保持原有大小（只有模式卡收小了一档） */
-#screen-start .row { margin-top: 0; }
-#start-premise-wrap { margin-top: 24px; }
-#screen-start .version {
-  font-family: var(--font-en);
-  font-size: 12.5px;
-  color: var(--ink-dim);
-  letter-spacing: 0.1em;
-  margin-top: 26px;
-  text-align: center;
-}
-/* 次级入口：一排安静的小书签 */
-.row-secondary { margin-top: 12px; }
-.row-secondary .btn {
-  font-size: 13px;
-  padding: 6px 14px;
-  color: var(--ink-dim);
-  background: transparent;
-  border-color: var(--btn-line);
-}
 
 @media (max-width: 640px) {
-  .start-card { padding: 34px 22px 22px; }
-  #screen-start .title { font-size: 40px; }
+  .start-card { padding: 30px 0 22px; }
+  .start-mode-cards .mode-card { padding: 17px 4px 14px; }
 }
 
 /* ==================== 书架（UI-2：会话列表 + 搜索） ==================== */
@@ -1279,7 +1328,7 @@ html[data-motion="rich"] .stage-empty {
   width: 40px; height: 40px;   /* P-1 §9：可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 15px;
-  color: var(--ink);
+  color: var(--on-ink);   /* 底是深色半透明遮罩，线稿图标要用浅色 */
   background: var(--stage-btn-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1292,7 +1341,7 @@ html[data-motion="rich"] .stage-empty {
   position: absolute; left: 10px; top: 10px; z-index: 5;
   width: 40px; height: 40px;
   display: none;
-  color: var(--ink);
+  color: var(--on-ink);
   background: var(--stage-btn-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1817,10 +1866,7 @@ label input.inline-num {
   .shelf-search { flex-basis: 100%; max-width: none; }   /* 窄屏搜索框独占一行 */
   .shelf-actions { margin-left: 0; }
   .title { font-size: 30px; }
-  #screen-start .title { font-size: 38px; }
   #screen-shelf { padding: 28px 14px 20px; }
-  .start-card { padding: 30px 20px 20px; }
-  .mode-cards.start-mode-cards { flex-direction: column; margin: 20px 0 14px; }
   .tray-btn { max-width: 70vw; }
 }
 @media (max-width: 480px) {
@@ -2231,3 +2277,166 @@ html[data-motion="off"] .branch-page.enter,
 html[data-motion="off"] .branch-panel { animation: none; }
 
 
+
+/* ==================== 图标（手绘 SVG sprite，见 index.html 顶部 #ir-icons） ====================
+   描边风格统一写在这里：24 网格、1.6 描边、圆头圆角、颜色跟随文字色（currentColor）。
+   注意：<use> 里的元素吃不到外部选择器，实心圆点在 sprite 里用 fill 属性单独写。 */
+.ic {
+  width: 1.15em; height: 1.15em;
+  fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round;
+  flex: none;
+  vertical-align: -0.2em;
+}
+.ic-l { margin-right: .4em; }
+.ic-r { margin-left: .3em; }
+.ic-in { vertical-align: -0.28em; }
+.hud-btn .ic { width: 18px; height: 18px; vertical-align: middle; }
+.hud-icon .ic { width: 20px; height: 20px; }
+.btn .ic { width: 16px; height: 16px; }
+.mini-btn .ic { width: 14px; height: 14px; }
+.tool-btn .ic { width: 15px; height: 15px; vertical-align: -3px; }
+.menu-item .ic { width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; color: var(--ink-dim); }
+.menu-item:hover .ic { color: var(--accent); }
+.stage-btn .ic, .stage-exit .ic { width: 19px; height: 19px; vertical-align: middle; }
+.toast-close .ic { width: 14px; height: 14px; vertical-align: middle; }
+.mode-chip .ic { width: 13px; height: 13px; vertical-align: -2px; }
+.reason-caret .ic { width: 12px; height: 12px; vertical-align: -2px; }
+.stage-empty .ic { width: 1.1em; height: 1.1em; }
+
+/* ==================== 设置页（全部限定在 #modal-settings 内，不影响其它弹窗） ====================
+   版式：左侧安静的文字导航 + 右侧一栏滚动内容；卡片定高，切分组时不跳。
+   字段之间不再夹长段说明：副标题一行（.set-sub），高级项 / 长说明折进 <details>（.adv / .help）。 */
+#modal-settings .set-shell { display: grid; align-items: start; }
+#modal-settings .set-nav { display: flex; flex-direction: column; gap: 2px; }
+#modal-settings .set-nav-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  text-align: left;
+  font-family: var(--font-ui); font-size: 13.5px; letter-spacing: .05em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+#modal-settings .set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: none; }
+#modal-settings .set-nav-item.active { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+#modal-settings .set-nav-item .ic { display: none; width: 16px; height: 16px; color: var(--ink-faint); }
+
+#modal-settings fieldset {
+  min-width: 0;
+  margin: 0 0 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+#modal-settings fieldset + fieldset { padding-top: 28px; border-top: 1px solid var(--line-soft); }
+#modal-settings legend {
+  /* legend 默认骑在 fieldset 上边框上；浮起来 + 清除后，它就成了普通的小节标题 */
+  float: left; display: block; width: 100%;
+  padding: 0 0 6px;
+  font-family: var(--font-ui); font-size: 15px; font-weight: 600; letter-spacing: .06em;
+  color: var(--ink);
+}
+#modal-settings legend + * { clear: both; }
+#modal-settings .set-sub {
+  margin: 0 0 16px;
+  font-family: var(--font-ui); font-size: 12.5px; line-height: 1.75;
+  color: var(--ink-dim);
+}
+#modal-settings .set-sub b { color: var(--ink); font-weight: 600; }
+#modal-settings label { margin-bottom: 14px; }
+#modal-settings .hint { font-size: 12.5px; line-height: 1.75; margin-top: 6px; }
+#modal-settings .hint code, #modal-settings .help-body code {
+  font-family: var(--font-mono); font-size: 11.5px;
+  padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--ink);
+}
+#modal-settings .check { flex-wrap: wrap; row-gap: 0; margin-bottom: 12px; }
+#modal-settings .check-sub { flex: 0 0 100%; padding-left: 24px; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
+#modal-settings .row-inline .check { margin-bottom: 0; }
+#modal-settings .row-inline { margin-top: 8px; }
+#modal-settings .panel-block { margin-top: 16px; padding-top: 14px; }
+#modal-settings .mp-title { color: var(--ink); font-weight: 600; margin: 0 0 10px; }
+#modal-settings #mp-editor { margin-top: 14px; }
+
+/* 测试连接：一行，按钮在左，结果在右 */
+#modal-settings .test-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 2px 0 14px;
+}
+#modal-settings .test-row .test-state { margin-top: 0; flex: 1 1 200px; min-width: 0; }
+
+/* 折叠块：高级参数 / 单独配置 / 详细设置（.adv，带边框）与填写说明（.help，无边框） */
+#modal-settings details.adv,
+#modal-settings details.help { margin-top: 8px; }
+#modal-settings details.adv {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+#modal-settings details.adv > summary,
+#modal-settings details.help > summary {
+  display: flex; align-items: center; gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-ui); font-size: 13px; letter-spacing: .04em;
+}
+#modal-settings details.adv > summary { padding: 10px 14px; color: var(--ink); }
+#modal-settings details.help > summary { padding: 6px 0; color: var(--ink-dim); }
+#modal-settings details.adv > summary::-webkit-details-marker,
+#modal-settings details.help > summary::-webkit-details-marker { display: none; }
+#modal-settings details.adv > summary::before,
+#modal-settings details.help > summary::before {
+  content: "";
+  flex: none;
+  width: 6px; height: 6px;
+  border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  color: var(--ink-dim);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+#modal-settings details[open] > summary::before { transform: rotate(45deg); }
+#modal-settings details.adv > summary:hover,
+#modal-settings details.help > summary:hover { color: var(--accent); }
+#modal-settings .adv-tag { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+#modal-settings .adv-tag.on { color: var(--accent); }
+#modal-settings .adv-body { padding: 14px 14px 2px; border-top: 1px solid var(--line-soft); }
+#modal-settings .help-body { padding: 2px 0 4px; }
+#modal-settings .help-body p, #modal-settings .help-body .hint {
+  margin: 6px 0; font-size: 12.5px; line-height: 1.8; color: var(--ink-dim);
+}
+#modal-settings details.panel-block > summary { font-size: 13px; }
+#modal-settings .danger-row { margin: 0; padding-top: 22px; border-top: 1px solid var(--line-soft); text-align: left; }
+
+/* 桌面：定高卡片，左导航固定、右内容单独滚动 */
+@media (min-width: 721px) {
+  #modal-settings .modal-card { width: min(940px, 96vw); height: min(740px, 92vh); max-height: none; }
+  #modal-settings .modal-body { padding: 0; overflow: hidden; display: flex; }
+  #modal-settings .set-shell { flex: 1; min-height: 0; grid-template-columns: 196px minmax(0, 1fr); gap: 0; align-items: stretch; }
+  #modal-settings .set-nav { position: static; padding: 16px 10px; border-right: 1px solid var(--line-soft); overflow-y: auto; }
+  #modal-settings .set-panels { overflow-y: auto; padding: 26px 32px 30px; }
+  #modal-settings .set-panel-title { display: none; }   /* 左边已高亮当前分组，不再重复标题 */
+}
+/* 窄屏：列表 → 详情下钻（逻辑在 prefsui.js，这里只管长相） */
+@media (max-width: 720px) {
+  #modal-settings .modal-body { padding: 4px 16px 22px; }
+  #modal-settings .set-nav { gap: 0; }
+  #modal-settings .set-nav-item {
+    min-height: 54px; padding: 12px 4px;
+    font-size: 15.5px; color: var(--ink);
+    border-radius: 0; border-bottom: 1px solid var(--line-soft);
+  }
+  #modal-settings .set-nav-item.active { background: transparent; color: var(--ink); font-weight: 400; }
+  #modal-settings .set-nav-item .ic { display: block; }
+  #modal-settings .set-panel-title { margin: 6px 0 18px; font-size: 21px; letter-spacing: .06em; color: var(--ink); }
+  #modal-settings .set-back { margin: 10px 0 0; }
+  /* 下钻：列表态只显示分组列表，详情态只显示当前分组（这两条要带 #modal-settings，才压得过上面的 display:flex） */
+  #modal-settings .set-shell:not(.detail) .set-panels { display: none; }
+  #modal-settings .set-shell.detail .set-nav { display: none; }
+  #modal-settings fieldset { margin-bottom: 26px; }
+}

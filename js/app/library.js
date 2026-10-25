@@ -6,7 +6,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, MODE_LABELS, DEFAULT_SETUP, toast, irConfirm, openModal, closeModal, clone, fmtTime, saveAll, miniBtn } = A;
+  const { $, Store, MODE_LABELS, toast, irConfirm, openModal, closeModal, clone, fmtTime, saveAll, miniBtn } = A;
 
   let startMode = 'choice';      // 开始页选中的模式（choice | chat | rp）
   let typeTimer = null;
@@ -353,8 +353,10 @@
     $('#screen-game').classList.add('hidden');
     $('#screen-shelf').classList.add('hidden');
     $('#screen-start').classList.remove('hidden');
-    $('#btn-continue').classList.toggle('hidden', Store.listStories().length === 0);
-    if (!$('#setup-premise').value.trim()) $('#setup-premise').value = DEFAULT_SETUP;
+    // 有存档才出现「继续上次」，并带上最近那个故事的名字
+    const recent = Store.listStories()[0];
+    $('#btn-continue').classList.toggle('hidden', !recent);
+    $('#continue-title').textContent = recent && recent.title ? '《' + recent.title + '》' : '';
   }
 
   // 阅读页「＋ 新故事」：先把当前这一幕落盘，再开「新故事」选模式弹窗（三个模式共用同一入口）
@@ -365,28 +367,17 @@
   }
 
   // 开始页三模式（§4.8）：三张卡即三个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
-  //   剧情 = 设定框快通道；对话 = 直接开聊；扮演 = 先建角色卡
+  //   剧情 = 开局设定向导（与书架「新建」同一入口，不再有预设剧情）；对话 = 直接开聊；扮演 = 先建角色卡
   function startFromStart(mode) {
     startMode = (mode === 'chat' || mode === 'rp') ? mode : 'choice';
-    if (startMode === 'choice') startFromPremise();
+    if (startMode === 'choice') A.openWizard(null);
     else A.createStoryImmediate(startMode);
-  }
-
-  // 剧情模式：用设定框里的文字直接开一局（v0.1 的快通道）
-  function startFromPremise() {
-    const premise = $('#setup-premise').value.trim() || DEFAULT_SETUP;
-    const title = (premise.split('\n')[0] || '').replace(/^标题[:：]\s*/, '').slice(0, 40) || '未命名故事';
-    S.story = Store.newStory({ premise, title, mode: 'choice' });
-    Store.seedWorldFromPremise(S.story, premise);   // 设定里的「世界 / 时间 / 伏笔」直接进记忆卡，不空白
-    A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.renderChat });   // §5：试画引导可跳过；关闭后回到「开始第一幕」按钮
   }
 
   /* 离线演示（?demo=1）：内置剧本 + 本地占位图，直接开局。
      不联网、不需要 Key、配置不写盘；画风锚定 / 画师工作台 / 出图 / 存档等链路与真实模式完全一致。 */
   function startDemo() {
     IR.Demo.reset();
-    $('#setup-premise').value = IR.Demo.premise;      // 首页设定框里留一份，退出演示后能看到这个开局长什么样
     $('#demo-chip').classList.remove('hidden');
     S.story = Store.newStory({ title: IR.Demo.title + '（演示）', premise: IR.Demo.premise, mode: 'choice' });
     A.enterGame(true, { deferOpening: true });          // 演示跳过试画锚定，直接开演

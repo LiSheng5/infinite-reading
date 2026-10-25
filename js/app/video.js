@@ -157,10 +157,9 @@
       ctx.fillStyle = '#14161B';
       ctx.fillRect(0, 0, 320, 180);
       ctx.fillStyle = 'rgba(255,255,255,.85)';
-      ctx.font = '44px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('▶', 160, 92);
+      ctx.beginPath();           // 播放三角：自己画，不依赖字体（部分系统会把 ▶ 渲染成彩色 emoji）
+      ctx.moveTo(143, 68); ctx.lineTo(143, 116); ctx.lineTo(187, 92);
+      ctx.closePath(); ctx.fill();
       return cv.toDataURL('image/png');
     } catch (_) { return null; }
   }
@@ -633,7 +632,8 @@
       row.appendChild(img);
       const cap = document.createElement('span');
       cap.className = 'pw-line';
-      cap.textContent = '▶ ' + (v.alt || '场景视频') + (v.duration ? ' · ' + v.duration + 's' : '');
+      cap.appendChild(A.iconEl('play', 'ic-l'));
+      cap.appendChild(document.createTextNode((v.alt || '场景视频') + (v.duration ? ' · ' + v.duration + 's' : '')));
       row.appendChild(cap);
       box.appendChild(row);
     }

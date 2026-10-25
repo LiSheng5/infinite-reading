@@ -159,7 +159,7 @@
   async function draftWizard() {
     const topic = $('#wz-draft-input').value.trim() || DEFAULT_TOPIC;
     const btn = $('#btn-wz-draft');
-    btn.disabled = true; btn.textContent = '起草中…';
+    btn.disabled = true; btn.textContent = '起草中…';   // 结束后在 finally 里按「图标 + 起草」还原
     try {
       const cfg = resolveSub('draft');
       let d = null;
@@ -181,7 +181,7 @@
       fillWizard(localDraft(topic));
       toast(netErrHint(e) + '（已改用本地模板草稿）', true, true);
     } finally {
-      btn.disabled = false; btn.textContent = '✎ 起草';
+      btn.disabled = false; btn.innerHTML = A.icon('pencil', 'ic-l') + '起草';
     }
   }
 

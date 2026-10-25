@@ -11,7 +11,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, Cap, DEMO, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, DEFAULT_SETUP, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
+  const { $, Store, Cap, DEMO, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
 
   /* ================= 事件绑定 ================= */
 
@@ -60,7 +60,7 @@
     $('#btn-start-shelf').onclick = A.showShelf;
     $('#btn-open-settings').onclick = A.openSettings;
     $('#btn-continue').onclick = A.continueLast;
-    // 「🎬 离线演示」：带上 ?demo=1 重开一次（演示模式靠查询参数判定，刷新即回到普通模式）
+    // 「离线演示」：带上 ?demo=1 重开一次（演示模式靠查询参数判定，刷新即回到普通模式）
     $('#btn-start-demo').onclick = () => { location.href = '?demo=1'; };
 
     // 拖进窗口即可导入（书架与开始页都支持）
@@ -347,6 +347,8 @@
     if (featSched) featSched.onclick = () => {
       if (!A.featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
       openModal('modal-settings');
+      A.initSettingsNav();
+      A.openSettingsGroup('g-tools');   // 定时主动在「工具与服务」组里：先切过去，再滚到它
       if (A.sidecarReady()) A.loadFeatureConfig();
       const fs = $('#fs-schedule');
       if (fs && fs.scrollIntoView) fs.scrollIntoView({ block: 'start' });
@@ -453,6 +455,35 @@
     });
   }
 
+  /* ================= 首页无限符号 =================
+   * #start-infinity 里是一块 ASCII 字符画。这里把每个非空白字符包成 span.c：
+   *   --x = 所在列（决定循环里的相位，色带从左往右流）
+   *   --t = 静态时的浅蓝占比（动效关 / 标准档时就停在一道「深 → 浅 → 深」的渐变上）
+   * 深色在底层、浅色在 ::after 叠层，只改叠层 opacity 来做深浅循环——
+   * 守项目的动画白名单（只动 opacity），循环强度跟随 data-motion（见 style.css 的 .inf）。 */
+  function buildInfinity() {
+    const pre = $('#start-infinity');
+    if (!pre || pre.dataset.ready === '1') return;
+    pre.dataset.ready = '1';
+    const rows = pre.textContent.split('\n');
+    const width = Math.max.apply(null, rows.map(r => r.length)) || 1;
+    pre.textContent = '';
+    rows.forEach((row, ri) => {
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        if (ch === ' ') { pre.appendChild(document.createTextNode(' ')); continue; }
+        const span = document.createElement('span');
+        span.className = 'c';
+        span.dataset.c = ch;
+        span.textContent = ch;
+        span.style.setProperty('--x', String(x));
+        span.style.setProperty('--t', (0.5 - 0.5 * Math.cos(2 * Math.PI * x / Math.max(1, width - 1))).toFixed(2));
+        pre.appendChild(span);
+      }
+      if (ri < rows.length - 1) pre.appendChild(document.createTextNode('\n'));
+    });
+  }
+
   /* ================= 启动 ================= */
 
   function init() {
@@ -475,6 +506,7 @@
       else if (motionMQ.addListener) motionMQ.addListener(applyMotion);
     }
     A.watchStageVisibility();           // Ken Burns 离屏暂停
+    buildInfinity();                    // 首页无限符号（逐字上色 + 深浅蓝循环）
     bind();
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）

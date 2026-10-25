@@ -817,7 +817,7 @@
   function buildStoryPack(st, kind, images, settings) {
     const P = (global.IR && global.IR.Prefs) || null;
     const pack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.12.0',
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.12.1',
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,

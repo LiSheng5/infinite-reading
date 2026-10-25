@@ -15,7 +15,7 @@
 
   /* ================= 小工具 ================= */
 
-  const MODE_ICONS = { choice: '📖', chat: '💬', rp: '🎭' };
+  const MODE_ICONS = { choice: 'book', chat: 'chat', rp: 'mask' };   // sprite 里的图标名
   const GROUP_LABELS = [
     { key: 'today', label: '今天' },
     { key: 'yesterday', label: '昨天' },
@@ -130,7 +130,7 @@
     const thumbSrc = Store.safeThumb(it.thumb);
     thumb.className = 'shelf-row-thumb' + (thumbSrc ? '' : ' empty');
     if (thumbSrc) thumb.style.backgroundImage = 'url(' + JSON.stringify(thumbSrc) + ')';
-    else thumb.textContent = MODE_ICONS[it.mode] || MODE_ICONS.choice;
+    else thumb.innerHTML = A.icon(MODE_ICONS[it.mode] || MODE_ICONS.choice);
     row.appendChild(thumb);
 
     const body = document.createElement('div');
@@ -152,7 +152,7 @@
 
     const more = document.createElement('button');
     more.className = 'shelf-row-more';
-    more.textContent = '⋯';
+    more.innerHTML = A.icon('more');
     more.title = '更多操作';
     more.setAttribute('aria-label', '更多操作');
     more.onclick = e => { e.stopPropagation(); openRowMenu(row, it); };

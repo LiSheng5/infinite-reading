@@ -37,7 +37,7 @@
     [/世界状态卡/, 'g-story'],
   ];
   const GROUP_TITLES = {
-    'g-models': '模型库',
+    'g-models': '模型',
     'g-subs': '辅助模型',
     'g-image': '生图与画风',
     'g-tools': '工具与服务',
@@ -96,7 +96,13 @@
       $('#set-shell').classList.remove('detail');
       syncSettingsNav();
     };
-    openSettingsGroup('g-models');
+    // 窄屏第一次打开：先看分组列表，点进去才是详情（列表 → 下钻）；桌面直接进第一组
+    if (narrowSettings()) {
+      $('#set-shell').classList.remove('detail');
+      syncSettingsNav();
+    } else {
+      openSettingsGroup('g-models');
+    }
   }
 
   // 显示某分组；窄屏进「详情」态（列表 → 下钻），桌面始终左导航 + 右内容
@@ -141,6 +147,35 @@
       if (active) openSettingsGroup(active.dataset.group);
       else openSettingsGroup('g-models');
     }
+  }
+
+
+  /* ================= 折叠块（details.adv）的自动展开 =================
+   * 设置页把「高级参数 / 单独配置 / 详细设置」折进 <details class="adv">；
+   * 已经有内容时自动展开，免得用户以为那些设置「不见了」：
+   *   data-auto="filled"        里面有任何非空的文本 / 数字 / 密码输入 → 展开
+   *   data-auto="#某个勾选框"     那个勾选框是勾上的 → 展开
+   * 摘要右侧的小标签（.adv-tag）用 data-tag-on / data-tag-off 标出当前状态。 */
+  function syncAdvPanels() {
+    document.querySelectorAll('#modal-settings details.adv[data-auto]').forEach((d) => {
+      const rule = d.dataset.auto;
+      let on = false;
+      if (rule === 'filled') {
+        on = Array.prototype.some.call(
+          d.querySelectorAll('input[type="text"], input[type="number"], input[type="password"], textarea'),
+          el => String(el.value || '').trim() !== ''
+        );
+      } else {
+        const box = document.querySelector(rule);
+        on = !!(box && box.checked);
+      }
+      const tag = d.querySelector('.adv-tag');
+      if (tag) {
+        tag.textContent = on ? (d.dataset.tagOn || '') : (d.dataset.tagOff || '');
+        tag.classList.toggle('on', on);
+      }
+      if (on) d.open = true;
+    });
   }
 
   /* ================= 模型库管理（§3.1） ================= */
@@ -381,7 +416,7 @@
     const badge = document.createElement('span');
     const over = prefHas(path);
     badge.className = 'prefs-badge' + (over ? ' over' : '');
-    badge.textContent = over ? '本对话覆盖' : '跟随全局 ✓';
+    badge.innerHTML = over ? '本对话覆盖' : '跟随全局' + A.icon('check', 'ic-r');
     head.appendChild(badge);
     if (over) {
       head.appendChild(miniBtn('重置', () => {
@@ -482,7 +517,7 @@
 
   function choicesRow() {
     return prefRow('choices', '选项显示', () => sel([
-      ['tray', '收在「💡 灵感」里'],
+      ['tray', '收在「灵感」里'],
       ['always', '始终内联在旁白下'],
     ], P().effective(S.settings, S.story, 'choices'), (v) => {
       setPref('choices', v); saveAll(); renderStoryPrefs(); A.renderChat();
@@ -556,7 +591,7 @@
     const over = prefHas('tools');
     const badge = document.createElement('span');
     badge.className = 'prefs-badge' + (over ? ' over' : '');
-    badge.textContent = over ? '本对话覆盖' : '跟随全局 ✓';
+    badge.innerHTML = over ? '本对话覆盖' : '跟随全局' + A.icon('check', 'ic-r');
     head.appendChild(badge);
     if (over) {
       head.appendChild(miniBtn('重置', () => {
@@ -739,7 +774,7 @@
   }
 
   A.reg({
-    initSettingsNav, openSettingsGroup, syncSettingsNav,
+    initSettingsNav, openSettingsGroup, syncSettingsNav, syncAdvPanels,
     renderModelProfiles, openProfileEditor, cancelProfileEditor, saveProfileFromEditor, deleteProfile,
     renderStoryPrefs, openStoryPrefs, closeStoryPrefs,
     bindPrefsUI,

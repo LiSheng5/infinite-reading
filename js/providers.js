@@ -724,7 +724,7 @@
         };
       }
       if (res.ok) {
-        return { level: 'ok', message: '连接成功：接口可达，Key 被接受。这里只读列任务，不会提交任务，所以不花钱。能否出视频要在第一次「🎬 出视频」时才算真正验证。' };
+        return { level: 'ok', message: '连接成功：接口可达，Key 被接受。这里只读列任务，不会提交任务，所以不花钱。能否出视频要在第一次「生成视频」时才算真正验证。' };
       }
       let detail = '';
       try { detail = (await res.text()).slice(0, 300); } catch (_) {}

@@ -16,39 +16,97 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
-<link rel="stylesheet" href="css/style.css?v=0.12.0">
+<link rel="stylesheet" href="css/style.css?v=0.12.1">
 </head>
 <body>
+<!-- ========== 图标库（手绘 SVG sprite）：24×24 网格 · 1.6 描边 · currentColor。
+     用法：<svg class="ic" aria-hidden="true"><use href="#i-名字"/></svg>；JS 里用 IR.App.icon('名字')。
+     描边 / 圆角样式写在 css/style.css 的 .ic 上，颜色跟随文字色。 ========== -->
+<svg id="ir-icons" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- 关闭 -->
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <!-- 设置：齿环 + 八个齿 -->
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.4"/><path d="M12 3v2.6M12 18.4V21M3 12h2.6M18.4 12H21M5.6 5.6l1.9 1.9M16.5 16.5l1.9 1.9M18.4 5.6l-1.9 1.9M7.5 16.5l-1.9 1.9"/></symbol>
+    <!-- 方向 -->
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19.5 12h-15M10.5 6l-6 6 6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19.5v-15M6 10.5l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4.5v15M6 13.5l6 6 6-6"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.5 5.5l6.5 6.5-6.5 6.5"/></symbol>
+    <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <!-- 重来 / 再试一批 -->
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M4.2 12a7.8 7.8 0 107.8-7.8 7.8 7.8 0 00-5.6 2.4L4.2 8.8"/><path d="M4.2 4.2v4.6h4.6"/></symbol>
+    <!-- 加 / 更多 -->
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle fill="currentColor" stroke="none" cx="5.5" cy="12" r="1.5"/><circle fill="currentColor" stroke="none" cx="12" cy="12" r="1.5"/><circle fill="currentColor" stroke="none" cx="18.5" cy="12" r="1.5"/></symbol>
+    <!-- 继续上次：回溯的钟 -->
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.2 12a7.8 7.8 0 107.8-7.8 7.8 7.8 0 00-5.6 2.4L4.2 8.8"/><path d="M4.2 4.2v4.6h4.6M12 8v4.2l2.8 1.8"/></symbol>
+    <!-- 灵感：灯泡 -->
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M12 3.2a6 6 0 00-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0012 3.2z"/><path d="M9.7 19h4.6M10.6 21.2h2.8"/></symbol>
+    <!-- 写邮件 -->
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.2"/><path d="M4.4 7.6L12 13.4l7.6-5.8"/></symbol>
+    <!-- 定时 -->
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12.5" r="8"/><path d="M12 8v4.6l3 1.8M5 4.2L3.4 5.8M19 4.2l1.6 1.6"/></symbol>
+    <!-- 代下单 -->
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4.5h2.6l1.9 10.2h10.2l1.8-7.4H6.4"/><circle cx="9.6" cy="19" r="1.4"/><circle cx="16.8" cy="19" r="1.4"/></symbol>
+    <!-- 作画：调色盘 -->
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.6a8.4 8.4 0 100 16.8c1.3 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.7 1.8-1.7h2.1a3.7 3.7 0 003.7-3.7C20.5 7.1 16.7 3.6 12 3.6z"/><circle fill="currentColor" stroke="none" cx="7.6" cy="11.2" r="1.1"/><circle fill="currentColor" stroke="none" cx="10.4" cy="7.4" r="1.1"/><circle fill="currentColor" stroke="none" cx="15.2" cy="7.8" r="1.1"/></symbol>
+    <!-- 画师工作台：铅笔 -->
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4.2 19.8l.9-4L16.6 4.3a2 2 0 012.8 0l.3.3a2 2 0 010 2.8L8.2 18.9z"/><path d="M14.4 6.5l3.1 3.1"/></symbol>
+    <!-- 沉浸：四角 -->
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9.2V4h5.2M14.8 4H20v5.2M20 14.8V20h-5.2M9.2 20H4v-5.2"/></symbol>
+    <!-- 视频：胶片 -->
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3.5" y="4.8" width="17" height="14.4" rx="2"/><path d="M8 4.8v14.4M16 4.8v14.4M3.5 9.6H8M3.5 14.4H8M16 9.6h4.5M16 14.4h4.5"/></symbol>
+    <!-- 播放 -->
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.6v12.8a.8.8 0 001.2.7l10-6.4a.8.8 0 000-1.4L9.2 4.9A.8.8 0 008 5.6z"/></symbol>
+    <!-- 测试连接：闪电 -->
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.4 3L5.6 13.4h5.4l-.9 7.6 8.3-10.9h-5.4z"/></symbol>
+    <!-- 提示 / 完成 -->
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.2L3 19.4h18z"/><path d="M12 10v4.4M12 17.2h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6l4.6 4.5L19 7.6"/></symbol>
+    <!-- 三种模式：剧情 = 书；智能体 = 对话框；扮演 = 面具 -->
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M3.8 5.6c2.7-1 5.6-.8 8.2.8 2.6-1.6 5.5-1.8 8.2-.8v12.8c-2.7-1-5.6-.8-8.2.8-2.6-1.6-5.5-1.8-8.2-.8z"/><path d="M12 6.4v12.8"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5.2 4.8h13.6a1.7 1.7 0 011.7 1.7v8.2a1.7 1.7 0 01-1.7 1.7h-6.4l-4.6 3.5v-3.5H5.2a1.7 1.7 0 01-1.7-1.7V6.5a1.7 1.7 0 011.7-1.7z"/><path d="M8 10h8M8 13h4.6"/></symbol>
+    <symbol id="i-mask" viewBox="0 0 24 24"><path d="M4.6 5.4c4.6-1.4 10.2-1.4 14.8 0v6.2c0 4.3-3.2 7.6-7.4 7.6s-7.4-3.3-7.4-7.6z"/><path d="M8 10.4c.9-.7 2-.7 2.9 0M13.1 10.4c.9-.7 2-.7 2.9 0M9.2 14.6c1.6 1.5 4 1.5 5.6 0"/></symbol>
+    <!-- AI 主动：四角星 -->
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.2l2.3 6.5 6.5 2.3-6.5 2.3L12 20.8l-2.3-6.5L3.2 12l6.5-2.3z"/></symbol>
+  </defs>
+</svg>
+
 <div id="app">
 
-  <!-- ========== 开始页（应用入口：点一张模式卡即由此开局） ========== -->
+  <!-- ========== 开始页（应用入口） ==========
+       顶部是 ASCII 无限符号（js/app.js 的 buildInfinity 把每个字符包成 span，做深蓝 → 浅蓝的循环；
+       没有 JS 时就是一块静态深蓝字符画）；三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
     <div class="start-card">
-      <h1 class="title">无限阅读</h1>
+      <h1 class="start-mark" aria-label="无限阅读"><pre id="start-infinity" class="inf" aria-hidden="true">    .-~~~~-.       .-~~~~-.
+  .'        '.   .'        '.
+ /            \ /            \
+|              X              |
+ \            / \            /
+  '.        .'   '.        .'
+    '-~~~~-'       '-~~~~-'</pre></h1>
 
-      <!-- 三个模式（§4.8）：只有名字，点哪张即由此开局（无介绍、无单独的「开始」按钮） -->
+      <!-- 有存档时才出现：回访用户最常做的就是接着读 -->
+      <button id="btn-continue" class="start-continue hidden" type="button">
+        <svg class="ic" aria-hidden="true"><use href="#i-history"/></svg><span class="sc-label">继续上次</span><span id="continue-title" class="sc-title"></span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg>
+      </button>
+
       <div id="start-modes" class="mode-cards start-mode-cards">
-        <button class="mode-card" data-mode="choice"><b>剧情</b></button>
-        <button class="mode-card" data-mode="chat"><b>智能体</b></button>
-        <button class="mode-card" data-mode="rp"><b>扮演</b></button>
+        <button class="mode-card" data-mode="choice"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg><b>剧情</b></button>
+        <button class="mode-card" data-mode="chat"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><b>智能体</b></button>
+        <button class="mode-card" data-mode="rp"><svg class="ic" aria-hidden="true"><use href="#i-mask"/></svg><b>扮演</b></button>
       </div>
 
-      <!-- 入口按钮收在模式卡下面，与三张模式卡聚成一块（尺寸保持原样，不跟着模式卡收小） -->
-      <div class="row">
-        <button id="btn-open-settings" class="btn">⚙ 接入模型</button>
-        <button id="btn-continue" class="btn ghost hidden">↶ 继续上次</button>
-      </div>
-      <div class="row row-secondary">
-        <button id="btn-start-shelf" class="btn slim">我的书架</button>
-        <button id="btn-start-import" class="btn slim">文本导入</button>
-        <button id="btn-start-demo" class="btn slim" title="不用配置、不用联网：用内置剧本和本地占位图先看一遍完整流程">🎬 离线演示</button>
-      </div>
-
-      <div id="start-premise-wrap">
-        <label class="field-label" for="setup-premise">故事设定（仅剧情模式用；开演前可随意修改）</label>
-        <textarea id="setup-premise" rows="8" spellcheck="false"></textarea>
-      </div>
-      <p class="version">无限阅读 v0.12.0 · 纯本地运行 · 数据只保存在你的浏览器里</p>
+      <nav class="start-links" aria-label="更多入口">
+        <button id="btn-start-shelf" class="link-btn" type="button">书架</button>
+        <button id="btn-start-import" class="link-btn" type="button">文本导入</button>
+        <button id="btn-open-settings" class="link-btn" type="button">接入模型</button>
+        <button id="btn-start-demo" class="link-btn" type="button" title="不用配置、不用联网：用内置剧本和本地占位图先看一遍完整流程">离线演示</button>
+      </nav>
+      <p class="version">v0.12.1 · 纯本地运行 · 数据只保存在你的浏览器里</p>
     </div>
   </section>
 
@@ -61,14 +119,14 @@
           <input id="shelf-search" class="shelf-search-input" type="text" autocomplete="off" spellcheck="false"
                  placeholder="搜索标题与正文…（/ 或 Ctrl+K）" aria-label="搜索对话"
                  role="combobox" aria-expanded="false" aria-controls="shelf-results" aria-activedescendant="">
-          <button id="shelf-search-clear" class="hud-btn hidden" title="清空搜索" aria-label="清空搜索">✕</button>
+          <button id="shelf-search-clear" class="hud-btn hidden" title="清空搜索" aria-label="清空搜索"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
         </div>
         <div class="shelf-actions">
-          <button id="btn-new-story" class="btn primary">＋ 新建</button>
-          <button id="btn-import" class="btn ghost" title="导入 .irstory.json / .irbackup.json / .zip">↑ 导入</button>
+          <button id="btn-new-story" class="btn primary"><svg class="ic ic-l" aria-hidden="true"><use href="#i-plus"/></svg>新建</button>
+          <button id="btn-import" class="btn ghost" title="导入 .irstory.json / .irbackup.json / .zip"><svg class="ic ic-l" aria-hidden="true"><use href="#i-up"/></svg>导入</button>
           <button id="btn-import-text" class="btn ghost" title="粘贴文本导入">文本导入</button>
-          <button id="btn-shelf-settings" class="btn ghost" title="模型设置">⚙ 设置</button>
-          <button id="btn-shelf-home" class="btn ghost" title="回到首页">← 首页</button>
+          <button id="btn-shelf-settings" class="btn ghost" title="设置"><svg class="ic ic-l" aria-hidden="true"><use href="#i-gear"/></svg>设置</button>
+          <button id="btn-shelf-home" class="btn ghost" title="回到首页"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>首页</button>
         </div>
       </header>
 
@@ -76,8 +134,8 @@
       <div id="shelf-results" class="shelf-results hidden" role="listbox" aria-label="搜索结果"></div>
 
       <div id="shelf-empty" class="shelf-empty hidden">
-        <p class="shelf-empty-text">还没有对话。点「＋ 新建」开始第一段。</p>
-        <button id="btn-empty-new" class="btn primary empty-new">＋ 新建</button>
+        <p class="shelf-empty-text">还没有对话。点「新建」开始第一段。</p>
+        <button id="btn-empty-new" class="btn primary empty-new"><svg class="ic ic-l" aria-hidden="true"><use href="#i-plus"/></svg>新建</button>
         <p class="hint">也可以把 <b>.irstory.json</b> / <b>.irbackup.json</b> / <b>.zip</b>（带原图的备份包）文件拖进这个窗口导入。</p>
       </div>
       <div id="shelf-search-empty" class="shelf-empty hidden">
@@ -95,17 +153,17 @@
   <section id="screen-game" class="screen hidden" data-layout="split">
     <header class="hud">
       <div class="hud-left">
-        <button id="btn-back-home" class="hud-btn hud-icon" title="返回首页（自动存档）">←</button>
+        <button id="btn-back-home" class="hud-btn hud-icon" title="返回首页（自动存档）" aria-label="返回首页"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
         <button id="btn-hud-shelf" class="hud-btn hud-text" title="我的书架">书架</button>
         <span id="hud-mode" class="mode-chip"></span>
         <!-- 离线演示模式标识（?demo=1）：点它=去掉查询参数，回到可配置真模型的普通模式 -->
         <a id="demo-chip" class="mode-chip demo-chip hidden" href="?"
-           title="离线演示模式：内置剧本 + 本地占位图，未连接任何模型。点此回到可配置真模型的普通模式">🎬 演示</a>
+           title="离线演示模式：内置剧本 + 本地占位图，未连接任何模型。点此回到可配置真模型的普通模式"><svg class="ic ic-l" aria-hidden="true"><use href="#i-film"/></svg>演示</a>
       </div>
       <div class="hud-actions">
         <button id="btn-toggle-image" class="hud-btn" title="收起 / 展开画面">画面</button>
         <div class="hud-more">
-          <button id="btn-hud-more" class="hud-btn hud-icon" title="更多" aria-haspopup="menu" aria-expanded="false">⋯</button>
+          <button id="btn-hud-more" class="hud-btn hud-icon" title="更多" aria-label="更多" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg></button>
           <div id="hud-more-menu" class="menu hidden" role="menu">
             <button id="btn-savepoint" class="menu-item" type="button" role="menuitem">打一个存档点</button>
             <button id="btn-branch" class="menu-item" type="button" role="menuitem">分支</button>
@@ -125,21 +183,21 @@
       <div id="chat-pane" class="chat-pane">
         <div id="chat-scroll" class="chat-scroll"></div>
         <footer class="composer">
-          <!-- 选项托盘：默认收起，点「💡 灵感」才展开（P2） -->
+          <!-- 选项托盘：默认收起，点「灵感」才展开（P2） -->
           <div id="choice-tray" class="choice-tray hidden"></div>
           <div class="composer-tools">
             <button id="btn-inspiration" class="tool-btn hidden" type="button" title="看这一轮的选项">
-              💡 <span>灵感</span><span id="inspiration-count" class="badge hidden"></span>
+              <svg class="ic ic-l" aria-hidden="true"><use href="#i-bulb"/></svg><span>灵感</span><span id="inspiration-count" class="badge hidden"></span>
             </button>
             <span class="composer-spacer"></span>
             <!-- 本地服务功能入口：只在「对话 / 扮演」模式出现；未启动时灰显并说明 -->
             <div class="menu-wrap">
               <button id="btn-more-actions" class="tool-btn hidden" type="button" title="更多功能"
-                      aria-haspopup="menu" aria-expanded="false">＋</button>
+                      aria-label="更多功能" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
               <div id="feature-menu" class="menu menu-up hidden" role="menu">
-                <button id="btn-feat-email" class="menu-item" type="button" role="menuitem">✉ 写邮件</button>
-                <button id="btn-feat-schedule" class="menu-item" type="button" role="menuitem">⏰ 定时主动</button>
-                <button id="btn-feat-payment" class="menu-item" type="button" role="menuitem">🛒 代下单</button>
+                <button id="btn-feat-email" class="menu-item" type="button" role="menuitem"><svg class="ic ic-l" aria-hidden="true"><use href="#i-mail"/></svg>写邮件</button>
+                <button id="btn-feat-schedule" class="menu-item" type="button" role="menuitem"><svg class="ic ic-l" aria-hidden="true"><use href="#i-clock"/></svg>定时主动</button>
+                <button id="btn-feat-payment" class="menu-item" type="button" role="menuitem"><svg class="ic ic-l" aria-hidden="true"><use href="#i-cart"/></svg>代下单</button>
                 <p id="feature-bar-state" class="menu-note"></p>
               </div>
             </div>
@@ -169,23 +227,23 @@
           <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
           <img id="stage-img" class="stage-img hidden" alt="">
           <video id="stage-video" class="stage-video hidden" controls playsinline loop muted></video>
-          <div id="stage-empty" class="stage-empty">点 🎨 为当前场景画一张</div>
+          <div id="stage-empty" class="stage-empty">点 <svg class="ic ic-in" aria-hidden="true"><use href="#i-palette"/></svg> 为当前场景画一张</div>
           <span id="gen-status" class="pill stage-pill hidden"></span>
           <span id="video-status" class="pill stage-pill stage-pill-video hidden"></span>
           <button id="btn-video-cancel" class="mini-btn video-cancel hidden" type="button" title="只停止本地等待；云端任务可能已计费">取消等待</button>
           <div class="stage-actions">
-            <button id="btn-stage-painter" class="stage-btn" title="画师工作台（看 / 改这张图的提示词）">✎</button>
-            <button id="btn-stage-gen" class="stage-btn" title="为当前场景补一张">🎨</button>
+            <button id="btn-stage-painter" class="stage-btn" title="画师工作台（看 / 改这张图的提示词）" aria-label="画师工作台"><svg class="ic" aria-hidden="true"><use href="#i-pencil"/></svg></button>
+            <button id="btn-stage-gen" class="stage-btn" title="为当前场景补一张" aria-label="为当前场景作画"><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg></button>
             <div class="menu-wrap">
-              <button id="btn-stage-video" class="stage-btn" title="把当前画面做成视频（MiniMax · 会按秒计费）" aria-haspopup="menu" aria-expanded="false">🎬</button>
+              <button id="btn-stage-video" class="stage-btn" title="把当前画面做成视频（MiniMax · 会按秒计费）" aria-label="生成视频" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-film"/></svg></button>
               <div id="video-menu" class="menu hidden" role="menu">
                 <button id="btn-video-i2v" class="menu-item" type="button" role="menuitem">以当前图生成视频</button>
                 <button id="btn-video-t2v" class="menu-item" type="button" role="menuitem">按剧情文生视频</button>
               </div>
             </div>
-            <button id="btn-immersive" class="stage-btn" title="沉浸（画面铺满）">⛶</button>
+            <button id="btn-immersive" class="stage-btn" title="沉浸（画面铺满）" aria-label="沉浸"><svg class="ic" aria-hidden="true"><use href="#i-expand"/></svg></button>
           </div>
-          <button id="btn-immersive-exit" class="stage-exit hidden" type="button" title="退出沉浸（Esc）">✕</button>
+          <button id="btn-immersive-exit" class="stage-exit hidden" type="button" title="退出沉浸（Esc）" aria-label="退出沉浸"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
         </div>
         <p id="stage-caption" class="stage-caption"></p>
         <div id="thumb-strip" class="thumb-strip"></div>
@@ -196,11 +254,11 @@
   <!-- ========== 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉 ========== -->
   <div id="branch-page" class="branch-page hidden" role="dialog" aria-modal="true" aria-label="分支视图">
     <header class="branch-top">
-      <button id="btn-branch-back" class="btn" type="button">← 返回对话</button>
+      <button id="btn-branch-back" class="btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>返回对话</button>
       <h2 id="branch-title" class="branch-title"></h2>
       <div class="branch-tools">
-        <button id="btn-branch-zoom-out" class="hud-btn hud-icon" type="button" title="缩小" aria-label="缩小">−</button>
-        <button id="btn-branch-zoom-in" class="hud-btn hud-icon" type="button" title="放大" aria-label="放大">＋</button>
+        <button id="btn-branch-zoom-out" class="hud-btn hud-icon" type="button" title="缩小" aria-label="缩小"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button>
+        <button id="btn-branch-zoom-in" class="hud-btn hud-icon" type="button" title="放大" aria-label="放大"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
         <button id="btn-branch-center" class="btn" type="button" title="居中并选中当前回合">回到当前</button>
         <button id="btn-branch-expand-all" class="btn" type="button" aria-pressed="false">展开全部折叠</button>
       </div>
@@ -213,7 +271,7 @@
       <aside id="branch-panel" class="branch-panel hidden" aria-label="节点详情">
         <div class="branch-panel-head">
           <div id="bp-turn" class="bp-turn"></div>
-          <button id="btn-bp-close" class="hud-btn hud-icon" type="button" title="关闭面板" aria-label="关闭面板">✕</button>
+          <button id="btn-bp-close" class="hud-btn hud-icon" type="button" title="关闭面板" aria-label="关闭面板"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
         </div>
         <div class="branch-panel-body">
           <div class="bp-field"><div class="bp-label">玩家行动</div><div id="bp-action" class="bp-text"></div></div>
@@ -236,7 +294,7 @@
     <div class="modal-card narrow">
       <div class="modal-head">
         <h2>新故事</h2>
-        <button id="btn-close-new" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-new" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <div class="mode-cards">
@@ -259,12 +317,12 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>开局设定</h2>
-        <button id="btn-close-wizard" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-wizard" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <div class="draft-row">
           <label>一句话让 AI 起草<input id="wz-draft-input" type="text" placeholder="例如：雨夜便利店里的十年之约"></label>
-          <button id="btn-wz-draft" class="btn">✎ 起草</button>
+          <button id="btn-wz-draft" class="btn"><svg class="ic ic-l" aria-hidden="true"><use href="#i-pencil"/></svg>起草</button>
         </div>
         <p class="hint" id="wz-draft-hint">起草模型可在模型设置里更换（默认跟随剧情模型）。草稿出来后再改成你自己的话即可。</p>
 
@@ -290,7 +348,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>粘贴剧情文本导入</h2>
-        <button id="btn-close-import-text" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-import-text" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
 
@@ -307,7 +365,7 @@
           <p class="hint" id="it-plan-hint"></p>
           <p class="hint">文本会原样发给上面选的模型；整理产物只在这里预览，你确认之后才会建新档。想单独指定一个便宜的整理模型：在「模型设置 · 起草模型」里填，然后这里选「起草模型」。</p>
           <div class="row-inline">
-            <button id="btn-it-run" class="btn primary">✎ 开始整理</button>
+            <button id="btn-it-run" class="btn primary"><svg class="ic ic-l" aria-hidden="true"><use href="#i-pencil"/></svg>开始整理</button>
             <button id="btn-it-cancel" class="btn ghost">取消</button>
           </div>
         </div>
@@ -336,7 +394,7 @@
           <p class="hint">确认后建新档并走试画锚定。「用户确认修改」这一步是设计里明确不能跳过的：导入文本是别人的内容，由你把关。</p>
           <div class="row-inline">
             <button id="btn-it-start" class="btn primary">用它开局</button>
-            <button id="btn-it-back" class="btn ghost">← 重新粘贴</button>
+            <button id="btn-it-back" class="btn ghost"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>重新粘贴</button>
           </div>
         </div>
 
@@ -349,7 +407,7 @@
     <div class="modal-card narrow">
       <div class="modal-head">
         <h2>导出故事</h2>
-        <button id="btn-close-export" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-export" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p class="hint" id="export-story-name"></p>
@@ -371,7 +429,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>画师工作台</h2>
-        <button id="btn-close-painter" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-painter" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <div class="pw-top">
@@ -386,7 +444,7 @@
         <div class="row-inline">
           <button id="btn-pw-redraw" class="btn primary">按此重画</button>
           <button id="btn-pw-force" class="btn" title="把视觉设定卡的画风与人物设定压进这张图重画">按设定卡强制重画</button>
-          <button id="btn-pw-reset" class="btn ghost" title="丢掉手改，回到画师写的原稿">↺ 回到画师原稿</button>
+          <button id="btn-pw-reset" class="btn ghost" title="丢掉手改，回到画师写的原稿"><svg class="ic ic-l" aria-hidden="true"><use href="#i-redo"/></svg>回到画师原稿</button>
           <button id="btn-pw-anchor" class="btn ghost" title="重走「试画 4 张候选 → 定视觉设定卡」">锚定画风</button>
           <span class="hint" id="pw-status"></span>
         </div>
@@ -415,7 +473,7 @@
           <legend>视频（MiniMax · 会按秒计费）</legend>
           <label>动态提示词（留空 = 交画师构思，有内容 = 直出）<textarea id="pw-video-prompt" rows="3" spellcheck="false" placeholder="留空：画师按这张图与最近剧情写「动起来的部分」；有内容：直接用这段提示词生成"></textarea></label>
           <div class="row-inline">
-            <button id="btn-pw-video" class="btn" type="button">🎬 以此图生视频</button>
+            <button id="btn-pw-video" class="btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-film"/></svg>以此图生视频</button>
             <span class="hint">视频生成是独立的异步任务，不堵出图；进度看舞台左上的视频胶囊。</span>
           </div>
           <div id="pw-video-list" class="pw-video-list"></div>
@@ -442,7 +500,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>锚定画风</h2>
-        <button id="btn-close-anchor" class="hud-btn" title="关闭（跳过锚定）">✕</button>
+        <button id="btn-close-anchor" class="hud-btn" title="关闭（跳过锚定）" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p class="hint" id="anchor-intro"></p>
@@ -450,7 +508,7 @@
         <div id="anchor-step-pick">
           <div id="anchor-grid" class="anchor-grid"></div>
           <div class="row-inline">
-            <button id="btn-anchor-more" class="btn">↺ 再试一批</button>
+            <button id="btn-anchor-more" class="btn"><svg class="ic ic-l" aria-hidden="true"><use href="#i-redo"/></svg>再试一批</button>
             <button id="btn-anchor-skip" class="btn ghost">跳过，自由发挥</button>
             <button id="btn-anchor-use" class="btn primary" disabled>用这张定画风</button>
           </div>
@@ -481,7 +539,7 @@
             <p class="hint" id="ac-status"></p>
           </fieldset>
           <div class="row-inline">
-            <button id="btn-anchor-back" class="btn ghost">← 重选</button>
+            <button id="btn-anchor-back" class="btn ghost"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>重选</button>
             <button id="btn-anchor-lock" class="btn primary">锁定这张卡</button>
             <span class="hint">锁定后记入版本；每张图都会带上它</span>
           </div>
@@ -495,7 +553,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2 id="card-modal-title">角色卡</h2>
-        <button id="btn-close-card" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-card" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p class="hint" id="card-source-hint"></p>
@@ -510,7 +568,7 @@
         <label>系统提示（这张卡自带的设定要求，可选）<input id="rc-note" type="text" spellcheck="false"></label>
         <label class="check"><input id="rc-sync-world" type="checkbox" checked> 同时初始化世界卡人物条目（性格 / 说话方式对接）</label>
         <p class="hint">导入的是你自己的卡：只兼容 SillyTavern V2/V3 的 PNG 内嵌 JSON 格式，不复制任何代码与内容。
-          <button id="btn-rc-import" class="mini-btn">↑ 选择 PNG 卡</button>
+          <button id="btn-rc-import" class="mini-btn"><svg class="ic ic-l" aria-hidden="true"><use href="#i-up"/></svg>选择 PNG 卡</button>
         </p>
       </div>
       <div class="modal-foot">
@@ -520,17 +578,17 @@
     </div>
   </div>
 
-  <!-- ========== 模型设置（模型相关全部归置在此，§4.9） ========== -->
+    <!-- ========== 设置（模型 / 辅助模型 / 画面 / 工具与服务 / 数据 / 外观 / 当前故事） ==========
+       版式原则：每个分组只露「必填 + 常改」的字段；高级参数、长说明、单独配置一律折进 <details>
+       （js/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。fieldset → 分组由 legend 文字归类。 -->
   <div id="modal-settings" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
-        <h2>模型设置</h2>
-        <button id="btn-close-settings" class="hud-btn" title="关闭">✕</button>
+        <h2>设置</h2>
+        <button id="btn-close-settings" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
 
-        <!-- Base URL 下拉候选：只列「接口地址」不列模型名（地址稳定、无需频繁维护；模型名自己填）。
-             用 datalist，既能选也能手填；各字段以服务商官方文档为准，随时可改。 -->
         <datalist id="dl-base-url">
           <option value="https://open.bigmodel.cn/api/paas/v4">国内 · 智谱 GLM（BigModel，对话 + CogView 生图）</option>
           <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">国内 · 阿里云百炼 · 通义千问（OpenAI 兼容）</option>
@@ -558,173 +616,166 @@
           <option value="http://localhost:8000/v1">本地 · vLLM / 其他本地 OpenAI 服务</option>
         </datalist>
 
-        <p class="hint">任意兼容 OpenAI 格式的接口都能用（云端 / 本地）：Base URL 可从下拉里选常见服务商、也能自己填；模型名与参数由你填——不预置模型名，省得跟着厂商变动一直维护。</p>
-
-        <!-- UI-3 §4.1：左侧分组导航 + 右侧分组面板（窄屏 = 列表 → 详情下钻）。
-             每个 fieldset 由 js/app/prefsui.js 归入分组面板，控件 id 一个不变。 -->
         <div class="set-shell" id="set-shell">
           <nav class="set-nav" id="set-nav" aria-label="设置分组">
-            <button type="button" class="set-nav-item" data-group="g-models">模型库</button>
-            <button type="button" class="set-nav-item" data-group="g-subs">辅助模型</button>
-            <button type="button" class="set-nav-item" data-group="g-image">生图与画风</button>
-            <button type="button" class="set-nav-item" data-group="g-tools">工具与服务</button>
-            <button type="button" class="set-nav-item" data-group="g-data">数据</button>
-            <button type="button" class="set-nav-item" data-group="g-look">外观</button>
-            <button type="button" class="set-nav-item" data-group="g-story">当前故事</button>
+            <button type="button" class="set-nav-item" data-group="g-models"><span>模型</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-subs"><span>辅助模型</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-image"><span>生图与画风</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-tools"><span>工具与服务</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-data"><span>数据</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-look"><span>外观</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
+            <button type="button" class="set-nav-item" data-group="g-story"><span>当前故事</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
           </nav>
           <div class="set-panels" id="set-panels">
-            <button type="button" id="set-back" class="btn ghost set-back hidden">← 返回</button>
+            <button type="button" id="set-back" class="btn ghost set-back hidden"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>返回</button>
 
+        <!-- ─── 模型 ─── -->
         <fieldset>
-          <legend>剧情对话模型（AI1 · 旁白与角色）</legend>
+          <legend>剧情对话模型</legend>
+          <p class="set-sub">旁白与角色都由它来写，新对话默认用它。任何兼容 OpenAI 格式的接口都能接（云端 / 本地）。</p>
           <div class="grid2">
-            <label>接口地址 Base URL<input id="s-chat-base" type="text" list="dl-base-url" placeholder="https://…（点这里选常见服务商，也可自己填）"></label>
+            <label>接口地址 Base URL<input id="s-chat-base" type="text" list="dl-base-url" placeholder="https://…（可从下拉选服务商）"></label>
             <label>模型<input id="s-chat-model" type="text" placeholder="填你的模型名"></label>
           </div>
-          <p class="hint">Base URL 点一下输入框会列出常见服务商接口地址（也能自己填），通常以 /v1 结尾；模型名去控制台「模型广场 / 文档」复制准确写法，注意大小写——模型名更新快，故不预置，只给你常用地址。</p>
           <label>API Key<input id="s-chat-key" type="password" placeholder="sk-…"></label>
-          <p class="hint">API Key 在服务商控制台创建后粘贴，只保存在你的浏览器本地，不会上传到别处。</p>
-          <div class="grid2">
-            <label>温度（0~2，越高越发散）<input id="s-chat-temp" type="number" step="0.1" min="0" max="2"></label>
-            <label id="wrap-chat-thinking" class="hidden">思考档位<select id="s-chat-thinking"></select></label>
+          <div class="test-row">
+            <button id="btn-test-chat" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+            <span class="hint test-state" id="test-chat-state">只探测，不生成内容。</span>
           </div>
-          <label>上下文窗口（token · 70% 压缩阈值按它算）<input id="s-chat-ctx" type="number" min="0" step="1000" placeholder="不知道就留空（回退按条数压缩）"></label>
-          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value，原样并入请求体）<input id="s-chat-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
-          <p class="hint" id="s-chat-cap"></p>
-          <p class="hint">兼容所有 OpenAI 格式接口（云端 / 本地均可）；不内置服务商预设，省得跟着厂商模型变动一直维护。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-chat" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-chat-state">用当前输入框里的地址与 Key 试连一次（只探测，不生成内容）。</span>
-          </div>
+          <details class="adv">
+            <summary><span class="adv-t">高级参数</span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>温度（0~2，越高越发散）<input id="s-chat-temp" type="number" step="0.1" min="0" max="2"></label>
+                <label id="wrap-chat-thinking" class="hidden">思考档位<select id="s-chat-thinking"></select></label>
+              </div>
+              <label>上下文窗口（token，压缩阈值按它算）<input id="s-chat-ctx" type="number" min="0" step="1000" placeholder="不知道就留空（回退按条数压缩）"></label>
+              <label>自定义请求参数（key=value，逗号分隔，并入请求体）<input id="s-chat-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
+              <p class="hint" id="s-chat-cap"></p>
+            </div>
+          </details>
+          <details class="help">
+            <summary>填写说明</summary>
+            <div class="help-body">
+              <p>Base URL 通常以 /v1 结尾，点输入框会列出常见服务商；模型名去服务商控制台的「模型广场 / 文档」复制，注意大小写。不内置模型名，省得跟着厂商变动一直维护。</p>
+              <p>API Key 只保存在你浏览器本地，不会上传到别处。</p>
+            </div>
+          </details>
         </fieldset>
 
-        <!-- UI-3 §3.1 模型库：可选的多套主模型；每个对话可在「本对话设置」里选自己的模型 -->
         <fieldset id="fs-profiles">
-          <legend>模型库（每个对话可单独选）</legend>
-          <p class="hint">这里存的是几套「主模型」配置。每个对话可以在「⋯ → 本对话设置」里选自己的模型；不选就跟随上面的默认主模型。<b>对话存档 / 导出里只记模型的引用名，绝不带 API Key 与接口地址</b>（故事会被导出、分享）。</p>
+          <legend>模型库</legend>
+          <p class="set-sub">存几套备用的主模型，每个对话可在「本对话设置」里单独选；不选就用上面的默认模型。对话存档与导出只记引用名，<b>绝不带 Key 与接口地址</b>。</p>
           <div id="mp-list" class="mono-list"></div>
           <div class="row-inline">
-            <button id="mp-add" class="btn">＋ 新增模型</button>
+            <button id="mp-add" class="btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-plus"/></svg>新增模型</button>
             <span class="hint" id="mp-state"></span>
           </div>
           <div id="mp-editor" class="panel-block hidden">
-            <p class="hint" id="mp-title">新增模型</p>
+            <p class="hint mp-title" id="mp-title">新增模型</p>
             <div class="grid2">
               <label>名称（自己认得出就行）<input id="mp-name" type="text" placeholder="例如：便宜的 / 聪明的"></label>
               <label>模型<input id="mp-model" type="text" placeholder="填你的模型名"></label>
             </div>
-            <div class="grid2">
-              <label>接口地址 Base URL<input id="mp-base" type="text" list="dl-base-url" placeholder="https://…（留空 = 沿用默认主模型）"></label>
-              <label>温度（0~2）<input id="mp-temp" type="number" step="0.1" min="0" max="2" placeholder="0.9"></label>
-            </div>
+            <label>接口地址 Base URL<input id="mp-base" type="text" list="dl-base-url" placeholder="https://…（留空 = 沿用默认主模型）"></label>
             <label>API Key<input id="mp-key" type="password" placeholder="留空 = 沿用默认主模型；已保存的 Key 不回显"></label>
             <p class="hint" id="mp-key-state"></p>
             <label class="check hidden" id="mp-copy-key-wrap"><input id="mp-copy-key" type="checkbox" checked> 复制时带上原模型的 API Key（不勾 = 只复制其它字段）</label>
-            <div class="grid2">
-              <label>上下文窗口（token · 0 = 未填）<input id="mp-ctx" type="number" min="0" step="1000" placeholder="不知道就留空"></label>
-              <label>思考档位<input id="mp-thinking" type="text" placeholder="default（不下发）"></label>
-            </div>
-            <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="mp-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
+            <details class="adv">
+              <summary><span class="adv-t">高级参数</span></summary>
+              <div class="adv-body">
+                <div class="grid2">
+                  <label>温度（0~2）<input id="mp-temp" type="number" step="0.1" min="0" max="2" placeholder="0.9"></label>
+                  <label>思考档位<input id="mp-thinking" type="text" placeholder="default（不下发）"></label>
+                </div>
+                <label>上下文窗口（token，0 = 未填）<input id="mp-ctx" type="number" min="0" step="1000" placeholder="不知道就留空"></label>
+                <label>自定义请求参数（key=value，逗号分隔）<input id="mp-params" type="text" placeholder="reasoning_effort=high, top_p=0.95"></label>
+              </div>
+            </details>
             <div class="row-inline">
-              <button id="mp-save" class="btn primary">保存这个模型</button>
-              <button id="mp-cancel" class="btn ghost">取消</button>
+              <button id="mp-save" class="btn primary" type="button">保存这个模型</button>
+              <button id="mp-cancel" class="btn ghost" type="button">取消</button>
             </div>
           </div>
         </fieldset>
 
+        <!-- ─── 辅助模型：都是「留空 = 沿用剧情对话模型」，默认折叠 ─── -->
         <fieldset>
-          <legend>画师子代理（把剧情写成绘画提示词）</legend>
-          <div class="grid2">
-            <label>接口地址 Base URL<input id="s-painter-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
-            <label>模型<input id="s-painter-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
-          </div>
-          <label>API Key<input id="s-painter-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
-          <p class="hint">留空即沿用剧情模型的地址与 Key。推荐填最便宜的模型（写提示词不需要强模型）。</p>
-          <p class="hint">每张图下方都有「工作台」：看 / 改完整 prompt、跟画师说着改、按此重画。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-painter" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-painter-state">留空项按「沿用剧情模型」代入后再测。</span>
-          </div>
+          <legend>画师子代理</legend>
+          <p class="set-sub">把剧情写成绘画提示词。推荐填最便宜的模型；留空沿用剧情对话模型。每张图下方的「工作台」可查看 / 修改完整提示词。</p>
+          <details class="adv" data-auto="filled" data-tag-off="沿用剧情模型" data-tag-on="已单独配置">
+            <summary><span class="adv-t">单独配置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>接口地址 Base URL<input id="s-painter-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+                <label>模型<input id="s-painter-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+              </div>
+              <label>API Key<input id="s-painter-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+              <div class="test-row">
+                <button id="btn-test-painter" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+                <span class="hint test-state" id="test-painter-state">留空项按「沿用剧情模型」代入后再测。</span>
+              </div>
+            </div>
+          </details>
         </fieldset>
 
         <fieldset>
-          <legend>书记员（校对世界卡 / 压缩摘要 / 提取画像）</legend>
+          <legend>书记员</legend>
+          <p class="set-sub">校对世界卡、压缩摘要、提取画像。校对是便宜活，推荐填便宜的模型；留空沿用剧情对话模型。</p>
           <label class="check"><input id="s-scribe-enabled" type="checkbox" checked> 启用书记员</label>
-          <label class="check"><input id="s-scribe-ai" type="checkbox" checked> 书记员兼任「压缩摘要 + 滚动风格摘要」（调用失败时自动走本地规则，不花 API）</label>
+          <label class="check"><input id="s-scribe-ai" type="checkbox" checked> 兼任「压缩摘要 + 滚动风格摘要」<span class="check-sub">调用失败时自动走本地规则，不花 API</span></label>
           <label class="inline-field">每 <input id="s-scribe-every" type="number" min="1" max="100" class="inline-num" value="10"> 回合校对一次</label>
-          <div class="grid2">
-            <label>接口地址 Base URL<input id="s-scribe-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
-            <label>模型<input id="s-scribe-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
-          </div>
-          <label>API Key<input id="s-scribe-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
-          <p class="hint">留空即沿用剧情模型。推荐填最便宜的模型（校对是便宜活）。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-scribe" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-scribe-state">留空项按「沿用剧情模型」代入后再测。</span>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>用户画像（R13 · 默认全关，可按模式开）</legend>
-          <div class="row-inline">
-            <label class="check"><input id="s-profile-choice" type="checkbox"> 剧情模式</label>
-            <label class="check"><input id="s-profile-chat" type="checkbox"> 对话模式</label>
-            <label class="check"><input id="s-profile-rp" type="checkbox"> 扮演模式</label>
-            <button id="btn-profile-all" class="mini-btn">全部开启</button>
-            <button id="btn-profile-none" class="mini-btn">全部关闭</button>
-          </div>
-          <label>存储范围
-            <select id="s-profile-scope">
-              <option value="global">全局（跨故事共享）</option>
-              <option value="per-story">仅当前故事</option>
-            </select>
-          </label>
-          <p class="hint">开启后书记员在校对时顺手提取（失败走本地规则）；每轮只注入与当前话题相关的 Top-N 条 + 常驻一行摘要，条目再多也不涨 token。关闭即停止收集，已存条目保留、可手动清空。</p>
-          <div class="panel-block">
-            <p class="hint" id="profile-state"></p>
-            <div id="profile-list" class="mono-list"></div>
-            <div class="row-inline">
-              <button id="btn-profile-clear" class="mini-btn">清空画像</button>
+          <details class="adv" data-auto="filled" data-tag-off="沿用剧情模型" data-tag-on="已单独配置">
+            <summary><span class="adv-t">单独配置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>接口地址 Base URL<input id="s-scribe-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+                <label>模型<input id="s-scribe-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+              </div>
+              <label>API Key<input id="s-scribe-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+              <div class="test-row">
+                <button id="btn-test-scribe" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+                <span class="hint test-state" id="test-scribe-state">留空项按「沿用剧情模型」代入后再测。</span>
+              </div>
             </div>
-          </div>
+          </details>
         </fieldset>
 
         <fieldset>
-          <legend>起草模型（开局向导「一句话让 AI 起草」）</legend>
-          <div class="grid2">
-            <label>接口地址 Base URL<input id="s-draft-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
-            <label>模型<input id="s-draft-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
-          </div>
-          <label>API Key<input id="s-draft-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
-          <p class="hint">留空即沿用剧情模型。推荐直接跟随剧情模型（起草需要创造力）。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-draft" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-draft-state">留空项按「沿用剧情模型」代入后再测。</span>
-          </div>
+          <legend>起草模型</legend>
+          <p class="set-sub">开局向导里「一句话让 AI 起草」用它。起草需要创造力，推荐直接跟随剧情对话模型。</p>
+          <details class="adv" data-auto="filled" data-tag-off="沿用剧情模型" data-tag-on="已单独配置">
+            <summary><span class="adv-t">单独配置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>接口地址 Base URL<input id="s-draft-base" type="text" list="dl-base-url" placeholder="留空 = 沿用剧情模型"></label>
+                <label>模型<input id="s-draft-model" type="text" placeholder="留空 = 沿用剧情模型"></label>
+              </div>
+              <label>API Key<input id="s-draft-key" type="password" placeholder="留空 = 沿用剧情模型"></label>
+              <div class="test-row">
+                <button id="btn-test-draft" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+                <span class="hint test-state" id="test-draft-state">留空项按「沿用剧情模型」代入后再测。</span>
+              </div>
+            </div>
+          </details>
         </fieldset>
 
+        <!-- ─── 生图与画风 ─── -->
         <fieldset>
-          <legend>生图模型（为每一幕作画）</legend>
-          <!-- 生图适配器：两套接口格式差在「路径 / 尺寸参数 / 回包结构」三处，选错了会一直报错，
-               所以单独给一个下拉；模型名与 Key 两组共用下面同一批输入。 -->
+          <legend>生图模型</legend>
+          <p class="set-sub">为每一幕作画。可以和对话不是同一家（有些服务商只做对话，就再配一家）。</p>
           <label>生图适配器
             <select id="s-image-provider">
               <option value="openai-images">OpenAI 兼容（自动拼 /images/generations）</option>
-              <option value="minimax-image">MiniMax 原生（/v1/image_generation · image-01 / image-01-live）</option>
+              <option value="minimax-image">MiniMax 原生（/v1/image_generation）</option>
             </select>
           </label>
-          <!-- 参考图：把「上一张图」当人物 / 画风的硬锚（MiniMax subject_reference）。
-               纯文生图每次从零开始，人物长相最容易漂，这是目前唯一能真正传图的手段。 -->
           <div class="grid2">
-            <label>参考图（一致性）
-              <select id="s-image-ref">
-                <option value="off">关闭（纯文生图）</option>
-                <option value="prev">用上一张图（人物 / 画风更连贯）</option>
-              </select>
-            </label>
+            <label>接口地址 Base URL<input id="s-image-base" type="text" list="dl-base-url" placeholder="https://…（可从下拉选）"></label>
+            <label>模型<input id="s-image-model" type="text" placeholder="填你的生图模型名"></label>
           </div>
+          <label>API Key<input id="s-image-key" type="password" placeholder="sk-…"></label>
           <div class="grid2">
-            <label id="wrap-image-size" class="hidden">尺寸（该模型支持的档位）<select id="s-image-size"></select></label>
             <label id="wrap-image-aspect">比例
               <select id="s-image-aspect">
                 <option value="16:9">16:9 横屏</option>
@@ -733,38 +784,49 @@
                 <option value="custom">自定义</option>
               </select>
             </label>
+            <label id="wrap-image-size" class="hidden">尺寸（该模型支持的档位）<select id="s-image-size"></select></label>
             <label id="wrap-image-quality" class="hidden">质量<select id="s-image-quality"></select></label>
           </div>
           <div class="grid2" id="row-image-wh">
             <label>宽<input id="s-image-width" type="number" min="64" step="16" placeholder="1280"></label>
             <label>高<input id="s-image-height" type="number" min="64" step="16" placeholder="720"></label>
           </div>
-          <div class="grid2">
-            <label>接口地址 Base URL<input id="s-image-base" type="text" list="dl-base-url" placeholder="https://…（点这里选，也可自己填）"></label>
-            <label>模型<input id="s-image-model" type="text" placeholder="填你的生图模型名"></label>
+          <div class="test-row">
+            <button id="btn-test-image" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+            <span class="hint test-state" id="test-image-state">只探测地址是否可达，不真的出图，所以不花钱。</span>
           </div>
-          <p class="hint" id="hint-image-openai">生图接口可以和对话不是同一家（有些服务商只做对话、不做生图，就再配一家）；下拉里带「生图」标注的可直接选，地址会自动拼上 /images/generations。</p>
-          <p class="hint hidden" id="hint-image-minimax">MiniMax 原生接口：地址填 https://api.minimaxi.com（国内）或 https://api.minimax.io（国外），带不带 /v1 都行，会自动拼上 /v1/image_generation；模型填 image-01 或 image-01-live。MiniMax 不给浏览器跨域，直连被拦时先跑 node tools/video-proxy.mjs，地址改填 http://127.0.0.1:4320。<br>尺寸：image-01-live 只认比例（自定义宽高会被折成最接近的比例），自定义宽高只对 image-01 生效（512–2048 且 8 的倍数）。画风只对 live 生效，写进下面的自定义请求参数：style.style_type=漫画（漫画 / 元气 / 中世纪 / 水彩）+ style.style_weight=0.8（0–1，默认 0.8）。想更稳再加 seed=12345（同 seed + 同参数，出图更接近；换了提示词仍会变）。</p>
-          <label>API Key<input id="s-image-key" type="password" placeholder="sk-…"></label>
-          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-image-params" type="text" placeholder="steps=30, negative_prompt=blurry"></label>
-          <p class="hint">尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；模型名与参数都可随意填；画师工作台里也能改尺寸。不确定的项留空即可，会走通用默认。</p>
-          <p class="hint">参考图：开启后每次作画会把「上一张图」缩到长边 1024 的 JPEG，作为 subject_reference 交给接口——人物长相 / 服饰 / 画风更连贯，代价是构图会更接近上一张。目前只有 MiniMax 原生适配器支持；第一次作画（还没有上一张图）自动跳过，不会报错。官方文档把 subject_reference 写在 image-01 的图生图接口下，image-01-live 是否接受要实测：被拒会报 2013，把它改回「关闭」即可。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-image" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-image-state">只探测地址是否可达（不会真的出图，所以不花钱）。</span>
-          </div>
+          <details class="adv">
+            <summary><span class="adv-t">高级</span></summary>
+            <div class="adv-body">
+              <label>参考图（一致性）
+                <select id="s-image-ref">
+                  <option value="off">关闭（纯文生图）</option>
+                  <option value="prev">用上一张图（人物 / 画风更连贯）</option>
+                </select>
+              </label>
+              <label>自定义请求参数（key=value，逗号分隔）<input id="s-image-params" type="text" placeholder="steps=30, negative_prompt=blurry"></label>
+            </div>
+          </details>
+          <details class="help">
+            <summary>填写说明</summary>
+            <div class="help-body">
+              <p class="hint" id="hint-image-openai">下拉里带「生图」标注的服务商可直接选，地址会自动拼上 /images/generations。尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；不确定的项留空，会走通用默认。画师工作台里也能改尺寸。</p>
+              <p class="hint hidden" id="hint-image-minimax">MiniMax 原生接口：地址填 https://api.minimaxi.com（国内）或 https://api.minimax.io（国外），带不带 /v1 都行；模型填 image-01 或 image-01-live。MiniMax 不给浏览器跨域，直连被拦时先跑 <code>node tools/video-proxy.mjs</code>，地址改填 http://127.0.0.1:4320。<br>尺寸：image-01-live 只认比例，自定义宽高只对 image-01 生效（512–2048 且 8 的倍数）。画风只对 live 生效，写进「自定义请求参数」：style.style_type=漫画（漫画 / 元气 / 中世纪 / 水彩）+ style.style_weight=0.8（0–1）。想更稳再加 seed=12345。</p>
+              <p>参考图：开启后每次作画会把「上一张图」缩到长边 1024 的 JPEG，作为 subject_reference 交给接口，人物长相 / 服饰 / 画风更连贯，代价是构图更接近上一张。目前只有 MiniMax 原生适配器支持；第一次作画自动跳过。image-01-live 是否接受要实测，被拒会报 2013，改回「关闭」即可。</p>
+            </div>
+          </details>
         </fieldset>
 
         <fieldset>
-          <legend>生视频模型（MiniMax）</legend>
-          <!-- 视频专用下拉：只列生视频相关的地址（对话 / 生图服务商见上面的 dl-base-url，各一处、不重复登记） -->
+          <legend>生视频模型</legend>
+          <p class="set-sub">MiniMax 生视频（V2）。视频是异步任务，通常 1~3 分钟出结果，<b>按秒计费</b>。</p>
           <datalist id="dl-video-base">
             <option value="http://127.0.0.1:4320">本地转发 · tools/video-proxy.mjs（CORS 绕行）</option>
             <option value="https://api.minimaxi.com">国内 · MiniMax（生视频 · V2）</option>
             <option value="https://api.minimax.io">国外 · MiniMax（生视频 · V2）</option>
           </datalist>
           <div class="grid2">
-            <label>接口地址 Base URL<input id="s-video-base" type="text" list="dl-video-base" placeholder="https://api.minimaxi.com 或 https://api.minimax.io（下拉里可选）"></label>
+            <label>接口地址 Base URL<input id="s-video-base" type="text" list="dl-video-base" placeholder="https://api.minimaxi.com 或 https://api.minimax.io"></label>
             <label>模型<input id="s-video-model" type="text" placeholder="填你的生视频模型名"></label>
           </div>
           <label>API Key<input id="s-video-key" type="password" placeholder="sk-…"></label>
@@ -789,12 +851,23 @@
               <option value="21:9">21:9</option>
             </select>
           </label>
-          <label>自定义请求参数（高级 · 可选，逗号分隔 key=value）<input id="s-video-params" type="text" placeholder="mode=std, watermark=false"></label>
-          <p class="hint">MiniMax 生视频（V2 接口）：Base URL 填 <code>https://api.minimaxi.com</code>（国内）或 <code>https://api.minimax.io</code>（海外），模型名举例 <code>MiniMax-H3</code> / <code>MiniMax-H3-Max</code>。这两个是<b>接口地址、不是网站</b>——浏览器直接打开看到 404 是正常的；拿 Key 请去网页控制台 <code>platform.minimaxi.com</code>（国内）/ <code>platform.minimax.io</code>（海外）。时长 / 分辨率 / 比例用上面的控件选（默认 5 秒 / 768P / 16:9）；「自定义请求参数」是高级覆盖——同名 key 以它为准，还可带 <code>mode=std</code> 等其它参数。图生视频的画幅由首帧决定（比例选择对它无效）。视频是<b>异步任务</b>：提交后每 10 秒查一次，通常 1~3 分钟出结果；剧情模式舞台右上角「🎬」触发，<b>会按秒计费</b>。<b>浏览器直连被 CORS 拦</b>时先起本地转发 <code>node tools/video-proxy.mjs</code>，Base URL 改填 <code>http://127.0.0.1:4320</code>。</p>
-          <div class="row-inline test-row">
-            <button id="btn-test-video" class="mini-btn">⚡ 测试连接</button>
-            <span class="hint test-state" id="test-video-state">只读探测：不会提交任务，所以不花钱。</span>
+          <div class="test-row">
+            <button id="btn-test-video" class="mini-btn" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-bolt"/></svg>测试连接</button>
+            <span class="hint test-state" id="test-video-state">只读探测：不提交任务，所以不花钱。</span>
           </div>
+          <details class="adv">
+            <summary><span class="adv-t">高级</span></summary>
+            <div class="adv-body">
+              <label>自定义请求参数（key=value，逗号分隔；同名 key 以它为准）<input id="s-video-params" type="text" placeholder="mode=std, watermark=false"></label>
+            </div>
+          </details>
+          <details class="help">
+            <summary>填写说明</summary>
+            <div class="help-body">
+              <p>Base URL 填 <code>https://api.minimaxi.com</code>（国内）或 <code>https://api.minimax.io</code>（海外），模型名举例 <code>MiniMax-H3</code> / <code>MiniMax-H3-Max</code>。这两个是<b>接口地址、不是网站</b>，浏览器直接打开看到 404 是正常的；拿 Key 请去网页控制台 <code>platform.minimaxi.com</code>（国内）/ <code>platform.minimax.io</code>（海外）。</p>
+              <p>剧情模式舞台右上角的胶片按钮触发生成。浏览器直连被 CORS 拦时，先起本地转发 <code>node tools/video-proxy.mjs</code>，Base URL 改填 <code>http://127.0.0.1:4320</code>。</p>
+            </div>
+          </details>
         </fieldset>
 
         <fieldset>
@@ -811,25 +884,199 @@
             </label>
             <label>自定义画风关键词（英文逗号分隔）<input id="s-style-custom" type="text" placeholder="watercolor, soft light"></label>
           </div>
-          <p class="hint">锚定后由视觉设定卡接管（见下）；这里只在未锚定时兜底。</p>
+          <p class="set-sub">锚定后由视觉设定卡接管；这里只在未锚定时兜底。</p>
           <div class="panel-block">
             <p class="hint" id="style-card-state"></p>
             <div id="style-card-view" class="hidden">
               <div id="style-card-text" class="mono-line"></div>
-              <!-- 只让改「画风备注」：这条最容易被模型写成剧情事实（「始终下雨」），改它不必重画 4 张候选 -->
               <div class="row-inline">
                 <input id="s-card-note" type="text" placeholder="画风备注（只写画风偏好，别写时间 / 天气 / 地点）">
-                <button id="btn-save-card-note" class="mini-btn">保存备注</button>
+                <button id="btn-save-card-note" class="mini-btn" type="button">保存备注</button>
               </div>
-              <p class="hint">备注只管画面气质：时间、天气、地点、在场者由剧情与世界状态卡决定——玩家说放晴，就该画晴。</p>
+              <p class="hint">备注只管画面气质：时间、天气、地点、在场者由剧情与世界状态卡决定，玩家说放晴，就该画晴。</p>
             </div>
             <div class="row-inline">
-              <button id="btn-anchor-rerun" class="btn">锚定画风（试画 4 张候选）</button>
+              <button id="btn-anchor-rerun" class="btn" type="button">锚定画风（试画 4 张候选）</button>
             </div>
             <p class="hint" id="rolling-style-text"></p>
           </div>
         </fieldset>
 
+        <!-- ─── 工具与服务 ─── -->
+        <fieldset>
+          <legend>生成过程</legend>
+          <label class="check"><input id="s-show-reasoning" type="checkbox" checked> 展示深度思考链<span class="check-sub">模型返回 reasoning_content 时</span></label>
+          <label class="check"><input id="s-tools-enabled" type="checkbox" checked> 向模型下发工具<span class="check-sub">召回世界卡 / 视觉设定卡、请求作画、写入记忆；模型不支持 function calling 时可关</span></label>
+          <div class="row-inline">
+            <span class="hint" id="s-notools-hint"></span>
+            <button id="btn-clear-notools" class="mini-btn" type="button">清除降级记录</button>
+          </div>
+        </fieldset>
+
+        <fieldset id="fs-sidecar">
+          <legend>本地服务</legend>
+          <p class="set-sub">可选的本地小服务，只监听 127.0.0.1。邮件、定时主动、代下单都靠它；没启动时这些功能保持禁用，其它功能不受影响。</p>
+          <p class="hint" id="sidecar-state">未启动</p>
+          <div class="grid2">
+            <label>端口<input id="s-sidecar-port" type="number" min="1" max="65535" placeholder="4319"></label>
+            <label>token<input id="s-sidecar-token" type="text" spellcheck="false" placeholder="启动本地服务时终端会打印"></label>
+          </div>
+          <div class="row-inline">
+            <button id="btn-sidecar-probe" class="btn" type="button">重新探测</button>
+            <span class="hint">在项目目录运行 <code>node sidecar/server.mjs</code> 启动；token 防止本机其它程序乱调。</span>
+          </div>
+        </fieldset>
+
+        <fieldset id="fs-email">
+          <legend>邮件</legend>
+          <p class="set-sub">默认关闭。白名单由本地服务硬校验：名单外的收件人只能先生成草稿，你确认后才会发出；所有发送 / 草稿 / 拒绝都有审计记录。</p>
+          <label class="check"><input id="s-email-enabled" type="checkbox"> 启用邮件功能</label>
+          <details class="adv" data-auto="#s-email-enabled" data-tag-off="未启用" data-tag-on="已启用">
+            <summary><span class="adv-t">详细设置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>发信渠道
+                  <select id="s-email-provider">
+                    <option value="mock">模拟（只记账，不真的发信）</option>
+                    <option value="resend">Resend（HTTP API）</option>
+                  </select>
+                </label>
+                <label>每日发送上限（0 = 一封都不发）<input id="s-email-dailylimit" type="number" min="0" step="1"></label>
+              </div>
+              <label>发件人地址<input id="s-email-from" type="text" spellcheck="false" placeholder="例如 me@example.com"></label>
+              <label>Resend API Key（只存在本地服务里；留空表示不改动已保存的 Key）<input id="s-email-resendkey" type="password" spellcheck="false"></label>
+              <label>收件人白名单（每行一个）<textarea id="s-email-allowlist" rows="3" spellcheck="false" placeholder="buddy@example.com"></textarea></label>
+              <details class="panel-block">
+                <summary>邮件审计（最近记录）</summary>
+                <div id="email-audit" class="mono-list"></div>
+              </details>
+            </div>
+          </details>
+        </fieldset>
+
+        <fieldset id="fs-schedule">
+          <legend>定时主动</legend>
+          <p class="set-sub">默认关闭。免打扰时段与每日上限只存在本地服务里，<b>模型改不了</b>；模型提议的安排一律进「待确认」，要你点确认才生效。调度必须由本地服务常驻。</p>
+          <label class="check"><input id="s-sched-enabled" type="checkbox"> 启用定时主动联系</label>
+          <label class="check"><input id="s-sched-paused" type="checkbox"> 一键暂停所有主动行为</label>
+          <details class="adv" data-auto="#s-sched-enabled" data-tag-off="未启用" data-tag-on="已启用">
+            <summary><span class="adv-t">详细设置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>每日主动消息上限（0 = 不限制）<input id="s-sched-dailycap" type="number" min="0" step="1"></label>
+                <label>错过触发时
+                  <select id="s-sched-missed">
+                    <option value="SKIP">跳过</option>
+                    <option value="RUN_ONCE">补一次</option>
+                    <option value="RUN_ALL">全部补齐</option>
+                  </select>
+                </label>
+              </div>
+              <label>免打扰时段（每行一段，格式 22:00-08:00）<textarea id="s-sched-quiet" rows="2" spellcheck="false" placeholder="23:00-08:00"></textarea></label>
+              <div class="row-inline">
+                <button id="btn-trigger-refresh" class="mini-btn" type="button">刷新安排</button>
+                <span class="hint" id="trigger-summary"></span>
+              </div>
+              <div id="trigger-list" class="mono-list"></div>
+            </div>
+          </details>
+        </fieldset>
+
+        <fieldset id="fs-payment">
+          <legend>购物支付</legend>
+          <p class="set-sub">默认关闭。策略由本地服务在代码层强制，AI 拿不到任何支付凭证；额度默认全是 0 = 什么都不放行。<b>AI 可能出错，请设置合理额度。</b></p>
+          <label class="check"><input id="s-pay-enabled" type="checkbox"> 启用代下单功能</label>
+          <details class="adv" data-auto="#s-pay-enabled" data-tag-off="未启用" data-tag-on="已启用">
+            <summary><span class="adv-t">详细设置</span><span class="adv-tag"></span></summary>
+            <div class="adv-body">
+              <div class="grid2">
+                <label>渠道
+                  <select id="s-pay-provider">
+                    <option value="mock">模拟支付（不真实扣款）</option>
+                    <option value="manual-order">仅生成订单（自己手动付款）</option>
+                  </select>
+                </label>
+                <label>货币<input id="s-pay-currency" type="text" maxlength="8" placeholder="CNY"></label>
+              </div>
+              <div class="grid2">
+                <label>单笔上限（分，0 = 不放行）<input id="s-pay-pertx" type="number" min="0" step="100"></label>
+                <label>每日上限（分，0 = 不放行）<input id="s-pay-daily" type="number" min="0" step="100"></label>
+              </div>
+              <div class="grid2">
+                <label>每月上限（分，0 = 不放行）<input id="s-pay-monthly" type="number" min="0" step="100"></label>
+                <label>免确认小额阈值（分，0 = 全部要确认）<input id="s-pay-autoapprove" type="number" min="0" step="100"></label>
+              </div>
+              <div class="grid2">
+                <label>冷静期（分钟）<input id="s-pay-cooldown" type="number" min="0" step="1"></label>
+                <label>商户白名单（每行一个，留空 = 不限）<textarea id="s-pay-merchants" rows="2" spellcheck="false"></textarea></label>
+              </div>
+              <label>品类黑名单（每行一个）<textarea id="s-pay-categories" rows="2" spellcheck="false" placeholder="虚拟币"></textarea></label>
+              <div class="row-inline">
+                <button id="btn-pay-refresh" class="mini-btn" type="button">刷新台账</button>
+                <span class="hint" id="pay-summary"></span>
+              </div>
+              <div id="pay-ledger" class="mono-list"></div>
+            </div>
+          </details>
+        </fieldset>
+
+        <!-- ─── 数据 ─── -->
+        <fieldset>
+          <legend>用户画像</legend>
+          <p class="set-sub">默认全关，可按模式开。开启后书记员校对时顺手提取，每轮只注入与当前话题相关的几条，不涨 token；关闭即停止收集，已存条目保留。</p>
+          <div class="row-inline">
+            <label class="check"><input id="s-profile-choice" type="checkbox"> 剧情</label>
+            <label class="check"><input id="s-profile-chat" type="checkbox"> 智能体</label>
+            <label class="check"><input id="s-profile-rp" type="checkbox"> 扮演</label>
+            <button id="btn-profile-all" class="mini-btn" type="button">全部开启</button>
+            <button id="btn-profile-none" class="mini-btn" type="button">全部关闭</button>
+          </div>
+          <label>存储范围
+            <select id="s-profile-scope">
+              <option value="global">全局（跨故事共享）</option>
+              <option value="per-story">仅当前故事</option>
+            </select>
+          </label>
+          <div class="panel-block">
+            <p class="hint" id="profile-state"></p>
+            <div id="profile-list" class="mono-list"></div>
+            <div class="row-inline">
+              <button id="btn-profile-clear" class="mini-btn" type="button">清空画像</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>本地存储与备份</legend>
+          <p class="hint" id="storage-state"></p>
+          <p class="hint" id="storage-usage"></p>
+          <div class="row-inline">
+            <button id="btn-backup-all" class="btn primary" type="button"><svg class="ic ic-l" aria-hidden="true"><use href="#i-down"/></svg>导出全部备份</button>
+            <button id="btn-clean-images" class="mini-btn" type="button" title="删掉没有任何故事引用的原图；剧情、缩略图、提示词都不动">清理孤儿原图</button>
+            <span class="hint" id="backup-at"></span>
+          </div>
+          <label class="check"><input id="backup-with-keys" type="checkbox"> 备份里带上 API Key<span class="check-sub">方便换设备直接可用；文件泄露有被盗刷风险，默认不带</span></label>
+          <label class="check"><input id="backup-with-src" type="checkbox"> 备份里带上原图（导出为 .zip）<span class="check-sub">文件会明显变大，打包要等一会儿</span></label>
+          <details class="help">
+            <summary>两种备份格式 · 数据存在哪 · 什么情况下会丢</summary>
+            <div class="help-body">
+              <p><b>.irbackup.json</b>：全部故事 + 模型设置 + 用户画像，不含原图，体积可控。<b>.zip</b>：同一份正文 + 全部原图，换设备时连图一起搬。把文件拖回书架窗口即可整体还原（同 id 的故事会被覆盖，其它保留）。只想带走单个故事，用书架卡片上的「导出 → 附带原图」。</p>
+              <p>全部数据只存在<b>这台设备的这个浏览器</b>里（主库是 IndexedDB，原图以 Blob 单独存放），没有任何服务器。下列情况会让它消失：</p>
+              <p>· 清「Cookie 和网站数据 / 站点数据」会全删（只清缓存不受影响）<br>
+                · 无痕 / 隐私模式，关窗即没<br>
+                · 换浏览器、换设备、换打开方式（<b>file:// 和 http://localhost 是两套独立数据</b>）<br>
+                · Safari（含 iOS）：7 天没和页面交互，系统会自动清除脚本可写存储，建议「添加到主屏幕」或常来点一下<br>
+                · 磁盘空间紧张时，浏览器可能自动淘汰</p>
+              <p class="hint" id="storage-persist"></p>
+            </div>
+          </details>
+        </fieldset>
+
+        <div class="danger-row">
+          <button id="btn-clear-save" class="btn danger" type="button">清空本地存档与设置</button>
+        </div>
+
+        <!-- ─── 外观 ─── -->
         <fieldset>
           <legend>界面</legend>
           <div class="grid2">
@@ -842,7 +1089,7 @@
             </label>
             <label>选项显示
               <select id="s-ui-choices">
-                <option value="tray">收在「💡 灵感」里</option>
+                <option value="tray">收在「灵感」里</option>
                 <option value="always">始终内联在旁白下</option>
               </select>
             </label>
@@ -878,19 +1125,10 @@
             </label>
           </div>
           <p class="hint" id="ui-layout-hint"></p>
-          <p class="hint">沉浸（画面铺满）从舞台右上角的 ⛶ 进入，Esc 或 ✕ 退出；分隔条双击恢复 1:1。</p>
+          <p class="hint">首页的无限符号只在「丰富」档循环流动；「标准」「关」或系统开了「减少动态效果」时停成一道静态渐变。</p>
         </fieldset>
 
-        <fieldset>
-          <legend>生成过程</legend>
-          <label class="check"><input id="s-show-reasoning" type="checkbox" checked> 展示深度思考链（模型返回 reasoning_content 时）</label>
-          <label class="check"><input id="s-tools-enabled" type="checkbox" checked> 下发工具（按需召回世界卡 / 视觉设定卡、请求作画、写入记忆；模型不支持 function calling 时可手动关闭）</label>
-          <div class="row-inline">
-            <span class="hint" id="s-notools-hint"></span>
-            <button id="btn-clear-notools" class="mini-btn">清除降级记录</button>
-          </div>
-        </fieldset>
-
+        <!-- ─── 当前故事 ─── -->
         <fieldset>
           <legend>推进模式</legend>
           <label>当前故事模式
@@ -900,7 +1138,7 @@
               <option value="rp">角色扮演（角色卡）</option>
             </select>
           </label>
-          <p class="hint">切换只改提示词与渲染，不影响记忆 / 重试 / 作画；记忆数据不随切换清空。</p>
+          <p class="set-sub">切换只改提示词与渲染，不影响记忆 / 重试 / 作画；记忆数据不随切换清空。</p>
         </fieldset>
 
         <fieldset>
@@ -908,7 +1146,7 @@
           <p class="hint" id="sp-empty">进入一个故事后，这里可以打存档点、回到旧存档点。</p>
           <div id="sp-panel" class="hidden">
             <div class="row-inline">
-              <button id="btn-add-savepoint" class="btn">打一个存档点</button>
+              <button id="btn-add-savepoint" class="btn" type="button">打一个存档点</button>
               <span class="hint">退出故事时会自动存档；存档点保留最近 5 个</span>
             </div>
             <div id="sp-list" class="mono-list"></div>
@@ -920,7 +1158,7 @@
           <p class="hint" id="memory-empty">开始一个故事后，这里显示它的世界状态卡、摘要栈与留痕。</p>
           <div id="memory-panels" class="hidden">
             <div class="row-inline">
-              <button id="btn-inject-memory" class="btn">注入记忆</button>
+              <button id="btn-inject-memory" class="btn" type="button">注入记忆</button>
               <span class="hint" id="inject-state"></span>
             </div>
             <div class="grid2">
@@ -939,13 +1177,13 @@
             <label>关系·纽带（每行一条；书记员随校对维护，也可手改）<textarea id="w-rel-bonds" rows="2" spellcheck="false"></textarea></label>
             <label>关系·备注<input id="w-rel-notes" type="text"></label>
             <div class="row-inline">
-              <button id="btn-save-world" class="btn">保存世界卡</button>
+              <button id="btn-save-world" class="btn" type="button">保存世界卡</button>
               <span id="world-scribe-at" class="hint"></span>
             </div>
             <div class="panel-block">
               <p class="hint" id="rc-status"></p>
               <div class="row-inline">
-                <button id="btn-edit-card" class="btn">编辑角色卡 / 导入 PNG</button>
+                <button id="btn-edit-card" class="btn" type="button">编辑角色卡 / 导入 PNG</button>
               </div>
             </div>
             <details class="panel-block">
@@ -959,141 +1197,20 @@
           </div>
         </fieldset>
 
-        <fieldset id="fs-sidecar">
-          <legend>本地服务（可选）</legend>
-          <p class="hint" id="sidecar-state">未启动</p>
-          <div class="grid2">
-            <label>端口<input id="s-sidecar-port" type="number" min="1" max="65535" placeholder="4319"></label>
-            <label>token<input id="s-sidecar-token" type="text" spellcheck="false" placeholder="启动本地服务时终端会打印"></label>
-          </div>
-          <div class="row-inline">
-            <button id="btn-sidecar-probe" class="btn" type="button">重新探测</button>
-            <span class="hint">在项目目录里运行 <code>node sidecar/server.mjs</code> 即可启动。</span>
-          </div>
-          <p class="hint">这是一个<b>可选</b>的本地小服务，只监听 <b>127.0.0.1</b>。没启动时下面三个功能会显示「需要启动本地服务」并保持禁用，其它功能完全不受影响。token 用来防止本机其它程序乱调你的服务。</p>
-        </fieldset>
-
-        <fieldset id="fs-email">
-          <legend>邮件（默认关闭）</legend>
-          <label class="check"><input id="s-email-enabled" type="checkbox"> 启用邮件功能</label>
-          <div class="grid2">
-            <label>发信渠道
-              <select id="s-email-provider">
-                <option value="mock">模拟（只记账，不真的发信）</option>
-                <option value="resend">Resend（HTTP API）</option>
-              </select>
-            </label>
-            <label>每日发送上限（0 = 一封都不发）<input id="s-email-dailylimit" type="number" min="0" step="1"></label>
-          </div>
-          <label>发件人地址<input id="s-email-from" type="text" spellcheck="false" placeholder="例如 me@example.com"></label>
-          <label>Resend API Key（只存在本地服务里；留空表示不改动已保存的 Key）<input id="s-email-resendkey" type="password" spellcheck="false"></label>
-          <label>收件人白名单（每行一个）<textarea id="s-email-allowlist" rows="3" spellcheck="false" placeholder="buddy@example.com"></textarea></label>
-          <p class="hint">白名单由<b>本地服务硬校验</b>：不在名单里的收件人只能先生成草稿，必须你确认后才会发出。所有发送 / 草稿 / 拒绝都会写入审计记录。</p>
-          <details class="panel-block">
-            <summary>邮件审计（最近记录）</summary>
-            <div id="email-audit" class="mono-list"></div>
-          </details>
-        </fieldset>
-
-        <fieldset id="fs-schedule">
-          <legend>定时主动（默认关闭）</legend>
-          <label class="check"><input id="s-sched-enabled" type="checkbox"> 启用定时主动联系</label>
-          <label class="check"><input id="s-sched-paused" type="checkbox"> 一键暂停所有主动行为</label>
-          <div class="grid2">
-            <label>每日主动消息上限（0 = 不限制）<input id="s-sched-dailycap" type="number" min="0" step="1"></label>
-            <label>错过触发时
-              <select id="s-sched-missed">
-                <option value="SKIP">跳过</option>
-                <option value="RUN_ONCE">补一次</option>
-                <option value="RUN_ALL">全部补齐</option>
-              </select>
-            </label>
-          </div>
-          <label>免打扰时段（每行一段，格式 22:00-08:00）<textarea id="s-sched-quiet" rows="2" spellcheck="false" placeholder="23:00-08:00"></textarea></label>
-          <p class="hint">免打扰时段与每日上限只存在本地服务里，<b>模型改不了</b>。调度必须由本地服务常驻；没启动时会显示「调度已暂停：本地服务未启动」。</p>
-          <div class="row-inline">
-            <button id="btn-trigger-refresh" class="mini-btn" type="button">刷新安排</button>
-            <span class="hint" id="trigger-summary"></span>
-          </div>
-          <div id="trigger-list" class="mono-list"></div>
-          <p class="hint">模型可以提议安排，但一律进入「待确认」，需要你在这里点确认才会生效。</p>
-        </fieldset>
-
-        <fieldset id="fs-payment">
-          <legend>购物支付（默认关闭）</legend>
-          <label class="check"><input id="s-pay-enabled" type="checkbox"> 启用代下单功能</label>
-          <div class="grid2">
-            <label>渠道
-              <select id="s-pay-provider">
-                <option value="mock">模拟支付（不真实扣款）</option>
-                <option value="manual-order">仅生成订单（自己手动付款）</option>
-              </select>
-            </label>
-            <label>货币<input id="s-pay-currency" type="text" maxlength="8" placeholder="CNY"></label>
-          </div>
-          <div class="grid2">
-            <label>单笔上限（分，0 = 不放行）<input id="s-pay-pertx" type="number" min="0" step="100"></label>
-            <label>每日上限（分，0 = 不放行）<input id="s-pay-daily" type="number" min="0" step="100"></label>
-          </div>
-          <div class="grid2">
-            <label>每月上限（分，0 = 不放行）<input id="s-pay-monthly" type="number" min="0" step="100"></label>
-            <label>免确认小额阈值（分，0 = 全部要确认）<input id="s-pay-autoapprove" type="number" min="0" step="100"></label>
-          </div>
-          <div class="grid2">
-            <label>冷静期（分钟）<input id="s-pay-cooldown" type="number" min="0" step="1"></label>
-            <label>商户白名单（每行一个，留空 = 不限）<textarea id="s-pay-merchants" rows="2" spellcheck="false"></textarea></label>
-          </div>
-          <label>品类黑名单（每行一个）<textarea id="s-pay-categories" rows="2" spellcheck="false" placeholder="虚拟币"></textarea></label>
-          <p class="hint">策略由<b>本地服务在代码层强制</b>，AI 拿不到任何支付凭证。默认全是 0 = 什么都不放行，请按需设置。<b>风险提示：AI 可能出错，请设置合理额度。</b></p>
-          <div class="row-inline">
-            <button id="btn-pay-refresh" class="mini-btn" type="button">刷新台账</button>
-            <span class="hint" id="pay-summary"></span>
-          </div>
-          <div id="pay-ledger" class="mono-list"></div>
-        </fieldset>
-
-        <fieldset>
-          <legend>本地存储与备份</legend>
-          <p class="hint" id="storage-state"></p>
-          <p class="hint" id="storage-usage"></p>
-          <div class="row-inline">
-            <button id="btn-backup-all" class="btn primary">↓ 一键导出全部备份</button>
-            <button id="btn-clean-images" class="mini-btn" title="删掉没有任何故事引用的原图；剧情、缩略图、提示词都不动">清理孤儿原图</button>
-            <span class="hint" id="backup-at"></span>
-          </div>
-          <label class="check"><input id="backup-with-keys" type="checkbox"> 备份里也带上 API Key（方便换设备直接可用；文件泄露有被人盗刷的风险，默认不带）</label>
-          <label class="check"><input id="backup-with-src" type="checkbox"> 备份里也带上原图（导出为 <b>.zip</b>；图片按二进制存，比 base64 省约 1/3 体积，但文件会明显变大，打包需要等一会儿）</label>
-          <p class="hint">两种备份：<b>.irbackup.json</b>（全部故事 + 模型设置 + 用户画像，<b>不含原图</b>，体积可控）与 <b>.zip</b>（同一份正文 + 全部原图，换设备时连图一起搬）。把文件拖回书架窗口即可整体还原（同 id 的故事会被覆盖，其它故事保留）。只想带走单个故事时，用书架卡片上的「导出 → 附带原图」。</p>
-          <details class="panel-block">
-            <summary>数据存在哪？什么情况下会丢？</summary>
-            <p class="hint">全部数据只存在<b>这台设备的这个浏览器</b>里（主库是 <b>IndexedDB</b>，容量由浏览器按磁盘空间分配，通常远大于 localStorage 的约 5MB；原图以 Blob 单独存放），没有任何服务器。下列操作会让它消失，注意避开：</p>
-            <p class="hint">· 清「Cookie 和网站数据 / 站点数据」——会全删（只清「缓存 / 缓存的图片和文件」不受影响）<br>
-              · 无痕 / 隐私模式——关窗即没<br>
-              · 换浏览器、换设备、换打开方式（<b>file:// 和 http://localhost 是两套独立数据，互不相通</b>）<br>
-              · Safari（含 iOS）：7 天没和这个页面交互，ITP 会自动清除脚本可写存储 → 建议「添加到主屏幕」或常来点一下<br>
-              · 磁盘空间紧张时，浏览器可能自动淘汰</p>
-            <p class="hint" id="storage-persist"></p>
-          </details>
-        </fieldset>
-
-        <div class="danger-row">
-          <button id="btn-clear-save" class="btn danger">清空本地存档与设置</button>
-        </div>
-
           </div><!-- /.set-panels -->
         </div><!-- /.set-shell -->
       </div>
       <div class="modal-foot">
-        <button id="btn-save-settings" class="btn primary">保存</button>
+        <button id="btn-save-settings" class="btn primary" type="button">保存</button>
       </div>
     </div>
   </div>
 
-  <!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ========== -->
+<!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ========== -->
   <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">
     <div class="prefs-head">
       <h3>本对话设置</h3>
-      <button id="prefs-close" class="hud-btn" title="关闭">✕</button>
+      <button id="prefs-close" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
     <div class="prefs-body" id="prefs-body"></div>
     <p class="hint prefs-foot" id="prefs-note">改动只影响当前对话，随时点「重置」回到全局默认；换模型从下一条消息起生效。</p>
@@ -1106,7 +1223,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2 id="cf-title">确认</h2>
-        <button id="btn-close-confirm" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-confirm" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p id="cf-message"></p>
@@ -1126,7 +1243,7 @@
        不遮挡输入框 / 发送键 / 弹窗底部按钮。同一时刻只保留一条，后来者替换前者。 -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite">
     <span id="toast-text"></span>
-    <button id="toast-close" class="toast-close hidden" type="button" title="关闭提示">✕</button>
+    <button id="toast-close" class="toast-close hidden" type="button" title="关闭提示" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
 </div>
 
@@ -1135,7 +1252,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>写邮件</h2>
-        <button id="btn-close-email" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-email" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p class="hint" id="email-status"></p>
@@ -1159,7 +1276,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2>代为下单</h2>
-        <button id="btn-close-payment" class="hud-btn" title="关闭">✕</button>
+        <button id="btn-close-payment" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
       </div>
       <div class="modal-body">
         <p class="hint" id="pay-status"></p>
@@ -1185,57 +1302,57 @@
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<script src="js/providers.js?v=0.12.0"></script>
-<script src="js/prefs.js?v=0.12.0"></script>
-<script src="js/context.js?v=0.12.0"></script>
+<script src="js/providers.js?v=0.12.1"></script>
+<script src="js/prefs.js?v=0.12.1"></script>
+<script src="js/context.js?v=0.12.1"></script>
 <!-- 分支树数据层（story.tree 真源 + 投影，纯逻辑不碰 DOM / 存储）：必须在 app.js 之前 -->
-<script src="js/tree.js?v=0.12.0"></script>
+<script src="js/tree.js?v=0.12.1"></script>
 <!-- 分支树布局（分支页画布几何：泳道 / 折叠 / 标签，纯逻辑 Node 可测）：必须在 app.js 之前 -->
-<script src="js/treeLayout.js?v=0.12.0"></script>
+<script src="js/treeLayout.js?v=0.12.1"></script>
 <!-- 存储适配器（IndexedDB 主库 + 回退）：必须在 store.js 之前，store 启动时会用到它 -->
-<script src="js/storage.js?v=0.12.0"></script>
-<script src="js/store.js?v=0.12.0"></script>
-<script src="js/modelCapabilities.js?v=0.12.0"></script>
-<script src="js/roleCard.js?v=0.12.0"></script>
+<script src="js/storage.js?v=0.12.1"></script>
+<script src="js/store.js?v=0.12.1"></script>
+<script src="js/modelCapabilities.js?v=0.12.1"></script>
+<script src="js/roleCard.js?v=0.12.1"></script>
 <!-- 离线演示模式（?demo=1）：注册「内置剧本」与「本地占位图」两个适配器；必须在 app.js 之前 -->
-<script src="js/demo.js?v=0.12.0"></script>
+<script src="js/demo.js?v=0.12.1"></script>
 <!-- 极简 ZIP 读写（零依赖）：只给「带原图的全量备份」打包 / 解包用；必须在 app.js 之前 -->
-<script src="js/zip.js?v=0.12.0"></script>
+<script src="js/zip.js?v=0.12.1"></script>
 <!-- 可选本地服务（sidecar）客户端：/health 探测、token、api()、SSE；必须在 app.js 之前 -->
-<script src="js/sidecar.js?v=0.12.0"></script>
+<script src="js/sidecar.js?v=0.12.1"></script>
 <!-- 功能编排内核：主动触达的去重与排队（app.js 注册投递回调）；必须在 app.js 之前 -->
-<script src="js/features.js?v=0.12.0"></script>
+<script src="js/features.js?v=0.12.1"></script>
 <!-- 作画串行队列（时机 / 工具 / 手动出图共用；纯逻辑不碰 DOM / story）：必须在 app.js 之前 -->
-<script src="js/paintQueue.js?v=0.12.0"></script>
+<script src="js/paintQueue.js?v=0.12.1"></script>
 <!-- 提案（模型发起的邮件 / 下单，纯逻辑；sidecar 以参数注入）：必须在 app.js 之前 -->
-<script src="js/proposals.js?v=0.12.0"></script>
+<script src="js/proposals.js?v=0.12.1"></script>
 <!-- 动效强度解析（纯逻辑，Node 可 require）：必须在 app.js 之前 -->
-<script src="js/motion.js?v=0.12.0"></script>
-<script src="js/titles.js?v=0.12.0"></script>
-<script src="js/search.js?v=0.12.0"></script>
+<script src="js/motion.js?v=0.12.1"></script>
+<script src="js/titles.js?v=0.12.1"></script>
+<script src="js/search.js?v=0.12.1"></script>
 <!-- 主逻辑拆分（js/app/*.js）：core 先建 IR.App / A.state / A.reg，其余模块次之，app.js 作组合根收尾 -->
-<script src="js/app/core.js?v=0.12.0"></script>
-<script src="js/app/branch.js?v=0.12.0"></script>
-<script src="js/app/models.js?v=0.12.0"></script>
-<script src="js/app/library.js?v=0.12.0"></script>
-<script src="js/app/shelf.js?v=0.12.0"></script>
-<script src="js/app/backup.js?v=0.12.0"></script>
-<script src="js/app/importer.js?v=0.12.0"></script>
-<script src="js/app/cards.js?v=0.12.0"></script>
-<script src="js/app/wizard.js?v=0.12.0"></script>
-<script src="js/app/sidecar.js?v=0.12.0"></script>
-<script src="js/app/features.js?v=0.12.0"></script>
-<script src="js/app/styleanchor.js?v=0.12.0"></script>
-<script src="js/app/painter.js?v=0.12.0"></script>
-<script src="js/app/video.js?v=0.12.0"></script>
-<script src="js/app/turn.js?v=0.12.0"></script>
-<script src="js/app/round.js?v=0.12.0"></script>
-<script src="js/app/render.js?v=0.12.0"></script>
-<script src="js/app/layout.js?v=0.12.0"></script>
-<script src="js/app/settings.js?v=0.12.0"></script>
-<script src="js/app/prefsui.js?v=0.12.0"></script>
-<script src="js/app.js?v=0.12.0"></script>
+<script src="js/app/core.js?v=0.12.1"></script>
+<script src="js/app/branch.js?v=0.12.1"></script>
+<script src="js/app/models.js?v=0.12.1"></script>
+<script src="js/app/library.js?v=0.12.1"></script>
+<script src="js/app/shelf.js?v=0.12.1"></script>
+<script src="js/app/backup.js?v=0.12.1"></script>
+<script src="js/app/importer.js?v=0.12.1"></script>
+<script src="js/app/cards.js?v=0.12.1"></script>
+<script src="js/app/wizard.js?v=0.12.1"></script>
+<script src="js/app/sidecar.js?v=0.12.1"></script>
+<script src="js/app/features.js?v=0.12.1"></script>
+<script src="js/app/styleanchor.js?v=0.12.1"></script>
+<script src="js/app/painter.js?v=0.12.1"></script>
+<script src="js/app/video.js?v=0.12.1"></script>
+<script src="js/app/turn.js?v=0.12.1"></script>
+<script src="js/app/round.js?v=0.12.1"></script>
+<script src="js/app/render.js?v=0.12.1"></script>
+<script src="js/app/layout.js?v=0.12.1"></script>
+<script src="js/app/settings.js?v=0.12.1"></script>
+<script src="js/app/prefsui.js?v=0.12.1"></script>
+<script src="js/app.js?v=0.12.1"></script>
 <!-- PWA 注册：只在 https / localhost 下起作用（file:// 自动跳过），不依赖 IR，所以放在 app.js 之后 -->
-<script src="js/pwa.js?v=0.12.0"></script>
+<script src="js/pwa.js?v=0.12.1"></script>
 </body>
 </html>

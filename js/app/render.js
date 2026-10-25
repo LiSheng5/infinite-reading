@@ -31,7 +31,7 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'reason-toggle';
-    btn.innerHTML = '<span class="reason-caret">▸</span><span class="reason-label">思考链</span>';
+    btn.innerHTML = '<span class="reason-caret">' + A.icon('chev') + '</span><span class="reason-label">思考链</span>';
     const panel = document.createElement('div');
     panel.className = 'reason-panel';
     const body = document.createElement('div');
@@ -53,7 +53,7 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'reason-toggle';
-    btn.innerHTML = '<span class="reason-caret">▸</span><span class="reason-label">思考中…</span>';
+    btn.innerHTML = '<span class="reason-caret">' + A.icon('chev') + '</span><span class="reason-label">思考中…</span>';
     const panel = document.createElement('div');
     panel.className = 'reason-panel';
     const body = document.createElement('div');
@@ -137,7 +137,7 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn primary';
-    btn.textContent = '▶ 开始第一幕';
+    btn.innerHTML = A.icon('play', 'ic-l') + '开始第一幕';
     btn.onclick = () => {
       if (S.busy) { toast('正在生成中，等这一步结束'); return; }
       A.runOpening();
@@ -357,8 +357,9 @@
     row.className = 'img-alt-row';
     const cap = document.createElement('span');
     cap.className = 'img-alt';
-    cap.textContent = '▶ ' + (e.alt || '场景视频') + (e.duration ? ' · ' + e.duration + 's' : '')
-      + (e.videoOmitted ? ' · 视频未随备份导出' : '');
+    cap.appendChild(A.iconEl('play', 'ic-l'));
+    cap.appendChild(document.createTextNode((e.alt || '场景视频') + (e.duration ? ' · ' + e.duration + 's' : '')
+      + (e.videoOmitted ? ' · 视频未随备份导出' : '')));
     cap.title = '点击在右侧舞台播放';
     cap.onclick = selectVideo; row.appendChild(cap);
     if (!e.videoId && e.remoteUrl) {
@@ -380,10 +381,11 @@
     d.className = 'bubble bubble-player bubble-agent';
     const tag = document.createElement('div');
     tag.className = 'agent-note';
-    tag.textContent = '💠 AI 主动找你'
+    tag.appendChild(A.iconEl('spark', 'ic-l'));
+    tag.appendChild(document.createTextNode('AI 主动找你'
       + (e.trigger ? '（' + e.trigger + '）' : '')
       + (e.reason ? ' · ' + e.reason : '')
-      + (e.ts ? ' · ' + fmtTime(e.ts) : '');
+      + (e.ts ? ' · ' + fmtTime(e.ts) : '')));
     d.appendChild(tag);
     const body = document.createElement('div');
     body.textContent = e.text || '';
@@ -427,7 +429,7 @@
         const rb = document.createElement('button');
         rb.className = 'mini-btn';
         rb.textContent = '↻ 重试';
-        rb.title = '换一种不同的发展（旧版留在分支里，可用 ‹ › 切回）';
+        rb.title = '换一种不同的发展（旧版留在分支里，可用上一条 / 下一条分支切回）';
         rb.onclick = A.retryLast;
         tools.appendChild(rb);
       }
@@ -435,13 +437,13 @@
         const nav = document.createElement('span');
         nav.className = 'version-nav';
         const prev = document.createElement('button');
-        prev.className = 'mini-btn'; prev.textContent = '‹'; prev.title = '上一条分支';
+        prev.className = 'mini-btn'; prev.innerHTML = A.icon('chev-l'); prev.title = '上一条分支'; prev.setAttribute('aria-label', '上一条分支');
         prev.onclick = () => A.switchSiblingFromBubble(e.nid, -1);
         const label = document.createElement('span');
         label.className = 'version-label';
         label.textContent = (sibs.indexOf(e.nid) + 1) + '/' + sibs.length;
         const next = document.createElement('button');
-        next.className = 'mini-btn'; next.textContent = '›'; next.title = '下一条分支';
+        next.className = 'mini-btn'; next.innerHTML = A.icon('chev'); next.title = '下一条分支'; next.setAttribute('aria-label', '下一条分支');
         next.onclick = () => A.switchSiblingFromBubble(e.nid, 1);
         nav.appendChild(prev); nav.appendChild(label); nav.appendChild(next);
         tools.appendChild(nav);
