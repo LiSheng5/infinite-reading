@@ -113,52 +113,21 @@
   }
 
   // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
-  // UI-3：模型库 profiles[] 同样走这把刀（默认不带 Key 的语义不变，只是覆盖新增的 profiles）
+  // 阶段 2：打包逻辑抽到 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
   function buildBackupPack(stripKeys) {
-    const s = clone(S.settings);
-    if (stripKeys) {
-      ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
-      if (Array.isArray(s.profiles)) s.profiles.forEach(p => { if (p) p.apiKey = ''; });
-    }
-    return {
-      format: 'ir-backup', schema: 1, app: '无限阅读 v0.12.1',
-      exportedAt: Date.now(),
-      settings: s,
-      userProfile: Store.loadUserProfile(),
-      stories: Store.listStories().map(it => Store.loadStory(it.id)).filter(Boolean),
-    };
+    return IR.BackupPack.buildBackupPack(
+      S.settings,
+      Store.loadUserProfile(),
+      Store.listStories().map(it => Store.loadStory(it.id)).filter(Boolean),
+      stripKeys
+    );
   }
 
-  /* 「带原图备份」= 一个 zip 里放两样东西：
+  /* 「带原图备份」= 一个 zip 里放两样东西（打包细节见 src/core/backupPack.ts 头注）：
    *   ir-backup.json      与普通备份完全同款（schema 2 只多一份 images 清单）
-   *   images/0001.png …   原图按二进制原样存放
-   * 为什么不把原图 base64 塞进 JSON：大图转 base64 体积涨约 1/3，还会在内存里堆成巨型字符串；
-   * zip 装的是原始字节，体积最省，导出 / 导入都不容易把内存打爆。代价是 .zip 不能直接肉眼查看。 */
-  const IMAGE_EXT = {
-    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp',
-    'image/gif': 'gif', 'image/avif': 'avif', 'image/svg+xml': 'svg',
-  };
-
+   *   images/0001.png …   原图按二进制原样存放（不转 base64） */
   async function buildBackupZip(pack, onProgress) {
-    // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份。
-    // §0：视频本体不进备份（体积），只留封面——封面在 scene / log 的 thumb 里随 json 走。
-    const ids = Array.from(Store.knownImageIds()).filter(id => !/^vid:/.test(String(id)));
-    const files = [];
-    const manifest = [];
-    let bytes = 0;
-    for (let i = 0; i < ids.length; i++) {
-      const blob = await Store.getImage(ids[i]);
-      if (blob && blob.size) {
-        const path = 'images/' + String(manifest.length + 1).padStart(4, '0') + '.' + (IMAGE_EXT[blob.type] || 'bin');
-        files.push({ name: path, data: blob });
-        manifest.push({ id: ids[i], path: path, type: blob.type || 'application/octet-stream', size: blob.size });
-        bytes += blob.size;
-      }
-      if (onProgress) onProgress(i + 1, ids.length, bytes);
-    }
-    const body = Object.assign({}, pack, { schema: 2, images: manifest });
-    files.unshift({ name: 'ir-backup.json', data: JSON.stringify(body, null, 1) });
-    return { blob: await IR.Zip.build(files), count: manifest.length, bytes: bytes };
+    return IR.BackupPack.buildBackupZip(pack, onProgress);
   }
 
   async function doBackupAll() {
@@ -207,11 +176,8 @@
   }
 
   async function applyBackupImport(obj, zipEntries) {
-    const stories = (Array.isArray(obj.stories) ? obj.stories : []).filter(s => s && s.id);
-    // 带原图的备份：清单在正文里，图片本体在同包的 images/*（见 buildBackupZip）
-    const manifest = Array.isArray(obj.images) ? obj.images.filter(x => x && x.id && x.path) : [];
-    const pending = zipEntries ? manifest.filter(x => zipEntries.has(x.path)) : [];
-    const missing = manifest.length - pending.length;
+    // 阶段 2：数据校验/清单过滤抽到 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
+    const { stories, pending, missing } = IR.BackupPack.parseBackup(obj, zipEntries);
     if (!stories.length && !obj.settings) { toast('备份文件里没有可还原的内容', true); return; }
     const ok = await irConfirm(
       '导入备份：还原 ' + stories.length + ' 个故事'
@@ -300,15 +266,9 @@
     return /\.zip$/.test(n) || t === 'application/zip' || t === 'application/x-zip-compressed' || t === 'multipart/x-zip';
   }
 
-  // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况
+  // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况（纯逻辑在 src/core/backupPack.ts）
   function pickBackupJson(entries) {
-    if (entries.has('ir-backup.json')) return entries.get('ir-backup.json');
-    let best = null;
-    for (const [name, blob] of entries) {
-      if (!/(^|\/)ir-backup\.json$/i.test(name)) continue;
-      if (!best || name.length < best.name.length) best = { name: name, blob: blob };
-    }
-    return best ? best.blob : null;
+    return IR.BackupPack.pickBackupJson(entries);
   }
 
   // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
@@ -360,38 +320,9 @@
       return;
     }
     // 完整档案：原样续玩
-    const st = Store.newStory({
-      title: (obj.title || '导入的故事') + '（导入）',
-      premise: obj.premise || '',
-      mode: obj.mode || 'choice',
-      styleTone: obj.styleTone || '',
-      world: obj.world || {},
-      styleCard: obj.styleCard || null,
-      rollingStyle: obj.rollingStyle || null,
-      characterCard: obj.characterCard || null,
-      userProfile: obj.userProfile || [],
-      painterThread: obj.painterThread || [],
-    });
-    st.log = Array.isArray(obj.log) ? obj.log : [];
-    st.messages = Array.isArray(obj.messages) ? obj.messages : [];
-    st.summaries = Array.isArray(obj.summaries) ? obj.summaries : [];
-    st.turn = obj.turn || 0;
-    st.lastSceneSummary = obj.lastSceneSummary || '';
-    st.scenes = (obj.images || []).map((im, i) => ({
-      id: im.id || ('sc-imp' + i), alt: im.alt || '', prompt: im.prompt || '', promptRaw: im.promptRaw || '',
-      aspect: im.aspect || '', width: im.width || 0, height: im.height || 0,
-      // 视频条目：只随包带封面（videoOmitted），本体没导出——导入后显示「视频未随备份导出」
-      kind: im.kind || undefined, videoOmitted: im.videoOmitted || undefined,
-      mode: im.mode || undefined, duration: im.duration || undefined,
-      // 导入档案不可信（审查 中危 #12）：thumb 白名单只放行 data:/blob:，坏数据不进存储
-      thumb: Store.safeThumb(im.thumb), src: im.src || null, ts: Date.now(),
-    }));
-    st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
-    // UI-3 §3.4：本对话偏好随包导入（只有 profileId + 显示用标签；凭证在导出侧已剥）。
-    // 本机没有该 profile 时 resolveChatCfg 自动回退默认，本对话设置面板会提示。
-    if (obj.prefs && typeof obj.prefs === 'object') st.prefs = Store.sanitizePrefsSafe(obj.prefs);
-    st.tree = obj.tree ? clone(obj.tree) : null;   // full 包带的分支树（§5⑧）
-    IR.Tree.ensure(st);                            // 导入后建 / 校验树（无树旧包 → 线性链）
+    // 阶段 2：story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack，与 0.12.1 逐字一致），
+    // 这里只留落盘与界面跳转
+    const st = IR.BackupPack.storyFromPack(obj);
     Store.saveStory(st);
     A.showShelf();                       // 导入即进书架，能直接看到新卡片
     // 档案里带的原图（别人导出时勾了「附带原图」）：转成 Blob 存进 IndexedDB，之后照常显示原图
