@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 对比度护栏（UI-1 §6.1）：解析 css/style.css 的 :root 自定义属性，
+ * 对比度护栏（UI-1 §6.1）：解析 css/tokens.css 的 :root 自定义属性（阶段 3 起令牌真源），
  * 按「令牌对」清单计算 WCAG 对比度；不达标 / 令牌缺失 → exit 1。
  * 零依赖（纯 Node）。带透明度的色值先叠到其底色上再算。
  *
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CSS = readFileSync(join(ROOT, 'css', 'style.css'), 'utf8');
+const CSS = readFileSync(join(ROOT, 'css', 'tokens.css'), 'utf8');
 
 /* ---------------- :root 令牌 ---------------- */
 
@@ -176,7 +176,7 @@ for (const p of PAIRS) {
   }
 }
 
-console.log('UI-1 对比度检查（css/style.css :root）');
+console.log('UI-1 对比度检查（css/tokens.css :root）');
 console.table(rows);
 
 if (failed) {

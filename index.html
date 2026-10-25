@@ -16,7 +16,10 @@
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
      旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
 
+<!-- 样式三层：令牌（css/tokens.css）→ 屏幕样式（css/style.css）→ 动效模块（css/motion.css，最后加载：档位政策与暂停规则优先） -->
+<link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/motion.css">
 </head>
 <body>
 <!-- ========== 图标库（手绘 SVG sprite）：24×24 网格 · 1.6 描边 · currentColor。

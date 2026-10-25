@@ -8,123 +8,9 @@
 
    本文件只负责样式：结构、类名与 JS 逻辑均保持原样。 */
 
-/* ==================== 设计令牌（唯一改色的地方） ==================== */
-:root {
-  color-scheme: light;
-
-  /* 底 · 面 */
-  --bg:            #FFFFFF;   /* 页面与阅读面 */
-  --stage:         #F5F7FA;   /* 舞台底色 */
-  --surface:       #F5F7FA;   /* 卡片、面板、书架行、输入框底 */
-  --surface-2:     #EEF2F7;   /* 抬起来一层：悬停、气泡、弹窗内的次级面 */
-
-  /* 线 */
-  --line:          rgba(11, 15, 25, .10);   /* 分隔线、纯装饰描边 */
-  --line-soft:     rgba(11, 15, 25, .06);
-  --line-strong:   #7D889B;   /* 输入框 / 按钮描边等「需要看得见边界」的地方（≥3:1） */
-
-  /* 文字 */
-  --ink:           #0B0F19;   /* 近黑（微蓝），正文与标题 */
-  --ink-dim:       #5B6678;   /* 次要 */
-  --ink-faint:     #6E7A8C;   /* 仅用于非关键提示 */
-  --ink-hover:     #232B3A;   /* 主按钮（黑底）的悬停态 */
-
-  /* 强调：全站只此一个彩色 */
-  --accent:        #2563EB;   /* 选中态、链接、分支线、进度线、焦点环 */
-  --accent-deep:   #1D4ED8;
-  --accent-soft:   rgba(37, 99, 235, .10);  /* 选中背景、光晕、mark 高亮底 */
-  --accent-line:   rgba(37, 99, 235, .42);
-  --on-accent:     #FFFFFF;
-
-  /* 主按钮：黑底白字（蓝色不填主按钮，只做强调） */
-  --on-ink:        #FFFFFF;
-
-  /* 危险 */
-  --danger:        #C62828;
-  --danger-deep:   #A31F1F;
-  --danger-soft:   rgba(198, 40, 40, .10);
-  --danger-line:   rgba(198, 40, 40, .45);
-  --on-danger:     #FFFFFF;
-
-  /* 阴影（静态值，不参与动画）：白底靠描边 + 轻阴影区分层级 */
-  --shadow-1:      0 1px 2px rgba(11, 15, 25, .08);
-  --shadow-2:      0 8px 24px rgba(11, 15, 25, .12);
-
-  /* 毛玻璃底 */
-  --bg-glass:      rgba(255, 255, 255, .8);
-
-  /* 控件 */
-  --field-bg:      var(--surface);
-  --field-inset:   inset 0 1px 0 rgba(11, 15, 25, .03);
-
-  /* 浅色底上的极淡灰染（悬停 / 分组底） */
-  --hover-tint:    rgba(11, 15, 25, .04);
-  --menu-hover:    rgba(11, 15, 25, .05);
-  --fieldset-tint: rgba(11, 15, 25, .015);
-  --scroll-thumb:  rgba(11, 15, 25, .18);
-
-  /* 图上叠层（图片 / 沉浸场景专用遮罩：这是「图上叠字」的深色遮罩，不是 UI 底色） */
-  --scrim:           rgba(4, 5, 7, .68);
-  --lightbox-bg:     rgba(4, 5, 7, .88);
-  --stage-btn-bg:    rgba(10, 11, 13, .72);
-  --stage-btn-hover: rgba(10, 11, 13, .90);
-  --stage-vignette:  radial-gradient(120% 100% at 50% 45%, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%);
-  --immersive-scrim: linear-gradient(to top, rgba(8,9,11,.97) 0%, rgba(8,9,11,.88) 62%, rgba(8,9,11,0) 100%);
-
-  /* 动效令牌（调手感只改这里；规则里不写死时长） */
-  --dur-fast: 120ms;
-  --dur-base: 220ms;
-  --dur-slow: 420ms;
-  --ease-out: cubic-bezier(.2,.8,.2,1);
-  --ease-spring: cubic-bezier(.34,1.56,.64,1);
-  --ease-inout: cubic-bezier(.65,0,.35,1);
-  /* 循环动画周期（与交互时长分开调） */
-  --loop-busy: 1.4s;
-  --loop-kb: 20s;
-  --loop-ambient: 40s;
-
-  /* 首页无限符号：深蓝 → 浅蓝（两端色；中间过渡靠两层叠加的 opacity） */
-  --inf-deep:      #1E3A8A;
-  --inf-light:     #60A5FA;
-  --loop-inf:      5.5s;      /* 色带流过整个符号一圈的时长 */
-
-  /* 环境光（仅 data-motion="rich"）：白底上的极淡蓝，alpha ≤ .08 */
-  --ambient-glow:
-    radial-gradient(60% 50% at 30% 35%, rgba(37, 99, 235, .08), rgba(37, 99, 235, 0) 70%),
-    radial-gradient(50% 45% at 72% 65%, rgba(37, 99, 235, .06), rgba(37, 99, 235, 0) 70%);
-
-  /* 字体栈（全部系统字体，零远程请求） */
-  --font-body:    "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
-  --font-ui:      system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-title:   "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
-  --font-note:    var(--font-ui);
-  --font-cursive: var(--font-body);
-  --font-en:      var(--font-ui);
-  --font-quote:   var(--font-body);
-  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-
-  /* —— 兼容旧样式里的变量名（其余规则只引用这些，不再出现字面色） —— */
-  --paper:          var(--bg);
-  --paper-2:        var(--surface);
-  --paper-3:        var(--stage);
-  --btn-bg:         var(--surface-2);
-  --btn-ink:        var(--ink);
-  --btn-line:       var(--line-strong);
-  --note-paper:     transparent;
-  --note-shadow:    none;
-  --note-rim:       transparent;
-  --note-fiber-a:   0;
-  --note-grain-a:   0;
-  --bubble-ink:          var(--ink);
-  --bubble-ink-dim:      var(--ink-dim);
-  --bubble-accent:       var(--accent);
-  --bubble-accent-soft:  var(--accent-soft);
-  --bubble-accent-line:  var(--accent-line);
-  --vig-in:         transparent;
-  --vig-out:        transparent;
-  --grain-opacity:  0;
-  --grain-blend:    normal;
-}
+/* ==================== 设计令牌 ====================
+   令牌真源在 css/tokens.css（:root + 颜色/字体/圆角/动效参数），
+   动效档位与 @keyframes 在 css/motion.css。本文件只消费 var(--*)，不定义令牌。 */
 
 /* ==================== 基础 ==================== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -177,7 +63,7 @@ a {
   color: var(--accent);
   text-decoration: none;
   position: relative;
-  transition: color var(--dur-base) var(--ease-out);
+  transition: color var(--m-t-color-base) var(--ease-out);
 }
 a::after {
   content: "";
@@ -190,7 +76,7 @@ a::after {
   transform-origin: left center;
   /* 极简：一条直线下划线 */
   border-radius: 999px;
-  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  transition: opacity var(--m-dur-base) var(--ease-out), transform var(--m-t-shift-base) var(--ease-out);
 }
 a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
 
@@ -210,7 +96,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   padding: 9px 18px;
   cursor: pointer;
   box-shadow: none;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
 }
 .btn:hover {
   color: var(--ink);
@@ -258,7 +144,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   padding: 0 10px;
   white-space: nowrap;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .hud-btn:hover { color: var(--ink); border-color: var(--line); background: var(--hover-tint); }
 .hud-icon { font-size: 16px; }
@@ -272,7 +158,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   border-radius: var(--radius);
   padding: 4px 10px;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
 }
 .mini-btn:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); transform: translateY(-1px); }
 .mini-btn:active { transform: scale(.97); }
@@ -299,80 +185,25 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   margin-top: 8px;
 }
 
-/* ==================== 动效基座（v0.7） ====================
-   动画属性白名单：transform / opacity / filter / stroke-dashoffset / stroke-dasharray。
-   不得动画 width / height / top / left / margin / box-shadow 等触发重排的属性
-   （eval/tokens-test.js 把这条变成可执行检查）。阴影只做静态值。
-   时长 / 缓动只用动效令牌（--dur-* / --ease-*），调手感只改 :root。 */
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes leafIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes leafInX {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-@keyframes breathe { 50% { opacity: 0.5; } }
-/* 图片 blur-up：缩略图 → 原图就绪时的去模糊（filter 是唯一例外，同时最多 1 张在动） */
-@keyframes blurUp {
-  from { filter: blur(12px); }
-  to   { filter: blur(0); }
-}
-/* 顶栏忙碌进度线：不确定进度的横向流动（只动 transform） */
-@keyframes busyFlow {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(290%); }
-}
-/* 舞台当前图：极缓慢 Ken Burns（仅 rich；离屏 / data-paused 暂停） */
-@keyframes kenBurns {
-  from { transform: scale(1); }
-  to   { transform: scale(1.06); }
-}
-/* 环境光漂移（仅 rich）：白底上的极淡蓝缓慢平移 */
-@keyframes ambientDrift {
-  0%   { transform: translate(-3%, -2%) scale(1); }
-  50%  { transform: translate(3%, 2%) scale(1.06); }
-  100% { transform: translate(-3%, -2%) scale(1); }
-}
+/* ==================== 动效基座（阶段 3 起走统一 motion 模块） ====================
+   @keyframes、档位政策（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
+   三档行为的真源声明在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。
+   这里只写「哪个元素用哪个动画」：
+   animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环加 var(--m-iter)）；
+   transition 的时长走 var(--m-t-*)（位移 / 颜色）或 var(--m-dur-*)（透明度），
+   off 档自动收成 80ms 透明度变化、0ms 其余——不再需要全局 !important 改写。 */
 
 .start-card, .shelf-wrap, .story-card, .anchor-card,
 .chat-note, .reason-block, .thumb {
-  animation: leafIn var(--dur-slow) var(--ease-out) both;
+  animation: var(--an-leafIn) var(--m-dur-slow) var(--ease-out) both;
 }
 
 /* 流式增量：新到的文字包在 span.delta 里逐段淡入（仅 rich；standard/off 由 JS 不建 span） */
-.delta { animation: fadeIn var(--dur-fast) var(--ease-out) both; }
+.delta { animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both; }
 /* standard 档：不对逐段做动画，只对整个流式气泡做一次淡入 */
-html[data-motion="standard"] .bubble-live { animation: fadeIn var(--dur-base) var(--ease-out) both; }
+html[data-motion="standard"] .bubble-live { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 
-/* ==================== 动效强度（html[data-motion="off|standard|rich"]） ====================
-   off：无位移、无循环，最多保留 ≤80ms 的透明度变化。
-   standard：淡入淡出与短位移（≤160ms）；无循环动画（忙碌进度线改透明度呼吸）；
-             无 Ken Burns、无环境光、无逐段文字淡入。
-   rich：本任务书列出的全部动效（默认）。
-   html[data-motion] 由 js/motion.js 解析、app.js 写入；
-   下面的 prefers-reduced-motion 块保留为「无 JS 时的兜底」，与 data-motion 规则不冲突。 */
-html[data-motion="off"] *,
-html[data-motion="off"] *::before,
-html[data-motion="off"] *::after {
-  animation-name: fadeIn !important;
-  animation-duration: 80ms !important;
-  animation-iteration-count: 1 !important;
-  animation-delay: 0s !important;
-  transition-property: opacity !important;
-  transition-duration: 80ms !important;
-  transition-delay: 0s !important;
-}
-html[data-motion="standard"] *,
-html[data-motion="standard"] *::before,
-html[data-motion="standard"] *::after {
-  animation-duration: 160ms !important;
-  animation-iteration-count: 1 !important;
-}
-/* 同屏同时运行的循环动画 ≤ 3 个：#busy-line + Ken Burns + 环境光（其余一律单次） */
-
-/* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐） ---- */
+/* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐）：三档行为见 ANIMATIONS.busyFlow ---- */
 #busy-line {
   position: absolute; left: 0; right: 0; bottom: -1px;
   height: 2px;
@@ -386,26 +217,27 @@ html[data-motion="standard"] *::after {
   height: 100%;
   width: 36%;
   background: var(--accent);
-  animation: busyFlow var(--loop-busy) var(--ease-inout) infinite;
+}
+/* rich：横向流动循环；standard：单次淡入（无循环）；off：静态线，无动画 */
+html[data-motion="rich"] #busy-line::after {
+  animation: var(--an-busyFlow) var(--loop-busy) var(--ease-inout) var(--m-iter);
 }
 html[data-motion="standard"] #busy-line::after {
   width: 100%;
-  animation: breathe var(--dur-slow) var(--ease-inout) infinite !important;
+  animation: var(--an-busyFlow) var(--m-dur-base) var(--ease-out) both;
 }
 html[data-motion="off"] #busy-line::after {
   width: 100%;
-  animation: none !important;
-  transform: none !important;
 }
 
 /* ---- 舞台图片：blur-up（原图就绪） / 交叉淡入（换画） / Ken Burns（仅 rich） ---- */
 html[data-motion="rich"] .stage-img.has-art {
-  animation: kenBurns var(--loop-kb) var(--ease-inout) infinite alternate;
+  animation: var(--an-kenBurns) var(--loop-kb) var(--ease-inout) var(--m-iter) alternate;
 }
 html[data-motion="rich"] .stage-img.has-art.is-offscreen { animation-play-state: paused; }
 /* blur-up / 交叉淡入进行中压过 Ken Burns（同级靠后生效；同时最多 1 张在动 = 舞台当前图） */
-html[data-motion] .stage-img.blur-up { animation: blurUp var(--dur-slow) var(--ease-out) both; }
-html[data-motion] .stage-img.fade-swap { animation: fadeIn var(--dur-slow) var(--ease-out) both; }
+html[data-motion] .stage-img.blur-up { animation: var(--an-blurUp) var(--m-dur-slow) var(--ease-out) both; }
+html[data-motion] .stage-img.fade-swap { animation: var(--an-fadeIn) var(--m-dur-slow) var(--ease-out) both; }
 
 /* ---- 环境光（仅 rich）：舞台背后与空状态下的一层极淡蓝（装饰层，不吃事件） ---- */
 html[data-motion="rich"] .stage-wrap::before {
@@ -413,31 +245,9 @@ html[data-motion="rich"] .stage-wrap::before {
   position: absolute;
   inset: -12%;
   background: var(--ambient-glow);
-  animation: ambientDrift var(--loop-ambient) var(--ease-inout) infinite;
+  animation: var(--an-ambientDrift) var(--loop-ambient) var(--ease-inout) var(--m-iter);
   pointer-events: none;
   z-index: 0;
-}
-
-/* 页面不可见时暂停一切循环动画（app.js 写 data-paused） */
-html[data-paused] *,
-html[data-paused] *::before,
-html[data-paused] *::after {
-  animation-play-state: paused !important;
-}
-
-/* 分支页打开时暂停底下聊天页的循环动画（UI-4 §4.5：同屏循环 ≤3，都留给分支页自己） */
-html[data-branch="open"] #screen-game *,
-html[data-branch="open"] #screen-game *::before,
-html[data-branch="open"] #screen-game *::after {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001s !important;
-  }
 }
 
 /* ==================== 开始页 ====================
@@ -481,12 +291,10 @@ html[data-branch="open"] #screen-game *::after {
   color: var(--inf-light);
   opacity: var(--t, .5);
 }
-@keyframes infWave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
-/* 只有「丰富」档循环；其余档停在静态渐变（全局 off / standard 规则会改写 animation，这里显式压住） */
-html[data-motion] .inf .c::after { animation: none !important; }
+/* 只有「丰富」档循环；其余档停在静态渐变（infWave 的三档声明见 ANIMATIONS.infWave） */
 html[data-motion="rich"] .inf .c::after {
-  animation: infWave var(--loop-inf) var(--ease-inout) infinite !important;
-  animation-delay: calc(var(--x, 0) * -0.14s) !important;
+  animation: var(--an-infWave) var(--loop-inf) var(--ease-inout) var(--m-iter);
+  animation-delay: calc(var(--x, 0) * var(--loop-inf-step) * -1);
 }
 
 /* 继续上次：主操作（黑底白字），带最近那个故事的名字 */
@@ -504,7 +312,7 @@ html[data-motion="rich"] .inf .c::after {
   border: 1px solid var(--ink);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transition: background-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
 }
 .start-continue:hover { background: var(--ink-hover); transform: translateY(-1px); }
 .start-continue:active { transform: scale(.985); }
@@ -545,7 +353,7 @@ html[data-motion="rich"] .inf .c::after {
   border-radius: var(--radius);
   padding: 7px 12px;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .link-btn:hover { color: var(--accent); background: var(--accent-soft); }
 #screen-start .version {
@@ -643,7 +451,7 @@ html[data-motion="rich"] .inf .c::after {
   border-bottom: 1px solid var(--line-soft);
   border-left: 3px solid transparent;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
+  transition: background var(--m-t-color-fast) var(--ease-out);
 }
 .shelf-row:hover { background: var(--hover-tint); }
 .shelf-row:focus-visible { outline: 2px solid var(--accent-line); outline-offset: -2px; }
@@ -676,19 +484,17 @@ html[data-motion="rich"] .inf .c::after {
   width: 40px; height: 40px;
   border: none; background: transparent; border-radius: var(--radius);
   color: var(--ink-dim); font-size: 18px; line-height: 1; cursor: pointer;
-  opacity: 0; transition: opacity var(--dur-fast) var(--ease-out);
+  opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out);
 }
 .shelf-row:hover .shelf-row-more, .shelf-row-more:focus-visible { opacity: 1; }
 @media (hover: none) { .shelf-row-more { opacity: 1; } }   /* 触屏常显 */
 .row-menu { top: calc(100% - 8px); right: 8px; }
 .shelf-more { display: block; margin: 14px auto 6px; }
 
-/* 行进入：错峰淡入上移（rich 档启用，总时长封顶；standard/off 由 data-motion 统一压成淡入） */
-@keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-html[data-motion="rich"] .shelf-row.row-in { animation: rowIn var(--dur-base) var(--ease-out) both; }
+/* 行进入：错峰淡入上移（rowIn 只在 rich 跑，见 ANIMATIONS.rowIn） */
+html[data-motion="rich"] .shelf-row.row-in { animation: var(--an-rowIn) var(--m-dur-base) var(--ease-out) both; }
 /* 标题打字机结束后的淡入替换（standard 档） */
-@keyframes titleSwap { from { opacity: .25; } to { opacity: 1; } }
-.shelf-row-title.title-swap { animation: titleSwap var(--dur-base) var(--ease-out) both; }
+.shelf-row-title.title-swap { animation: var(--an-titleSwap) var(--m-dur-base) var(--ease-out) both; }
 
 /* 搜索结果（UI-2 §3.5）：标题 + 模式 + 时间 + 至多 2 条片段，命中用 mark 高亮 */
 .shelf-results { display: flex; flex-direction: column; }
@@ -714,11 +520,10 @@ mark {
   border-radius: 3px; padding: 0 1px;
 }
 /* 搜索结果 ↔ 分组列表 交叉淡入（rich 档；standard/off 自动降级为短淡入；fadeIn 见动效基座） */
-.fade-swap { animation: fadeIn var(--dur-base) var(--ease-out) both; }
+.fade-swap { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 
 /* 搜索结果点进对话：命中消息的短暂高亮（蓝色描边淡出，§3.7）
    叠加层画描边、只动 opacity（动效等级：只动合成层属性） */
-@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 .hit-flash { position: relative; }
 .hit-flash::after {
   content: "";
@@ -726,7 +531,7 @@ mark {
   border: 2px solid var(--accent-line);
   border-radius: var(--radius);
   pointer-events: none;
-  animation: fadeOut 1.1s var(--ease-out) both;
+  animation: var(--an-fadeOut) var(--m-dur-flash) var(--ease-out) both;
 }
 
 /* 空状态（UI-2 §2.2）：一句话 + 「＋ 新建」大按钮 */
@@ -801,7 +606,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   z-index: 40;
-  animation: fadeIn var(--dur-fast) var(--ease-out) both;
+  animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both;
 }
 .menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 .menu-item {
@@ -899,7 +704,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: 6px;
   border: 1px solid var(--line);
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+  transition: border-color var(--m-t-color-fast) var(--ease-out), opacity var(--m-dur-fast) var(--ease-out);
 }
 .bubble-image img:hover { border-color: var(--accent-line); opacity: .9; }
 .img-alt-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0; }
@@ -916,7 +721,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.img-alt-row .mini-btn { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); flex: 0 0 auto; }
+.img-alt-row .mini-btn { opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); flex: 0 0 auto; }
 .bubble-image:hover .mini-btn, .bubble-image:focus-within .mini-btn { opacity: 1; }
 .img-superseded {
   font-family: var(--font-ui);
@@ -1062,10 +867,10 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   cursor: pointer; user-select: none;
 }
 .reason-toggle:hover { color: var(--accent); }
-.reason-caret { display: inline-block; font-size: 10px; transition: transform var(--dur-base) var(--ease-out); }
+.reason-caret { display: inline-block; font-size: 10px; transition: transform var(--m-t-shift-base) var(--ease-out); }
 .reason-block.open .reason-caret { transform: rotate(90deg); }
 /* max-height 不做动画（触发布局）：展开是瞬时撑开 + 透明度过渡 */
-.reason-panel { max-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.reason-panel { max-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); }
 .reason-block.open .reason-panel { max-height: 60vh; overflow-y: auto; opacity: 1; }
 .reason-text {
   margin-top: 6px;
@@ -1108,7 +913,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: var(--radius);
   padding: 10px 14px;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .choice-btn:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
 
@@ -1148,7 +953,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: 6px;
   padding: 4px 8px;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .tool-btn:hover { color: var(--ink); background: var(--accent-soft); }
 .badge {
@@ -1175,7 +980,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   border-radius: var(--radius);
   padding: 0 14px;
   outline: none;
-  transition: border-color var(--dur-base) var(--ease-out);
+  transition: border-color var(--m-t-color-base) var(--ease-out);
 }
 #player-input::placeholder { color: var(--ink-faint); }
 #player-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -1197,7 +1002,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   font-size: 12.5px;
   padding: 0 10px;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn:hover { color: var(--ink); }
@@ -1242,7 +1047,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   width: 1px;
   transform: translateX(-50%);
   background: var(--line);
-  transition: background-color var(--dur-base) var(--ease-out);
+  transition: background-color var(--m-t-color-base) var(--ease-out);
 }
 .splitter:hover::after, .splitter.dragging::after { background: var(--accent-line); }
 
@@ -1271,7 +1076,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
   filter: blur(36px) brightness(.45);
   transform: scale(1.06);
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  transition: opacity var(--m-dur-slow) var(--ease-out);
   pointer-events: none;
   z-index: 0;
 }
@@ -1301,7 +1106,7 @@ a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-c
    有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
 html[data-motion="standard"] .stage-empty,
 html[data-motion="rich"] .stage-empty {
-  animation: fadeIn var(--dur-base) var(--ease-out) both;
+  animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both;
 }
 .stage-pill { position: absolute; top: 12px; left: 12px; z-index: 4; }
 /* 视频生成进度：与作画胶囊错开一行，两个任务可以同时在跑 */
@@ -1320,7 +1125,7 @@ html[data-motion="rich"] .stage-empty {
   z-index: 4;
   display: flex; gap: 6px;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  transition: opacity var(--m-dur-fast) var(--ease-out);
 }
 .stage-wrap:hover .stage-actions,
 .stage-wrap:focus-within .stage-actions { opacity: 1; }
@@ -1334,7 +1139,7 @@ html[data-motion="rich"] .stage-empty {
   border-radius: var(--radius);
   cursor: pointer;
   backdrop-filter: blur(8px);
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
 }
 .stage-btn:hover { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
 .stage-exit {
@@ -1365,23 +1170,32 @@ html[data-motion="rich"] .stage-empty {
   border: 1px solid var(--line);
   cursor: pointer;
   opacity: .55;
-  transition: opacity var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+  transition: opacity var(--m-dur-base) var(--ease-out), border-color var(--m-t-color-base) var(--ease-out);
 }
 .thumb:hover { opacity: 1; }
 .thumb.active { border-color: var(--accent); opacity: 1; }
-/* 视频缩略图：更实的描边 + 右下角 ▶ 角标（img 上没法画 ::after，包一层 .thumb-wrap） */
+/* 视频缩略图：更实的描边 + 右下角播放角标（img 上没法画 ::after，包一层 .thumb-wrap）。
+   角标自己画三角（border 技法），不用「▶」字符——部分系统会把符号渲染成彩色 emoji（§6.3）。 */
 .thumb.is-video { border-color: var(--line-strong); }
 .thumb.is-video.active { border-color: var(--accent); }
 .thumb-wrap { position: relative; flex: 0 0 auto; display: inline-flex; }
 .thumb-wrap.is-video::after {
-  content: '▶';
-  position: absolute; right: 3px; bottom: 2px;
-  font-size: 9px; line-height: 1;
-  color: var(--on-accent);
+  content: '';
+  position: absolute; right: 3px; bottom: 3px;
+  width: 13px; height: 11px;
   background: var(--stage-btn-bg);
   border-radius: 3px;
-  padding: 2px 3px 2px 2px;
   pointer-events: none;
+}
+.thumb-wrap.is-video::before {
+  content: '';
+  position: absolute; right: 7px; bottom: 5.5px;
+  width: 0; height: 0;
+  border-left: 5px solid var(--on-accent);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  pointer-events: none;
+  z-index: 1;
 }
 /* 视频进度胶囊旁的「取消等待」（只停本地等待，云端可能已计费） */
 .video-cancel {
@@ -1470,7 +1284,7 @@ html[data-motion="rich"] .stage-empty {
   max-height: 45vh;
   padding-top: 34px;
   background: var(--immersive-scrim);
-  transition: opacity var(--dur-base) var(--ease-out);
+  transition: opacity var(--m-dur-base) var(--ease-out);
 }
 #screen-game[data-layout="immersive"] .chat-scroll {
   padding: 0 max(18px, calc((100% - 40em) / 2)) 6px;
@@ -1525,7 +1339,7 @@ html[data-motion="rich"] .stage-empty {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-2);
-  animation: leafIn var(--dur-base) var(--ease-spring) both;   /* 入场：弹簧手感 */
+  animation: var(--an-leafIn) var(--m-dur-base) var(--ease-spring) both;   /* 入场：弹簧手感 */
 }
 .modal-card.narrow { width: min(520px, 94vw); }
 .modal-head {
@@ -1584,7 +1398,7 @@ label input, label select {
   border-radius: var(--radius);
   padding: 8px 10px;
   outline: none;
-  transition: border-color var(--dur-base) var(--ease-out);
+  transition: border-color var(--m-t-color-base) var(--ease-out);
 }
 label input:focus, label select:focus {
   border-color: var(--accent-line);
@@ -1603,7 +1417,7 @@ label textarea {
   padding: 8px 10px;
   outline: none;
   resize: vertical;
-  transition: border-color var(--dur-base) var(--ease-out);
+  transition: border-color var(--m-t-color-base) var(--ease-out);
 }
 label textarea:focus { border-color: var(--accent-line); box-shadow: var(--field-inset), 0 0 0 3px var(--accent-soft); }
 label input:disabled { opacity: 0.45; }
@@ -1682,7 +1496,7 @@ label input.inline-num {
   cursor: pointer;
   font-family: var(--font-ui);
   box-shadow: none;
-  transition: border-color var(--dur-base) var(--ease-out), background-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  transition: border-color var(--m-t-color-base) var(--ease-out), background-color var(--m-t-color-base) var(--ease-out), transform var(--m-t-shift-base) var(--ease-out);
 }
 .mode-card b {
   display: block;
@@ -1769,7 +1583,7 @@ label input.inline-num {
   background: var(--paper-2);
   box-shadow: var(--shadow-1);
   cursor: pointer;
-  transition: border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  transition: border-color var(--m-t-color-base) var(--ease-out), transform var(--m-t-shift-base) var(--ease-out);
 }
 .anchor-card:hover { border-color: var(--accent-line); transform: translateY(-2px); box-shadow: var(--shadow-2); }
 .anchor-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-2); }
@@ -1834,7 +1648,7 @@ label input.inline-num {
   z-index: 45;
   pointer-events: none;
   /* 旁白是阅读面本身：不做入场位移动画，避免长文重排时跳动 */
-  animation: leafInX var(--dur-base) var(--ease-spring) both;
+  animation: var(--an-leafInX) var(--m-dur-base) var(--ease-spring) both;
 }
 .toast.error { border-left-color: var(--danger, var(--ink)); color: var(--ink); }
 .toast-close {
@@ -1986,13 +1800,12 @@ fieldset.feature-off legend { color: var(--ink-dim); }
   border: 1px solid var(--line-soft); background: var(--field-bg);
   color: var(--ink-dim); border-radius: var(--radius); cursor: pointer;
   font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em;
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  transition: background var(--m-t-color-fast) var(--ease-out), color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
 }
 .set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: translateX(2px); }
 .set-nav-item.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-deep); }
 .set-panels { min-width: 0; }
-.set-panel { animation: fadeIn var(--dur-slow) var(--ease-out) both; }
+.set-panel { animation: var(--an-fadeIn) var(--m-dur-slow) var(--ease-out) both; }
 .set-panel-title {
   font-family: var(--font-note); font-size: 15px; font-weight: 400;
   letter-spacing: .14em; color: var(--ink-dim); margin: 2px 0 12px;
@@ -2013,9 +1826,8 @@ html[data-motion="off"] .set-panel { animation: none; }
   background: var(--surface); border-left: 1px solid var(--line);
   box-shadow: var(--shadow-2); z-index: 25;   /* 在内容之上、弹窗（.modal z-index 30）之下 */
   display: flex; flex-direction: column;
-  animation: prefsIn var(--dur-base) var(--ease-spring) both;
+  animation: var(--an-prefsIn) var(--m-dur-base) var(--ease-spring) both;
 }
-@keyframes prefsIn { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
 .prefs-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 16px; border-bottom: 1px solid var(--line);
@@ -2073,10 +1885,9 @@ html[data-motion="off"] .set-panel { animation: none; }
     max-height: 76vh; border-left: none;
     border-top: 1px solid var(--line);
     border-radius: var(--radius) var(--radius) 0 0;
-    animation: prefsUp var(--dur-base) var(--ease-spring) both;
+    animation: var(--an-prefsUp) var(--m-dur-base) var(--ease-spring) both;
     padding-bottom: env(safe-area-inset-bottom);
   }
-  @keyframes prefsUp { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
 }
 html[data-motion="off"] .story-prefs { animation: none; }
 
@@ -2107,7 +1918,7 @@ html[data-motion="off"] .story-prefs { animation: none; }
   display: flex; flex-direction: column;
   background: var(--bg);
 }
-.branch-page.enter { animation: fadeIn var(--dur-base) var(--ease-out) both; }
+.branch-page.enter { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 .branch-top {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 14px; border-bottom: 1px solid var(--line);
@@ -2145,8 +1956,7 @@ html[data-motion="off"] .story-prefs { animation: none; }
   fill: none; stroke: var(--accent-line); stroke-width: 2.4;
   stroke-linecap: round; stroke-dasharray: 2 16; opacity: 0;
 }
-html[data-motion="rich"] .branch-flow { opacity: 1; animation: flowLight 3.6s linear infinite; }
-@keyframes flowLight { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+html[data-motion="rich"] .branch-flow { opacity: 1; animation: var(--an-flowLight) var(--loop-flow) var(--ease-linear) var(--m-iter); }
 
 /* —— 节点 —— */
 .branch-node { cursor: pointer; }
@@ -2162,7 +1972,7 @@ html[data-motion="rich"] .branch-flow { opacity: 1; animation: flowLight 3.6s li
 }
 .branch-node.is-head .head-ring { opacity: 1; }
 html[data-motion="rich"] .branch-node.is-head .head-ring {
-  animation: breathe var(--loop-busy) ease-in-out infinite;   /* 循环 2/3 */
+  animation: var(--an-breathe) var(--loop-busy) var(--ease-io) var(--m-iter);   /* 循环 2/3 */
 }
 .branch-node .sel-ring { fill: none; stroke: var(--ink); stroke-width: 2.2; opacity: 0; }
 .branch-node.is-selected .sel-ring { opacity: 1; }
@@ -2171,11 +1981,7 @@ html[data-motion="rich"] .branch-node.is-head .head-ring {
   transform-box: fill-box; transform-origin: center;
 }
 html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
-  animation: nodePulse var(--loop-busy) var(--ease-out) infinite;   /* 循环 3/3 */
-}
-@keyframes nodePulse {
-  0% { opacity: .8; transform: scale(.72); }
-  100% { opacity: 0; transform: scale(1.5); }
+  animation: var(--an-nodePulse) var(--loop-busy) var(--ease-out) var(--m-iter);   /* 循环 3/3 */
 }
 .branch-node .branch-label {
   font-family: var(--font-ui); font-size: 12px; fill: var(--ink-dim);
@@ -2205,7 +2011,7 @@ html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
   width: 360px; flex-shrink: 0; display: flex; flex-direction: column;
   background: var(--surface); border-left: 1px solid var(--line);
   box-shadow: var(--shadow-2);
-  animation: prefsIn var(--dur-base) var(--ease-spring) both;
+  animation: var(--an-prefsIn) var(--m-dur-base) var(--ease-spring) both;
 }
 .branch-panel-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -2267,7 +2073,7 @@ html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
     width: auto; max-height: 62vh; border-left: none;
     border-top: 1px solid var(--line);
     border-radius: var(--radius) var(--radius) 0 0;
-    animation: prefsUp var(--dur-base) var(--ease-spring) both;
+    animation: var(--an-prefsUp) var(--m-dur-base) var(--ease-spring) both;
     padding-bottom: env(safe-area-inset-bottom);
   }
   .history-bar { flex-wrap: wrap; }
@@ -2321,7 +2127,7 @@ html[data-motion="off"] .branch-panel { animation: none; }
   border: 0;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  transition: background-color var(--m-t-color-fast) var(--ease-out), color var(--m-t-color-fast) var(--ease-out);
 }
 #modal-settings .set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: none; }
 #modal-settings .set-nav-item.active { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
@@ -2398,7 +2204,7 @@ html[data-motion="off"] .branch-panel { animation: none; }
   border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
   transform: rotate(-45deg);
   color: var(--ink-dim);
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--m-t-shift-fast) var(--ease-out);
 }
 #modal-settings details[open] > summary::before { transform: rotate(45deg); }
 #modal-settings details.adv > summary:hover,

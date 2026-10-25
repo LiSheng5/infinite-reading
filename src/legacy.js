@@ -59,3 +59,6 @@ import '../js/pwa.js';
 
 // 阶段 1 spike：Svelte 5 设置切片，仅在 ?spike=1 时挂载（默认形态零像素变化，铁律 3）
 import './spike/index.js';
+
+// 阶段 3：基础组件库展示页，仅在 ?ui=1 时挂载（组件库与动效模块的视觉 / 动效自查）
+import './ui/gallery.js';

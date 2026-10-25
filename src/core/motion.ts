@@ -1,18 +1,25 @@
-/* 动效强度解析（UI-1）：纯逻辑，不碰 DOM，Node 可 require。
+/* 统一 motion 模块 · 纯逻辑端（阶段 3，任务书 §6.2）
  *
- *   IR.Motion.resolve(pref, prefersReduced) → 'off' | 'standard' | 'rich'
+ * 这里是动效档位的**语义真源**：
+ *
+ *   Motion.resolve(pref, prefersReduced) → 'off' | 'standard' | 'rich'
  *     pref: 'auto' | 'off' | 'standard' | 'rich'（未知值当 'auto'）
  *     auto  → prefersReduced ? 'off' : 'rich'
  *     显式选择优先于系统偏好（用户知情地选了丰富就尊重）
  *
- * 强度档位的视觉规则见 css/style.css 的 html[data-motion] 规则块；
- * 应用层（app.js）启动时与 prefers-reduced-motion 变化时，
- * 把 resolve 的结果写进 document.documentElement.dataset.motion。 */
+ *   Motion.TIERS —— 三档政策（off / standard / rich 各自允许什么，数字与 css/motion.css 收口一致）
+ *   Motion.LOOP_BUDGET —— 同屏同时运行的循环动画上限（组数；错相多实例按 1 组计）
+ *   Motion.ANIMATIONS —— 每个 @keyframes 三档行为的声明表（none | fade | shift | full | loop）
+ *
+ * 分工：
+ *   · 本文件 = 纯逻辑与声明（Node 可 require，eval/motion-test.js / tokens-test.js 对账）
+ *   · css/motion.css = 档位政策变量（--m-*）与动画名表（--an-*）的 CSS 镜像 + @keyframes 唯一定义点
+ *   · src/ui/motion.js = DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）
+ * 三者由 eval/tokens-test.js 交叉对账：@keyframes 一条不多一条不少、--an-* 逐档可推导。 */
 import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/motion.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+/* ↑ 阶段 2 搬迁自 js/motion.js（IIFE → ES module），阶段 3 扩展出声明表；
+ * 函数体 resolve 逐字未动。模块间现存的 global.IR 惰性互访按铁律保留（见 src/core/ir.ts 头注）。 */
 const global = globalThis as any;
 
   var LEVELS = ['off', 'standard', 'rich'];
@@ -22,8 +29,61 @@ const global = globalThis as any;
     return prefersReduced ? 'off' : 'rich';
   }
 
+  /* 三档政策（§6.2 的可执行形态；off/standard 的收口值同时落在 css/motion.css 的 --m-* 上）：
+   *   maxOpacityMs  透明度变化的时长上限（off 最多 80ms）
+   *   maxShiftMs    短位移的时长上限（standard ≤160ms；off 不许位移 = 0）
+   *   maxColorMs    颜色类过渡的时长上限（off 不许 = 0）
+   *   loops         该档是否允许循环动画
+   *   loopBudget    该档同屏循环动画上限（组） */
+  var TIERS = {
+    off:      { maxOpacityMs: 80,  maxShiftMs: 0,   maxColorMs: 0,   loops: false, loopBudget: 0 },
+    standard: { maxOpacityMs: 160, maxShiftMs: 160, maxColorMs: 220, loops: false, loopBudget: 0 },
+    rich:     { maxOpacityMs: 420, maxShiftMs: 220, maxColorMs: 220, loops: true,  loopBudget: 3 },
+  };
+
+  /* 同屏同时运行的循环动画上限（rich 档）：#busy-line + Ken Burns + 环境光 / 分支页流光 + head 呼吸 + 选中脉冲。
+   * 一组 = 同名 keyframes 的错相多实例（如首页符号逐字符波按 1 组计）。登记见 src/ui/motion.js 的 registerLoop。 */
+  var LOOP_BUDGET = 3;
+
+  /* 逐动画三档行为声明表（与 css/motion.css 的 @keyframes、--an-* 名表一一对应）：
+   *   none  该档不跑
+   *   fade  仅透明度、单次（off 档一切位移/滤镜动画的收容档）
+   *   shift opacity + 短位移、单次（standard 的上限形态）
+   *   full  完整合成层动画、单次（可含 filter / stroke-dash*，仅 rich）
+   *   loop  循环（仅 rich；standard / off 一律收成单次或不跑）
+   * 不变式（motion-test 校验）：off ⊆ {none,fade}；standard ⊆ {none,fade,shift}；
+   * rich ⊆ {none,fade,shift,full,loop}；档次富度 off ≤ standard ≤ rich。 */
+  var ANIMATIONS = {
+    /* —— 单次 —— */
+    fadeIn:       { off: 'fade',  standard: 'fade',  rich: 'fade'  },
+    fadeOut:      { off: 'fade',  standard: 'fade',  rich: 'fade'  },
+    titleSwap:    { off: 'fade',  standard: 'fade',  rich: 'fade'  },
+    leafIn:       { off: 'fade',  standard: 'shift', rich: 'shift' },
+    leafInX:      { off: 'fade',  standard: 'shift', rich: 'shift' },
+    prefsIn:      { off: 'fade',  standard: 'shift', rich: 'shift' },
+    prefsUp:      { off: 'fade',  standard: 'shift', rich: 'shift' },
+    rowIn:        { off: 'none',  standard: 'none',  rich: 'shift' },  // 书架行错峰入场，rich 专档
+    blurUp:       { off: 'fade',  standard: 'fade',  rich: 'full'  },  // 去模糊属滤镜，只在 rich；其余收成淡入
+    /* —— 循环（rich 专档；standard/off 收成淡入或不跑） —— */
+    busyFlow:     { off: 'none',  standard: 'fade',  rich: 'loop'  },  // 忙碌线：standard 单次淡入、rich 流动
+    breathe:      { off: 'none',  standard: 'none',  rich: 'loop'  },  // head 呼吸
+    kenBurns:     { off: 'none',  standard: 'none',  rich: 'loop'  },  // 舞台极缓推拉
+    ambientDrift: { off: 'none',  standard: 'none',  rich: 'loop'  },  // 舞台环境光漂移
+    infWave:      { off: 'none',  standard: 'none',  rich: 'loop'  },  // 首页符号色带（逐字符错相，按 1 组计）
+    flowLight:    { off: 'none',  standard: 'none',  rich: 'loop'  },  // 分支页流光（只挂一条 path）
+    nodePulse:    { off: 'none',  standard: 'none',  rich: 'loop'  },  // 选中节点脉冲
+  };
+
   const __irApi = {
-    Motion: { resolve: resolve, LEVELS: LEVELS.slice() },
+    Motion: {
+      resolve: resolve,
+      LEVELS: LEVELS.slice(),
+      TIERS: TIERS,
+      LOOP_BUDGET: LOOP_BUDGET,
+      ANIMATIONS: ANIMATIONS,
+    },
   };
   registerIR(__irApi);
   export const { Motion } = __irApi;
+  export const TIERS_POLICY = TIERS;
+  export const ANIMATION_SPECS = ANIMATIONS;

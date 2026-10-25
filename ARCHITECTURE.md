@@ -40,7 +40,7 @@
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `js/app/sidecar.js` 的 `initFeatures` 注册） | `attach`、`accept`、`drain` |
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
-| `js/motion.js` | `IR.Motion` | 动效强度解析（**纯逻辑**，Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，不碰 DOM | `resolve` |
+| `src/core/motion.ts`（阶段 2 前为 `js/motion.js`） | `IR.Motion` | 统一 motion 模块的纯逻辑端（Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，并持有 `TIERS` 三档政策、`LOOP_BUDGET` 循环上限与 `ANIMATIONS` 逐动画三档行为声明表，不碰 DOM | `resolve` `TIERS` `ANIMATIONS` `LOOP_BUDGET` |
 | `js/prefs.js` | `IR.Prefs` | 本对话偏好（UI-3 设置分层，**纯逻辑**，Node 可 `require`）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析（profileId → 模型库）、各模式可见控件、导出剥凭证；不碰 DOM / 存储 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
 | `js/titles.js` | `IR.Titles` | 自动标题（**纯逻辑**，UI-2 §3.3）：触发判定、给小模型的 prompt、输出清洗、本地兜底、写回护栏；不碰 DOM / 网络 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
 | `js/search.js` | `IR.Search` | 全文搜索（**纯逻辑**，UI-2 §3.4）：标题 + 全部分支节点的子串检索（NFKC / 小写 / 折叠空白，AND 多词），片段带 `ranges`（**输出零 HTML**）；内存索引 `Map(id → doc)` 不持久化 | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
@@ -243,8 +243,8 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 | **全树图集必须含非当前分支** | `js/tree.js`：`imageIdsOf`（树遍历**唯一实现**）；`store.js`：`imageIdsOf`（扫 log / scenes 后委托树遍历）、`knownImageIds` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径；树遍历只留一份实现，两处漂移过就是删档级事故） |
 | **晚到条目 / 画面带 `nodeId` 校验** | `js/app/painter.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`js/tree.js`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
 | **模型发起的有副作用动作一律走提案** | `js/proposals.js`：`confirm` / `approveSecond` / `deny`；`js/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作 |
-| **动画只动合成层属性** | `css/style.css` 的 `@keyframes` 与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
-| **颜色只从令牌来** | `css/style.css` 的 `:root`（唯一改色的地方）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
+| **动画只动合成层属性** | `css/motion.css` 的 `@keyframes`（全仓唯一定义点）与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`，小面积装饰元素可用 `@property` 注册的自定义属性（注册块须可动画 syntax + `inherits: false`）；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
+| **颜色只从令牌来** | `css/tokens.css` 的 `:root`（唯一改色的地方，阶段 3 起独立成文件）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
 | **自动标题写回护栏**（UI-2 §3.3） | `js/titles.js`：`applyTitle(story, id, title)`；触发在 `js/app/round.js` / `turn.js` 的 `seal` 之后、编排在 `js/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
 | **搜索输出零 HTML、高亮只走 ranges**（UI-2 §3.4/§3.5） | `js/search.js`：`query`（片段 + ranges）；`js/app/shelf.js`：`appendHighlighted`（`createElement('mark')` + `textContent`） | 查询结果只有纯文本与 `[start,end]` 下标；UI 高亮不得拼 `innerHTML`（对抗内容如 `<script>` 原样保留为文本）。搜索文档遍历**全部分支节点**；内存索引不持久化，首次聚焦搜索框惰性构建（分批 ~5 个故事让出主线程），`saveStory` 防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除 |
 | **书架只读索引**（UI-2 §3.1） | `js/store.js`：索引条目 `{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`、`ensureIndexComplete`；`js/app/shelf.js`：`renderShelf` | `renderShelf` 不再对每个故事 `loadStory`；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `ensureIndexComplete` 按需补齐并整体回写一次（幂等）；空标题只显示兜底文案、**不回写存档** |
@@ -259,17 +259,19 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 ### 5.1 设计令牌与动效等级（UI-1）
 
-**颜色**：全站只从 `css/style.css` 的 `:root` 令牌取色——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
+**颜色**：全站只从 `css/tokens.css` 的 `:root` 令牌取色（阶段 3 起独立成文件）——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
 
-**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient`。
+**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与档位参数 `--dur-off/shift/flash/none`。圆角统一 `--radius: 8px`（阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。
 
-**动效强度**：`<html data-motion="off|standard|rich">`，由 `js/motion.js` 的 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`js/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入。
+**动效强度（阶段 3 统一 motion 模块）**：语义真源 `src/core/motion.ts`（`resolve` / `TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画三档声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 档位收口变量 `--m-*` + 动画名表 `--an-*` + 暂停规则），DOM 端 `src/ui/motion.js`（`initMotion` / `registerLoop` 循环预算 / `suspendLoops` 子树挂起）。`<html data-motion="off|standard|rich">` 由 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`js/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入；每个动画的三档行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
 
 | 档 | 行为 |
 |---|---|
 | off | 无位移、无循环；最多保留瞬时（≤80ms）的透明度变化 |
-| standard | 淡入淡出与短位移（≤160ms）；无循环动画（忙碌进度线除外，用透明度呼吸）；无 Ken Burns、无环境光、无逐段文字淡入 |
+| standard | 淡入淡出与短位移（≤160ms）；无循环动画；无 Ken Burns、无环境光、无逐段文字淡入 |
 | rich | 全部动效（默认） |
+
+循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例），登记走 `registerLoop`（超出者挂 `data-loop="wait"` 暂停）；页面不可见 `html[data-paused]` 全局暂停；分支页打开时暂停底下阅读页的循环（旧屏走 `html[data-branch="open"]` 规则，新屏走 `suspendLoops`）。
 
 **本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。
 

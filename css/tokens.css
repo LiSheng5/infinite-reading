@@ -1,0 +1,138 @@
+/* 无限阅读 · 设计令牌（唯一改色的地方）
+   阶段 3 起从 css/style.css 抽出为独立真源：所有颜色 / 字体 / 圆角 / 动效参数只在这里定义，
+   组件与屏幕样式一律 var(--) 消费。eval/tokens-test.js、tools/contrast-check.mjs 都以本文件为准。
+
+   主题：默认即浅色；暗色主题只预留结构（将来加 [data-theme="dark"] 一套令牌即可），本期不实现。
+   字体：不加载任何远程字体——旁白用衬线系统栈，界面用无衬线系统栈，提示词用等宽。
+
+   纪律（tokens-test 可执行检查）：
+   - 颜色字面量只准出现在本文件的 :root 里；其余 CSS / Svelte 样式 / JS 一律走令牌；
+   - 组件里的 SVG 一律 currentColor；
+   - 时长 / 缓动 / 循环周期一律令牌，规则里不写死毫秒数（档位收口见 css/motion.css）。 */
+
+:root {
+  color-scheme: light;
+
+  /* 底 · 面 */
+  --bg:            #FFFFFF;   /* 页面与阅读面 */
+  --stage:         #F5F7FA;   /* 舞台底色 */
+  --surface:       #F5F7FA;   /* 卡片、面板、书架行、输入框底 */
+  --surface-2:     #EEF2F7;   /* 抬起来一层：悬停、气泡、弹窗内的次级面 */
+
+  /* 线 */
+  --line:          rgba(11, 15, 25, .10);   /* 分隔线、纯装饰描边 */
+  --line-soft:     rgba(11, 15, 25, .06);
+  --line-strong:   #7D889B;   /* 输入框 / 按钮描边等「需要看得见边界」的地方（≥3:1） */
+
+  /* 文字 */
+  --ink:           #0B0F19;   /* 近黑（微蓝），正文与标题 */
+  --ink-dim:       #5B6678;   /* 次要 */
+  --ink-faint:     #6E7A8C;   /* 仅用于非关键提示 */
+  --ink-hover:     #232B3A;   /* 主按钮（黑底）的悬停态 */
+
+  /* 强调：全站只此一个彩色 */
+  --accent:        #2563EB;   /* 选中态、链接、分支线、进度线、焦点环 */
+  --accent-deep:   #1D4ED8;
+  --accent-soft:   rgba(37, 99, 235, .10);  /* 选中背景、光晕、mark 高亮底 */
+  --accent-line:   rgba(37, 99, 235, .42);
+  --on-accent:     #FFFFFF;
+
+  /* 主按钮：黑底白字（蓝色不填主按钮，只做强调） */
+  --on-ink:        #FFFFFF;
+
+  /* 危险 */
+  --danger:        #C62828;
+  --danger-deep:   #A31F1F;
+  --danger-soft:   rgba(198, 40, 40, .10);
+  --danger-line:   rgba(198, 40, 40, .45);
+  --on-danger:     #FFFFFF;
+
+  /* 阴影（静态值，不参与动画）：白底靠描边 + 轻阴影区分层级 */
+  --shadow-1:      0 1px 2px rgba(11, 15, 25, .08);
+  --shadow-2:      0 8px 24px rgba(11, 15, 25, .12);
+
+  /* 毛玻璃底 */
+  --bg-glass:      rgba(255, 255, 255, .8);
+
+  /* 控件 */
+  --radius:        8px;   /* 所有圆角统一 8px（阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角） */
+  --field-bg:      var(--surface);
+  --field-inset:   inset 0 1px 0 rgba(11, 15, 25, .03);
+
+  /* 浅色底上的极淡灰染（悬停 / 分组底） */
+  --hover-tint:    rgba(11, 15, 25, .04);
+  --menu-hover:    rgba(11, 15, 25, .05);
+  --fieldset-tint: rgba(11, 15, 25, .015);
+  --scroll-thumb:  rgba(11, 15, 25, .18);
+
+  /* 图上叠层（图片 / 沉浸场景专用遮罩：这是「图上叠字」的深色遮罩，不是 UI 底色） */
+  --scrim:           rgba(4, 5, 7, .68);
+  --lightbox-bg:     rgba(4, 5, 7, .88);
+  --stage-btn-bg:    rgba(10, 11, 13, .72);
+  --stage-btn-hover: rgba(10, 11, 13, .90);
+  --stage-vignette:  radial-gradient(120% 100% at 50% 45%, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%);
+  --immersive-scrim: linear-gradient(to top, rgba(8,9,11,.97) 0%, rgba(8,9,11,.88) 62%, rgba(8,9,11,0) 100%);
+
+  /* 动效令牌（调手感只改这里；规则里不写死时长） */
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-inout: cubic-bezier(.65,0,.35,1);
+  /* 动效档位参数（任务书 §6.2；档位收口由 css/motion.css 按 html[data-motion] 写入 --m-*） */
+  --dur-off: 80ms;       /* off 档：透明度变化的时长上限 */
+  --dur-shift: 160ms;    /* standard 档：短位移的时长上限 */
+  --dur-flash: 1.1s;     /* 搜索命中高亮的消退时长 */
+  --dur-none: .001s;     /* 无 JS 兜底：prefers-reduced-motion 里把一切压到接近 0 */
+  --ease-io: ease-in-out;  /* 0.12.1 起 head-ring 呼吸沿用的关键字缓动（数值上不等于 --ease-inout，保留原手感） */
+  --ease-linear: linear;
+  /* 循环动画周期（与交互时长分开调） */
+  --loop-busy: 1.4s;
+  --loop-kb: 20s;
+  --loop-ambient: 40s;
+  --loop-flow: 3.6s;       /* 分支页流光扫过一条边的周期 */
+
+  /* 首页无限符号：深蓝 → 浅蓝（两端色；中间过渡靠两层叠加的 opacity） */
+  --inf-deep:      #1E3A8A;
+  --inf-light:     #60A5FA;
+  --loop-inf:      5.5s;      /* 色带流过整个符号一圈的时长 */
+  --loop-inf-step: .14s;      /* 每列的相位步长（app.js 按 --x 错相） */
+
+  /* 环境光（仅 data-motion="rich"）：白底上的极淡蓝，alpha ≤ .08 */
+  --ambient-glow:
+    radial-gradient(60% 50% at 30% 35%, rgba(37, 99, 235, .08), rgba(37, 99, 235, 0) 70%),
+    radial-gradient(50% 45% at 72% 65%, rgba(37, 99, 235, .06), rgba(37, 99, 235, 0) 70%);
+
+  /* 字体栈（全部系统字体，零远程请求） */
+  --font-body:    "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --font-ui:      system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-title:   "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --font-note:    var(--font-ui);
+  --font-cursive: var(--font-body);
+  --font-en:      var(--font-ui);
+  --font-quote:   var(--font-body);
+  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* —— 兼容旧样式里的变量名（其余规则只引用这些，不再出现字面色） —— */
+  --paper:          var(--bg);
+  --paper-2:        var(--surface);
+  --paper-3:        var(--stage);
+  --btn-bg:         var(--surface-2);
+  --btn-ink:        var(--ink);
+  --btn-line:       var(--line-strong);
+  --note-paper:     transparent;
+  --note-shadow:    none;
+  --note-rim:       transparent;
+  --note-fiber-a:   0;
+  --note-grain-a:   0;
+  --bubble-ink:          var(--ink);
+  --bubble-ink-dim:      var(--ink-dim);
+  --bubble-accent:       var(--accent);
+  --bubble-accent-soft:  var(--accent-soft);
+  --bubble-accent-line:  var(--accent-line);
+  --vig-in:         transparent;
+  --vig-out:        transparent;
+  --grain-opacity:  0;
+  --grain-blend:    normal;
+}

@@ -1,0 +1,211 @@
+/* ==================== 动效模块（统一 motion 模块 · CSS 端） ====================
+   任务书 §6.2。分工：
+   · 档位语义与逐动画三档行为声明 → src/core/motion.ts（ANIMATIONS 是真源）
+   · 档位政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
+   · DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js
+   eval/tokens-test.js 会对账：本文件的 --an-* 名表必须与 src/core/motion.ts 的
+   ANIMATIONS 声明表逐条推导一致；@keyframes 必须一条不多、一条不少。
+
+   三档（off / standard / rich；auto 解析见 src/core/motion.ts 的 resolve）：
+   · off：无位移、无循环，最多 80ms 的透明度变化（--m-dur-* 收到 --dur-off，位移/颜色过渡 0ms）。
+   · standard：淡入淡出与 ≤160ms 的短位移；无循环（--m-iter 压成 1）。
+   · rich：完整动效（默认档；无 JS 时 :root 的默认值即 rich）。
+   · auto：跟随系统「减少动态效果」（系统开了则 off）；用户显式选择优先于系统偏好。
+
+   循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例，
+   如首页符号逐字符波按 1 组计）。超出预算的循环挂 data-loop="wait" 暂停，
+   登记与释放走 src/ui/motion.js 的 registerLoop()。 */
+
+/* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
+   小面积装饰元素允许用 @property 注册的自定义属性做动画（任务书 §6.2 放宽项），
+   其余动画仍只准动合成层属性。注册块必须：syntax 是可动画类型、inherits: false。
+   --t：首页无限符号逐字符的浅色占比（app.js 写入；阶段 5 的真渐变流动就动它）。 */
+@property --t {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.5;
+}
+
+/* ==================== 档位政策变量（动画/过渡时长的档位收口） ====================
+   规则里只准引用这些变量，不写死毫秒数；改手感只改令牌（css/tokens.css）或这张收口表。 */
+:root, html[data-motion="rich"] {
+  /* 动画单次时长（收口：rich 取令牌原值） */
+  --m-dur-fast: var(--dur-fast);
+  --m-dur-base: var(--dur-base);
+  --m-dur-slow: var(--dur-slow);
+  --m-dur-flash: var(--dur-flash);
+  /* 过渡时长：位移类（transform）与颜色类（color / border-color / background*） */
+  --m-t-shift-fast: var(--dur-fast);
+  --m-t-shift-base: var(--dur-base);
+  --m-t-color-fast: var(--dur-fast);
+  --m-t-color-base: var(--dur-base);
+  /* 循环动画的 iteration-count：rich 才循环 */
+  --m-iter: infinite;
+}
+html[data-motion="standard"] {
+  --m-dur-fast: var(--dur-fast);
+  --m-dur-base: var(--dur-shift);   /* 短位移 ≤160ms（§6.2） */
+  --m-dur-slow: var(--dur-shift);
+  --m-dur-flash: var(--dur-shift);
+  --m-t-shift-fast: var(--dur-fast);
+  --m-t-shift-base: var(--dur-shift);
+  --m-t-color-fast: var(--dur-fast);
+  --m-t-color-base: var(--dur-base);
+  --m-iter: 1;                      /* standard 无循环 */
+}
+html[data-motion="off"] {
+  --m-dur-fast: var(--dur-off);     /* 最多 80ms 的透明度变化 */
+  --m-dur-base: var(--dur-off);
+  --m-dur-slow: var(--dur-off);
+  --m-dur-flash: var(--dur-off);
+  --m-t-shift-fast: 0ms;            /* 无位移 */
+  --m-t-shift-base: 0ms;
+  --m-t-color-fast: 0ms;            /* 非透明度过渡一律即时 */
+  --m-t-color-base: 0ms;
+  --m-iter: 1;                      /* 无循环 */
+}
+
+/* ==================== 动画名三档表（--an-*） ====================
+   每个动画声明自己三档下的行为（真源 = src/core/motion.ts 的 ANIMATIONS，此处是 CSS 镜像）：
+   · 档位为 none → 该档名字换成 none（不跑）
+   · 档位为 fade → 名字换成 fadeIn（fade 类保持本名）；off 档一切位移/滤镜收成 80ms 淡入
+   · 档位为 shift / full / loop → 名字保持本名（时长与循环次数由 --m-* 收口）
+   用法：animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环再加 var(--m-iter)）。 */
+:root, html[data-motion="rich"] {
+  --an-fadeIn: fadeIn;
+  --an-fadeOut: fadeOut;
+  --an-titleSwap: titleSwap;
+  --an-leafIn: leafIn;
+  --an-leafInX: leafInX;
+  --an-prefsIn: prefsIn;
+  --an-prefsUp: prefsUp;
+  --an-blurUp: blurUp;
+  --an-rowIn: rowIn;
+  --an-busyFlow: busyFlow;
+  --an-breathe: breathe;
+  --an-kenBurns: kenBurns;
+  --an-ambientDrift: ambientDrift;
+  --an-infWave: infWave;
+  --an-flowLight: flowLight;
+  --an-nodePulse: nodePulse;
+}
+html[data-motion="standard"] {
+  --an-fadeIn: fadeIn;
+  --an-fadeOut: fadeOut;
+  --an-titleSwap: titleSwap;
+  --an-leafIn: leafIn;
+  --an-leafInX: leafInX;
+  --an-prefsIn: prefsIn;
+  --an-prefsUp: prefsUp;
+  --an-blurUp: fadeIn;      /* 去模糊属滤镜，standard 收成淡入 */
+  --an-rowIn: none;
+  --an-busyFlow: fadeIn;    /* 忙碌线 standard 改单次淡入（无循环） */
+  --an-breathe: none;
+  --an-kenBurns: none;
+  --an-ambientDrift: none;
+  --an-infWave: none;
+  --an-flowLight: none;
+  --an-nodePulse: none;
+}
+html[data-motion="off"] {
+  --an-fadeIn: fadeIn;
+  --an-fadeOut: fadeOut;
+  --an-titleSwap: titleSwap;
+  --an-leafIn: fadeIn;
+  --an-leafInX: fadeIn;
+  --an-prefsIn: fadeIn;
+  --an-prefsUp: fadeIn;
+  --an-blurUp: fadeIn;
+  --an-rowIn: none;
+  --an-busyFlow: none;
+  --an-breathe: none;
+  --an-kenBurns: none;
+  --an-ambientDrift: none;
+  --an-infWave: none;
+  --an-flowLight: none;
+  --an-nodePulse: none;
+}
+
+/* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明三档行为） ====================
+   动画属性白名单：transform / opacity / filter / stroke-dashoffset / stroke-dasharray；
+   小面积装饰元素可用上面 @property 注册的自定义属性。不得动画 width / height / top / left /
+   margin / box-shadow 等触发重排的属性（eval/tokens-test.js 把这条变成可执行检查）。 */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes leafIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes leafInX {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes breathe { 50% { opacity: 0.5; } }
+/* 图片 blur-up：缩略图 → 原图就绪时的去模糊（filter 是白名单里唯一的滤镜例外） */
+@keyframes blurUp {
+  from { filter: blur(12px); }
+  to   { filter: blur(0); }
+}
+/* 顶栏忙碌进度线：不确定进度的横向流动（只动 transform） */
+@keyframes busyFlow {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(290%); }
+}
+/* 舞台当前图：极缓慢 Ken Burns（rich 专档；离屏 / data-paused 暂停） */
+@keyframes kenBurns {
+  from { transform: scale(1); }
+  to   { transform: scale(1.06); }
+}
+/* 环境光漂移（rich 专档）：白底上的极淡蓝缓慢平移 */
+@keyframes ambientDrift {
+  0%   { transform: translate(-3%, -2%) scale(1); }
+  50%  { transform: translate(3%, 2%) scale(1.06); }
+  100% { transform: translate(-3%, -2%) scale(1); }
+}
+/* 首页无限符号逐字符深浅循环（rich 专档；错相延迟在用法处按 --x 计算） */
+@keyframes infWave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes titleSwap { from { opacity: .25; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes prefsIn { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes prefsUp { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* 分支页流光：stroke-dashoffset 扫过（rich 专档） */
+@keyframes flowLight { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+@keyframes nodePulse {
+  0% { opacity: .8; transform: scale(.72); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* ==================== 暂停机制（循环动画的一切「停」都从这里出） ==================== */
+/* 页面不可见时暂停一切循环动画（src/ui/motion.js 写 data-paused） */
+html[data-paused] *,
+html[data-paused] *::before,
+html[data-paused] *::after {
+  animation-play-state: paused !important;
+}
+/* 子树挂起：分支页打开时暂停底下阅读页的循环（src/ui/motion.js 的 suspendLoops） */
+[data-loops-paused] *,
+[data-loops-paused] *::before,
+[data-loops-paused] *::after {
+  animation-play-state: paused !important;
+}
+/* 循环预算排队：超出同屏 ≤3 组的循环先停住（src/ui/motion.js 的 registerLoop） */
+[data-loop="wait"],
+[data-loop="wait"]::before,
+[data-loop="wait"]::after {
+  animation-play-state: paused !important;
+}
+/* 分支页打开时暂停底下聊天页的循环动画（旧屏口径，随旧屏一起退役） */
+html[data-branch="open"] #screen-game *,
+html[data-branch="open"] #screen-game *::before,
+html[data-branch="open"] #screen-game *::after {
+  animation-play-state: paused;
+}
+
+/* 无 JS 兜底：系统「减少动态效果」时把一切动画/过渡压到接近 0（与 data-motion 规则不冲突） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: var(--dur-none) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--dur-none) !important;
+  }
+}
