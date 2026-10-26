@@ -213,15 +213,9 @@
     S.settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
-    // 「当前故事」组（推进模式 / 世界状态卡）也要跟着主「保存」落盘：
-    // 否则只点底部「保存」时这两块的改动会被下次 renderStoryPanels 按旧值回填（看起来像「恢复默认」）。
-    // 注意顺序：先读出模式（存世界卡会重绘表单、把下拉框刷回旧值），再写世界卡，最后换模式。
-    if (S.story) {
-      const sel = $('#s-story-mode');
-      const m = sel ? sel.value : '';
-      saveWorldFromForm({ silent: true, ifChanged: true });
-      if (m && m !== (S.story.mode || 'choice')) onModeChange({ target: { value: m } });
-    }
+    // 阶段 4 屏 2：主「保存」只管全局设置。原「顺带落盘世界卡 / 推进模式」的收口随
+    // 「当前故事」组迁入本对话设置面板而移除（docs/phase4-settings-plan.md §5.3）：
+    // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
     saveAll();
     if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== S.settings.showReasoning) A.renderChat();   // 思考链开关即时生效
@@ -329,6 +323,9 @@
       + (parts.length ? parts.join('；') : '（还没出过图）');
   }
 
+  // 世界卡表单的「判变」账本：上次整画时对应的故事 id（换故事必须整画，同故事脏了不冲）
+  let worldFormStoryId = null;
+
   function renderStoryPanels() {
     const has = !!S.story;
     renderStylePanel();
@@ -344,14 +341,20 @@
     $('#memory-panels').classList.toggle('hidden', !has);
     if (!has) return;
     const w = S.story.world || {};
-    $('#w-place').value = w.place || '';
-    $('#w-time').value = w.time || '';
-    $('#w-scene').value = w.scene || '';
-    $('#w-threads').value = (w.threads || []).join('\n');
-    wCharEd().set(w.characters || []);   // 人物设定独立控件（可增删行）
-    $('#w-rel-stage').value = (w.relationship || {}).stage || '';
-    $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
-    $('#w-rel-notes').value = (w.relationship || {}).notes || '';
+    // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉
+    //（docs/phase4-settings-plan.md §3.2）。换故事（表单记账的 story id 变了）照常整画。
+    const worldDirty = worldFormStoryId === S.story.id && worldFormChanged(w);
+    if (!worldDirty) {
+      worldFormStoryId = S.story.id;
+      $('#w-place').value = w.place || '';
+      $('#w-time').value = w.time || '';
+      $('#w-scene').value = w.scene || '';
+      $('#w-threads').value = (w.threads || []).join('\n');
+      wCharEd().set(w.characters || []);   // 人物设定独立控件（可增删行）
+      $('#w-rel-stage').value = (w.relationship || {}).stage || '';
+      $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
+      $('#w-rel-notes').value = (w.relationship || {}).notes || '';
+    }
     $('#world-scribe-at').textContent = w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString()) : '尚未校对';
     const sl = $('#summary-list'); sl.innerHTML = '';
     (S.story.summaries || []).forEach(s => { const d = document.createElement('div'); d.className = 'mono-line'; d.textContent = s; sl.appendChild(d); });

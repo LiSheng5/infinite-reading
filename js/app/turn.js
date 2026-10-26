@@ -215,7 +215,7 @@
       if (rs.wardrobe) target.wardrobe = rs.wardrobe;
       target.updatedAt = Date.now();
       saveAll();
-      if (!$('#modal-settings').classList.contains('hidden')) A.renderStoryPanels();
+      if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
     } catch (_) { /* 保留本地规则结果 */ }
   }
 
@@ -246,7 +246,7 @@
     if (A.profileOn() && !scribeUsable()) A.collectProfileLocal();
     saveAll();
     A.renderChat();
-    if (!$('#modal-settings').classList.contains('hidden')) A.renderStoryPanels();
+    if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
   }
 
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）

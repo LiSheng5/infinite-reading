@@ -66,7 +66,7 @@ const PLAN = [
   { key: 'painter', state: 'seeded', screen: 'painter', expect: '#modal-painter:not(.hidden)', note: '画师工作台（看 / 改这张图的提示词）' },
   { key: 'anchor', state: 'seeded', screen: 'anchor', expect: '#modal-anchor:not(.hidden)', note: '画风锚定：4 张候选试画（本地占位图）' },
   { key: 'card', state: 'seeded', screen: 'card', expect: '#modal-card:not(.hidden)', note: '角色卡编辑弹窗' },
-  { key: 'story-prefs', state: 'seeded', screen: 'story-prefs', expect: '#story-prefs:not(.hidden)', note: '本对话设置面板（剧情模式：模型/画风/推进模式/选项/布局）' },
+  { key: 'story-prefs', state: 'seeded', screen: 'story-prefs', expect: '#story-prefs:not(.hidden)', note: '本对话设置面板（覆盖行 + 故事数据：推进模式/存档点/世界状态卡，阶段 4 屏 2 迁入）' },
   { key: 'modal-confirm', state: 'seeded', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（打一个存档点，带名字输入框）' },
   { key: 'toast', state: 'seeded', screen: 'toast', expect: '#toast:not(.hidden)', note: '提示条（打完存档点的「已打存档点」）' },
   { key: 'modal-export', state: 'seeded', screen: 'modal-export', expect: '#modal-export:not(.hidden)', note: '导出弹窗（书架行「⋯」→ 导出）' },
@@ -379,7 +379,8 @@ async function runEmpty(page, snap, vp, manifest) {
   const groups = [
     ['settings-models', 'g-models'], ['settings-subs', 'g-subs'], ['settings-image', 'g-image'],
     ['settings-tools', 'g-tools'], ['settings-data', 'g-data'], ['settings-look', 'g-look'],
-    ['settings-story', 'g-story'],
+    // 阶段 4 屏 2：g-story「当前故事」组已迁入本对话设置面板（#prefs-story），
+    // 全局设置没有这个分组了；PLAN 里的 settings-story 条目保留不重排（序号 = 文件名前缀）。
   ];
   for (const [key, group] of groups) {
     if (await page.locator('#set-back:not(.hidden)').count()) await page.click('#set-back');
@@ -508,13 +509,10 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.click('#btn-close-anchor');
   await sleep(300);
 
-  // —— 角色卡（设置 → 当前故事 → 编辑角色卡） ——
+  // —— 角色卡（本对话设置 · 故事数据 → 编辑角色卡；阶段 4 屏 2 起入口在面板里，不再走全局设置） ——
   await openHudMenu(page);
-  await page.click('#btn-settings');
-  await page.waitForSelector('#modal-settings:not(.hidden)');
-  await sleep(500);
-  if (await page.locator('#set-back:not(.hidden)').count()) await page.click('#set-back');
-  await page.click('.set-nav-item[data-group="g-story"]');
+  await page.click('#btn-story-prefs');
+  await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
   await sleep(400);
   await page.click('#btn-edit-card');
   await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 }).catch(() => {});
@@ -522,13 +520,17 @@ async function runSeeded(page, snap, vp, manifest) {
   await snap('card');
   await page.click('#btn-close-card');
   await sleep(300);
-  await page.click('#btn-close-settings');
+  await page.click('#prefs-close');
   await sleep(300);
 
-  // —— 本对话设置 ——
+  // —— 本对话设置（滚到「故事数据」区：推进模式 / 存档点 / 世界状态卡，阶段 4 屏 2 迁入） ——
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
+  await page.evaluate(() => {
+    const el = document.getElementById('prefs-story');
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
   await sleep(400);
   await snap('story-prefs');
 
@@ -571,8 +573,8 @@ async function runSeeded(page, snap, vp, manifest) {
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
-  await page.selectOption('#p-mode', 'chat').catch(e => {
-    manifest.skipped.push({ item: '切换推进模式到智能体', state: 'seeded', width: vp.width, reason: '#p-mode 选择失败：' + e.message });
+  await page.selectOption('#s-story-mode', 'chat').catch(e => {
+    manifest.skipped.push({ item: '切换推进模式到智能体', state: 'seeded', width: vp.width, reason: '#s-story-mode 选择失败：' + e.message });
   });
   await sleep(600);
   await page.click('#prefs-close');

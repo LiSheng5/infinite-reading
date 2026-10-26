@@ -1,16 +1,21 @@
-// 搬家回归护栏（UI-3 §6）：设置控件 id 清单。
-// 清单在「设置分层」改动之前从旧 index.html 的 #modal-settings 里抽取并冻结。
-// 断言：新 index.html 的 #modal-settings 里这些 id 一个不少（改名必须同步更新本清单并在报告说明）。
+// 搬家回归护栏（UI-3 §6 + 阶段 4 屏 2）：设置控件 id 清单。
+// 两份冻结清单（v0.8.0 冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
+//   GLOBAL_SETTINGS_IDS —— #modal-settings 里的全局设置控件；
+//   STORY_PANEL_IDS     —— 「本对话设置」面板 #prefs-story 里的当前故事控件
+//     （阶段 4 屏 2 自全局设置「当前故事」组迁入，见 docs/phase4-settings-plan.md §4；
+//      其中 btn-w-char-add 是迁移时随行卡控件一并补进清单的）。
+// 取样边界按两个容器各自收紧（旧口径到「通用确认」才截断，#prefs-story 恰好落在区间里，
+// 搬不搬家测试都绿——所以必须双向断言：在自己的段里出现、在对方的段里不出现）。
 // 用法：node eval/settings-ids-test.js        // 校验
-//       node eval/settings-ids-test.js --dump // 打印当前 index.html 里的 id（用于更新清单）
+//       node eval/settings-ids-test.js --dump // 打印两个段里当前的 id（用于更新清单）
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const HTML_PATH = path.join(__dirname, '..', 'index.html');
 
-// === 冻结清单（v0.8.0 的 #modal-settings 全部 id，含控件 / 按钮 / 提示位 / 面板） ===
-const REQUIRED_IDS = [
+// === 冻结清单 A：#modal-settings 全局设置（130 个 id，含控件 / 按钮 / 提示位 / 面板） ===
+const GLOBAL_SETTINGS_IDS = [
   'modal-settings',
   'dl-base-url',
   'btn-close-settings',
@@ -40,12 +45,6 @@ const REQUIRED_IDS = [
   'btn-anchor-rerun', 'rolling-style-text',
   's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',
   's-show-reasoning', 's-tools-enabled', 's-notools-hint', 'btn-clear-notools',
-  's-story-mode',
-  'sp-empty', 'sp-panel', 'btn-add-savepoint', 'sp-list',
-  'memory-empty', 'memory-panels', 'btn-inject-memory', 'inject-state',
-  'w-place', 'w-time', 'w-scene', 'w-threads', 'w-characters',
-  'w-rel-stage', 'w-rel-bonds', 'w-rel-notes', 'btn-save-world', 'world-scribe-at',
-  'rc-status', 'btn-edit-card', 'sum-count', 'summary-list', 'tool-list',
   'fs-sidecar', 'sidecar-state', 's-sidecar-port', 's-sidecar-token', 'btn-sidecar-probe',
   'fs-email', 's-email-enabled', 's-email-provider', 's-email-dailylimit', 's-email-from',
   's-email-resendkey', 's-email-allowlist', 'email-audit',
@@ -59,16 +58,30 @@ const REQUIRED_IDS = [
   'btn-clear-save', 'btn-save-settings',
 ];
 
+// === 冻结清单 B：#story-prefs 的 #prefs-story「当前故事」组（阶段 4 屏 2 迁入） ===
+const STORY_PANEL_IDS = [
+  's-story-mode',
+  'sp-empty', 'sp-panel', 'btn-add-savepoint', 'sp-list',
+  'memory-empty', 'memory-panels', 'btn-inject-memory', 'inject-state',
+  'w-place', 'w-time', 'w-scene', 'w-threads', 'w-characters',
+  'w-rel-stage', 'w-rel-bonds', 'w-rel-notes', 'btn-save-world', 'world-scribe-at',
+  'rc-status', 'btn-edit-card', 'sum-count', 'summary-list', 'tool-list',
+  // 阶段 4 屏 2 随迁移补进清单（人物行编辑的「+ 添加人物」）
+  'btn-w-char-add',
+];
+
 // radio 组用 name 标识（不是 id）；同样冻结。
 // P-1（v0.11.0）：出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除（任务书 §3.2），
 // 清单里不再有它——剧情模式作画只剩 🎨 按钮触发，这里同步冻结清单变化。
 const REQUIRED_NAMES = [];
 
-function settingsSection(html) {
-  const start = html.indexOf('id="modal-settings"');
-  if (start < 0) throw new Error('找不到 #modal-settings');
-  const end = html.indexOf('<!-- ========== 通用确认', start);
-  return html.slice(start, end < 0 ? html.length : end);
+// 取样段：设置段到「本对话设置」注释为止；面板段到「通用确认」注释为止（各自容器的边界）。
+function sectionOf(html, fromId, toComment, label) {
+  const start = html.indexOf('id="' + fromId + '"');
+  if (start < 0) throw new Error('找不到 #' + fromId);
+  const end = html.indexOf(toComment, start);
+  if (end < 0) throw new Error('找不到 ' + label + ' 的收尾标记：' + toComment);
+  return html.slice(start, end);
 }
 
 function extractIds(seg) {
@@ -88,33 +101,41 @@ function extractNames(seg) {
 }
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
-const seg = settingsSection(html);
-const ids = extractIds(seg);
-const names = extractNames(seg);
+const settingsSeg = sectionOf(html, 'modal-settings', '<!-- ========== 本对话设置', '全局设置段');
+const storySeg = sectionOf(html, 'story-prefs', '<!-- ========== 通用确认', '本对话设置段');
+const settingsIds = extractIds(settingsSeg);
+const storyIds = extractIds(storySeg);
+const settingsNames = extractNames(settingsSeg);
+const storyNames = extractNames(storySeg);
 
 if (process.argv.includes('--dump')) {
-  const notInList = [...ids].filter((id) => !REQUIRED_IDS.includes(id)).sort();
-  console.log(JSON.stringify({ ids: [...ids].sort(), names: [...names].sort(), notInList }, null, 2));
+  console.log(JSON.stringify({
+    settings: { ids: [...settingsIds].sort(), notInList: [...settingsIds].filter((id) => !GLOBAL_SETTINGS_IDS.includes(id)).sort() },
+    story: { ids: [...storyIds].sort(), notInList: [...storyIds].filter((id) => !STORY_PANEL_IDS.includes(id)).sort() },
+  }, null, 2));
   process.exit(0);
 }
 
-const missingIds = REQUIRED_IDS.filter((id) => !ids.has(id));
-const missingNames = REQUIRED_NAMES.filter((n) => !names.has(n));
+const problems = [];
+const missingGlobal = GLOBAL_SETTINGS_IDS.filter((id) => !settingsIds.has(id));
+const missingStory = STORY_PANEL_IDS.filter((id) => !storyIds.has(id));
+// 双向：清单里的 id 不许出现在对方段里（搬漏会同时命中这两条）
+const globalLeak = GLOBAL_SETTINGS_IDS.filter((id) => storyIds.has(id));
+const storyLeak = STORY_PANEL_IDS.filter((id) => settingsIds.has(id));
 
-let failed = false;
-if (missingIds.length) {
-  failed = true;
-  console.error('❌ 设置控件 id 丢失（搬家回归）：');
-  for (const id of missingIds) console.error('   - ' + id);
-}
-if (missingNames.length) {
-  failed = true;
-  console.error('❌ 设置控件 radio 组丢失：');
-  for (const n of missingNames) console.error('   - ' + n);
-}
+if (missingGlobal.length) problems.push(['全局设置 id 丢失（搬家回归）', missingGlobal]);
+if (missingStory.length) problems.push(['本对话设置 id 丢失（搬家回归）', missingStory]);
+if (globalLeak.length) problems.push(['全局设置 id 泄漏进 #story-prefs（双份 id）', globalLeak]);
+if (storyLeak.length) problems.push(['「当前故事」id 残留在 #modal-settings（搬漏）', storyLeak]);
+const missingNames = REQUIRED_NAMES.filter((n) => !settingsNames.has(n) && !storyNames.has(n));
+if (missingNames.length) problems.push(['radio 组丢失', missingNames]);
 
-if (failed) {
-  console.error(`清单 ${REQUIRED_IDS.length} 个 id / ${REQUIRED_NAMES.length} 个 name；缺失 ${missingIds.length} / ${missingNames.length}。`);
+if (problems.length) {
+  for (const [title, list] of problems) {
+    console.error('❌ ' + title + '：');
+    for (const id of list) console.error('   - ' + id);
+  }
+  console.error(`全局清单 ${GLOBAL_SETTINGS_IDS.length} 个 / 面板清单 ${STORY_PANEL_IDS.length} 个 / radio ${REQUIRED_NAMES.length} 个。`);
   process.exit(1);
 }
-console.log(`✅ settings-ids-test：#${REQUIRED_IDS.length} 个设置控件 id 与 ${REQUIRED_NAMES.length} 个 radio 组全部保留`);
+console.log(`✅ settings-ids-test：全局 #${GLOBAL_SETTINGS_IDS.length} 个（#modal-settings）+ 本对话 #${STORY_PANEL_IDS.length} 个（#story-prefs）+ ${REQUIRED_NAMES.length} 个 radio 组全部就位，双向无泄漏`);

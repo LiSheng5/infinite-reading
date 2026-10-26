@@ -627,7 +627,6 @@
             <button type="button" class="set-nav-item" data-group="g-tools"><span>工具与服务</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
             <button type="button" class="set-nav-item" data-group="g-data"><span>数据</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
             <button type="button" class="set-nav-item" data-group="g-look"><span>外观</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
-            <button type="button" class="set-nav-item" data-group="g-story"><span>当前故事</span><svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg></button>
           </nav>
           <div class="set-panels" id="set-panels">
             <button type="button" id="set-back" class="btn ghost set-back hidden"><svg class="ic ic-l" aria-hidden="true"><use href="#i-back"/></svg>返回</button>
@@ -1131,7 +1130,30 @@
           <p class="hint">首页的无限符号只在「丰富」档循环流动；「标准」「关」或系统开了「减少动态效果」时停成一道静态渐变。</p>
         </fieldset>
 
-        <!-- ─── 当前故事 ─── -->
+        <!-- 「当前故事」组（推进模式 / 存档点 / 世界状态卡）已迁入本对话设置面板（见页尾 #prefs-story）：
+             它们依赖当前打开的故事，属于对话数据而非全局设置（阶段 4 屏 2，docs/phase4-settings-plan.md）。 -->
+
+          </div><!-- /.set-panels -->
+        </div><!-- /.set-shell -->
+      </div>
+      <div class="modal-foot">
+        <button id="btn-save-settings" class="btn primary" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+<!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ==========
+     阶段 4 屏 2 起：「当前故事」组（推进模式 / 存档点 / 世界状态卡）自全局设置迁入本面板
+     （docs/phase4-settings-plan.md）——它们依赖当前打开的故事，全局设置不再保留入口。 -->
+  <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">
+    <div class="prefs-head">
+      <h3>本对话设置</h3>
+      <button id="prefs-close" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="prefs-scroll">
+      <div class="prefs-body" id="prefs-body"></div>
+
+      <div class="prefs-body prefs-story" id="prefs-story">
         <fieldset>
           <legend>推进模式</legend>
           <label>当前故事模式
@@ -1199,23 +1221,8 @@
             </details>
           </div>
         </fieldset>
-
-          </div><!-- /.set-panels -->
-        </div><!-- /.set-shell -->
-      </div>
-      <div class="modal-foot">
-        <button id="btn-save-settings" class="btn primary" type="button">保存</button>
       </div>
     </div>
-  </div>
-
-<!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ========== -->
-  <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">
-    <div class="prefs-head">
-      <h3>本对话设置</h3>
-      <button id="prefs-close" class="hud-btn" title="关闭" aria-label="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
-    </div>
-    <div class="prefs-body" id="prefs-body"></div>
     <p class="hint prefs-foot" id="prefs-note">改动只影响当前对话，随时点「重置」回到全局默认；换模型从下一条消息起生效。</p>
   </aside>
 

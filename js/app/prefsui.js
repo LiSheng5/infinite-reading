@@ -15,6 +15,8 @@
   /* ================= 全局设置：分组导航（§4.1） ================= */
 
   // fieldset → 分组：按 legend 归类（控件 id 不动，只是搬进分组面板）
+  // 阶段 4 屏 2：「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
+  // 不再进全局设置分组（docs/phase4-settings-plan.md）。
   const GROUP_BY_LEGEND = [
     [/剧情对话模型|模型库/, 'g-models'],
     [/画师子代理/, 'g-subs'],
@@ -32,9 +34,6 @@
     [/用户画像/, 'g-data'],
     [/本地存储/, 'g-data'],
     [/界面/, 'g-look'],
-    [/推进模式/, 'g-story'],
-    [/存档点/, 'g-story'],
-    [/世界状态卡/, 'g-story'],
   ];
   const GROUP_TITLES = {
     'g-models': '模型',
@@ -43,7 +42,6 @@
     'g-tools': '工具与服务',
     'g-data': '数据',
     'g-look': '外观',
-    'g-story': '当前故事',
   };
 
   function groupOfFs(fs) {
@@ -557,28 +555,6 @@
     return row;
   }
 
-  function modeRow() {
-    const row = document.createElement('div');
-    row.className = 'prefs-row';
-    const label = document.createElement('div');
-    label.className = 'prefs-label';
-    label.textContent = '推进模式（本对话）';
-    row.appendChild(label);
-    row.appendChild(sel([
-      ['choice', '剧情（结尾给选项）'],
-      ['chat', '智能体（带工具的助手）'],
-      ['rp', '角色扮演（角色卡）'],
-    ], (S.story && S.story.mode) || 'choice', (v) => {
-      A.onModeChange({ target: { value: v } });
-      renderStoryPrefs();
-    }, 'p-mode'));
-    const h = document.createElement('p');
-    h.className = 'hint';
-    h.textContent = '切换只改提示词与渲染，不影响记忆 / 重试 / 作画。';
-    row.appendChild(h);
-    return row;
-  }
-
   function toolsRows() {
     const box = document.createElement('div');
     box.className = 'prefs-row';
@@ -632,28 +608,6 @@
       (v) => { setPref('tools.schedule', v); saveAll(); renderStoryPrefs(); },
       'p-schedule',
     ), '');
-  }
-
-  function characterCardRow() {
-    const row = document.createElement('div');
-    row.className = 'prefs-row';
-    const label = document.createElement('div');
-    label.className = 'prefs-label';
-    label.textContent = '角色卡';
-    row.appendChild(label);
-    const card = S.story && S.story.characterCard;
-    const h = document.createElement('p');
-    h.className = 'hint';
-    h.textContent = card ? ('角色卡：' + (card.name || '（无名）')) : '还没有角色卡。';
-    row.appendChild(h);
-    const btn = miniBtn('编辑角色卡 / 导入 PNG', () => {
-      if (!S.story) return;
-      closeStoryPrefs();
-      A.openCardEditor({ mode: 'edit' });
-    });
-    btn.id = 'p-card-open';
-    row.appendChild(btn);
-    return row;
   }
 
   function layoutChoiceRow() {
@@ -727,12 +681,12 @@
 
     if (visible.has('model')) body.appendChild(modelRow());
     if (visible.has('style')) body.appendChild(styleRow());
-    if (visible.has('mode')) body.appendChild(modeRow());
+    // 推进模式（s-story-mode）与角色卡（btn-edit-card）已并入下面的「故事数据」区（#prefs-story），
+    // 覆盖行里不再另出 p-mode / p-card-open（docs/phase4-settings-plan.md §2.3）。
     if (visible.has('choices')) body.appendChild(choicesRow());
     if (visible.has('showReasoning')) body.appendChild(showReasoningRow());
     if (visible.has('tools')) body.appendChild(toolsRows());
     if (visible.has('schedule')) body.appendChild(scheduleRow());
-    if (visible.has('characterCard')) body.appendChild(characterCardRow());
     if (visible.has('layout')) {
       body.appendChild((mode === 'choice') ? layoutChoiceRow() : layoutChatRow());
     }
@@ -741,6 +695,11 @@
   function openStoryPrefs() {
     if (!S.story) { toast('先打开一个对话'); return; }
     renderStoryPrefs();
+    // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新——
+    // 迁入面板后它不再等全局设置打开才画（docs/phase4-settings-plan.md §2.2）
+    A.renderStoryPanels();
+    A.renderSavepoints();
+    A.renderInjectHint();
     const panel = $('#story-prefs');
     if (panel) panel.classList.remove('hidden');
     const game = $('#screen-game');
