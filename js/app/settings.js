@@ -326,6 +326,12 @@
   // 世界卡表单的「判变」账本：上次整画时对应的故事 id（换故事必须整画，同故事脏了不冲）
   let worldFormStoryId = null;
 
+  // 阶段 4 屏 2：Svelte 面板的状态桥（window.IR.StoryPanel，见 src/screens/storyPrefs）——
+  // 重绘后对账「判变」，让「保存世界卡」的禁用态跟表单一致；旧屏（?ui=legacy）没有这个桥，跳过
+  function syncStoryPanel() {
+    if (globalThis.IR && IR.StoryPanel && IR.StoryPanel.syncDirty) IR.StoryPanel.syncDirty();
+  }
+
   function renderStoryPanels() {
     const has = !!S.story;
     renderStylePanel();
@@ -339,6 +345,7 @@
     }
     $('#memory-empty').classList.toggle('hidden', has);
     $('#memory-panels').classList.toggle('hidden', !has);
+    syncStoryPanel();   // 阶段 4 屏 2：Svelte 面板对账「判变」（保存钮禁用态）
     if (!has) return;
     const w = S.story.world || {};
     // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉
@@ -355,6 +362,13 @@
       $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
       $('#w-rel-notes').value = (w.relationship || {}).notes || '';
     }
+    // 世界状态卡摘要行（阶段 4 屏 2 一级视图：地点 · 时间 · 人物 n 位 · 摘要 n 幕）
+    const sum = $('#world-summary');
+    if (sum) {
+      const chars = (w.characters || []).filter(c => c && c.name).length;
+      sum.textContent = '地点：' + (w.place || '—') + ' · 时间：' + (w.time || '—')
+        + ' · 人物 ' + chars + ' 位 · 摘要 ' + ((S.story.summaries || []).length) + ' 幕';
+    }
     $('#world-scribe-at').textContent = w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString()) : '尚未校对';
     const sl = $('#summary-list'); sl.innerHTML = '';
     (S.story.summaries || []).forEach(s => { const d = document.createElement('div'); d.className = 'mono-line'; d.textContent = s; sl.appendChild(d); });
@@ -365,6 +379,7 @@
       d.textContent = '· ' + (e.tool || '') + '：' + (e.summary || '');
       tl.appendChild(d);
     });
+    syncStoryPanel();   // 回填后再对账一次（回填只在未判变时发生，这里兜住保存后的时序）
   }
 
   // 角色卡状态（R13）：rp 常驻；切出 rp 时卡保留在存档里只是停用（§4.8）
@@ -382,15 +397,19 @@
   }
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
+  // 阶段 4 屏 2：新面板里改「行卡」形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
+  // 向导 / 文本导入两处仍是表格形态。旧屏（?ui=legacy）没有 data-impl 标记，沿用表格不变。
   let wCharEdInst = null;
   function wCharEd() {
+    const panelEl = document.getElementById('story-prefs');
+    const variant = (panelEl && panelEl.dataset.impl === 'svelte') ? 'card' : 'row';
     return wCharEdInst || (wCharEdInst = A.charEditor($('#w-characters'), [
       { key: 'name', label: '名字', placeholder: '姓名' },
       { key: 'presence', label: '在场 / 离场', placeholder: '在场' },
       { key: 'personality', label: '性格', placeholder: '性格' },
       { key: 'speech', label: '说话方式', placeholder: '说话方式' },
       { key: 'note', label: '备注', placeholder: '手改后书记员不覆盖' },
-    ], $('#btn-w-char-add')));
+    ], $('#btn-w-char-add'), { variant: variant }));
   }
 
   // 表单与当前世界卡是否不一致：modal「保存」用它决定要不要顺带落盘世界卡（没改就不写，避免误锁备注）
@@ -581,5 +600,5 @@
     toast('已更新画风备注（v' + card.version + '）：只影响画面气质，剧情事实仍由世界卡与剧情决定', false, true);
   }
 
-  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderStoryPanels, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
+  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderStoryPanels, worldFormChanged, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
 })();

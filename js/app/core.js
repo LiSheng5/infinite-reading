@@ -416,10 +416,15 @@
   /* 人物设定独立控件（可增删行）：替代「名字｜性格｜说话方式」一行一个的竖线文本框。
    * container 渲染行（.char-row）；addBtn 可选（不传就自建「+ 添加人物」放容器后面）。
    * fields: [{ key, label?, placeholder? }]，每行每字段一个输入框。
+   * opts.variant：'row'（默认，表格形态：一行五字段 + 表头，向导 / 文本导入用）
+   *              'card'（行卡形态：首行「名字 + 在场/离场」各占一半、下方三个全宽输入、
+   *                      右上角 40px 删除钮、不出表头——本对话设置的世界卡编辑器用，
+   *                      docs/phase4-settings-plan.md §3.2）。
    * 返回 { set(list), get(), add(vals) }：get() 滤掉全空行、不造字段外的值。 */
-  function charEditor(container, fields, addBtn) {
+  function charEditor(container, fields, addBtn, opts) {
     fields = fields || [];
-    // 表头：每个字段的可见名字（名字 / 性格 / 说话方式……），与输入框同列对齐
+    const variant = (opts && opts.variant === 'card') ? 'card' : 'row';
+    // 表头：每个字段的可见名字（名字 / 性格 / 说话方式……），与输入框同列对齐（行卡形态不出表头）
     function makeHead() {
       const head = document.createElement('div');
       head.className = 'char-head';
@@ -435,14 +440,15 @@
     }
     function makeRow(vals) {
       const row = document.createElement('div');
-      row.className = 'char-row';
-      fields.forEach(f => {
+      row.className = 'char-row' + (variant === 'card' ? ' card' : '');
+      fields.forEach((f, i) => {
         const inp = document.createElement('input');
         inp.type = 'text';
         inp.dataset.k = f.key;
         inp.placeholder = f.placeholder || f.label || f.key;
         inp.spellcheck = false;
         inp.value = vals && vals[f.key] != null ? String(vals[f.key]) : '';
+        if (variant === 'card' && i >= 2) inp.className = 'char-wide';   // 性格 / 说话方式 / 备注整行
         row.appendChild(inp);
       });
       const del = miniBtn('', () => row.remove(), 'char-del');
@@ -455,7 +461,7 @@
     const api = {
       set(list) {
         container.textContent = '';
-        if (fields.some(f => f.label)) container.appendChild(makeHead());
+        if (variant === 'row' && fields.some(f => f.label)) container.appendChild(makeHead());
         (Array.isArray(list) ? list : []).forEach(v => container.appendChild(makeRow(v)));
         if (!rows().length) container.appendChild(makeRow(null));   // 空表也给一行，看得见字段形状
       },

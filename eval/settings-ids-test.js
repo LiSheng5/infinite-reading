@@ -76,6 +76,9 @@ const STORY_PANEL_IDS = [
 const REQUIRED_NAMES = [];
 
 // 取样段：设置段到「本对话设置」注释为止；面板段到「通用确认」注释为止（各自容器的边界）。
+// 阶段 4 屏 2 起有第二个真源：Svelte 新屏的组件源码（src/screens/settings / src/screens/storyPrefs）。
+// 过渡期双真源都要就位——legacy 侧（index.html）与 Svelte 侧（字段配置 + 组件模板）任一侧缺 id 即红。
+// 挂载容器（modal-settings / story-prefs）本身留在 index.html（Svelte 只替换其子节点），Svelte 侧豁免。
 function sectionOf(html, fromId, toComment, label) {
   const start = html.indexOf('id="' + fromId + '"');
   if (start < 0) throw new Error('找不到 #' + fromId);
@@ -108,10 +111,36 @@ const storyIds = extractIds(storySeg);
 const settingsNames = extractNames(settingsSeg);
 const storyNames = extractNames(storySeg);
 
+// ---- 第二真源：Svelte 新屏（src/screens/settings / src/screens/storyPrefs）----
+// id 的形态：模板 id="…" / 字段配置 id: '…'、wrapId: '…'、stateId: '…' / data-testid="…"。
+// 挂载容器（modal-settings / story-prefs）留在 index.html（Svelte 只替换子节点），Svelte 侧豁免。
+const MOUNT_IDS = ['modal-settings', 'story-prefs'];
+function svelteIdsOf(dir) {
+  const out = new Set();
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { stack.push(p); continue; }
+      if (!/\.(svelte|js|ts)$/.test(e.name)) continue;
+      const src = fs.readFileSync(p, 'utf8');
+      const re = /\b(?:wrapId|stateId|id)\s*[:=]\s*["']([^"']+)["']|\bdata-testid\s*[:=]\s*["']([^"']+)["']/g;
+      let m;
+      while ((m = re.exec(src))) out.add(m[1] || m[2]);
+    }
+  }
+  return out;
+}
+const svelteSettingsIds = svelteIdsOf(path.join(__dirname, '..', 'src', 'screens', 'settings'));
+const svelteStoryIds = svelteIdsOf(path.join(__dirname, '..', 'src', 'screens', 'storyPrefs'));
+
 if (process.argv.includes('--dump')) {
   console.log(JSON.stringify({
     settings: { ids: [...settingsIds].sort(), notInList: [...settingsIds].filter((id) => !GLOBAL_SETTINGS_IDS.includes(id)).sort() },
     story: { ids: [...storyIds].sort(), notInList: [...storyIds].filter((id) => !STORY_PANEL_IDS.includes(id)).sort() },
+    svelteSettings: { ids: [...svelteSettingsIds].sort() },
+    svelteStory: { ids: [...svelteStoryIds].sort() },
   }, null, 2));
   process.exit(0);
 }
@@ -123,10 +152,20 @@ const missingStory = STORY_PANEL_IDS.filter((id) => !storyIds.has(id));
 const globalLeak = GLOBAL_SETTINGS_IDS.filter((id) => storyIds.has(id));
 const storyLeak = STORY_PANEL_IDS.filter((id) => settingsIds.has(id));
 
+// ---- 双真源：Svelte 侧（legacy 有的 id 一个不能少；挂载容器豁免）+ 互不串门 ----
+const svelteGlobalMissing = [...settingsIds].filter((id) => !MOUNT_IDS.includes(id) && !svelteSettingsIds.has(id)).sort();
+const svelteStoryMissing = [...storyIds].filter((id) => !MOUNT_IDS.includes(id) && !svelteStoryIds.has(id)).sort();
+const svelteGlobalLeak = GLOBAL_SETTINGS_IDS.filter((id) => !MOUNT_IDS.includes(id) && svelteStoryIds.has(id));
+const svelteStoryLeak = STORY_PANEL_IDS.filter((id) => !MOUNT_IDS.includes(id) && svelteSettingsIds.has(id));
+
 if (missingGlobal.length) problems.push(['全局设置 id 丢失（搬家回归）', missingGlobal]);
 if (missingStory.length) problems.push(['本对话设置 id 丢失（搬家回归）', missingStory]);
 if (globalLeak.length) problems.push(['全局设置 id 泄漏进 #story-prefs（双份 id）', globalLeak]);
 if (storyLeak.length) problems.push(['「当前故事」id 残留在 #modal-settings（搬漏）', storyLeak]);
+if (svelteGlobalMissing.length) problems.push(['Svelte 设置屏（src/screens/settings）缺 id（第二真源）', svelteGlobalMissing]);
+if (svelteStoryMissing.length) problems.push(['Svelte 本对话面板（src/screens/storyPrefs）缺 id（第二真源）', svelteStoryMissing]);
+if (svelteGlobalLeak.length) problems.push(['全局设置 id 出现在 Svelte 面板源码（串门）', svelteGlobalLeak]);
+if (svelteStoryLeak.length) problems.push(['「当前故事」id 出现在 Svelte 设置屏源码（串门）', svelteStoryLeak]);
 const missingNames = REQUIRED_NAMES.filter((n) => !settingsNames.has(n) && !storyNames.has(n));
 if (missingNames.length) problems.push(['radio 组丢失', missingNames]);
 
@@ -138,4 +177,5 @@ if (problems.length) {
   console.error(`全局清单 ${GLOBAL_SETTINGS_IDS.length} 个 / 面板清单 ${STORY_PANEL_IDS.length} 个 / radio ${REQUIRED_NAMES.length} 个。`);
   process.exit(1);
 }
-console.log(`✅ settings-ids-test：全局 #${GLOBAL_SETTINGS_IDS.length} 个（#modal-settings）+ 本对话 #${STORY_PANEL_IDS.length} 个（#story-prefs）+ ${REQUIRED_NAMES.length} 个 radio 组全部就位，双向无泄漏`);
+console.log(`✅ settings-ids-test：全局 #${GLOBAL_SETTINGS_IDS.length} 个（#modal-settings）+ 本对话 #${STORY_PANEL_IDS.length} 个（#story-prefs）+ ${REQUIRED_NAMES.length} 个 radio 组全部就位，双向无泄漏；`
+  + `双真源就位（Svelte 侧设置 ${svelteSettingsIds.size} / 面板 ${svelteStoryIds.size} 个 id，含挂载容器豁免 ${MOUNT_IDS.join(' / ')}）`);

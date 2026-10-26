@@ -58,6 +58,8 @@
   }
 
   // 把弹窗里的 fieldset / 危险行归进分组面板（幂等；只搬家，不改任何控件 id）
+  // 阶段 4 屏 2：Svelte 设置屏（src/screens/settings）按字段配置直接落好分组面板，
+  // #set-panels[data-impl="svelte"] 时跳过这步「按 legend 归类搬 DOM」，只做导航态绑定。
   function initSettingsNav() {
     const panels = $('#set-panels');
     const nav = $('#set-nav');
@@ -66,6 +68,25 @@
       return;
     }
     panels.dataset.ready = '1';
+    if (panels.dataset.impl !== 'svelte') regroupPanels(panels);
+    nav.querySelectorAll('.set-nav-item').forEach(btn => {
+      btn.onclick = () => openSettingsGroup(btn.dataset.group);
+    });
+    const back = $('#set-back');
+    if (back) back.onclick = () => {
+      $('#set-shell').classList.remove('detail');
+      syncSettingsNav();
+    };
+    // 窄屏第一次打开：先看分组列表，点进去才是详情（列表 → 下钻）；桌面直接进第一组
+    if (narrowSettings()) {
+      $('#set-shell').classList.remove('detail');
+      syncSettingsNav();
+    } else {
+      openSettingsGroup('g-models');
+    }
+  }
+
+  function regroupPanels(panels) {
     const byGroup = Object.create(null);
     const kids = Array.prototype.slice.call(panels.children);
     kids.forEach((el) => {
@@ -86,21 +107,6 @@
       (byGroup[g] || []).forEach(el => sec.appendChild(el));
       panels.appendChild(sec);
     });
-    nav.querySelectorAll('.set-nav-item').forEach(btn => {
-      btn.onclick = () => openSettingsGroup(btn.dataset.group);
-    });
-    const back = $('#set-back');
-    if (back) back.onclick = () => {
-      $('#set-shell').classList.remove('detail');
-      syncSettingsNav();
-    };
-    // 窄屏第一次打开：先看分组列表，点进去才是详情（列表 → 下钻）；桌面直接进第一组
-    if (narrowSettings()) {
-      $('#set-shell').classList.remove('detail');
-      syncSettingsNav();
-    } else {
-      openSettingsGroup('g-models');
-    }
   }
 
   // 显示某分组；窄屏进「详情」态（列表 → 下钻），桌面始终左导航 + 右内容
@@ -694,6 +700,7 @@
 
   function openStoryPrefs() {
     if (!S.story) { toast('先打开一个对话'); return; }
+    if (IR.StoryPanel && IR.StoryPanel.onOpen) IR.StoryPanel.onOpen();   // 阶段 4 屏 2：回到一级视图 + 对账判变
     renderStoryPrefs();
     // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新——
     // 迁入面板后它不再等全局设置打开才画（docs/phase4-settings-plan.md §2.2）

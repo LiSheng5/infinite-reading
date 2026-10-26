@@ -52,7 +52,9 @@ const PLAN = [
   { key: 'settings-tools', state: 'empty', screen: 'settings-tools', expect: '#modal-settings:not(.hidden)', note: '设置 · 工具与服务（生成过程 / 本地服务 / 邮件 / 定时主动 / 购物支付）' },
   { key: 'settings-data', state: 'empty', screen: 'settings-data', expect: '#modal-settings:not(.hidden)', note: '设置 · 数据（用户画像 / 本地存储）' },
   { key: 'settings-look', state: 'empty', screen: 'settings-look', expect: '#modal-settings:not(.hidden)', note: '设置 · 外观（界面）' },
-  { key: 'settings-story', state: 'empty', screen: 'settings-story', expect: '#modal-settings:not(.hidden)', note: '设置 · 当前故事（无故事时为空/禁用态）' },
+  // 序号 10 的最终处置（阶段 4 屏 2）：原「设置 · 当前故事」随「当前故事」组迁出全局设置而退役，
+  // 空位原地复用为「本对话设置 · 世界状态卡二级视图」（PLAN 序号 = 文件名前缀，不重排）。
+  { key: 'story-world-edit', state: 'seeded', screen: 'story-world-edit', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（面板内下钻：人物行卡 + sticky 保存栏）' },
   { key: 'modal-new', state: 'empty', screen: 'modal-new', expect: '#modal-new:not(.hidden)', note: '新故事弹窗（三张模式卡）' },
   { key: 'modal-wizard', state: 'empty', screen: 'modal-wizard', expect: '#modal-wizard:not(.hidden)', note: '开局设定向导（剧情模式）' },
   { key: 'modal-import-text', state: 'empty', screen: 'modal-import-text', expect: '#modal-import-text:not(.hidden)', note: '粘贴剧情文本导入弹窗（第 1 步）' },
@@ -74,6 +76,9 @@ const PLAN = [
   { key: 'modal-payment', state: 'seeded', screen: 'modal-payment', expect: '#modal-payment:not(.hidden)', note: '代下单弹窗（同上，智能体模式）' },
   { key: 'settings-schedule', state: 'seeded', screen: 'settings-schedule', expect: '#fs-schedule', note: '定时主动（「＋」→ 定时主动：设置·工具与服务，滚动到「定时主动」分区）' },
   { key: 'lightbox', state: 'seeded', screen: 'lightbox', expect: '#lightbox:not(.hidden)', note: '图片灯箱（智能体模式内联图气泡点开的大图）' },
+  // —— 阶段 4 屏 2 补拍：本对话设置面板的新交互 ——
+  { key: 'story-savepoints', state: 'seeded', screen: 'story-savepoints', expect: '#sp-list', note: '本对话设置 · 存档点列表（n 个 + 摘要行）' },
+  { key: 'story-world-empty', state: 'seeded', screen: 'story-world-empty', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（新故事：空世界，表单全空）' },
 ];
 
 /* 明确不截 / 只在某状态截的项与原因（进 manifest.skipped） */
@@ -82,6 +87,7 @@ const KNOWN_GAPS = [
   { item: 'modal-anchor（画风锚定）', state: 'empty', reason: '试画 4 张候选要生图适配器；empty 是未配置的普通模式，点了只会报「没配模型」' },
   { item: 'modal-email / modal-payment / 定时主动', state: 'empty', reason: '入口只在智能体/扮演模式出现，empty 无故事可切模式' },
   { item: 'settings-nav（设置分组列表）', state: 'seeded', reason: '与 empty 的设置弹窗同构，全局设置只在 empty 逐分组截；seeded 只补「本对话设置」与「定时主动」' },
+  { item: '10 号序（原 settings-story）', state: 'empty', reason: '「当前故事」组已迁出全局设置（阶段 4 屏 2 commit 1），empty 里无故事可截；PLAN 序号原地复用为 seeded 的世界卡二级视图（story-world-edit），序号不重排' },
 ];
 
 /* ================= 小工具 ================= */
@@ -534,6 +540,28 @@ async function runSeeded(page, snap, vp, manifest) {
   await sleep(400);
   await snap('story-prefs');
 
+  // —— 世界状态卡二级视图（面板内下钻，§3.2 方案 A）：人物行卡 + sticky 保存栏 ——
+  await page.click('#btn-world-edit');
+  await sleep(450);
+  await snap('story-world-edit');
+  await page.click('#prefs-world-back');   // 返回一级：滚动位置还原（下面再验一次列表）
+  await sleep(350);
+
+  // —— 存档点列表（打两个点：摘要行「n 个存档点 · 退出自动存档」+ 列表） ——
+  await page.evaluate(() => {
+    const A = window.IR.App;
+    const S = A.state;
+    if (S.story && !(S.story.savepoints || []).length) {
+      A.addSavepoint('手动存档 · 车厢');
+      A.addSavepoint('手动存档 · 月台');
+      A.renderSavepoints();
+    }
+    const el = document.getElementById('sp-panel');
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+  await sleep(400);
+  await snap('story-savepoints');
+
   // —— 确认弹窗（打存档点）+ 提示条 ——
   await page.click('#prefs-close');
   await sleep(300);
@@ -627,6 +655,23 @@ async function runSeeded(page, snap, vp, manifest) {
   } else {
     manifest.skipped.push({ item: 'lightbox', state: 'seeded', width: vp.width, reason: '聊天流里没有可点的内联图气泡（.bubble-image-inline img），灯箱入口没出现' });
   }
+
+  // —— 世界状态卡二级视图 · 空世界（直接开一个新故事：世界卡是空表单，「保存世界卡」默认禁用） ——
+  await page.evaluate(() => {
+    const A = window.IR.App;
+    A.closeStoryPrefs();
+    A.createStoryImmediate('chat');
+  });
+  await sleep(800);
+  await openHudMenu(page);
+  await page.click('#btn-story-prefs');
+  await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 }).catch(() => {
+    manifest.skipped.push({ item: 'story-world-empty', state: 'seeded', width: vp.width, reason: '新故事没开起来 / 面板没打开，看 console' });
+  });
+  await sleep(300);
+  await page.click('#btn-world-edit').catch(() => {});
+  await sleep(450);
+  await snap('story-world-empty');
 }
 
 main().catch(e => {

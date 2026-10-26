@@ -302,6 +302,8 @@
     const list = $('#sp-list');
     list.innerHTML = '';
     const sps = (S.story.savepoints || []).slice().reverse();
+    const sum = $('#sp-summary');   // 摘要行（阶段 4 屏 2 一级视图：n 个存档点 · 退出自动存档）
+    if (sum) sum.textContent = sps.length + ' 个存档点 · 退出自动存档';
     if (!sps.length) {
       const d = document.createElement('div');
       d.className = 'mono-line';

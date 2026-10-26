@@ -428,6 +428,8 @@
       if (closeTopModal()) return;
       const openMenu = document.querySelector('.menu:not(.hidden)');
       if (openMenu) { A.closeMenus(); return; }
+      // 本对话设置面板（Svelte 新屏才注册）：Esc 先退世界卡二级视图、再关面板
+      if (IR.StoryPanel && IR.StoryPanel.esc && IR.StoryPanel.esc()) return;
       A.exitImmersive();
     });
 

@@ -65,3 +65,9 @@ import './ui/gallery.js';
 
 // 阶段 4 · 屏 1：首页 Svelte 重写（默认挂新屏；?ui=legacy 退回旧首页，阶段 6 删）
 import './screens/home/index.js';
+
+// 阶段 4 · 屏 2：设置屏 + 本对话设置面板 Svelte 重写（默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删）
+// 注意：必须在 js/app.js 之后引入——app.js 的组合根只登记异步 boot，bind() 在 Store.boot() 之后才跑，
+// 这时两个新屏的 DOM 已就位，按 id 的旧绑定照常挂上（同屏 1 的装配顺序语义）。
+import './screens/settings/index.js';
+import './screens/storyPrefs/index.js';
