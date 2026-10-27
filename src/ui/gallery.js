@@ -7,7 +7,7 @@
 import { mount } from 'svelte';
 import Gallery from './Gallery.svelte';
 
-if (new URLSearchParams(location.search).has('ui')) {
+if (new URLSearchParams(location.search).get('ui') === '1') {
   const host = document.createElement('div');
   host.id = 'ir-ui-host';
   document.body.appendChild(host);

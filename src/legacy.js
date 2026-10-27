@@ -71,3 +71,6 @@ import './screens/home/index.js';
 // 这时两个新屏的 DOM 已就位，按 id 的旧绑定照常挂上（同屏 1 的装配顺序语义）。
 import './screens/settings/index.js';
 import './screens/storyPrefs/index.js';
+
+// 阶段 4 · 屏 3：书架 Svelte 重写（默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2）
+import './screens/shelf/index.js';

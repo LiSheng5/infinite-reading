@@ -16,8 +16,18 @@
   /* ================= 事件绑定 ================= */
 
   function bind() {
-    // —— 书架 ——
-    $('#btn-new-story').onclick = () => openModal('modal-new');
+    // 新屏（Svelte）挂载后容器打 data-impl="svelte"（src/screens/*/index.js）：见标记跳过旧 DOM 绑定，
+    // 避免双重触发（同屏 1 的 startSvelte 判定）。搜索框 / 键盘 / 空状态按钮不在此列——
+    // 仍由 js/app/shelf.js 的 initShelf 按 id 绑定，行为零改动。
+    const startSvelte = !!document.querySelector('#screen-start[data-impl="svelte"]');
+    const shelfSvelte = !!document.querySelector('#screen-shelf[data-impl="svelte"]');
+    // —— 书架 ——（书架 Svelte 屏的顶部按钮由组件自带 handler）
+    if (!shelfSvelte) {
+      $('#btn-new-story').onclick = () => openModal('modal-new');
+      $('#btn-shelf-settings').onclick = A.openSettings;
+      $('#btn-shelf-home').onclick = A.showStart;
+      $('#btn-import').onclick = () => $('#file-import').click();
+    }
     $('#btn-close-new').onclick = () => closeModal('modal-new');
     document.querySelectorAll('#modal-new .mode-card').forEach(b => {
       b.onclick = () => {
@@ -27,16 +37,11 @@
         else A.createStoryImmediate(mode);
       };
     });
-    $('#btn-shelf-settings').onclick = A.openSettings;
-    $('#btn-shelf-home').onclick = A.showStart;
     A.initShelf();   // UI-2：搜索框 / 键盘 / 空状态按钮（js/app/shelf.js）
-    $('#btn-import').onclick = () => $('#file-import').click();
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 
     // —— 剧情文本导入（R12 路径②，§4.11 / T-P6-1） ——
-    $('#btn-import-text').onclick = A.openImportText;
-    // 首页已换 Svelte 实现（src/screens/home，容器打 data-impl="svelte"）时跳过旧 DOM 绑定，避免双重触发
-    const startSvelte = !!document.querySelector('#screen-start[data-impl="svelte"]');
+    if (!shelfSvelte) $('#btn-import-text').onclick = A.openImportText;
     if (!startSvelte) $('#btn-start-import').onclick = A.openImportText;
     $('#btn-close-import-text').onclick = A.closeImportText;
     $('#btn-it-cancel').onclick = A.closeImportText;

@@ -74,6 +74,16 @@
     if (!list) return;
     // 旧索引条目一次性补齐（幂等；§3.1 迁移）
     try { Store.ensureIndexComplete(); } catch (_) { /* 迁移失败不拦渲染 */ }
+    // 阶段 4 屏 3：书架已换 Svelte 实现（src/screens/shelf，容器打 data-impl="svelte"）时，
+    // #shelf-list 的行 DOM 由组件管——这里只推视图模型（分组 / 行错峰 / 「更早」截断），不再拼 DOM；
+    // 旧拼装路径原样留给 ?ui=legacy 逃生口（阶段 6 随 legacy 入口一起删）。
+    if (IR.ShelfScreen) {
+      const index = Store.listStories();
+      $('#shelf-empty').classList.toggle('hidden', index.length > 0);
+      if (currentQuery) { runSearch(); return; }
+      IR.ShelfScreen.render(shelfModel(index));
+      return;
+    }
     list.innerHTML = '';
     const index = Store.listStories();   // 已按 updatedAt 新 → 旧
     $('#shelf-empty').classList.toggle('hidden', index.length > 0);
@@ -104,7 +114,7 @@
         const more = document.createElement('button');
         more.className = 'btn ghost shelf-more';
         more.textContent = '展开更多（还有 ' + (items.length - EARLIER_CAP) + ' 条）';
-        more.onclick = () => { expandEarlier = true; renderShelf(); };
+        more.onclick = showAllEarlier;
         list.appendChild(more);
       }
     }
@@ -167,6 +177,66 @@
       }
     });
     return row;
+  }
+
+  /* ============ 视图模型（阶段 4 屏 3：IR.ShelfScreen 状态桥） ============
+   * Svelte 组件按这些数据渲染出与 rowOf / resultRowOf 同结构的 DOM；
+   * 切分 / 分组 / 截断口径与旧拼装路径共用上面的常量与工具函数，不另起一套。 */
+
+  function shelfModel(index) {
+    const currentId = Store.getCurrentId();
+    const grouped = { today: [], yesterday: [], week: [], older: [] };
+    for (const it of index) grouped[groupKeyOf(it.updatedAt || 0)].push(it);
+    const groups = [];
+    let rowIndex = 0;
+    for (const g of GROUP_LABELS) {
+      const items = grouped[g.key];
+      if (!items.length) continue;
+      const capped = (g.key === 'older' && index.length > 300 && !expandEarlier && items.length > EARLIER_CAP);
+      const shown = capped ? items.slice(0, EARLIER_CAP) : items;
+      groups.push({
+        key: g.key,
+        label: g.label,
+        count: items.length,
+        items: shown.map(it => rowModel(it, currentId, rowIndex++)),
+        capped,
+        moreCount: items.length - EARLIER_CAP,
+      });
+    }
+    return groups;
+  }
+
+  function rowModel(it, currentId, rowIndex) {
+    return {
+      id: it.id,
+      current: it.id === currentId,
+      rowIn: rowIndex < 14,
+      delay: rowIndex < 14 ? Math.min(rowIndex * ROW_STAGGER_STEP, ROW_STAGGER_MAX) + 'ms' : '',
+      // 导入档案的 thumb 不可信（审查 中危 #12）：白名单只放行 data:/blob:（safeThumb），
+      // 组件拼 url() 时再经 JSON.stringify 转义——与旧 rowOf / models.js setStageArt 同口径
+      thumb: Store.safeThumb(it.thumb),
+      icon: MODE_ICONS[it.mode] || MODE_ICONS.choice,
+      title: it.title || '未命名故事',
+      meta: '[' + (MODE_LABELS[it.mode] || '剧情') + '] · 第 ' + (it.turn || 0) + ' 回合 · ' + relTime(it.updatedAt),
+      snippet: it.snippet || '',
+    };
+  }
+
+  function hitModel(hit, doc) {
+    return {
+      id: hit.id,
+      rawTitle: doc.title,
+      focusNid: (hit.hits && hit.hits[0] && hit.hits[0].nid) || null,
+      titleSegs: segmentsOf(doc.title || '未命名故事', hit.titleRanges),
+      meta: '[' + (MODE_LABELS[doc.mode] || '剧情') + '] · ' + relTime(doc.updatedAt),
+      snippets: (hit.hits || []).slice(0, 2).map(h => segmentsOf(h.snippet, h.ranges)),
+    };
+  }
+
+  // 「展开更多」：点开「更早」分组的截断（新旧两屏的行列表展开按钮共用）
+  function showAllEarlier() {
+    expandEarlier = true;
+    renderShelf();
   }
 
   /* ================= 「⋯」菜单（§2.2） ================= */
@@ -377,20 +447,30 @@
     setTimeout(step, 0);
   }
 
-  // 高亮：createElement('mark') + textContent，绝不 innerHTML 拼片段（§0）
-  function appendHighlighted(parent, text, ranges) {
+  // 命中片段拆段：[{ t: '纯文本' }, { t: '命中', mark: true }]，旧拼装与 Svelte 组件共用切分口径
+  function segmentsOf(text, ranges) {
     const s = String(text == null ? '' : text);
+    const segs = [];
     let pos = 0;
     for (const r of (ranges || [])) {
       const a = Math.max(0, +r[0] || 0), b = Math.min(s.length, +r[1] || 0);
       if (b <= a || a < pos) continue;
-      if (a > pos) parent.appendChild(document.createTextNode(s.slice(pos, a)));
-      const mark = document.createElement('mark');
-      mark.textContent = s.slice(a, b);
-      parent.appendChild(mark);
+      if (a > pos) segs.push({ t: s.slice(pos, a) });
+      segs.push({ t: s.slice(a, b), mark: true });
       pos = b;
     }
-    if (pos < s.length) parent.appendChild(document.createTextNode(s.slice(pos)));
+    if (pos < s.length) segs.push({ t: s.slice(pos) });
+    return segs;
+  }
+
+  // 高亮：createElement('mark') + textContent，绝不 innerHTML 拼片段（§0）
+  function appendHighlighted(parent, text, ranges) {
+    for (const seg of segmentsOf(text, ranges)) {
+      if (!seg.mark) { parent.appendChild(document.createTextNode(seg.t)); continue; }
+      const mark = document.createElement('mark');
+      mark.textContent = seg.t;
+      parent.appendChild(mark);
+    }
   }
 
   function runSearch() {
@@ -403,7 +483,8 @@
     if (clearBtn) clearBtn.classList.toggle('hidden', !q);
     if (!q) {
       results.classList.add('hidden');
-      results.innerHTML = '';
+      // 阶段 4 屏 3：结果行 DOM 由 Svelte 组件管时推空数组（等价于旧 innerHTML=''）
+      if (IR.ShelfScreen) IR.ShelfScreen.results([]); else results.innerHTML = '';
       input.setAttribute('aria-expanded', 'false');
       input.setAttribute('aria-activedescendant', '');
       activeIdx = -1;
@@ -426,7 +507,6 @@
     void results.offsetWidth;
     results.classList.add('fade-swap');
     input.setAttribute('aria-expanded', 'true');
-    results.innerHTML = '';
     activeIdx = -1;
     input.setAttribute('aria-activedescendant', '');
 
@@ -437,6 +517,18 @@
     const termEl = $('#shelf-search-term');
     if (termEl && !hits.length) termEl.textContent = q;
 
+    // 阶段 4 屏 3：命中行 DOM 由 Svelte 组件管（IR.ShelfScreen 推视图模型，高亮拆成 mark 段）；
+    // 旧拼装路径原样留给 ?ui=legacy 逃生口。
+    if (IR.ShelfScreen) {
+      const models = [];
+      for (const hit of hits) {
+        const doc = docs.get(hit.id);
+        if (doc) models.push(hitModel(hit, doc));
+      }
+      IR.ShelfScreen.results(models);
+      return;
+    }
+    results.innerHTML = '';
     let i = 0;
     for (const hit of hits) {
       const doc = docs.get(hit.id);
@@ -617,5 +709,9 @@
     regenTitle,
     initShelf,
     searchStats,
+    // 阶段 4 屏 3：Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断——
+    // 两个入口登记给 A（函数体零改动 / 与旧按钮同语义），组件经 A() 调用
+    openRowMenu,
+    showAllEarlier,
   });
 })();
