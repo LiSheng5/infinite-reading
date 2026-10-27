@@ -2,7 +2,7 @@
  * src/screens/storyPrefs/panel.svelte.js —— 本对话设置面板的状态桥（Svelte 5 runes）
  *
  * view：'list'（一级：对话覆盖行 + 故事数据）/ 'world'（二级：世界状态卡编辑器，面板内下钻，
- *  见 docs/phase4-settings-plan.md §3.2 方案 A）。窄屏 76vh 底部弹层与桌面停靠面板同一套交互。
+ *  见阶段 4 屏 2 迁移方案 · 方案 A）。窄屏 76vh 底部弹层与桌面停靠面板同一套交互。
  * dirty：世界卡表单是否改动过——真源是 js/app/settings.js 的 worldFormChanged（判变账本），
  *  决定「保存世界卡」是否可点；输入事件与界面层 renderStoryPanels 重绘后都对账一次。
  *

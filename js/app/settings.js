@@ -214,7 +214,7 @@
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
     // 阶段 4 屏 2：主「保存」只管全局设置。原「顺带落盘世界卡 / 推进模式」的收口随
-    // 「当前故事」组迁入本对话设置面板而移除（docs/phase4-settings-plan.md §5.3）：
+    // 「当前故事」组迁入本对话设置面板而移除（阶段 4 屏 2 迁移方案）：
     // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
     saveAll();
     if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
@@ -349,7 +349,7 @@
     if (!has) return;
     const w = S.story.world || {};
     // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉
-    //（docs/phase4-settings-plan.md §3.2）。换故事（表单记账的 story id 变了）照常整画。
+    //（阶段 4 屏 2 迁移方案）。换故事（表单记账的 story id 变了）照常整画。
     const worldDirty = worldFormStoryId === S.story.id && worldFormChanged(w);
     if (!worldDirty) {
       worldFormStoryId = S.story.id;

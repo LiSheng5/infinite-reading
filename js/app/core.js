@@ -419,7 +419,7 @@
    * opts.variant：'row'（默认，表格形态：一行五字段 + 表头，向导 / 文本导入用）
    *              'card'（行卡形态：首行「名字 + 在场/离场」各占一半、下方三个全宽输入、
    *                      右上角 40px 删除钮、不出表头——本对话设置的世界卡编辑器用，
-   *                      docs/phase4-settings-plan.md §3.2）。
+   *                      阶段 4 屏 2 迁移方案）。
    * 返回 { set(list), get(), add(vals) }：get() 滤掉全空行、不造字段外的值。 */
   function charEditor(container, fields, addBtn, opts) {
     fields = fields || [];

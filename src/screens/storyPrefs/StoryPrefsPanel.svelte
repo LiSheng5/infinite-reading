@@ -1,6 +1,6 @@
 <script>
   /* 阶段 4 屏 2 · 「本对话设置」面板（Svelte 5 重写）
-   * 两级视图（面板内下钻，docs/phase4-settings-plan.md §3.2 方案 A）：
+   * 两级视图（面板内下钻，阶段 4 屏 2 迁移方案 · 方案 A）：
    *   一级 = 对话覆盖行（#prefs-body，界面层 renderStoryPrefs 按 IR.Prefs.visibleFor 渲染，本次不动）
    *        + 故事数据（推进模式 / 存档点 / 世界状态卡摘要与编辑入口 / 角色卡）；
    *   二级 = 世界状态卡编辑器（WorldCardEditor）。
