@@ -50,6 +50,12 @@
     const wrap = document.createElement('div');
     wrap.className = 'reason-block reason-live';
     if (open) wrap.classList.add('open');
+    reasonLiveInto(wrap, text);
+    return wrap;
+  }
+
+  // 思考窗 interior（按钮 + 面板）：旧整节点拼装与 Svelte 空壳（阶段 4 屏 4 的 fillLiveDom）共用
+  function reasonLiveInto(wrap, text) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'reason-toggle';
@@ -67,7 +73,33 @@
     };
     wrap.appendChild(btn);
     wrap.appendChild(panel);
-    return wrap;
+  }
+
+  // 阶段 4 屏 4：流式 / 打字机临时旁白挂进组件渲染的两个空壳（与旧 DOM 同位置同结构）。
+  // 空壳的显隐由视图模型的 live / liveReason 决定；interior 与 class 状态照旧命令式回填，
+  // S.liveEl / S.liveReasonEl 的同步语义与流式 span 追踪零改动（round.js / turn.js 不用改）。
+  function fillLiveDom() {
+    if (!S.live) return;
+    const shell = $('#chat-scroll').querySelector('.reason-live');
+    if (shell) {
+      reasonLiveInto(shell, S.live.reasoning);
+      if (S.liveReasonOpen) shell.classList.add('open');
+      if (S.liveReasonCollapsed) shell.classList.add('collapsed');
+      S.liveReasonEl = shell;
+      const p = shell.querySelector('.reason-panel');
+      if (p) p.scrollTop = p.scrollHeight;
+    }
+    const bubble = $('#chat-scroll').querySelector('.bubble-live');
+    if (bubble) {
+      if (S.live.text) {
+        bubble.textContent = S.live.text;
+      } else {
+        const pill = document.createElement('span');
+        pill.className = 'gen-pill';
+        pill.textContent = '生成中…';
+        bubble.appendChild(pill);
+      }
+    }
   }
 
   function renderChat() {
@@ -75,6 +107,20 @@
     S.liveReasonEl = null;
     A.resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
     const box = $('#chat-scroll');
+    // —— 阶段 4 屏 4：阅读页已换 Svelte 实现（src/screens/read，#game-layout 打 data-impl="svelte"）——
+    // 聊天流 / 开场引导 / 选项 DOM 由组件管：这里只推视图模型（js/app/readmodel.js 同口径构建）；
+    // 流式临时旁白的两个空壳（reason-live / bubble-live）由组件渲染，interior 仍走旧 DOM 拼装
+    //（fillLiveDom：span.delta 逐段淡入与 typewrite 都是命令式动画代码，零改动）。
+    // 旧拼装路径原样留给 ?ui=legacy 逃生口（阶段 6 随 legacy 入口一起删）。
+    if (IR.ReadScreen) {
+      A.updateHistoryBar();   // UI-4 §5：历史位置提示条跟着 head 走（head 有孩子就亮）
+      IR.ReadScreen.chat(A.readChatModel());
+      if (!S.story) return;
+      fillLiveDom();
+      A.renderFeatureBar();
+      scrollChatBottom();
+      return;
+    }
     box.innerHTML = '';
     A.updateHistoryBar();   // UI-4 §5：历史位置提示条跟着 head 走（head 有孩子就亮）
     if (!S.story) return;
@@ -598,6 +644,13 @@
 
   function renderThumbs() {
     const strip = $('#thumb-strip');
+    // —— 阶段 4 屏 4：缩略图条 DOM 由组件管——推视图模型（js/app/readmodel.js 同口径），
+    // 点击选场景的回调在组件里等价重放（lastBg + saveAll + renderStage + renderThumbs）。
+    // 旧拼装路径原样留给 ?ui=legacy 逃生口。
+    if (IR.ReadScreen) {
+      IR.ReadScreen.thumbs(A.readThumbsModel());
+      return;
+    }
     strip.innerHTML = '';
     const scenes = (S.story && S.story.scenes) || [];
     if (!scenes.length) {
@@ -674,5 +727,5 @@
 
   // 布局类导出（effectiveLayout / renderLayoutHint / isImmersive / applyLayout / toggleStagePanel /
   // enterImmersive / exitImmersive / bindSplitter）在 js/app/layout.js 注册（本文件只搬家拆分）
-  A.reg({ scrollChatBottom, imageSceneById, currentScene, renderChat, closeLightbox, renderStage, watchStageVisibility, renderThumbs, enterGame });
+  A.reg({ scrollChatBottom, imageSceneById, currentScene, renderChat, openLightbox, closeLightbox, safeImgSrc, renderStage, watchStageVisibility, renderThumbs, enterGame });
 })();

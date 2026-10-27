@@ -769,5 +769,5 @@
     return what + '：' + p.status;
   }
 
-  A.reg({ scheduleToolsAvailable, proposalToolsAvailable, runScheduleTool, loadFeatureConfig, saveFeatureConfig, renderTriggerList, openEmailModal, doEmailSend, renderPayLedger, openPaymentModal, doPaymentSubmit, runProposalTool, proposalBubble });
+  A.reg({ scheduleToolsAvailable, proposalToolsAvailable, runScheduleTool, loadFeatureConfig, saveFeatureConfig, renderTriggerList, openEmailModal, doEmailSend, renderPayLedger, openPaymentModal, doPaymentSubmit, runProposalTool, proposalBubble, proposalStatusLabel, confirmProposal, denyProposal });
 })();

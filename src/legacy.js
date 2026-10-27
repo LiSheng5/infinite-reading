@@ -49,6 +49,7 @@ import '../js/app/video.js';
 import '../js/app/turn.js';
 import '../js/app/round.js';
 import '../js/app/render.js';
+import '../js/app/readmodel.js';   // 阶段 4 屏 4：阅读页视图模型（IR.ReadScreen 状态桥的弹药，供 render.js 双路取用）
 import '../js/app/layout.js';
 import '../js/app/settings.js';
 import '../js/app/prefsui.js';
@@ -74,3 +75,7 @@ import './screens/storyPrefs/index.js';
 
 // 阶段 4 · 屏 3：书架 Svelte 重写（默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2）
 import './screens/shelf/index.js';
+
+// 阶段 4 · 屏 4：阅读页 Svelte 重写（聊天区 / 输入区 / 选项托盘 / 舞台 / 缩略图条；
+// 默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3）
+import './screens/read/index.js';
