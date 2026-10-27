@@ -61,7 +61,6 @@ icons/              应用图标（由 tools/make-icons.mjs 生成，产物随�
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx）
 启动.bat             Windows 一键启动（Python 优先，退回 tools/serve.ps1）
 tools/              可选脚本（版本号同步、单文件打包、图标生成、本地服务器、生视频本地转发 video-proxy.mjs），不属于运行时代码
-docs/               仓库截图（docs/screenshot.png）
 ```
 
 架构与数据流的细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。

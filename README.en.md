@@ -37,8 +37,6 @@ index.html?demo=1
 A built-in 10-turn script plus locally drawn placeholder images (rendered with canvas): no network, no API cost, no configuration.
 Story flow, choices, the painter sub-agent, image generation, the painter workbench, saving and the shelf all run through the *real* pipeline — only the model is replaced by a built-in script.
 
-![Offline demo mode (?demo=1)](docs/screenshot.png)
-
 - **Online demo**: `https://LiSheng5.github.io/infinite-reading/?demo=1` (enable it with Settings → Pages → Source: GitHub Actions; the workflow ships with the repo)
 - **One file to carry around**: `npm run bundle` produces `dist/ir.html` (~530 KB with HTML/CSS/JS inlined) — send it as an attachment and double-click it
 - To use a real model, drop the `?demo=1` from the URL (the little "🎬 演示" chip in the top bar does it for you) and configure a model from the home screen. Demo mode **never writes settings to storage**, so your real configuration stays untouched.
