@@ -62,7 +62,7 @@ const global = globalThis as any;
 
   // 深拷贝的唯一口径（审查 可维护性 三·1）：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
   // 循环引用不炸）；环境没有或内容不可克隆（函数等）时回落 JSON 往返。
-  // State / msgSnap / demo 模拟器等一律用 IR.clone，不要再各写 JSON.parse(JSON.stringify(x))。
+  // State / msgSnap 等一律用 IR.clone，不要再各写 JSON.parse(JSON.stringify(x))。
   function clone(x) {
     if (x == null || typeof x !== 'object') return x;
     if (typeof structuredClone === 'function') {
@@ -71,7 +71,7 @@ const global = globalThis as any;
     return JSON.parse(JSON.stringify(x));
   }
 
-  // 异步等待的唯一口径（审查 可维护性 三·5）：适配器轮询（providers）、app 工具、demo 模拟器共用
+  // 异步等待的唯一口径（审查 可维护性 三·5）：适配器轮询（providers）与 app 工具共用
   function sleep(ms) {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }

@@ -2,7 +2,7 @@
  * acceptance/tools/prefs-smoke.mjs —— 屏 2（设置屏 + 本对话设置面板）的行为冒烟
  *
  * 跑法：先 npm run build:single，再 node acceptance/tools/prefs-smoke.mjs
- * 目标：dist/single/index.html（file:// 双击的真实形态），?demo=1 离线演示故事。
+ * 目标：dist/single/index.html（file:// 双击的真实形态），页面内播种一个故事（不调用任何模型）。
  * 两轮：默认（Svelte 新屏）与 ?ui=legacy（0.12.1 旧屏逃生口）。
  * 覆盖：设置屏挂载 / id 就位 / 保存读回 / 折叠块自动展开两条规则 / 分组切换；
  *       本对话面板下钻（滚动 / 焦点 / Esc 层级）/ 人物行卡 / sticky 保存栏 / 判变禁用；
@@ -21,13 +21,44 @@ const APP = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 const out = [];
 const ok = (name, pass, detail) => out.push({ name, pass, detail: detail == null ? '' : String(detail) });
 
+// 页面内播种：一个带人物 / 存档点的故事（本对话面板要有人物行卡与存档点摘要）
+async function seedStory(page) {
+  const r = await page.evaluate(() => {
+    try {
+      const { Store, App } = window.IR;
+      const st = Store.newStory({ title: '冒烟故事', premise: '冒烟用的故事设定。', mode: 'choice' });
+      st.titleAuto = false;
+      st.world.place = '月台';   // 与下面 fill('冒烟镇') 不同，才能触发「判变」
+      st.world.time = '深夜';
+      st.world.characters = [{ name: '周叙', presence: '在场', personality: '克制', speech: '简短', note: '' }];
+      App.state.story = st;
+      App.addSavepoint('冒烟存档');
+      Store.saveStory(st);
+      Store.setCurrentId(st.id);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String((e && e.stack) || e) };
+    }
+  });
+  if (!r.ok) throw new Error('播种失败：' + r.error);
+}
+
 async function run(browser, label, suffix, fn) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const errors = [];
+  // 本地服务不在跑：把启动探测的 /health 接住，避免把「连不上 127.0.0.1」当成页面错误
+  await page.route('http://127.0.0.1:4319/**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, version: 'acceptance', features: { email: true, schedule: true, payment: true } }),
+  }));
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
-  await page.goto(APP + '?demo=1' + suffix);
-  await page.waitForTimeout(2500);
+  await page.goto(APP + (suffix ? '?' + suffix.replace(/^[?&]/, '') : ''));
+  await page.waitForFunction(() => !!(window.IR && IR.App && IR.App.state && IR.App.state.settings), null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  await seedStory(page);
+  await page.waitForTimeout(300);
   await fn(page, (name, pass, detail) => ok(label + name, pass, detail));
   ok(label + 'no pageerror', errors.length === 0, errors.slice(0, 5).join(' | '));
   await page.close();

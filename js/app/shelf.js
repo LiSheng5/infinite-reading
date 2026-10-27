@@ -311,7 +311,7 @@
     if (!cfg.provider || !cfg.model) return false;
     const adapter = (IR.ChatProviders || {})[cfg.provider];
     if (!adapter || typeof adapter.chat !== 'function') return false;
-    if (cfg.provider !== 'demo' && !cfg.apiKey) return false;
+    if (!cfg.apiKey) return false;
     return true;
   }
 

@@ -221,7 +221,7 @@
     const k = S.story && S.story.ui && S.story.ui.kind;
     return (k === 'say' || k === 'direct') ? k : 'do';
   }
-  // 外层前缀 [玩家行动] 保持不变（demo.js 靠它分派），类型标记作为内层前缀。
+  // 外层前缀 [玩家行动] 保持不变，类型标记作为内层前缀。
   // v0.6.0：chat（智能体）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
   function withKindMarker(text, kind) {
     const raw = String(text == null ? '' : text);

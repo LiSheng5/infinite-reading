@@ -3,7 +3,6 @@
 # 阶段 1 起源码经 Vite 构建，镜像改两段式：先构建 dist/site，再由 nginx 直接托管产物。
 #   docker build -t infinite-reading .
 #   docker run --rm -p 8080:80 infinite-reading      # → http://localhost:8080/
-#   想直接看演示：http://localhost:8080/?demo=1
 #
 # 运行段依旧零依赖、零状态（不装 node、不挂卷）；构建段只在 docker build 时跑一次。
 # 构建上下文靠 .dockerignore 瘦身（docs / eval / tools / .git 不进镜像）。

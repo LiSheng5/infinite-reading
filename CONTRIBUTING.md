@@ -45,14 +45,12 @@ js/titles.js        自动标题（纯逻辑）：触发判定、prompt、输出
 js/search.js        全文搜索（纯逻辑）：标题 + 全部分支节点检索，输出零 HTML
 js/modelCapabilities.js  模型参数登记表（默认留空）
 js/roleCard.js      SillyTavern V2/V3 PNG 角色卡解析
-js/demo.js          离线演示（?demo=1）：内置剧本 + 本地占位图两个适配器
 js/zip.js           零依赖手写 ZIP：带原图的全量备份打包 / 解包
 js/sidecar.js       可选本地服务客户端：/health 探测、token、SSE 退避重连
 js/features.js      主动触达的去重与排队（投递回调由 js/app/sidecar.js 的 initFeatures 注册）
 js/app.js           组合根：事件绑定 + 启动（业务模块拆在 js/app/*.js，现 20 个）
 eval/run.js         离线评测（零依赖、不花 API）
 eval/mock-story.js  评测用的 32 回合长局剧本
-eval/demo-smoke.js  演示模式冒烟测试（不开浏览器，验证适配器契约）
 eval/zip-smoke.js   ZIP 读写冒烟（第二套 CRC32 复算 + 手工解析中央目录）
 eval/scheduler-test.js / email-test.js / payment-test.js / sidecar-smoke.js / frontend-smoke.js  侧车与前端特性测试（接入 npm test）
 sidecar/            可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events / util / statuses
@@ -69,21 +67,11 @@ tools/              可选脚本（版本号同步、单文件打包、图标生
 
 ```bash
 node eval/run.js                      # 离线评测：应全部 [命中]，总分不低于基线
-node eval/demo-smoke.js               # 演示模式冒烟：契约检查全绿
 node tools/sync-version.mjs --check   # 版本号一致性
 ```
 
 `eval/run.js` 用固定剧本重放 32 回合，检查「上下文组装 / 压缩 / 启发式召回 / 角色卡 / 画像」是否被改坏。
 它**不调用任何 API、不产生费用**，是我们防回归的第一道闸门——改记忆机制前尤其要先跑。
-`eval/demo-smoke.js` 则盯着 `js/demo.js` 的两个假适配器：AI1 回包能不能被真实解析链路认出来、画师三套回包齐不齐、后台任务有没有老实交回空串。
-
-## 三之二、不想配 Key 也能开发界面
-
-在地址后面加 `?demo=1`（或点开始页的「🎬 离线演示」）会进入**离线演示模式**：
-内置剧本 + canvas 本地占位图，不联网、不写盘，剧情 / 出图 / 画师工作台 / 存档全都能点。
-
-调试 UI 布局时非常省事；但它走的是内置脚本，**验证真实模型行为时必须去掉这个参数**。
-演示模式的实现原则是「换适配器、不改业务逻辑」——改功能时请保持这一点，否则演示会悄悄烂掉。
 
 ## 四、代码取向
 

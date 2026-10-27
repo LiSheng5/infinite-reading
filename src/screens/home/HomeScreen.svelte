@@ -63,9 +63,6 @@
     <button id="btn-start-shelf" class="link-btn" type="button" onclick={() => A().showShelf()}>书架</button>
     <button id="btn-start-import" class="link-btn" type="button" onclick={() => A().openImportText()}>文本导入</button>
     <button id="btn-open-settings" class="link-btn" type="button" onclick={() => A().openSettings()}>接入模型</button>
-    <button id="btn-start-demo" class="link-btn" type="button"
-            title="不用配置、不用联网：用内置剧本和本地占位图先看一遍完整流程"
-            onclick={() => { location.href = '?demo=1'; }}>离线演示</button>
   </nav>
   <p class="version">v{VERSION} · 纯本地运行 · 数据只保存在你的浏览器里</p>
 </div>

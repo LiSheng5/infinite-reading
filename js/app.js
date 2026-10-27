@@ -11,7 +11,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, Cap, DEMO, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
+  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
 
   /* ================= 事件绑定 ================= */
 
@@ -69,8 +69,6 @@
       $('#btn-start-shelf').onclick = A.showShelf;
       $('#btn-open-settings').onclick = A.openSettings;
       $('#btn-continue').onclick = A.continueLast;
-      // 「离线演示」：带上 ?demo=1 重开一次（演示模式靠查询参数判定，刷新即回到普通模式）
-      $('#btn-start-demo').onclick = () => { location.href = '?demo=1'; };
     }
 
     // 拖进窗口即可导入（书架与开始页都支持）
@@ -510,7 +508,6 @@
 
     Store.migrateLegacy();            // v0.1 旧档 → v0.2（幂等）
     S.settings = Store.loadSettings();  // 迁移后重新读取
-    if (DEMO) S.settings = IR.Demo.applyTo(S.settings);   // 只改内存：演示适配器生效，配置不落盘
     // 动效强度（UI-1）：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
     applyMotion();
     if (motionMQ) {
@@ -522,14 +519,8 @@
     bind();
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
-    if (DEMO) {
-      // 演示模式保持零外联：把本地服务换成一整套内存 mock，界面链路照样跑通
-      if (IR.Demo && IR.Demo.installSidecarMock) IR.Demo.installSidecarMock();
-      if (IR.Demo && IR.Demo.applyVideoGate) IR.Demo.applyVideoGate();   // 🎬 置灰（§8）
-    }
     A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
-    if (DEMO) A.startDemo();            // 演示模式直接开演（跳过开始页与试画锚定）
-    else A.showStart();                 // 入口 = 开始页（v0.1 原样）
+    A.showStart();                      // 入口 = 开始页（v0.1 原样）
     A.renderShelf();
     A.initStorageGuard().then(A.renderStoragePanel);   // P0：申请持久化 + 刷新存储面板
     A.remindBackupIfNeeded();                        // P0：7 天没备份就提醒一次

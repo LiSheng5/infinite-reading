@@ -6,7 +6,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, DEMO, MODE_LABELS, IMAGE_ASPECTS, applyMotion, toast, irConfirm, fmtTime, saveAll, miniBtn } = A;
+  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, applyMotion, toast, irConfirm, fmtTime, saveAll, miniBtn } = A;
 
   function syncSettingsToForm() {
     A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
@@ -39,7 +39,7 @@
     $('#s-image-model').value = S.settings.image.model;
     $('#s-image-key').value = S.settings.image.apiKey;
     $('#s-image-params').value = typeof S.settings.image.extraParams === 'string' ? S.settings.image.extraParams : '';
-    // 生图适配器：只有两个真实值；演示模式的假适配器（demo-image）不显示在表单里，保存时也不会覆盖它
+    // 生图适配器：只有两个真实值
     $('#s-image-provider').value = S.settings.image.provider === 'minimax-image' ? 'minimax-image' : 'openai-images';
     $('#s-image-ref').value = S.settings.image.refMode === 'prev' ? 'prev' : 'off';
     applyImageProviderHint();
@@ -145,8 +145,8 @@
     S.settings.draft.model = $('#s-draft-model').value.trim();
     S.settings.draft.apiKey = $('#s-draft-key').value.trim();
 
-    // 生图适配器选哪个用哪个；演示模式保持假适配器（否则一保存就把 demo 换成真接口）
-    if (!DEMO) S.settings.image.provider = $('#s-image-provider').value === 'minimax-image' ? 'minimax-image' : 'openai-images';
+    // 生图适配器选哪个用哪个
+    S.settings.image.provider = $('#s-image-provider').value === 'minimax-image' ? 'minimax-image' : 'openai-images';
     // 参考图：'prev' 才真的传图，其余一律关闭
     S.settings.image.refMode = $('#s-image-ref').value === 'prev' ? 'prev' : 'off';
     S.settings.image.baseUrl = $('#s-image-base').value.trim();
@@ -248,7 +248,7 @@
     };
     return {
       cfg: {
-        // 生图按面板上选的适配器测（演示模式下面板显示的是 openai-images，但 DEMO 会提前拦下不联网）
+        // 生图按面板上选的适配器测
         provider: t.kind === 'image'
           ? (($('#s-image-provider') || {}).value === 'minimax-image' ? 'minimax-image' : 'openai-images')
           : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
@@ -267,8 +267,6 @@
       el.className = 'hint test-state' + (level ? ' ' + level : '');
       el.textContent = message;
     };
-
-    if (DEMO) { set('warn', '演示模式不联网：这里没有真实接口可测。去掉地址栏的 ?demo=1 重新打开就能测了。'); return; }
 
     const { cfg, inherited } = readTestCfg(t);
     const adapter = t.kind === 'image'

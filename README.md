@@ -20,22 +20,7 @@
 - 🔌 **模型随便换**：对话与生图分离，兼容所有 OpenAI 格式接口（云端 / 本地，Base URL 自填）
 - 🖼 **MiniMax 生图（`image-01` / `image-01-live`）**：「生图适配器」选 **MiniMax 原生**即走官方 `/v1/image_generation`；`image-01-live` 支持「漫画 / 元气 / 中世纪 / 水彩」四种画风（填进自定义参数 `style.style_type=漫画, style.style_weight=0.8`）。浏览器直连被 CORS 拦时同样用 `node tools/video-proxy.mjs` 转发（生图 / 生视频共用一个进程），接口地址填 `http://127.0.0.1:4320`
 - 🎯 **画风不漂**：画师写提示词时以上一张图为「差分基底」（风格词原样保留、只改剧情变化的部分）；设置里打开「参考图 = 用上一张图」后，还会把上一张缩到长边 1024 的 JPEG 作为 `subject_reference` 一并提交，人物长相与服饰更连贯
-- 🎬 **离线演示**：加 `?demo=1` 就能在不配 Key、不联网的情况下走完整流程（内置剧本 + 本地占位图）
 - 🎬 **生视频（MiniMax）**：剧情模式舞台右上角「🎬」→「以当前图生成视频 / 按剧情文生视频」。画师把这一幕写成「动态提示词」，提交 MiniMax 异步任务（独立队列、每 10 秒轮询、不堵出图），完成后存进 IndexedDB 在舞台播放；中途刷新 / 切档回来自动续上同一个任务。走 MiniMax V2 接口（`MiniMax-H3` / `MiniMax-H3-Max`）。浏览器直连被 CORS 拦时，起 `node tools/video-proxy.mjs`（零依赖本地转发），接口地址填 `http://127.0.0.1:4320` 即可。
-
-## 先看演示（零安装 · 零配置）
-
-不想填 Key、也不想先搭环境？**在地址后面加 `?demo=1` 就能直接开演**：
-
-```
-index.html?demo=1
-```
-
-内置 10 回合剧本 + 本地占位图（canvas 现场画的），不联网、不花额度、不需要任何配置；
-剧情、选项、画师子代理、出图、画师工作台、存档、书架全都跑同一条真实链路，只是把「模型」换成了内置脚本。
-
-- **一个文件带走**：`npm run bundle` 生成 `dist/ir.html`（约 530 KB，HTML/CSS/JS 全部内联），可以直接当附件发出去，双击就能玩
-- 想接真模型：去掉地址栏的 `?demo=1`（顶栏那个「🎬 演示」小胶囊就是入口），回首页点「⚙ 接入模型」即可。演示模式**不会写盘任何配置**，你原来的设置不会被弄脏。
 
 ## 快速开始
 
@@ -116,7 +101,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 |---|---|---|
 | 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve .` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
 | 单文件 | `npm run bundle` → `dist/ir.html`（约 530 KB） | 发给别人：一个 HTML 文件，双击即玩 |
-| 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/?demo=1` |
+| 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
 | 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 22.5：内置 `node:sqlite`，见 `sidecar/README.md`） |
 
@@ -151,11 +136,9 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `js/roleCard.js` | 角色卡（SillyTavern PNG 解析） |
 | `js/modelCapabilities.js` | 模型参数登记表（默认留空） |
 | `js/app.js` | 组合根：事件绑定 + 启动（业务在 `js/app/` 的 20 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
-| `js/demo.js` | 离线演示：`?demo=1` 时注册「内置剧本」与「本地占位图」两个适配器 |
 | `js/sidecar.js` + `js/features.js` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `js/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
-| `eval/demo-smoke.js` | 演示模式冒烟测试（不开浏览器，验证两个假适配器的接口契约 + demo 分支树链路） |
 | `eval/tree-test.js` | 分支树数据层测试（Node 离线：投影 / 兄弟切换 / 旧档迁移 / store 集成） |
 | `eval/proposals-test.js` | 提案模块单测（假 sidecar：模型发起的邮件 / 下单只能产生提案、确认才执行、幂等 / 过期，Node 离线） |
 | `eval/zip-smoke.js` 等 | ZIP 冒烟与侧车 / 前端特性测试（`npm test` 一并跑） |
@@ -168,13 +151,13 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 **v0.2 已交付（2026-10-05）**：离线评测、世界卡与三模式、书架与存档点、画师工作台、画风锚定、工具召回、文本导入、角色扮演、数据安全（持久化申请 / 存储 70% 预警 / 一键全量备份）。
 
-**开源基座 + 零安装（2026-10-10）**：MIT 许可与社区文档（CONTRIBUTING〔含行为准则 / 安全说明 / 第三方资源与许可〕+ ARCHITECTURE）、版本号单一真源与同步脚本、CI（语法 + 版本号 + 离线评测 + 打包冒烟）、**离线演示 `?demo=1`**、**单文件打包**、GitHub Pages 在线 Demo。
+**开源基座 + 零安装（2026-10-10）**：MIT 许可与社区文档（CONTRIBUTING〔含行为准则 / 安全说明 / 第三方资源与许可〕+ ARCHITECTURE）、版本号单一真源与同步脚本、CI（语法 + 版本号 + 离线评测 + 打包冒烟）、**单文件打包**、GitHub Pages 在线 Demo。
 
 **可安装 + 可分发（2026-10-10）**：**PWA**（manifest + Service Worker，断网也能打开；缓存名跟着版本号走）、图标生成器（矢量 + 各尺寸 PNG，含 maskable / iOS 主屏）、Windows **一键启动 `启动.bat`**（Python 优先，退回零依赖 PowerShell 服务器）、**Dockerfile + compose**（自托管 / NAS）。
 
 **v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
 
-**v0.12 — 生视频（2026-10-22）**：**MiniMax V2 生视频**（图生 / 文生，画师写「动态提示词」）、独立视频队列（不堵出图）、提交前付费确认、刷新 / 切档自动续上任务、下载转存 IndexedDB + CORS / 空间不足降级限时链接、只存封面不进备份、演示模式置灰、全链路离线测试。
+**v0.12 — 生视频（2026-10-22）**：**MiniMax V2 生视频**（图生 / 文生，画师写「动态提示词」）、独立视频队列（不堵出图）、提交前付费确认、刷新 / 切档自动续上任务、下载转存 IndexedDB + CORS / 空间不足降级限时链接、只存封面不进备份、全链路离线测试。
 
 **Backlog**
 - [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）

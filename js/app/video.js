@@ -14,7 +14,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, toast, offlineBlocked, saveAll, irConfirm, DEMO } = A;
+  const { $, Store, toast, offlineBlocked, saveAll, irConfirm } = A;
 
   const POLL_MS = 10000;              // 官方示例轮询间隔（恢复轮询的本地循环同速）
   const POLL_MAX_NETFAIL = 3;         // 轮询连续网络错误上限（单次容忍）
@@ -499,7 +499,6 @@
   // 去重 key（§7）：video:<sceneId>:i2v / video:<headNodeId>:t2v
   function enqueueVideo(opts) {
     opts = opts || {};
-    if (DEMO) { toast('演示模式不出视频'); return; }
     if (!S.story) { toast('先打开一个故事'); return; }
     if (S.story.mode !== 'choice') { toast('视频生成只在剧情模式可用（那边才有画面区）', true, true); return; }
     if (offlineBlocked('这次出视频')) return;

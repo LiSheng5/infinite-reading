@@ -591,10 +591,6 @@ mark {
   white-space: nowrap;
 }
 
-/* 离线演示模式标识（?demo=1）：点一下回到真实配置 */
-a.demo-chip { text-decoration: none; cursor: pointer; color: var(--accent); border-color: var(--accent-line); }
-a.demo-chip:hover { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-
 /* 「⋯」与「＋」的下拉菜单（hud / composer 共用） */
 .hud-more, .menu-wrap { position: relative; }
 .menu {
@@ -1204,8 +1200,6 @@ html[data-motion="rich"] .stage-empty {
 }
 /* 🎬 忙态：正在生成视频 */
 .stage-btn.busy { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
-/* 演示模式置灰（点击仍可弹提示） */
-.is-disabled { opacity: .5; cursor: not-allowed; }
 /* 画师工作台「视频」区 */
 .pw-video-list { display: flex; flex-direction: column; gap: 8px; }
 .pw-video-row { display: flex; align-items: center; gap: 10px; }

@@ -15,8 +15,7 @@
   "//": {
     "test": "全量离线套件（清单即此行的 && 链；check:version 已挂在头里）。跑它 = 回归门禁",
     "test:features": "局部快速回归（仅侧车/前端子集，非全量）",
-    "test:shelf": "局部快速回归（仅书架/搜索子集，非全量）",
-    "eval:demo": "局部快速回归（仅离线演示冒烟，非全量）"
+    "test:shelf": "局部快速回归（仅书架/搜索子集，非全量）"
   },
   "scripts": {
     "serve": "npx serve .",
@@ -26,9 +25,8 @@
     "build:site": "vite build",
     "sidecar": "node sidecar/server.mjs",
     "eval": "node eval/run.js",
-    "eval:demo": "node eval/demo-smoke.js",
     "check:types": "tsc --noEmit",
-    "test": "node tools/sync-version.mjs --check && node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/motion-test.js && node eval/ui-lib-test.js && node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/run.js && node eval/tree-test.js && node eval/treelayout-test.js && node eval/prefs-test.js && node eval/schema-test.js && node eval/settings-ids-test.js && node eval/painter-context-test.js && node eval/style-card-text-test.js && node eval/video-provider-test.js && node eval/minimax-image-test.js && node eval/videoqueue-test.js && node eval/demo-smoke.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs && tsc --noEmit",
+    "test": "node tools/sync-version.mjs --check && node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/motion-test.js && node eval/ui-lib-test.js && node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/run.js && node eval/tree-test.js && node eval/treelayout-test.js && node eval/prefs-test.js && node eval/schema-test.js && node eval/settings-ids-test.js && node eval/painter-context-test.js && node eval/style-card-text-test.js && node eval/video-provider-test.js && node eval/minimax-image-test.js && node eval/videoqueue-test.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs && tsc --noEmit",
     "test:shelf": "node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js",
     "check:contrast": "node tools/contrast-check.mjs",
     "check:tokens": "node eval/tokens-test.js",

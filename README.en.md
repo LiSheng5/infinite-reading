@@ -23,23 +23,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 - 🔌 **Any model** — chat and image models are configured separately; any OpenAI-compatible endpoint works (cloud or local, set your own Base URL).
 - 🖼 **MiniMax image generation (`image-01` / `image-01-live`)** — pick **MiniMax native** in the image adapter to use the official `/v1/image_generation`; `image-01-live` supports four style presets (漫画 / 元气 / 中世纪 / 水彩 — manga / energetic / medieval / watercolor, via custom params like `style.style_type=漫画, style.style_weight=0.8`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (one local relay process serves both image and video), base URL `http://127.0.0.1:4320`.
 - 🎯 **Consistent art style** — the painter writes each prompt on top of the previous image's full prompt as a "diff base" (style words kept verbatim, only the plot-driven part rewritten). With "reference = last image" enabled in settings, a JPEG of the previous image (long edge ≤ 1024) is also submitted as `subject_reference`, keeping faces and outfits coherent across scenes.
-- 🎬 **Offline demo** — append `?demo=1` to run the whole flow without a key or a network (built-in script + locally drawn placeholder images).
 - 🎬 **Video (MiniMax)** — the 🎬 button on the story stage opens a small menu: "video from current image" / "video from the plot". The painter writes a motion prompt, a MiniMax async task runs on its own queue (10s polling, never blocks image generation), and the finished MP4 is stored in IndexedDB and played on stage. Reload or switch stories mid-run and the same task is picked up again. Uses the MiniMax V2 API (`MiniMax-H3` / `MiniMax-H3-Max`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (a dependency-free local relay) and set the base URL to `http://127.0.0.1:4320`.
-
-## Try it without any setup
-
-Don't want to paste an API key or set up a project first? **Append `?demo=1` to the URL and it starts playing:**
-
-```
-index.html?demo=1
-```
-
-A built-in 10-turn script plus locally drawn placeholder images (rendered with canvas): no network, no API cost, no configuration.
-Story flow, choices, the painter sub-agent, image generation, the painter workbench, saving and the shelf all run through the *real* pipeline — only the model is replaced by a built-in script.
-
-- **Online demo**: `https://LiSheng5.github.io/infinite-reading/?demo=1` (enable it with Settings → Pages → Source: GitHub Actions; the workflow ships with the repo)
-- **One file to carry around**: `npm run bundle` produces `dist/ir.html` (~530 KB with HTML/CSS/JS inlined) — send it as an attachment and double-click it
-- To use a real model, drop the `?demo=1` from the URL (the little "🎬 演示" chip in the top bar does it for you) and configure a model from the home screen. Demo mode **never writes settings to storage**, so your real configuration stays untouched.
 
 ## Quick start
 
@@ -109,7 +93,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 |---|---|---|
 | Local server | `npx serve .` (or `启动.bat` on Windows) | Daily use: avoids the `file://` CORS and storage split |
 | Single file | `npm run bundle` → `dist/ir.html` (~530 KB) | Sharing: one HTML file, double-click and play |
-| Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/?demo=1` |
+| Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
 | Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22.5 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
 
@@ -143,11 +127,9 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `js/roleCard.js` | Character cards (SillyTavern PNG parsing) |
 | `js/modelCapabilities.js` | Model parameter registry (empty by default) |
 | `js/app.js` | Composition root: event binding + boot (business logic lives in the 20 modules under `js/app/` — see ARCHITECTURE.md §2.1) |
-| `js/demo.js` | Offline demo: registers the built-in script and placeholder-image adapters for `?demo=1` |
 | `js/sidecar.js` + `js/features.js` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `js/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
-| `eval/demo-smoke.js` | Demo smoke test (contract checks + the demo branch-tree flow, no browser needed) |
 | `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
 | `sidecar/` | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
@@ -159,13 +141,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 **Delivered in v0.2 (2026-10-05)**: offline evaluation; world card and three modes; shelf and save points; painter workbench; style anchoring; tool recall; text import; role-play; data safety (persistent storage, 70% warning, one-click full backup).
 
-**Open-source base + zero-install (2026-10-10)**: MIT license and community docs, single-source versioning, CI (syntax + version + offline eval + bundle smoke test), **offline demo `?demo=1`**, **single-file bundle**, GitHub Pages demo.
+**Open-source base + zero-install (2026-10-10)**: MIT license and community docs, single-source versioning, CI (syntax + version + offline eval + bundle smoke test), **single-file bundle**, GitHub Pages demo.
 
 **Installable + distributable (2026-10-10)**: **PWA** (manifest + Service Worker, works offline; the cache name follows the version), icon generator (vector + PNGs incl. maskable / iOS), Windows **one-click `启动.bat`** (Python first, falls back to a dependency-free PowerShell server), **Dockerfile + compose** for self-hosting.
 
 **v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `js/zip.js`), and mobile polish (safe areas, 44px touch targets).
 
-**v0.12 — video generation (2026-10-22)**: **MiniMax V2 video** (image-to-video / text-to-video, painter writes the motion prompt), a dedicated video queue (never blocks image generation), a paid-task confirmation, automatic task resume after reload / story switch, MP4 stored in IndexedDB with a timed-link fallback when CORS or disk space blocks the download, covers-only backups, demo-mode gate, and a full offline test suite.
+**v0.12 — video generation (2026-10-22)**: **MiniMax V2 video** (image-to-video / text-to-video, painter writes the motion prompt), a dedicated video queue (never blocks image generation), a paid-task confirmation, automatic task resume after reload / story switch, MP4 stored in IndexedDB with a timed-link fallback when CORS or disk space blocks the download, covers-only backups, and a full offline test suite.
 
 **Backlog**
 

@@ -40,7 +40,7 @@
        有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null) */
 
   /* ---------- 弹窗栈（P0-3） ----------
-   * 十余个弹窗各自独立，演示图里「写邮件」和「代为下单」会叠在一起。
+   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起。
    * 这里做一个最小的统一入口：
    *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
    *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
@@ -55,8 +55,6 @@
    * 用户会在毫不知情的情况下被扣一笔额度。 */
 
   // 体积显示：1 MB 以下按 KB 显示 —— 否则「68 KB 的备份」会显示成 0.0 MB，看着像没内容
-
-  // 设置落盘的唯一出口：演示模式只改内存，不写盘
 
   // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型
 
@@ -381,17 +379,6 @@
     else A.createStoryImmediate(startMode);
   }
 
-  /* 离线演示（?demo=1）：内置剧本 + 本地占位图，直接开局。
-     不联网、不需要 Key、配置不写盘；画风锚定 / 画师工作台 / 出图 / 存档等链路与真实模式完全一致。 */
-  function startDemo() {
-    IR.Demo.reset();
-    $('#demo-chip').classList.remove('hidden');
-    S.story = Store.newStory({ title: IR.Demo.title + '（演示）', premise: IR.Demo.premise, mode: 'choice' });
-    A.enterGame(true, { deferOpening: true });          // 演示跳过试画锚定，直接开演
-    toast('离线演示：' + IR.Demo.turnCount + ' 回合内置剧本 + 本地占位图，未连接任何模型。想接真模型就去掉地址栏的 ?demo=1。', false, true);
-    A.runOpening();
-  }
-
   // 「↶ 继续上次」
   function continueLast() {
     const s = Store.loadCurrent() || (Store.listStories()[0] && Store.loadStory(Store.listStories()[0].id));
@@ -489,5 +476,5 @@
     toast(withSrc && !hasSrc ? '已导出（原图已不在本地，仅带缩略图 + 提示词）' : '已导出：' + safeTitle + '.irstory.json', false, true);
   }
 
-  A.reg({ storeOriginal, sceneSrc, refImageDataUrl, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, startDemo, continueLast, openExport, downloadBlob, download, doExport });
+  A.reg({ storeOriginal, sceneSrc, refImageDataUrl, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, continueLast, openExport, downloadBlob, download, doExport });
 })();

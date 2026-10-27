@@ -6,7 +6,7 @@
   'use strict';
 
   const A = IR.App, S = A.state;
-  const { $, Store, DEMO, toast, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
+  const { $, Store, toast, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
 
 
   /* ================= 本地存储与备份（P0 数据安全） =================
@@ -231,7 +231,6 @@
 
   // 超过 7 天没备份（且确实有故事）→ 启动后提醒一次；提醒本身每天最多一次，不刷屏
   function remindBackupIfNeeded() {
-    if (DEMO) return;                 // 演示模式不提醒备份（配置与故事都不必当回事）
     const n = Store.listStories().length;
     if (!n) return;
     const now = Date.now();
@@ -247,7 +246,6 @@
   }
 
   function openSettings() {
-    if (DEMO) toast('演示模式：这里的设置改了也不会生效（演示不联网、不写盘）。去掉地址栏的 ?demo=1 重新打开，就可以接入真模型了。', false, true);
     A.closeStoryPrefs();   // UI-3：全局设置与本对话设置互斥（避免面板叠在弹窗上）
     A.syncSettingsToForm();
     renderStoragePanel();

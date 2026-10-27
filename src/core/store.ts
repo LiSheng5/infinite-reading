@@ -441,10 +441,10 @@ const global = globalThis as any;
     out.lastBackupRemindAt = (+raw.lastBackupRemindAt > 0) ? +raw.lastBackupRemindAt : 0;
 
     // T-M-1：思考档位 / 上下文窗口 / 手填参数（幂等校验）
-    // 离线演示模式已删除：旧设置里的 mock 一律迁回真实接口（用户需补填 Base URL / 模型）
+    // 旧版 mock provider 已不存在：一律迁回真实接口（用户需补填 Base URL / 模型）
     out.chat.provider = 'openai-compatible';
     // 生图适配器：'mock' → OpenAI 兼容；MiniMax 原生接口的旧别名统一成 'minimax-image'。
-    // 其它值原样保留（演示模式的 'demo-image' 只活在内存里，刷新后自然消失）。
+    // 其它值原样保留。
     const IMAGE_PROVIDER_ALIAS = { mock: 'openai-images', minimax: 'minimax-image', 'minimax-images': 'minimax-image' };
     if (IMAGE_PROVIDER_ALIAS[out.image.provider]) out.image.provider = IMAGE_PROVIDER_ALIAS[out.image.provider];
     out.chat.thinking = (typeof out.chat.thinking === 'string' && out.chat.thinking) ? out.chat.thinking : 'default';

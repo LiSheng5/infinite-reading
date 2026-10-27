@@ -13,7 +13,7 @@
  * 约定：
  *  - 只新增文件，不改任何现有源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
- *  - empty  = 干净浏览器上下文（无存档）；seeded = ?demo=1 离线演示玩过一局之后。
+ *  - empty  = 干净浏览器上下文（无存档）；seeded = 页面内播种一局（回合 / 分叉 / 图 / 存档点）之后。
  *  - 动效锁到 off（html[data-motion]=off）：reducedMotion:reduce + 显式把 ui.motion 置 off，
  *    截图前把鼠标移到中性点（阅读页特意悬停舞台，让舞台按钮完整显示）并等动效稳定。
  *  - 只截 viewport（fullPage:false），deviceScaleFactor=1。
@@ -59,7 +59,7 @@ const PLAN = [
   { key: 'modal-wizard', state: 'empty', screen: 'modal-wizard', expect: '#modal-wizard:not(.hidden)', note: '开局设定向导（剧情模式）' },
   { key: 'modal-import-text', state: 'empty', screen: 'modal-import-text', expect: '#modal-import-text:not(.hidden)', note: '粘贴剧情文本导入弹窗（第 1 步）' },
   { key: 'modal-confirm', state: 'empty', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（设置→数据→清空本地存档与设置 触发，无输入框）' },
-  // —— seeded：离线演示玩过一局 ——
+  // —— seeded：页面内播种一局之后 ——
   { key: 'start', state: 'seeded', screen: 'start', expect: '#btn-continue:not(.hidden)', note: '首页（有「继续上次」，带最近故事名）' },
   { key: 'shelf', state: 'seeded', screen: 'shelf', expect: '#screen-shelf:not(.hidden)', note: '书架（有故事卡片）' },
   { key: 'game', state: 'seeded', screen: 'game', expect: '#screen-game:not(.hidden)', note: '阅读页：聊天记录 / 舞台占位图 / 缩略图条 / 选项托盘展开；鼠标悬停舞台以完整显示舞台按钮' },
@@ -107,12 +107,8 @@ function parseArgs() {
 async function openApp(page, query) {
   await page.goto(APP_URL + (query || ''), { waitUntil: 'load' });
   await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 15000 });
+  await page.waitForFunction(() => !!(window.IR && IR.App && IR.App.state && IR.App.state.settings), null, { timeout: 15000 });
   await sleep(600);
-}
-
-async function waitIdle(page, timeout) {
-  await page.waitForFunction(() => !(window.IR && IR.App && IR.App.state && IR.App.state.busy), null, { timeout: timeout || 120000 });
-  await sleep(350);
 }
 
 // 截图前的稳定化：藏掉瞬态 toast、失焦、鼠标挪到中性点（或舞台）、等动效收干净
@@ -141,57 +137,6 @@ async function openHudMenu(page) {
   await page.evaluate(() => { const b = document.getElementById('btn-hud-more'); if (b) b.click(); });
   await page.waitForSelector('#hud-more-menu:not(.hidden)', { timeout: 5000 });
   await sleep(200);
-}
-
-async function pickChoice(page, idx) {
-  const inline = page.locator('#chat-scroll .choices-inline .choice-btn');
-  if (await inline.count()) { await inline.nth(idx).click(); return; }
-  const tray = page.locator('#choice-tray .tray-btn');
-  if (!(await tray.count())) {
-    await page.click('#btn-inspiration');
-    await page.waitForSelector('#choice-tray .tray-btn', { timeout: 8000 });
-  }
-  await page.locator('#choice-tray .tray-btn').nth(idx).click();
-}
-
-async function sendLine(page, text) {
-  await page.fill('#player-input', text);
-  await page.click('#btn-send');
-  await waitIdle(page, 120000);
-}
-
-// 为当前场景作画（HUD「⋯」→ 为当前场景作画），等到缩略图条攒够 n 张。
-// 失败不中断整轮：把现场诊断塞进 manifest.skipped，继续拍后面的图。
-async function paint(page, n, manifest, tag) {
-  await openHudMenu(page);
-  await page.click('#btn-manual-gen');
-  await sleep(500);
-  const toastText = await page.evaluate(() => {
-    const t = document.getElementById('toast');
-    return (t && !t.classList.contains('hidden') && t.textContent) ? t.textContent.trim() : '';
-  });
-  try {
-    await page.waitForFunction(
-      (min) => document.querySelectorAll('#thumb-strip img.thumb').length >= min,
-      n,
-      { timeout: 90000 }
-    );
-  } catch (_) {
-    const diag = await page.evaluate(() => ({
-      turn: (window.IR && IR.App.state.story) ? IR.App.state.story.turn : null,
-      head: (window.IR && IR.App.treeHeadNodeId) ? IR.App.treeHeadNodeId() : null,
-      scenes: ((window.IR && IR.App.state.story && IR.App.state.story.scenes) || []).map(s => ({ id: s.id, thumb: !!s.thumb, imageId: !!s.imageId })),
-      queue: (window.IR && IR.App.paintQ && IR.App.paintQ.size) ? IR.App.paintQ.size() : -1,
-      logTail: ((window.IR && IR.App.state.story && IR.App.state.story.log) || []).slice(-8).map(x => String(x.type) + ':' + String(x.summary || x.text || '').slice(0, 60)),
-    }));
-    const reason = '作画没出图（' + (tag || ('第 ' + n + ' 张')) + '）：点「为当前场景作画」后提示「' + (toastText || '（无提示）') + '」，现场=' + JSON.stringify(diag);
-    if (manifest) manifest.skipped.push({ item: '作画 ' + (tag || n), state: 'seeded', width: 0, reason });
-    log('  PAINT MISS', reason);
-    return false;
-  }
-  log('  paint ok #' + n + (toastText ? '（toast：' + toastText + '）' : ''));
-  await sleep(500);
-  return true;
 }
 
 // 分支树节点：优先点节点里的实心圆（一定在 g 的点击热区里），失败再退到 g 本体
@@ -233,17 +178,16 @@ async function main() {
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/shoot.mjs',
     entry: APP_URL,
-    demoEntry: APP_URL + '?demo=1',
     naming: '{序号}-{状态}-{屏幕}-{宽度}.png，状态 ∈ empty|seeded，序号 = PLAN 顺序',
     viewports: VIEWPORTS.map(v => ({ width: v.width, height: v.height, deviceScaleFactor: 1 })),
     states: {
       empty: '干净浏览器上下文（无 localStorage / IndexedDB 存档），普通模式打开 index.html',
-      seeded: '干净上下文 + ?demo=1 离线演示：开场 → 点选项 → 发消息 → 回到早前节点分叉再发一条 → 两幕作画 → 打存档点',
+      seeded: '干净上下文 + 页面内播种一局：4 个回合（含一次分叉）、两张图、两个存档点；画师 / 锚定 / 本地服务只在页面里注册测试桩，不发真实请求',
     },
     motion: null,
     notes: [
       '截图前隐藏瞬态 toast、鼠标移到 (2,2) 中性点（阅读页特意悬停舞台以完整显示舞台按钮），避免半悬停态。',
-      'modal-email / modal-payment / 定时主动的入口只在智能体(chat)/扮演(rp)模式出现：seeded 尾段用「本对话设置 → 推进模式」把演示故事切到智能体后再截，其余截图都保持演示默认的剧情(choice)模式。',
+      'modal-email / modal-payment / 定时主动的入口只在智能体(chat)/扮演(rp)模式出现：seeded 尾段用「本对话设置 → 推进模式」把播种故事切到智能体后再截，其余截图都保持剧情(choice)模式。',
       '全部截图只截 viewport（fullPage:false）。',
     ],
     shots: [],
@@ -443,12 +387,254 @@ async function runEmpty(page, snap, vp, manifest) {
   });
 }
 
-/* ---------- seeded：离线演示玩过一局 ---------- */
-async function runSeeded(page, snap, vp, manifest) {
-  await openApp(page, '?demo=1');
-  await waitIdle(page, 120000);   // 开场第一幕
+/* ---------- seeded 播种：页面内直接写入一局（含回合 / 分叉 / 两张图 / 存档点） ----------
+ * 离线演示模式下线后，seeded 不再依赖任何内置剧本：用 IR.Store / IR.Tree / IR.Context
+ * 的真实写入路径造一份存档（与 acceptance/tools/fixture.mjs 同口径），再进阅读页截图。
+ * 画师 / 锚定 / 本地服务需要「有回包才能开界面」的地方，只在页面里注册测试用桩，
+ * 不写回仓库源码、不发任何真实请求。 */
+async function seedStory(page) {
+  return page.evaluate(async () => {
+    try {
+      const { Store, Tree, Context, App, genId } = window.IR;
+      const S = App.state;
 
-  // 动效档位显式锁 off（演示开局后再锁一次，防启动期覆盖）
+      const makeThumb = i => {
+        const c = document.createElement('canvas');
+        c.width = 160; c.height = 100;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 160, 100);
+        grad.addColorStop(0, '#1d2a44');
+        grad.addColorStop(1, '#3c5a80');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 160, 100);
+        g.fillStyle = ['#d9822b', '#c0392b'][i % 2];
+        g.fillRect(24 + i * 14, 24, 56, 48);
+        g.fillStyle = '#f5ecd7';
+        g.fillRect(96, 58, 44, 14);
+        return { thumb: c.toDataURL('image/jpeg', 0.75), png: c.toDataURL('image/png') };
+      };
+
+      const playTurn = (st, t, opening) => {
+        const ts = Date.now();
+        const mark = Tree.begin(st);
+        const raw = String(t.text || '');
+        const sent = opening ? t.text : '（' + (t.kind === 'say' ? '说' : '做') + '）' + raw;
+        if (!opening) st.log.push({ type: 'player', text: raw, kind: t.kind || 'do', ts });
+        const userMsg = { role: 'user', content: Context.playerContent(st.premise, sent, opening ? { includePremise: true } : undefined) };
+        const rr = {
+          narration: t.narration, choices: t.choices || [],
+          scene_change: !!t.scene_change, scene_summary: t.scene_summary || '',
+        };
+        if (t.world) Context.mergeWorld(st.world, t.world);
+        const asst = Context.assistantEntry(rr, t.reasoning || '');
+        st.log.push(Context.narrationEntry(rr.narration, t.reasoning || '', ts));
+        st.messages.push(userMsg, asst);
+        st.turn += 1;
+        st.lastSceneSummary = rr.scene_summary || st.lastSceneSummary;
+        Context.compressStory(st, { summarize: Context.localSummarize });
+        const node = Tree.commit(st, {
+          action: opening
+            ? { type: 'opening', text: t.text, kind: null, sent: t.text }
+            : { type: 'player', text: raw, kind: t.kind || 'do', sent },
+          userMsg, assistantMsg: asst, logMark: mark.logMark,
+          meta: { model: 'acceptance-fixture' },
+        });
+        Tree.seal(st, node.id);
+        return node;
+      };
+
+      const paint = async (st, node, i, alt) => {
+        const ts = Date.now();
+        const { thumb, png } = makeThumb(i);
+        const blob = await fetch(png).then(r => r.blob());
+        const scene = {
+          id: genId('sc'), imageId: 'img:' + genId('sc'),
+          prompt: 'cinematic still, night train car, amber light, watercolor',
+          promptRaw: 'acceptance fixture prompt #' + i,
+          alt: alt || ('车厢场景图 ' + (i + 1)),
+          thumb, width: 160, height: 100, aspect: '16:10',
+          model: 'acceptance-fixture-image', ts,
+        };
+        Store.putImage(scene.imageId, blob, { model: scene.model, size: '160x100', width: 160, height: 100, prompt: scene.prompt });
+        const entry = {
+          type: 'image', id: scene.id, prompt: scene.prompt, promptRaw: scene.promptRaw, alt: scene.alt,
+          thumb: scene.thumb, imageId: scene.imageId, model: scene.model, size: '160x100',
+          aspect: scene.aspect, width: 160, height: 100, ts,
+        };
+        Tree.pushLate(st, node.id, scene);
+        Tree.pushLate(st, node.id, entry);
+        st.lastBg = entry.id;
+        return entry;
+      };
+
+      const st = Store.newStory({
+        title: '末班电车',
+        premise: '标题：末班电车\n世界：现代都市的深夜，开往郊外的末班电车。\n你的角色：一位刚下夜班的乘客。\nAI 扮演：旁白，以及车厢里的一切。\n风格：克制的悬疑。',
+        mode: 'choice',
+      });
+      st.titleAuto = false;
+      st.world.place = '末班电车·第三节车厢';
+      st.world.time = '深夜';
+      st.world.scene = '车厢里只剩零星乘客，窗外隧道灯忽明忽暗';
+      st.world.characters = [{ name: '周叙', presence: '在场', personality: '话里有话、克制', speech: '简短、爱反问', note: '夜班乘务员' }];
+      st.world.threads = ['广播报站比平时慢了半拍'];
+
+      const nodes = [];
+      nodes.push(playTurn(st, {
+        text: '（故事开场。请描写第一幕，把玩家带进场景。）',
+        narration: '车门合拢，顶灯闪了一下。整节车厢只剩三个人：你、一个抱着蒙布鸟笼的老人，和一个靠在门边打盹的乘务员。广播报出下一站，声音比平时慢了半拍。',
+        choices: ['走到乘务员那边', '先看看那只鸟笼', '在靠窗的位置坐下'],
+        scene_change: true,
+        scene_summary: '深夜电车车厢，暖黄顶灯，窗外隧道灯一闪一闪',
+        world: { place: '末班电车·第三节车厢', scene: '暖黄顶灯，窗外隧道灯一闪一闪' },
+      }, true));
+      nodes.push(playTurn(st, {
+        text: '走到乘务员那边，敲了敲隔板。', kind: 'do',
+        narration: '乘务员睁开眼，先看了一眼你身后，才把目光收回来。「到终点还有四站。」他说，「不过你要是赶时间，别在第三站下。」',
+        choices: ['问他为什么不能在第三站下', '买一张到终点的票', '回到座位'],
+        scene_summary: '乘务员隔板前，顶灯在两人之间投下一道影子',
+        world: { threads: ['广播报站比平时慢了半拍', '乘务员的提醒：别在第三站下'] },
+      }, false));
+      nodes.push(playTurn(st, {
+        text: '「为什么不能在第三站下？」', kind: 'say',
+        narration: '他没有立刻回答，只是把票夹在指间转了一圈。「第三站没有站台。」窗外的隧道灯在这时灭了一瞬，车厢里只剩应急灯的冷光。',
+        choices: ['盯着他手里的票', '去看车窗外的隧道'],
+        scene_change: true,
+        scene_summary: '车窗外的隧道，灯灭之后只剩应急灯的冷光',
+        world: { place: '末班电车·第三节车厢（隧道中）', time: '深夜·隧道里' },
+      }, false));
+
+      // 分支：回到第 2 回合节点，另走一条（分支树上就有一处真分叉）
+      Tree.switchTo(st, nodes[1].id);
+      const forked = playTurn(st, {
+        text: '没有追问，先去把那只鸟笼上的蒙布掀开一角。', kind: 'do',
+        narration: '蒙布下面不是鸟。是一只旧收音机，红色旋钮被磨得发亮，沙沙地响着，像有人在很远的地方数数。',
+        choices: ['把蒙布完全揭开', '回头叫乘务员'],
+        scene_change: true,
+        scene_summary: '座位上的鸟笼，蒙布下是一台红色旋钮的旧收音机',
+        world: { scene: '鸟笼里的旧收音机，红色旋钮发亮' },
+      }, false);
+
+      // 两张图都挂在当前路径上（nodes[1] 是分叉点的共同祖先；分叉后 nodes[2] 会离开当前路径）
+      await paint(st, nodes[1], 0);
+      await paint(st, forked, 1, '鸟笼里的旧收音机特写');
+
+      // 存档点：真实路径 App.addSavepoint
+      S.story = st;
+      App.addSavepoint('手动存档 · 车厢');
+      App.addSavepoint('手动存档 · 月台');
+
+      Store.saveStory(st);
+      Store.setCurrentId(st.id);
+      await Store.flush();
+
+      // —— 测试用桩：画师 / 锚定回包 + 生图（只活在这个浏览器上下文里） ——
+      const draw = prompt => {
+        const c = document.createElement('canvas');
+        c.width = 640; c.height = 400;
+        const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 640, 400);
+        grad.addColorStop(0, '#22314f');
+        grad.addColorStop(1, '#8a6a3f');
+        g.fillStyle = grad; g.fillRect(0, 0, 640, 400);
+        g.fillStyle = 'rgba(255,255,255,0.8)';
+        g.font = '600 22px system-ui, sans-serif';
+        g.fillText(String(prompt || '').slice(0, 48), 24, 368);
+        return c.toDataURL('image/jpeg', 0.8);
+      };
+      IR.ImageProviders['acceptance-image'] = {
+        label: '验收桩（canvas 占位图）',
+        generate: async (cfg, prompt) => draw(prompt),
+      };
+      IR.ChatProviders['acceptance-chat'] = {
+        label: '验收桩（固定 JSON）',
+        chat: async (cfg, messages) => {
+          const all = (messages || []).map(m => String(m.content || '')).join('\n');
+          if (all.includes('[锚定任务]\nstyles')) {
+            return JSON.stringify({
+              styles: [1, 2, 3, 4].map(i => ({
+                keywords: ['cinematic', 'watercolor', 'palette ' + i, 'light ' + i],
+                prompt_en: 'cinematic still, night train car, variant ' + i,
+                alt: '候选画风 ' + i,
+              })),
+            });
+          }
+          if (all.includes('[锚定任务]\ncard')) {
+            return JSON.stringify({
+              card: {
+                styleKeywords: ['cinematic', 'watercolor'], medium: 'watercolor', palette: 'amber, deep blue',
+                characters: [{ name: '周叙', appearanceEn: 'young conductor', outfit: 'uniform', features: 'calm eyes' }],
+                negative: 'text, watermark', note: '暖黄灯光，冷蓝雨夜',
+              },
+              reply: '设定卡写好了。',
+            });
+          }
+          return JSON.stringify({ prompt_en: 'cinematic still, night train car, amber light', alt: '夜车车厢' });
+        },
+      };
+      S.settings.chat = Object.assign({}, S.settings.chat, { provider: 'acceptance-chat', baseUrl: '', apiKey: '', model: 'acceptance' });
+      S.settings.image = Object.assign({}, S.settings.image, { provider: 'acceptance-image', baseUrl: '', apiKey: '', model: 'acceptance' });
+      S.settings.painter = Object.assign({}, S.settings.painter, { provider: '', baseUrl: '', apiKey: '', model: '' });
+
+      // —— 测试用桩：本地服务（邮件 / 定时主动 / 代下单的界面链路要「在线 + 有 token」） ——
+      const sidecarCfg = {
+        port: 4319,
+        email: { enabled: true, provider: 'mock', allowlist: ['buddy@example.com'], dailyLimit: 3, from: 'acceptance@example.com', hasResendApiKey: false },
+        schedule: { enabled: true, paused: false, quietHours: [{ start: '23:00', end: '08:00' }], dailyCap: 5, missedPolicy: 'SKIP' },
+        payment: { enabled: true, provider: 'mock', currency: 'CNY', perTx: 10000, daily: 20000, monthly: 50000, autoApprove: 500, cooldownMin: 0, merchantAllowlist: [], merchantBlocklist: [], categoryAllowlist: [], categoryBlocklist: [], budgets: {} },
+      };
+      const SC = IR.Sidecar;
+      Object.assign(SC, {
+        isOnline: () => true,
+        status: () => ({ state: 'online', online: true, port: 4319, hasToken: true, features: { email: true, schedule: true, payment: true }, version: 'acceptance', lastError: '', health: { ok: true } }),
+        configure: () => ({ port: 4319, token: 'acceptance' }),
+        config: () => ({ port: 4319, token: 'acceptance' }),
+        getConfig: async () => ({ ok: true, config: sidecarCfg }),
+        putConfig: async () => ({ ok: true, config: sidecarCfg }),
+        listTriggers: async () => [],
+        listPending: async () => [],
+        emailDrafts: async () => [],
+        emailAudit: async () => [],
+        paymentLedger: async () => [],
+        paymentMandates: async () => [],
+        paymentProposals: async () => [],
+        start: () => {},
+        stop: () => {},
+        on: () => () => {},
+      });
+
+      // 进阅读页并重绘（enterGame 内部会 ensure / project / render）
+      S.story = st;
+      App.enterGame(true, { deferOpening: true });
+
+      return {
+        ok: true,
+        turn: st.turn,
+        nodes: Object.keys((st.tree && st.tree.nodes) || {}).length,
+      };
+    } catch (e) {
+      return { ok: false, error: String((e && e.stack) || e) };
+    }
+  });
+}
+
+/* ---------- seeded：页面内播种一局（不调用任何模型） ---------- */
+async function runSeeded(page, snap, vp, manifest) {
+  // 本地服务不在跑：把启动探测的 /health 接住，避免把「连不上 127.0.0.1」记成页面错误
+  await page.route('http://127.0.0.1:4319/**', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, version: 'acceptance', features: { email: true, schedule: true, payment: true } }),
+  }));
+  await openApp(page, '');
+  const seeded = await seedStory(page);
+  if (!seeded.ok) {
+    manifest.skipped.push({ item: 'seeded 播种', state: 'seeded', width: vp.width, reason: '页面内播种失败：' + seeded.error });
+    return;
+  }
+  log('  seeded story ready, turn =', seeded.turn, 'nodes =', seeded.nodes);
+
+  // 动效档位显式锁 off（播种后再锁一次，防启动期覆盖）
   await page.evaluate(() => {
     if (window.IR && IR.App && IR.App.state && IR.App.state.settings) {
       IR.App.state.settings.ui = IR.App.state.settings.ui || {};
@@ -457,13 +643,13 @@ async function runSeeded(page, snap, vp, manifest) {
     }
   });
 
-  // —— 推进：点选项 → 发消息 ——
-  await pickChoice(page, 0);
-  await waitIdle(page, 120000);
-  await sendLine(page, '我擦开玻璃上的一块水汽，朝外看了看。');
-  await paint(page, 1, manifest, '第 1 张（第 3 回合后）');   // 第一幕作画（舞台占位图 + 缩略图条 1 张）
+  // —— 阅读页（聊天 / 舞台 / 缩略图条 / 选项托盘；图与分叉都在播种时写好） ——
+  await page.evaluate(() => { const b = document.getElementById('btn-inspiration'); if (b) b.click(); });
+  await page.waitForSelector('#choice-tray:not(.hidden)', { timeout: 5000 }).catch(() => {});
+  await sleep(400);
+  await snap('game', { hoverStage: true });
 
-  // —— 分支：回到上一回合节点，从那里再走一条支线（分支树上就有真分叉） ——
+  // —— 顶栏「⋯」→ 分支页（SVG 树 + 右侧面板） ——
   await openHudMenu(page);
   await snap('hud-more');         // 「⋯」菜单展开态
   await page.click('#btn-branch');
@@ -471,27 +657,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await sleep(500);
   await clickBranchNode(page, 1);
   await page.waitForSelector('#branch-panel:not(.hidden)', { timeout: 5000 }).catch(() => {});
-  await page.click('#btn-bp-resume');
-  await page.waitForFunction(() => { const el = document.getElementById('branch-page'); return el && el.classList.contains('hidden'); }, null, { timeout: 8000 });
   await sleep(400);
-  await sendLine(page, '我没有回答，先在那扇门上敲了三下。');   // 分叉回合
-  log('  fork turn done, turn =', await page.evaluate(() => (window.IR && IR.App.state.story) ? IR.App.state.story.turn : -1),
-    'head =', await page.evaluate(() => (window.IR && IR.App.treeHeadNodeId) ? IR.App.treeHeadNodeId() : ''));
-  await paint(page, 2, manifest, '第 2 张（分叉回合后）');   // 第二幕作画（缩略图条 2 张）
-
-  // —— 阅读页（聊天 / 舞台 / 缩略图条 / 选项托盘） ——
-  await page.evaluate(() => { const b = document.getElementById('btn-inspiration'); if (b) b.click(); });
-  await page.waitForSelector('#choice-tray:not(.hidden)', { timeout: 5000 }).catch(() => {});
-  await sleep(400);
-  await snap('game', { hoverStage: true });
-
-  // —— 分支页（SVG 树 + 右侧面板） ——
-  await openHudMenu(page);
-  await page.click('#btn-branch');
-  await page.waitForSelector('#branch-page:not(.hidden)');
-  await sleep(500);
-  await clickBranchNode(page, 1);
-  await page.waitForSelector('#branch-panel:not(.hidden)', { timeout: 5000 }).catch(() => {});
   await snap('branch');
   await page.click('#btn-branch-back');
   await page.waitForFunction(() => { const el = document.getElementById('branch-page'); return el && el.classList.contains('hidden'); }, null, { timeout: 8000 });

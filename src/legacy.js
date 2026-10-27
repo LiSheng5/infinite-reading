@@ -20,7 +20,6 @@ import './core/storage.ts';         // 存储适配器（IndexedDB 主库 + 回�
 import './core/store.ts';           // 存档层（schema v3 + 旧档迁移 + 内存优先读写）
 import './core/modelCapabilities.ts';
 import './core/roleCard.ts';
-import './core/demo.ts';            // 离线演示（?demo=1）：注册剧本与占位图两个适配器
 import './core/zip.ts';             // 极简 ZIP 读写（带原图备份打包 / 解包）
 import './core/sidecar.ts';         // 可选本地服务客户端（/health、token、api()、SSE）
 import './core/features.ts';        // 功能编排内核（主动触达去重与排队）

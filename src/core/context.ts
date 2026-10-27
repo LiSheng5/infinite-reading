@@ -94,7 +94,7 @@ const global = globalThis as any;
 
   // 切换兼容：rp 存档切成 chat 后，历史用户消息里可能带着内层标记，而 chat 的系统提示
   // 不再解释它们（模型会照着复述）——组装 chat 历史时剥掉 [玩家行动] 之后紧跟的那一个标记。
-  // 外层 [玩家行动] 前缀保持不变（demo.js 靠它分派）；正文中间出现的（导演）等不动。
+  // 外层 [玩家行动] 前缀保持不变；正文中间出现的（导演）等不动。
   function stripKindMarker(content) {
     const s = String(content == null ? '' : content);
     return s.replace(/(\[玩家行动\] )（(?:做|说|导演)）/, '$1');

@@ -10,7 +10,7 @@
 
 1. **零构建**：源码必须能被 `<script src>` 直接加载，不能有 import/export、不能需要编译。`file://` 双击也要能跑。
 2. **零依赖**：不引入第三方库，只用浏览器原生 API 与 `fetch`。
-3. **前端核心无后端依赖**：前端本身不需要任何服务器——没有服务端存储，所有状态都在 `IndexedDB`，所以「换 origin 就换数据」。邮件 / 定时主动 / 受限购物支付这三项能力由一个**可选的本地旁路服务（sidecar，`sidecar/`）**提供；**缺它则这三项功能关闭**并在界面上明示，其余功能完全不受影响（见 §12）。
+3. **前端核心无后端依赖**：前端本身不需要任何服务器——没有服务端存储，所有状态都在 `IndexedDB`，所以「换 origin 就换数据」。邮件 / 定时主动 / 受限购物支付这三项能力由一个**可选的本地旁路服务（sidecar，`sidecar/`）**提供；**缺它则这三项功能关闭**并在界面上明示，其余功能完全不受影响（见 §11）。
 
 ## 2. 模块与命名空间
 
@@ -26,7 +26,6 @@
 | `js/store.js` | `IR.Store` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步 | `boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
 | `js/modelCapabilities.js` | `IR.ModelCapabilities` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
 | `js/roleCard.js` | `IR.RoleCard` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
-| `js/demo.js` | `IR.Demo` + 两个演示适配器 | 离线演示（`?demo=1`）：把「模型」换成内置剧本与本地占位图 | `enabled`、`applyTo`、`reset`；`ChatProviders['demo']`、`ImageProviders['demo-image']` |
 | `js/zip.js` | `IR.Zip` | 极简 ZIP 读写（**零依赖、手写**）：给「带原图的全量备份」打包 / 解包。写入只用 store（不压缩，字节与原文件一致，任何解压工具都开得了），读取兼容 deflate（方法 8）与反斜杠路径 | `build`、`read`、`crc32` |
 | `sw.js` / `js/pwa.js` | 无（Service Worker 全局） | PWA：预缓存外壳与静态资源、离线可用；注册逻辑只在 https / localhost 生效 | `install`（预缓存）、`fetch`（导航网络优先 / 静态缓存优先） |
 | `js/app.js` | 无（组合根） | 事件绑定 + 启动（`bind` / `init` / boot IIFE），只接线不写业务；消费下面所有 `js/app/*` | `bind`、`init` |
@@ -49,10 +48,10 @@
 **脚本顺序是有意义的**（`index.html` 末尾）：
 
 ```
-providers.js → prefs.js → context.js → tree.js → treeLayout.js → storage.js → store.js → modelCapabilities.js → roleCard.js → demo.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
+providers.js → prefs.js → context.js → tree.js → treeLayout.js → storage.js → store.js → modelCapabilities.js → roleCard.js → zip.js → sidecar.js → features.js → paintQueue.js → proposals.js → motion.js → titles.js → search.js → app/core.js → 其余 js/app/*.js（任意顺序）→ js/app.js → pwa.js
 ```
 
-`prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `store.js` 与 `js/app/*` 之前（`serializeStory` 用它的裁剪窗口常量、`imageIdsOf` 委托它的树遍历，缺了直接报错；回合编排也要 `IR.Tree`）；`demo.js`、`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是演示适配器、惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
+`prefs.js` 赶在 `store.js` 之前（`migrateStory` 调 `IR.Prefs.sanitizePrefs`，缺位时有兜底）；`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`tree.js` 不依赖 store，但必须赶在 `store.js` 与 `js/app/*` 之前（`serializeStory` 用它的裁剪窗口常量、`imageIdsOf` 委托它的树遍历，缺了直接报错；回合编排也要 `IR.Tree`）；`zip.js`、`paintQueue.js`、`proposals.js`、`motion.js` 同理都要赶在 `js/app/*` 之前（分别是惰性查 `IR.Zip`、`IR.PaintQueue.create`、`IR.Proposals`、`IR.Motion.resolve`）；`js/app/core.js` 必须是**第一个**加载的 app 模块（建 `IR.App` / `A.state` / `A.reg`，其余模块顶部解构它的导出）；`js/app.js` 是组合根，**最后**加载（boot IIFE 末尾调 `init()`）；`pwa.js` 是唯一的例外，它排在 `js/app.js` 之后——它不碰 `IR`，只注册 Service Worker。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -295,25 +294,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
 
-## 7. 离线演示模式（`?demo=1`）
-
-`js/demo.js` 用「**换适配器**」而不是「分叉业务逻辑」的方式实现零安装演示——演示不是另一套 App，而是同一条链路接了两个假适配器：
-
-| 项 | 做法 |
-|---|---|
-| 判定 | `IR.Demo.enabled()` 读 `location.search`（`?demo=1` / `?demo` / `?demo=true`） |
-| 对话 | 注册 `ChatProviders['demo']`，按**提示词特征**分派：system 含「AI 画师导演」→ 画师任务（场景 / 工作台 / 试画 / 设定卡各有内置回包）；含「书记员」→ 返回空串，让本地规则兜底；user 消息以 `[玩家行动]` / `[设定]` 开头 → AI1，按**调用序号**推进内置剧本（不依赖历史长度，压缩后也不会错位） |
-| 生图 | 注册 `ImageProviders['demo-image']`，用 canvas 现画一张带提示词的占位图并返回 dataURL，出图链路（缩略图、背景淡入、图库）完全一致 |
-| 设置 | `IR.Demo.applyTo(settings)` 返回**副本**：对话 / 生图换成演示适配器、子模型留空沿用、关掉工具；`js/app/core.js` 的 `persistSettings()` 在演示模式直接 return，配置永不落盘 |
-| 入口 | `init()` 检测到演示模式就直接 `startDemo()`（跳过开始页与试画锚定）；顶栏「🎬 演示」与开始页「🎬 离线演示」是进出这个模式的开关 |
-
-推论：**新增功能只要走适配器层，演示模式就自动跟着一起走**。反过来，如果哪天演示跑不通，多半说明有人绕过了适配器层——这是个便宜的一致性检查。
-
-本地服务的三个功能也照这条办：`?demo=1` 下不连真实 sidecar（保持零外联），而是由 `IR.Demo.installSidecarMock()` 把 `IR.Sidecar` 换成一整套**内存实现**（同一批方法名、同样走保守策略），因此「写邮件 / 定时主动 / 代下单」的界面链路在演示模式下也能完整跑一遍。
-
-`eval/demo-smoke.js` 在 Node 里不放浏览器地跑这套契约（24 项，含「demo 走 3 回合 → 重试 → 切换 → 再切回」的分支树链路），已接入 CI。
-
-## 8. 评测如何做
+## 7. 评测如何做
 
 `eval/run.js` 只 `require` 纯逻辑模块（`context.js` / `store.js` / `roleCard.js`），不加载 `js/app.js` 与 `js/app/*`，因此**不发任何网络请求**：
 
@@ -324,13 +305,13 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 改记忆、压缩、召回相关代码前请先跑 `node eval/run.js`。
 
-## 9. PWA 与离线缓存（`sw.js`）
+## 8. PWA 与离线缓存（`sw.js`）
 
 PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `localhost` 下注册 `sw.js`，`file://` 直接跳过，**业务代码一行都不用改**。
 
 | 请求类型 | 策略 | 为什么 |
 |---|---|---|
-| 导航（打开页面，含 `?demo=1`） | 网络优先 → 断网回退预缓存的 `index.html` | 网络优先保证「改了立刻生效」，绝不被缓存卡住 |
+| 导航（打开页面） | 网络优先 → 断网回退预缓存的 `index.html` | 网络优先保证「改了立刻生效」，绝不被缓存卡住 |
 | 同源静态资源（CSS / JS / 图标 / manifest） | 缓存优先 + 后台静默更新（SWR） | 秒开；`?v=` 版本串本身就是失效开关 |
 | 跨域（对话 / 生图 API、字体 CDN） | 不拦截、不缓存 | **API Key 与剧情文本绝不进缓存** |
 | 非 GET | 不拦截 | 上传/导入走原路 |
@@ -339,21 +320,21 @@ PWA 是「装个帽子」，不是「换条路」：`js/pwa.js` 在 https / `loc
 
 `CACHE` 名（`ir-v<版本>`）由 `tools/sync-version.mjs` 从 `VERSION` 注入：版本一变就换缓存、`activate` 时清掉旧的，等价于「跟着发布节奏清缓存」。**改前端资源后如果本地看到旧文件，先怀疑 Service Worker**（DevTools → Application → Service Workers → Unregister）。
 
-## 10. 想扩展的话
+## 9. 想扩展的话
 
 - **接新的模型服务**：在 `js/providers.js` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `js/app/*` 的业务逻辑。
 - **视频**：`IR.VideoProviders['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`js/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。
 - **主题**：`css/style.css` 顶部的 CSS 变量就是主题入口。当前是白底蓝强调浅色主题（UI-1）；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `store.js` 与 `roleCard.js`，新增字段请同步 `migrateStory`。
 
-## 11. 已知边界
+## 10. 已知边界
 
 - **主库是 IndexedDB**（`js/storage.js` + `js/store.js`），容量由浏览器按磁盘空间分配，不再受 localStorage 约 5MB 限制；但这仍是**本机这个浏览器**的额度，且**不是无限大**——浏览器、设备剩余空间与存储策略都会影响它。旧版数据留在 localStorage 里作为回退快照，不再写入。
 - `file://` / `http://localhost` / 未来桌面壳的 origin 各不相同，数据天然隔离，只能靠导入导出搬运（**IndexedDB 也按 origin 隔离**）。
 - 浏览器直连第三方 API 会被 CORS 拦，无法在纯前端层面解决。
 - API Key 明文存 IndexedDB（详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的「安全说明」）。
 
-## 12. 可选本地服务（sidecar）
+## 11. 可选本地服务（sidecar）
 
 **定位**：不是「应用必须有后端」。前端核心照旧纯前端；`sidecar/` 是一个**可选**的本地伴侣进程，只有三项能力靠它：
 

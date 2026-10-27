@@ -9,10 +9,6 @@
   const Store = IR.Store;
   const Cap = IR.ModelCapabilities;   // 模型能力登记表（T-M-1）
 
-  /* 离线演示模式（?demo=1，见 js/demo.js）：内置剧本 + 本地占位图，不联网、不需要 Key。
-     只覆盖内存里的 settings，绝不写回 localStorage —— 真实配置不会被演示污染。 */
-  const DEMO = !!(IR.Demo && IR.Demo.enabled());
-
   /* ================= 默认值与提示词 ================= */
 
   const STYLE_PRESETS = {
@@ -242,7 +238,7 @@
   }
 
   /* ---------- 弹窗栈（P0-3） ----------
-   * 十余个弹窗各自独立，演示图里「写邮件」和「代为下单」会叠在一起。
+   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起。
    * 这里做一个最小的统一入口：
    *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
    *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
@@ -344,9 +340,8 @@
     return (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + ' MB';
   }
 
-  // 设置落盘的唯一出口：演示模式只改内存，不写盘
+  // 设置落盘的唯一出口
   function persistSettings() {
-    if (DEMO) return;
     Store.saveSettings(S.settings);
   }
 
@@ -501,7 +496,6 @@
     $,
     Store,
     Cap,
-    DEMO,
     STYLE_PRESETS,
     MODE_LABELS,
     KIND_LABELS,

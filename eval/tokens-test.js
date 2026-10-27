@@ -69,10 +69,6 @@ function check(name, ok, detail) {
 /* ---------- 允许名单：确实不能用令牌的色值（每条带理由） ---------- */
 const ALLOW_COLORS = [
   {
-    file: 'src/core/demo.ts',
-    reason: '离线演示占位图是 canvas 现画的「图片内容」（天空渐变 / 光源 / 剪影 / 雨丝 / 信息条），不是 UI 配色，走不了 CSS 令牌；其中信息条的深色遮罩与白字属于任务书 §2 的「图片上叠字」允许情形',
-  },
-  {
     file: 'js/app/video.js',
     reason: '视频抓帧失败时的兜底封面是 canvas 现画的「图片内容」（黑底 + 手绘播放三角，§6.3 特意不依赖字体画 ▶），不是 UI 配色',
   },

@@ -99,7 +99,7 @@
     <Field label="档位示例" for="g-select">
       <Select id="g-select" bind:value={demoModel} options={[
         { value: 'gpt-example', label: 'gpt-example' },
-        { value: 'demo-local', label: 'demo-local（离线演示）' },
+        { value: 'demo-local', label: 'demo-local' },
       ]} />
     </Field>
     <Checkbox bind:checked={demoOn} label="启用某个开关" />
