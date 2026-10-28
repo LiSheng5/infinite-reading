@@ -47,6 +47,11 @@ export function vtDisabled() {
   }
 }
 
+/** 视图过渡是否正在跑（阶段 5 第 6 步：rich 的分支页入场动画要等它结束再开） */
+export function vtActive() {
+  return !!activeVT;
+}
+
 /** 某个过渡动作在某档下的声明：{ kind, ms }；未登记的名字按档位默认政策兜底 */
 export function transitionSpec(name, tier) {
   const lv = LEVELS.indexOf(tier) >= 0 ? tier : 'rich';

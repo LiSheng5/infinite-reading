@@ -38,6 +38,7 @@
     expandAll: false,
     layout: null,
     seen: new Set(),       // 已渲染过的节点 id（判定「新长出来」）
+    entry: null,           // 最近一次 render 产出的新元素（过渡期押后入场动画，见 replayEntry）
     dragging: null,
     pinch: null,
     suppressClick: false,
@@ -102,6 +103,13 @@
 
   /* ================= 打开 / 关闭 ================= */
 
+  /* 阶段 5 第 6 步：开合走 IR.Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
+   * 时序要点（任务书「坑」）：
+   *   · 渲染整块放进 mutate —— 视图过渡在 update 回调之后才拍新快照，先渲染，快照里才有树；
+   *   · rich 的入场动画（边描边 / 节点弹出）不在 mutate 里开跑：快照会把它拍成空白首帧，
+   *     留到 finished 之后由 replayEntry 补；
+   *   · centerOn 必须留在 mutate 里（新快照要用已经居中的 transform），finished 后不再重算；
+   *   · html[data-branch] 与底下循环的挂起/复位都由 IR.Nav 管，这里不再直接写。 */
   function openBranch(opts) {
     opts = opts || {};
     const st = S.story;
@@ -111,33 +119,34 @@
     V.open = true;
     V.selectId = (opts.selectId && t.nodes[opts.selectId]) ? opts.selectId : t.head;
     V.panelOpen = !!opts.selectId;
-    const page = $('#branch-page');
-    page.classList.remove('hidden');
-    page.classList.remove('enter');
-    if (motionLevel() !== 'off') {
-      void page.offsetWidth;
-      page.classList.add('enter');
-    }
-    $('#branch-title').textContent = (st.title || '未命名') + ' · 分支';
-    // 循环动画预算 ≤3（§4.5）：分支页盖在聊天页上时，暂停底下舞台的 Ken Burns 等循环
-    // 阶段 5 第 3 步：data-branch 的写入收口到 IR.Nav（全仓唯一写入点）
-    IR.Nav.setBranchOpen(true);
+    V.entry = null;
     bindCanvas();
-    relayout();
-    render();
-    centerOn(V.selectId);
-    if (V.panelOpen) renderPanel(); else setPanelOpen(false);
-    updateActiveDescendant();
-    const svg = $('#branch-svg');
-    if (svg && svg.focus) svg.focus({ preventScroll: true });
+    const r = IR.Nav.branchPage(true, () => {
+      const page = $('#branch-page');
+      if (!page) return;
+      page.classList.remove('hidden');
+      // .enter（旧的整页淡入）退役：入场由视图过渡负责；css/style.css 里那条规则留待收尾清理
+      page.classList.remove('enter');
+      $('#branch-title').textContent = (st.title || '未命名') + ' · 分支';
+      relayout();
+      render();
+      centerOn(V.selectId);
+      if (V.panelOpen) renderPanel(); else setPanelOpen(false);
+      updateActiveDescendant();
+      const svg = $('#branch-svg');
+      if (svg && svg.focus) svg.focus({ preventScroll: true });
+    });
+    if (r.mode === 'instant') replayEntry();
+    else r.finished.then(replayEntry, replayEntry);
   }
 
   function closeBranch() {
     V.open = false;
     V.dragging = null;
-    const page = $('#branch-page');
-    if (page) page.classList.add('hidden');
-    IR.Nav.setBranchOpen(false);
+    IR.Nav.branchPage(false, () => {
+      const page = $('#branch-page');
+      if (page) page.classList.add('hidden');
+    });
   }
 
   /* ================= 布局 / 渲染 ================= */
@@ -236,9 +245,19 @@
     }
 
     applyTransform();
-    playEntry(newEdges, newNodes);
+    V.entry = { edges: newEdges, nodes: newNodes };
+    // 快照期不跑入场：rich 的节点从 scale(.4)/opacity 0 弹出，被拍进新快照就是一张空白页。
+    // 过渡结束（或被顶掉）后由 replayEntry 补这一段。
+    if (!(IR.Nav.isTransitioning && IR.Nav.isTransitioning())) playEntry(newEdges, newNodes);
     for (const n of vis) V.seen.add(n.id);
     updateActiveDescendant();
+  }
+
+  // 补放入场动画（只在 rich 有意义；playEntry 自己按档位早退）
+  function replayEntry() {
+    const e = V.entry;
+    V.entry = null;
+    if (e) playEntry(e.edges, e.nodes);
   }
 
   function renderNode(n, bms, t, collide) {
@@ -639,8 +658,10 @@
       return;
     }
     if (!IR.Tree.switchTo(S.story, node.id)) return;
-    closeBranch();
+    // 阶段 5 第 6 步：先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
+    // 快照会盖着旧内容跑 220ms，结算后才换成新内容（第 5 步「最终内容不闪回旧分支」的同款坑）。
     afterSwitch();
+    closeBranch();
   }
 
   function opFork() {
@@ -655,9 +676,9 @@
     }
     const res = IR.Tree.forkBefore(S.story, node.id);
     if (!res.ok) { toast(res.reason || '这里不能分叉', true); return; }
-    closeBranch();
     afterSwitch();
     A.setComposerText(res.action.text, res.action.kind);   // 预填原话 + 还原「做 / 说 / 导演」，不触发发送
+    closeBranch();                                          // 同上：内容与输入框都先就位，再拍关闭快照
   }
 
   function opLatest() {
@@ -666,8 +687,8 @@
     const leaf = node && IR.Tree.latestLeaf(S.story, node.id);
     if (!leaf) return;
     if (!IR.Tree.switchTo(S.story, leaf.id)) return;
-    closeBranch();
     afterSwitch();
+    closeBranch();
   }
 
   /* ================= 历史位置提示条（§5） ================= */

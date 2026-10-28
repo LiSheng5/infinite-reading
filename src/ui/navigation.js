@@ -19,7 +19,9 @@
  *   currentScreen()           当前可见的屏名（都没显示时返回 ''）
  *   showScreen(name, mutate)  切到某屏：隐藏其余、显示目标；mutate 里放这次切换要一起做的 DOM 变更
  *   stageArt(mutate)          舞台换画：共享元素 stage-art（新旧模糊副本同名），过渡期暂停 Ken Burns
- *   setBranchOpen(open)       分支页开合标记（html[data-branch]），循环暂停规则的开关
+ *   branchPage(open, mutate)  分支页开合：显隐 + 渲染交给 mutate；关的时候循环挂起等过渡落地再撤
+ *   isTransitioning()         视图过渡是否正在跑（rich 的入场动画要等它结束）
+ *   setBranchOpen(open)       分支页开合标记（html[data-branch] + data-loops-paused），循环暂停的开关
  *   isBranchOpen()            分支页是否开着
  *
  * 铁律：
@@ -29,7 +31,7 @@
  *   · rich 的「淡入 + 短位移」用 WAAPI 挂在 ::view-transition-new(root) 上（见 shiftNewSnapshot）：
  *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
  */
-import { runTransition } from './viewTransition.js';
+import { runTransition, vtActive } from './viewTransition.js';
 import { suspendLoops } from './motion.js';
 
 /** 屏幕登记表：名字 → 容器 id（切屏只认这一张表；别处不得再写 '.hidden'） */
@@ -103,25 +105,27 @@ export function showScreen(name, mutate) {
 
   // 过渡形态 / 时长全由 TRANSITIONS.screen 决定：off → 同步换、standard → 交叉淡入、
   // rich → 交叉淡入 + 短位移。降级（?vt=0 / 不支持 VT）只对目标屏做整块淡入。
-  cancelShift();
+  cancelShift('screen');
   const r = runTransition('screen', guarded, { scope: screenEl(name) });
-  if (r.mode === 'vt' && r.kind === 'shift') shiftNewSnapshot(r.ms);
+  if (r.mode === 'vt' && r.kind === 'shift') shiftNewSnapshot('screen', r.ms, SHIFT_PX);
   return { screen: name, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
 }
 
-/* ---------- rich 的短位移（切屏专用）----------
+/* ---------- rich 的短位移（切屏 / 分支页开合共用）----------
  * 为什么不在 css/motion.css 里写：位移需要 @keyframes，而 @keyframes 必须同步 src/core/motion.ts
- * 的 ANIMATIONS 与两份 eval 测试（任务书「坑」）；第 3 步的改动面不含那三处。这里改用 WAAPI 直接
- * 给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
+ * 的 ANIMATIONS 与两份 eval 测试（任务书「坑」）；第 3 / 6 步的改动面不含那三处。这里改用 WAAPI
+ * 直接给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
  * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩 css/motion.css 那三条
- * ::view-transition-* 规则给出的交叉淡入（不算失败，验收脚本也不把位移当硬要求）。 */
+ * ::view-transition-* 规则给出的交叉淡入（不算失败，验收脚本也不把位移当硬要求）。
+ * 按 key 分开存：切屏与分支页开合各自一段，互不 cancel（第 6 步实测：单例全局会把两段互相收掉）。 */
 const SHIFT_PX = 8;              // 与 rowIn / leafIn 的 8–10px 同一量级（短位移，不是滑屏）
-let shiftAnim = null;
+const shiftAnims = new Map();    // key → Animation
 
-function cancelShift() {
-  if (!shiftAnim) return;
-  try { shiftAnim.cancel(); } catch (_) {}
-  shiftAnim = null;
+function cancelShift(key) {
+  const a = shiftAnims.get(key);
+  if (!a) return;
+  try { a.cancel(); } catch (_) {}
+  shiftAnims.delete(key);
 }
 
 function easeToken() {
@@ -132,21 +136,21 @@ function easeToken() {
   return 'ease-out';
 }
 
-function shiftNewSnapshot(ms) {
+function shiftNewSnapshot(key, ms, fromY) {
   if (!(ms > 0) || typeof document === 'undefined') return;
-  cancelShift();
+  cancelShift(key);
   let anim;
   try {
     anim = document.documentElement.animate(
-      [{ transform: 'translateY(' + SHIFT_PX + 'px)' }, { transform: 'none' }],
+      [{ transform: 'translateY(' + fromY + 'px)' }, { transform: 'none' }],
       { duration: ms, easing: easeToken(), pseudoElement: '::view-transition-new(root)' },
     );
   } catch (_) {
     return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
   }
-  shiftAnim = anim;
+  shiftAnims.set(key, anim);
   // 收掉后清引用（被顶掉 / 被 skip 的 reject 属正常）
-  const done = () => { if (shiftAnim === anim) shiftAnim = null; };
+  const done = () => { if (shiftAnims.get(key) === anim) shiftAnims.delete(key); };
   try { anim.finished.then(done, done); } catch (_) { done(); }
 }
 
@@ -201,18 +205,91 @@ export function stageArt(mutate) {
   return { stage: 'stageArt', tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
 }
 
-/* ---------- 分支页标记（html[data-branch]）----------
- * 全仓唯一写入点：css/motion.css 的旧屏循环暂停规则、阶段 6 的分支页过渡都读这一个标记。 */
+/* ---------- 分支页标记（html[data-branch] + 底下阅读页的循环挂起）----------
+ * 全仓唯一写入点。两件事必须成对：标记本身（css/motion.css 的旧屏循环暂停规则、验收脚本都读它）
+ * 与 data-loops-paused（src/ui/motion.js 的 suspendLoops，Svelte 阅读页重写后选择器会换，属性更稳）。
+ * 只用标记不挂起的话，退出阅读页重写后 css 那条 `#screen-game *` 规则迟早要跟着改。 */
+let branchSuspend = null;
+
 export function setBranchOpen(open) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  if (open) root.dataset.branch = 'open';
-  else delete root.dataset.branch;
+  const read = screenEl('read');
+  if (open) {
+    root.dataset.branch = 'open';
+    if (read && !branchSuspend) branchSuspend = suspendLoops(read);
+  } else {
+    delete root.dataset.branch;
+    if (branchSuspend) {
+      try { branchSuspend(); } catch (_) {}
+      branchSuspend = null;
+    }
+  }
 }
 
 export function isBranchOpen() {
   if (typeof document === 'undefined') return false;
   return document.documentElement.dataset.branch === 'open';
+}
+
+/* ---------- 分支页开合（阶段 5 第 6 步）----------
+ * 与 showScreen 同构：过渡形态 / 时长全由 TRANSITIONS.branchPage 决定
+ *   off      → 同步切（焦点与滚动位置都不动）
+ *   standard → root 交叉淡入（分支页不命名，整屏换页）
+ *   rich     → 交叉淡入 + 新快照 translateY(±8px) 短位移（开 = 从下往上，关 = 往上退）
+ * 降级（?vt=0 / 不支持 VT）→ 只对 scope 做整块淡入：开 = 分支页，关 = 阅读页。
+ *
+ * 调用约定（js/app/branch.js 侧）：
+ *   mutate 里只做「显隐 + 渲染 + 焦点」这类必须与新快照同一帧的 DOM 变更；
+ *   过渡结束（或被下一段顶掉）后不再回调 —— 需要收尾的（centering / 入场动画 / 焦点还原）
+ *   由调用方拿 finished 自己接。
+ *
+ * 循环暂停的时序（任务书「坑」）：开 → 标记在 mutate 里立刻写上（新快照里底下阅读页已是暂停相位）；
+ * 关 → 标记等 finished 再撤（否则新快照拍的是暂停相位、结算后 live 已推进，Ken Burns 会跳一下）。
+ */
+const BRANCH_SHIFT_PX = 8;
+
+let branchSeq = 0;
+let branchWanted = false;     // 最近一次请求的开合态（DOM 标记在关的时候会滞后到 finished）
+
+export function branchPage(open, mutate) {
+  const want = !!open;
+  const run = typeof mutate === 'function' ? mutate : () => {};
+  const instant = (mode) => ({ branch: want ? 'open' : 'close', tier: '', kind: 'instant', ms: 0, mode: mode || 'instant', finished: Promise.resolve() });
+  const page = typeof document !== 'undefined' ? document.getElementById('branch-page') : null;
+
+  // 屏不在（?ui=legacy 半挂载 / 极早期）：只跑 mutate，不抛错也不动画
+  if (!page) { run(); return instant(); }
+
+  // 连点同一个入口：不跑过渡（不出第二对快照），mutate 照常跑
+  if (branchWanted === want) { run(); return instant(); }
+  branchWanted = want;
+
+  const stamp = ++branchSeq;
+  cancelShift('branchPage');
+  const scope = want ? page : screenEl('read');
+  const r = runTransition('branchPage', () => {
+    if (stamp !== branchSeq) return;
+    if (want) setBranchOpen(true);   // 开：快照前就把底下阅读页的循环挂起
+    run();
+  }, { scope });
+  if (r.mode === 'vt' && r.kind === 'shift') {
+    shiftNewSnapshot('branchPage', r.ms, want ? BRANCH_SHIFT_PX : -BRANCH_SHIFT_PX);
+  }
+
+  const finish = () => {
+    if (stamp !== branchSeq) return;          // 被下一段顶掉：不碰状态
+    if (!want) setBranchOpen(false);          // 关：等快照落地再放开底下循环
+  };
+  if (r.mode === 'instant') finish();
+  else r.finished.then(finish, finish);
+
+  return { branch: want ? 'open' : 'close', tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
+}
+
+/** 视图过渡是否正在跑（快照期）：rich 的入场动画要等它结束再开，否则会被拍成空白页 */
+export function isTransitioning() {
+  return vtActive();
 }
 
 /* ---------- IR 兼容层（legacy 界面层的既定桥法；阶段 6 随 IR 一起删） ---------- */
@@ -225,6 +302,8 @@ export const Nav = {
   applyScreen,
   showScreen,
   stageArt,
+  branchPage,
+  isTransitioning,
   setBranchOpen,
   isBranchOpen,
 };
