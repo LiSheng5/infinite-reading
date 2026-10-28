@@ -124,8 +124,15 @@
   function parseImportCharacters(text) { return IR.ImportText.parseImportCharacters(text); }
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式
+  // 屏 6b 起：新形态由 src/screens/modal/CharRows.svelte 渲染，行数据在状态桥里
+  // （IR.ModalScreens.chars('import')，与 A.charEditor 同形的 set / get / add）；
+  // ?ui=legacy 不注册状态桥，退回命令式注入的 charEditor（旧 DOM 照旧）。
   let itCharEd = null;
   function itChars() {
+    const bridge = IR.ModalScreens;
+    if (bridge && typeof bridge.chars === 'function' && bridge.has('modal-import-text')) {
+      return bridge.chars('import');
+    }
     return itCharEd || (itCharEd = A.charEditor($('#it-characters'), [
       { key: 'name', label: '名字', placeholder: '姓名' },
       { key: 'presence', label: '在场 / 离场', placeholder: '在场' },

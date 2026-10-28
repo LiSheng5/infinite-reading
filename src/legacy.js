@@ -29,6 +29,10 @@ import './core/motion.ts';          // 动效强度解析（off / standard / ric
 import './core/titles.ts';
 import './core/search.ts';
 import './core/backupPack.ts';      // 备份打包 / 还原的纯数据逻辑（阶段 2 自 js/app/backup.js 抽出）
+// 屏 6b：剧情文本导入的纯解析逻辑（js/app/importer.js 一律经 IR.ImportText 调用）。
+// 这个模块此前只有 registerIR 没有装配——IR.ImportText 一直是 undefined，导入整理在
+// 模型失败兜底那一步会抛 TypeError（6b 自检脚本抓到的真实缺陷，随本步一并修好）。
+import './core/importText.ts';
 
 // —— 屏 6a：弹窗的唯一入口（栈 / 层级 / 互斥 / 外壳）—— 必须在 core.js 之前求值：
 // core.js 的弹窗栈改为转发 IR.ModalHost（modalStack 仍是同一个数组实例）
@@ -86,6 +90,10 @@ import './screens/read/index.js';
 // 阶段 4 · 屏 5：分支页 Svelte 重写（顶栏 / 画布容器 / 节点详情面板；画布仍 createElementNS；
 // 默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3/4）
 import './screens/branch/index.js';
+
+// 阶段 4 · 屏 6b：轻弹窗内容重写（新故事 / 开局向导 / 文本导入 / 导出 / 确认；
+// 默认挂 Svelte 组件，?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3/4/5）
+import './screens/modal/index.js';
 
 // —— 屏 6a：弹窗外壳接管 11 个 legacy 弹窗 ——
 // import 全部求值完才执行（ES module 语义），所以这里的 DOM 已是「各屏挂载完」的终态；

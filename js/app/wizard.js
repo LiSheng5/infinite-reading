@@ -76,8 +76,15 @@
   /* ================= 开局向导（T-P2-3 / §4.8） ================= */
 
   // 人物设定独立控件（可增删行）：姓名 / 性格 / 说话方式，替代竖线文本框
+  // 屏 6b 起：新形态由 src/screens/modal/CharRows.svelte 渲染，行数据在状态桥里
+  // （IR.ModalScreens.chars('wizard')，与 A.charEditor 同形的 set / get / add）；
+  // ?ui=legacy 不注册状态桥，退回命令式注入的 charEditor（旧 DOM 照旧）。
   let wzCharEd = null;
   function wzChars() {
+    const bridge = IR.ModalScreens;
+    if (bridge && typeof bridge.chars === 'function' && bridge.has('modal-wizard')) {
+      return bridge.chars('wizard');
+    }
     return wzCharEd || (wzCharEd = A.charEditor($('#wz-characters'), [
       { key: 'name', label: '名字', placeholder: '如：周叙' },
       { key: 'personality', label: '性格', placeholder: '如：话里有话、克制' },
@@ -159,7 +166,10 @@
   async function draftWizard() {
     const topic = $('#wz-draft-input').value.trim() || DEFAULT_TOPIC;
     const btn = $('#btn-wz-draft');
-    btn.disabled = true; btn.textContent = '起草中…';   // 结束后在 finally 里按「图标 + 起草」还原
+    // 屏 6b：按钮由 Button 组件产出（图标是一个子节点），文案单独放在 #wz-draft-label，
+    // 只能改这个 span 的文字；旧 DOM 没有该 span，退回原来的 textContent / innerHTML 写法。
+    const label = $('#wz-draft-label') || btn;
+    btn.disabled = true; label.textContent = '起草中…';   // 结束后在 finally 里按「图标 + 起草」还原
     try {
       const cfg = resolveSub('draft');
       let d = null;
@@ -181,7 +191,9 @@
       fillWizard(localDraft(topic));
       toast(netErrHint(e) + '（已改用本地模板草稿）', true, true);
     } finally {
-      btn.disabled = false; btn.innerHTML = A.icon('pencil', 'ic-l') + '起草';
+      btn.disabled = false;
+      label.textContent = '起草';
+      if (label === btn) btn.innerHTML = A.icon('pencil', 'ic-l') + '起草';   // 旧 DOM：图标与文字一起还原
     }
   }
 
