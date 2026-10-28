@@ -18,7 +18,9 @@
  *    与 ANIMATIONS 逐条推导一致（off/standard/rich 各一块）；
  * 10. [新] 暂停机制在位：data-paused / data-loops-paused / data-loop="wait" 都有
  *    animation-play-state: paused 规则（页面不可见、子树挂起、循环预算排队）；
- * 11. [新] 图标 lint（§6.3）：CSS content: 值与 Svelte 模板不得出现 emoji /
+ * 11. [新] 视图过渡（阶段 5）：::view-transition-group/old/new(*) 三条规则在位，
+ *    animation-duration 只准 var(--m-dur-vt-*)；TRANSITIONS 里用到的每个 kind 都有对应变量；
+ * 12. [新] 图标 lint（§6.3）：CSS content: 值与 Svelte 模板不得出现 emoji /
  *    符号字符当图标（▶ ⚙ ⚡ ← ↑ ↓ ＋ ⋯ ✕ ✓ 等；部分系统会渲染成彩色 emoji）。
  *
  * 用法：node eval/tokens-test.js（任一不过 → 退出码 1）
@@ -173,6 +175,8 @@ for (const name of REQUIRED) {
 const REQUIRED_MOTION_VARS = [
   '--m-dur-fast', '--m-dur-base', '--m-dur-slow', '--m-dur-flash',
   '--m-t-shift-fast', '--m-t-shift-base', '--m-t-color-fast', '--m-t-color-base', '--m-iter',
+  // 阶段 5：视图过渡的时长收口（::view-transition-* 只准引用这三个）
+  '--m-dur-vt-fade', '--m-dur-vt-out', '--m-dur-vt-shift',
 ];
 for (const name of REQUIRED_MOTION_VARS) {
   check('动效政策变量 ' + name, motionVars.has(name));
@@ -450,7 +454,45 @@ check('页面不可见暂停（html[data-paused]）规则在位', ruleHasMotionP
 check('子树挂起（[data-loops-paused]）规则在位', ruleHasMotionPause(MOTION, '[data-loops-paused]'));
 check('循环预算排队（[data-loop="wait"]）规则在位', ruleHasMotionPause(MOTION, '[data-loop="wait"]'));
 
-/* ---------- 11. [新] 图标 lint：emoji / 符号字符不得当图标 ---------- */
+/* ---------- 11. [新] 视图过渡：伪元素规则在位，时长只走 --m-dur-vt-* ---------- */
+
+const VT_PARTS = ['group', 'old', 'new'];
+const vtSeen = {};
+const vtBad = [];
+eachRule(MOTION, (selector, body) => {
+  if (!selector.includes('::view-transition')) return;
+  for (const k of VT_PARTS) if (selector.includes('::view-transition-' + k + '(')) vtSeen[k] = true;
+  eachDeclaration(body, (prop, value) => {
+    if (prop === 'animation' && value.trim() !== 'none') {
+      vtBad.push(selector + ' 用了 animation 简写（动画名会绕开 --an-* 名表）');
+      return;
+    }
+    if (prop !== 'animation-duration') return;
+    const v = value.replace(/\s*!important\s*$/, '').trim();
+    if (!/^var\(\s*--m-dur-vt-[\w-]+\s*\)$/.test(v)) {
+      vtBad.push(selector + ' animation-duration 未走 --m-dur-vt-*：' + value);
+    }
+  });
+});
+for (const k of VT_PARTS) check('::view-transition-' + k + '(*) 规则在位', !!vtSeen[k]);
+check('视图过渡时长只走 --m-dur-vt-*', vtBad.length === 0, vtBad.join(' | '));
+
+// 过渡声明表（src/core/motion.ts 的 TRANSITIONS）里用到的每个 kind 都要有 CSS 变量收口
+const TRANSITIONS = MotionApi.TRANSITIONS || {};
+const KIND_VAR = { fade: '--m-dur-vt-fade', shift: '--m-dur-vt-shift', shared: '--m-dur-vt-shift' };
+const KIND_OK = ['instant', 'fade', 'shift', 'shared'];
+const kindBad = [];
+for (const [name, spec] of Object.entries(TRANSITIONS)) {
+  for (const tier of ['off', 'standard', 'rich']) {
+    const kind = spec && spec[tier] && spec[tier].kind;
+    if (kind && KIND_OK.indexOf(kind) < 0) kindBad.push(name + '.' + tier + ' 的 kind 不认识：' + kind);
+    const v = KIND_VAR[kind];
+    if (v && !motionVars.has(v)) kindBad.push(name + '.' + tier + '（' + kind + '）需要 ' + v);
+  }
+}
+check('TRANSITIONS 的 kind 都有对应 CSS 时长变量', kindBad.length === 0, kindBad.join(' | '));
+
+/* ---------- 12. [新] 图标 lint：emoji / 符号字符不得当图标 ---------- */
 
 const BANNED_GLYPHS = ['▶', '⚙', '⚡', '←', '↑', '↓', '＋', '⋯', '✕', '✓'];
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u;

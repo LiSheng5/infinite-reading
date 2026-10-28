@@ -41,6 +41,10 @@
   --m-t-color-base: var(--dur-base);
   /* 循环动画的 iteration-count：rich 才循环 */
   --m-iter: infinite;
+  /* 视图过渡（View Transitions）的时长收口（阶段 5；::view-transition-* 规则只引用这三个） */
+  --m-dur-vt-fade: var(--m-dur-base);    /* 新快照淡入 */
+  --m-dur-vt-out: var(--m-dur-fast);     /* 旧快照淡出（先退后进） */
+  --m-dur-vt-shift: var(--m-dur-base);   /* 组容器（共享元素的位置 / 尺寸补间） */
 }
 html[data-motion="standard"] {
   --m-dur-fast: var(--dur-fast);
@@ -52,6 +56,9 @@ html[data-motion="standard"] {
   --m-t-color-fast: var(--dur-fast);
   --m-t-color-base: var(--dur-base);
   --m-iter: 1;                      /* standard 无循环 */
+  --m-dur-vt-fade: var(--m-dur-base);    /* 收口到 --dur-shift = 160ms（无位移的交叉淡入） */
+  --m-dur-vt-out: var(--m-dur-fast);
+  --m-dur-vt-shift: var(--m-dur-base);
 }
 html[data-motion="off"] {
   --m-dur-fast: var(--dur-off);     /* 最多 80ms 的透明度变化 */
@@ -63,6 +70,11 @@ html[data-motion="off"] {
   --m-t-color-fast: 0ms;            /* 非透明度过渡一律即时 */
   --m-t-color-base: 0ms;
   --m-iter: 1;                      /* 无循环 */
+  /* off 档理论上不开视图过渡（src/ui/viewTransition.js 同步换 DOM）；这里是兜底：
+     只剩 80ms 以内的透明度变化，组容器 0ms（无位移） */
+  --m-dur-vt-fade: var(--m-dur-fast);
+  --m-dur-vt-out: var(--m-dur-fast);
+  --m-dur-vt-shift: 0ms;
 }
 
 /* ==================== 动画名三档表（--an-*） ====================
@@ -124,6 +136,36 @@ html[data-motion="off"] {
   --an-infWave: none;
   --an-flowLight: none;
   --an-nodePulse: none;
+}
+
+/* ==================== 视图过渡（View Transitions） ====================
+   阶段 5 第 2 步：src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
+   调 document.startViewTransition；快照动画本身全部由下面三条伪元素规则提供，
+   时长一律走 --m-dur-vt-*（再由上面三个档位块映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
+   过渡名单与三档 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：
+   这三条规则的 animation-duration 只准 var(--m-dur-vt-*)。
+   注意：::view-transition-* 匹配不到 html[data-paused] * / [data-loop="wait"] 这类选择器，
+   过渡期的循环暂停与预算复位要单独处理（任务书「坑」）。 */
+::view-transition-old(*) {
+  animation-duration: var(--m-dur-vt-out);
+  animation-timing-function: var(--ease-out);
+}
+::view-transition-new(*) {
+  animation-duration: var(--m-dur-vt-fade);
+  animation-timing-function: var(--ease-out);
+}
+/* 组容器：共享元素（第 4 步的 stage-art）的位置与尺寸补间走这里 */
+::view-transition-group(*) {
+  animation-duration: var(--m-dur-vt-shift);
+  animation-timing-function: var(--ease-out);
+}
+
+/* off 档兜底：即便有代码误开 VT，也不许任何快照动画（JS 侧同样是同步换 DOM）。
+   animation-name 而不是 animation 简写：tokens-test 的「名字必须走 --an-*」只查简写。 */
+html[data-motion="off"]::view-transition-group(*),
+html[data-motion="off"]::view-transition-old(*),
+html[data-motion="off"]::view-transition-new(*) {
+  animation-name: none;
 }
 
 /* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明三档行为） ====================
@@ -207,5 +249,12 @@ html[data-branch="open"] #screen-game *::after {
     animation-duration: var(--dur-none) !important;
     animation-iteration-count: 1 !important;
     transition-duration: var(--dur-none) !important;
+  }
+  /* 上面那条 * 规则匹配不到视图过渡的伪元素，快照要单列（任务书「坑」） */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: var(--dur-none) !important;
+    animation-iteration-count: 1 !important;
   }
 }

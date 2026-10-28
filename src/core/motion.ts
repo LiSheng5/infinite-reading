@@ -10,12 +10,17 @@
  *   Motion.TIERS —— 三档政策（off / standard / rich 各自允许什么，数字与 css/motion.css 收口一致）
  *   Motion.LOOP_BUDGET —— 同屏同时运行的循环动画上限（组数；错相多实例按 1 组计）
  *   Motion.ANIMATIONS —— 每个 @keyframes 三档行为的声明表（none | fade | shift | full | loop）
+ *   Motion.TRANSITIONS —— 每个「过渡动作」三档 kind / 时长（阶段 5：切屏 / 舞台换画 / 分支切换 /
+ *     分支页开合 / 弹窗开合的唯一声明处；DOM 端接线见 src/ui/viewTransition.js）
  *
  * 分工：
  *   · 本文件 = 纯逻辑与声明（Node 可 require，eval/motion-test.js / tokens-test.js 对账）
  *   · css/motion.css = 档位政策变量（--m-*）与动画名表（--an-*）的 CSS 镜像 + @keyframes 唯一定义点
+ *     + ::view-transition-* 的时长收口
  *   · src/ui/motion.js = DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）
- * 三者由 eval/tokens-test.js 交叉对账：@keyframes 一条不多一条不少、--an-* 逐档可推导。 */
+ *   · src/ui/viewTransition.js = 过渡内核（runTransition / supportsVT / ?vt=0 降级）
+ * 由 eval/tokens-test.js 交叉对账：@keyframes 一条不多一条不少、--an-* 逐档可推导、
+ * ::view-transition-* 的时长只走 --m-dur-vt-*。 */
 import { IR, registerIR } from './ir.ts';
 
 /* ↑ 阶段 2 搬迁自 js/motion.js（IIFE → ES module），阶段 3 扩展出声明表；
@@ -74,6 +79,24 @@ const global = globalThis as any;
     nodePulse:    { off: 'none',  standard: 'none',  rich: 'loop'  },  // 选中节点脉冲
   };
 
+  /* 过渡声明表（阶段 5；三档验收矩阵的可执行形态）：
+   *   kind 语义
+   *     instant  立即换（off 档唯一形态：不位移、不淡入，焦点与滚动位置都不动）
+   *     fade     交叉淡入（standard 的上限形态：无位移）
+   *     shift    淡入 + 短位移（rich 的方向性短位移）
+   *     shared   共享元素（同 view-transition-name 的新旧快照做位置 / 尺寸补间；仅 rich）
+   *   ms 该档这段过渡的时长上限——CSS 侧必须落在 --m-dur-vt-*（tokens-test 对账），
+   *   JS 侧的降级淡入也按它收（src/ui/viewTransition.js）。
+   * 不变式（motion-test 校验）：off 一律 instant/0；standard 只准 instant|fade；
+   * rich 可到 shift|shared；时长 ≤ 该档 TIERS 上限；shared 只准 rich。 */
+  var TRANSITIONS = {
+    screen:     { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shift',  ms: 220 } },
+    stageArt:   { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shared', ms: 220 } },
+    sibling:    { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shift',  ms: 220 } },
+    branchPage: { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shift',  ms: 220 } },
+    modal:      { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shift',  ms: 220 } },
+  };
+
   const __irApi = {
     Motion: {
       resolve: resolve,
@@ -81,9 +104,11 @@ const global = globalThis as any;
       TIERS: TIERS,
       LOOP_BUDGET: LOOP_BUDGET,
       ANIMATIONS: ANIMATIONS,
+      TRANSITIONS: TRANSITIONS,
     },
   };
   registerIR(__irApi);
   export const { Motion } = __irApi;
   export const TIERS_POLICY = TIERS;
   export const ANIMATION_SPECS = ANIMATIONS;
+  export const TRANSITION_SPECS = TRANSITIONS;
