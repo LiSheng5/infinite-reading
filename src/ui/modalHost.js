@@ -8,10 +8,10 @@
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
  * 分工：
- *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载
+ *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
  *   · src/ui/Modal.svelte = 外壳（shell 模式只出一个 display:contents 的层容器，不画任何像素）
  *   · js/app/core.js 只转发（IR.App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
- *   · 第 7 步（弹窗开合过渡）在这里接 runTransition，不动调用方
+ *   · 第 7 步（弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *
  * 6a 的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
  *   #app > #app-modals(display:contents) > #modal-shell-host(display:contents) > #modal-*
@@ -34,6 +34,7 @@
 
 import { mount } from 'svelte';
 import Modal from './Modal.svelte';
+import { runTransition, transitionSpec, supportsVT, vtDisabled } from './viewTransition.js';
 
 /** 11 个弹窗（顺序 = index.html 里的 DOM 顺序，搬进外壳时按它排，别改成字母序） */
 export const MODAL_IDS = [
@@ -159,14 +160,213 @@ function restack() {
   });
 }
 
+/* ---------- 开合过渡（阶段 5 · 第 7 步）----------
+ * 形态（三档验收矩阵「弹窗开合」一行，声明表 = src/core/motion.ts 的 TRANSITIONS.modal）：
+ *   off       即时：改 DOM 同步做，焦点与滚动位置都不动；不挂名字、不开快照
+ *   standard  遮罩层整体交叉淡入 / 淡出（≤160ms）：背景随遮罩一起渐隐，卡片不位移
+ *   rich      同上 + 卡片从 scale(.96) translateY(6px) 收进来（关窗时反向退到 scale(.98)
+ *             translateY(-4px)）；时长取 TRANSITIONS.modal.rich.ms
+ *   降级      ?vt=0 / 浏览器没有 startViewTransition：开窗对弹窗容器整块淡入；关窗即时（理由见下）
+ *
+ * 命名范围（任务书「坑」：根快照会曝光 fixed 层与内部滚动）：
+ *   · 过渡期间给根节点挂 `view-transition-name: none` —— 根不参与快照，弹窗只要自己那一层。
+ *     这是**临时**改（计数式 holdRootOutOfSnapshot），不写进 css：切屏 / 分支页的过渡仍要用
+ *     ::view-transition-new(root) 做位移，常驻 none 会把那两步弄坏。
+ *   · 容器名 = 弹窗 id（modal-settings…），卡片名 = id + '-card'（rich 才挂：standard 不许位移）。
+ *     一次只给「这一个弹窗」的两个节点命名，嵌套弹窗各用各的名字，同屏不重名。
+ *   · 名字只在过渡期存在：开窗过渡一结束就撤（与第 4 步 stage-art 同一口径），
+ *     免得开着弹窗去切屏时，弹窗被拖进那一层快照里做无意义的自交叉淡入。
+ *
+ * 为什么关窗在降级路径不做淡出：隐藏必须同步——焦点还原、栈、以及 20 多处调用点「关完立刻判
+ * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按任务书「off 档不许 await 后再改 DOM」
+ * 的同一条理由选同步，只在真有 View Transition 时才演出退场。
+ *
+ * 开窗那一侧（0.12.1 的同步语义不能破）：
+ *   · 显示、层级、焦点基准全部在调用当帧做完；旧快照里用 opacity:0 把这层挡掉（旧态是一张全透明图，
+ *     淡出等于什么都不发生），新快照照常淡入。
+ *   · 为什么不能把显示推迟到 update 回调：`openModal` 之后同步 focus / 量布局 / scrollIntoView 的
+ *     调用点有一批（irConfirm 的 #cf-input、文本导入的 #it-text、「定时主动」入口滚到 #fs-schedule）。
+ *     第一版正是推迟的，实测这三个全部落空（activeElement 停在触发按钮上）。
+ *   · 关窗那一侧只能把「隐藏」放进 update 回调（退场要求旧态可见、新态消失），栈仍在调用当下就撤。
+ *
+ * 连点 / 嵌套的正确性：
+ *   · 每个 id 一个单调序号，旧的收尾（撤名字 / 还原焦点）碰不到新状态；
+ *   · runTransition 自己会 skipTransition 收掉上一段（连续触发不留快照）；
+ *   · openModal 内部互相排斥关功能类弹窗时（openDepth>0）走同步关窗，不排一串过渡。
+ */
+const CARD_SEL = '.modal-card';
+const CARD_IN_Y = 6;        // rich 入场：卡片从 +6px 收上来
+const CARD_IN_SCALE = 0.96;
+const CARD_OUT_Y = -4;      // rich 退场：卡片往 -4px 退、略缩
+const CARD_OUT_SCALE = 0.98;
+
+let rootHold = 0;           // 根节点「不进快照」的嵌套计数（与切屏过渡共用同一份状态）
+let rootHoldPrev = '';
+const modalSeq = new Map();   // id → 最近一次开 / 关的序号
+const snapAnims = new Map();  // 伪元素选择器 → Animation（连点先收上一段，避免叠帧）
+
+function nextSeq(id) {
+  const n = (modalSeq.get(id) || 0) + 1;
+  modalSeq.set(id, n);
+  return n;
+}
+
+function seqIs(id, n) {
+  return (modalSeq.get(id) || 0) === n;
+}
+
+/** 当前动效档（与 src/ui/viewTransition.js 的 tierOf 同口径：没写 data-motion 时按 rich） */
+function motionTier() {
+  let v = '';
+  try { v = document.documentElement.dataset.motion || ''; } catch (_) {}
+  return v === 'off' || v === 'standard' ? v : 'rich';
+}
+
+/** 这批改动要不要真的开 View Transition（off / 降级都不挂名字） */
+function planModal() {
+  const spec = transitionSpec('modal', motionTier());
+  const willVT = spec.kind !== 'instant' && !vtDisabled() && supportsVT();
+  return { spec, willVT, rich: willVT && spec.kind === 'shift' };
+}
+
+/** 根节点在快照期间 opt-out（计数式：切屏 / 分支页的过渡同时在跑也不会互相清掉） */
+function holdRootOutOfSnapshot() {
+  const root = typeof document === 'undefined' ? null : document.documentElement;
+  if (!root) return () => {};
+  if (!rootHold) {
+    rootHoldPrev = root.style.viewTransitionName;
+    root.style.viewTransitionName = 'none';
+  }
+  rootHold++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    rootHold = Math.max(0, rootHold - 1);
+    if (!rootHold) {
+      try { root.style.viewTransitionName = rootHoldPrev || ''; } catch (_) {}
+      rootHoldPrev = '';
+    }
+  };
+}
+
+function cardOf(el) {
+  return el ? el.querySelector(CARD_SEL) : null;
+}
+
+/** 挂名字：容器（遮罩 + 卡片）永远挂，卡片只在 rich（有位移的那一档）挂 */
+function applyNames(id, withCard) {
+  const el = modalEl(id);
+  if (!el) return;
+  el.style.viewTransitionName = id;
+  const card = withCard ? cardOf(el) : null;
+  if (card) card.style.viewTransitionName = id + '-card';
+}
+
+function clearNames(id) {
+  const el = modalEl(id);
+  if (!el) return;
+  try { el.style.viewTransitionName = ''; } catch (_) {}
+  const card = cardOf(el);
+  if (card) { try { card.style.viewTransitionName = ''; } catch (_) {} }
+}
+
+function easeToken() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
+    if (v) return v;
+  } catch (_) {}
+  return 'ease-out';
+}
+
+/* 给快照伪元素挂一段 transform（与第 3 / 6 步 shiftNewSnapshot 同一手法：位移若写成 @keyframes
+ * 就要同步 motion.ts 与两份 eval 测试，这一步的改动面不含那三处）。
+ * 只动 transform：伪元素自己的淡入淡出仍由 css/motion.css 的 ::view-transition-* 时长收口。 */
+function animateSnapshot(pseudo, frames, ms) {
+  if (!(ms > 0) || typeof document === 'undefined') return;
+  const prev = snapAnims.get(pseudo);
+  if (prev) {
+    try { prev.cancel(); } catch (_) {}
+    snapAnims.delete(pseudo);
+  }
+  let anim;
+  try {
+    anim = document.documentElement.animate(frames, {
+      duration: ms,
+      easing: easeToken(),
+      pseudoElement: pseudo,
+    });
+  } catch (_) {
+    return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
+  }
+  snapAnims.set(pseudo, anim);
+  const done = () => { if (snapAnims.get(pseudo) === anim) snapAnims.delete(pseudo); };
+  try { anim.finished.then(done, done); } catch (_) { done(); }
+}
+
+function animateCardIn(id, ms) {
+  const card = cardOf(modalEl(id));
+  if (!card) return;
+  animateSnapshot('::view-transition-new(' + id + '-card)', [
+    { transform: 'translateY(' + CARD_IN_Y + 'px) scale(' + CARD_IN_SCALE + ')' },
+    { transform: 'none' },
+  ], ms);
+}
+
+function animateCardOut(id, ms) {
+  const card = cardOf(modalEl(id));
+  if (!card) return;
+  animateSnapshot('::view-transition-old(' + id + '-card)', [
+    { transform: 'none' },
+    { transform: 'translateY(' + CARD_OUT_Y + 'px) scale(' + CARD_OUT_SCALE + ')' },
+  ], ms);
+}
+
+/* 卡片自己的入场动画（css/style.css 的 .modal-card → --an-leafIn）在过渡期间让位给快照：
+ * 它会在 update 回调那一帧从 opacity:0 / translateY(10px) 起跑，被新快照原样拍下来 ——
+ * 结果是「遮罩淡入、卡片却定格在半透明」两段叠在一起。过渡期挂 animation-name:none，
+ * 新快照拍到的就是终态；关窗那一刻再撤（元素正被隐藏，重挂动画不会被看见）。
+ * 只对真走 View Transition 的路径做：off 档与降级的淡入仍是原来那条动画（本步不改它的档位政策）。 */
+const cardResume = new Map();   // id → 撤销「动画让位」的函数
+
+function resumeCard(id) {
+  const fn = cardResume.get(id);
+  if (!fn) return;
+  cardResume.delete(id);
+  try { fn(); } catch (_) {}
+}
+
+function suppressCardEntrance(id) {
+  resumeCard(id);
+  const card = cardOf(modalEl(id));
+  if (!card) return;
+  const prev = card.style.animationName;
+  card.style.animationName = 'none';
+  cardResume.set(id, () => { try { card.style.animationName = prev || ''; } catch (_) {} });
+}
+
+/** 收尾：撤根 opt-out、撤名字（序号过期的收尾什么都不碰） */
+function endModalTransition(id, seq, release) {
+  if (release) release();
+  if (seqIs(id, seq)) clearNames(id);
+}
+
+/** 没有过渡时（off / 降级 / 半挂载）的统一回执，形状与 runTransition 的返回值一致 */
+function instantResult(id) {
+  return { modal: id, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
+}
+
 /**
- * 开弹窗（语义与 0.12.1 的 core.js 完全一致）。
+ * 开弹窗（语义与 0.12.1 的 core.js 完全一致；第 7 步只把「改 DOM 那一帧」交给过渡内核）。
  * @param {string} id MODAL_IDS 里的 id
+ * @returns {{modal: string, tier: string, kind: string, ms: number, mode: string, finished: Promise<any>}}
  */
 export function openModal(id) {
   ensureShell();
   const el = modalEl(id);
-  if (!el) return;
+  if (!el) return instantResult(id);
+  // 已经开着（栈里有它且没隐藏）：只提到最上层，不重跑过渡（连点同一入口不该产生第二对快照）
+  const alreadyOpen = isModalOpen(id) && !el.classList.contains(HIDDEN);
   openDepth++;
   try {
     rememberFocus();   // 必须在互斥关窗之前：否则焦点基准会被「刚刚关掉的那层」污染
@@ -178,29 +378,110 @@ export function openModal(id) {
     const at = modalStack.indexOf(id);
     if (at >= 0) modalStack.splice(at, 1);
     modalStack.push(id);
-    el.classList.remove(HIDDEN);
-    el.setAttribute('aria-hidden', 'false');
-    el.style.zIndex = String(BASE_Z + modalStack.length);
   } finally {
     openDepth--;
   }
+
+  const seq = nextSeq(id);
+  const zDepth = String(BASE_Z + modalStack.length);
+  const show = () => {
+    if (!seqIs(id, seq)) return;     // 已经被后来的开 / 关切掉：这一帧不许再亮出来
+    el.classList.remove(HIDDEN);
+    el.setAttribute('aria-hidden', 'false');
+    el.style.zIndex = zDepth;
+  };
+
+  if (alreadyOpen) {
+    show();
+    return instantResult(id);
+  }
+
+  const plan = planModal();
+  if (!plan.willVT) {                       // off 档 / 降级：内核负责同步换（或整块淡入）
+    const r = runTransition('modal', show, { scope: el });
+    const done = () => endModalTransition(id, seq, null);
+    if (r.mode === 'instant') done();
+    else r.finished.then(done, done);
+    return { modal: id, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
+  }
+
+  /* 真走 View Transition 时**开窗这一侧仍然同步改 DOM**（与 0.12.1 同一时序），
+   * 只在旧快照里用 opacity:0 把它挡住 —— 否则「开完立刻聚焦输入框 / 滚到某个字段 / 量尺寸」
+   * 这一批调用点全会落空（实测：irConfirm 的输入框、文本导入的 #it-text、
+   * 「定时主动」入口的 scrollIntoView 都依赖当帧可见）。
+   * 旧态是一张全透明快照 → ::view-transition-old 淡出等于什么都不发生，新态照常淡入。 */
+  show();
+  el.style.opacity = '0';
+  const release = holdRootOutOfSnapshot();
+  applyNames(id, plan.rich);   // 名字要在开快照之前挂上（旧态全透明 → 只有入场）
+  suppressCardEntrance(id);    // 卡片入场动画让位给快照（否则新快照拍到的是它的第一帧）
+  /* 只清自己挂的 opacity：序号过期（被后来的开 / 关顶掉）且弹窗仍可见时，说明有更新的那一段在管它；
+   * 已经隐藏时清掉是安全的（不可见），顺便保证下一次开门不会带着 opacity:0 出来。 */
+  const paint = () => { if (seqIs(id, seq) || el.classList.contains(HIDDEN)) el.style.opacity = ''; };
+  const r = runTransition('modal', paint, { scope: el });
+  if (plan.rich) animateCardIn(id, r.ms);
+  const done = () => {
+    paint();                   // 兜底：update 回调万一没跑也要把 opacity 还回去
+    endModalTransition(id, seq, release);
+  };
+  if (r.mode === 'instant') done();
+  else r.finished.then(done, done);
+  return { modal: id, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
 }
 
 /**
  * 关弹窗（只改显隐与层级；需要清状态 / 收 Promise 的走 dismissModal）。
+ * 栈在调用当下就撤（Esc / 遮罩点击 / 焦点判定读的是同一个数组实例），
+ * View Transition 时只有「DOM 隐藏那一帧」被推到 update 回调里。
  * @param {string} id
  */
 export function closeModal(id) {
   const el = modalEl(id);
-  if (el) {
-    el.classList.add(HIDDEN);
-    el.setAttribute('aria-hidden', 'true');
-    el.style.zIndex = '';
-  }
+  const wasOpen = isModalOpen(id);
+  const seq = nextSeq(id);
+
   const at = modalStack.indexOf(id);
   if (at >= 0) modalStack.splice(at, 1);
   restack();   // 关掉后重排剩下几层的层序，保持「后开的在上面」
-  if (!modalStack.length && !openDepth) restoreFocus();
+  const last = !modalStack.length && !openDepth;
+
+  const hideNow = () => {
+    resumeCard(id);                       // 撤掉「动画让位」：此刻元素正要被隐藏，重挂动画不会被看见
+    if (el) el.style.opacity = '';        // 同理：清掉入场用的 opacity:0，下一次开门才不会有残留
+    if (el) {
+      el.classList.add(HIDDEN);
+      el.setAttribute('aria-hidden', 'true');
+      el.style.zIndex = '';
+    }
+    if (last) restoreFocus();
+  };
+  const hide = () => {
+    if (!seqIs(id, seq)) return;   // 被后来的 openModal 顶掉：不许把它重新藏起来
+    hideNow();
+  };
+
+  // 没开着的（重复关 / 互斥里已经关过）/ 开窗过程中（openDepth>0）/ 没有元素：同步收敛，不开过渡
+  if (!el || !wasOpen || openDepth > 0) {
+    hideNow();
+    clearNames(id);
+    return instantResult(id);
+  }
+
+  const plan = planModal();
+  if (!plan.willVT) {          // off 档 / 降级：只收敛 DOM（见文件头「为什么降级关窗不做淡出」）
+    hide();
+    clearNames(id);
+    return instantResult(id);
+  }
+
+  const release = holdRootOutOfSnapshot();
+  applyNames(id, plan.rich);   // 旧态带着名字 → 新态元素被 display:none 移除 → ::view-transition-old 退场
+  const r = runTransition('modal', hide, { scope: el });
+  if (plan.rich) animateCardOut(id, r.ms);
+  const done = () => endModalTransition(id, seq, release);
+  if (r.mode === 'instant') done();
+  else r.finished.then(done, done);
+  return { modal: id, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
 }
 
 /**
