@@ -141,6 +141,10 @@ export function runTransition(name, mutate, opts) {
       return downgrade(ctx, mutate, opts);   // 文档不可见 / 上一段还没收干净 → 降级
     }
     activeVT = vt;
+    /* ready 也必须接住：skipTransition()（连点被后一段顶掉 / 第 3 步的快速切屏）会让它以
+     * AbortError 拒绝，没人处理就是一条 unhandledrejection（Chromium 记为 pageerror）。
+     * 第 3 步接真实切屏时实测到，补这一行；finished 那条下面已经有拒绝分支。 */
+    try { vt.ready.then(() => {}, () => {}); } catch (_) {}
     const finished = vt.finished.then(
       () => { if (activeVT === vt) activeVT = null; },
       () => { if (activeVT === vt) activeVT = null; },   // skipTransition / 被后一段顶掉属正常

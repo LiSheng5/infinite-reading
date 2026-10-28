@@ -686,12 +686,15 @@
   function enterGame(fresh, opts) {
     opts = opts || {};
     if (!S.story) return;
+    // 过渡的 update 回调要下一帧才跑（阶段 5 第 3 步）：先把故事抓在闭包里，
+    // 免得等待期间被别的入口（返回首页 / 换故事）把 S.story 置空。
+    const story = S.story;
     // 分支树（§4.1/§3）：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
     try {
       IR.Tree.ensure(S.story);
       IR.Tree.project(S.story);
     } catch (e) { console.warn('IR.Tree 初始化失败（按存档原样继续）：', e); }
-    S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
+    story.ui = Object.assign(Store.defaultUi(), story.ui || {});
     A.renderStoryPrefs();   // UI-3 §7：切换对话整体重绘本对话设置面板（不残留上一个对话的值）
     // 切屏收口到 IR.Nav（阶段 5 第 3 步）：原「三处 classList 写 .hidden」由 showScreen 统一改，
     // 换画 / 聊天 / 布局这些 DOM 变更全部放进 mutate —— 过渡的新快照拿到的就是渲染完的阅读页。
@@ -699,7 +702,7 @@
       $('#screen-game').classList.remove('stage-strip', 'text-hidden');
       A.closeMenus();
       S.immersiveTextHidden = false;
-      $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
+      $('#hud-mode').textContent = MODE_LABELS[story.mode] || '剧情';
       A.syncKindSwitch();
       S.choicesTrayOpen = false;
       A.applyLayout();

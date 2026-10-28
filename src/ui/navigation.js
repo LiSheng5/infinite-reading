@@ -25,6 +25,8 @@
  *   · 目标屏已经可见时**不跑过渡**（连点同一入口不该产生快照），mutate 照常执行。
  *   · off 档与 instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动（任务书「坑」）。
  *   · 屏幕名不认识时退化为「只跑 mutate」，不抛错——?ui=legacy 与半挂载状态都不至于白屏。
+ *   · rich 的「淡入 + 短位移」用 WAAPI 挂在 ::view-transition-new(root) 上（见 shiftNewSnapshot）：
+ *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
  */
 import { runTransition } from './viewTransition.js';
 
@@ -35,6 +37,9 @@ export const SCREENS = { home: 'screen-start', shelf: 'screen-shelf', read: 'scr
 const ORDER = ['home', 'shelf', 'read'];
 
 const HIDDEN = 'hidden';
+
+/** 切屏序号：每开一段真过渡自增；过渡的 update 回调靠它判断「自己是不是最新那一次」 */
+let switchSeq = 0;
 
 /** 屏幕容器（找不到就是 null：?ui=legacy / 半挂载时都可能缺） */
 export function screenEl(name) {
@@ -77,12 +82,69 @@ export function showScreen(name, mutate) {
 
   // 不认识的名字 / 屏不在 DOM 里：退化为「只跑 mutate」，不抛错也不动画
   if (!SCREENS[name] || !screenEl(name)) {
-    runMutate();
+    if (typeof mutate === 'function') mutate();
     return { screen: name, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
   }
 
-  runMutate();
-  return { screen: name, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
+  // 已经在目标屏：不跑过渡（连点同一个入口不该产生快照），mutate 照常执行
+  if (currentScreen() === name && screenVisible(name)) {
+    if (typeof mutate === 'function') mutate();
+    return { screen: name, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
+  }
+
+  /* 视图过渡的 update 回调是**异步**的（下一帧才跑）：等待期间用户可能又切到别的屏。
+   * 用单调递增的序号作废上一段——被顶掉的那次不再改 DOM，否则会把已经离开的屏重新亮出来
+   * （实测：enterGame 的过渡还没跑 update，用户已「返回首页」，旧回调又把阅读页显示了一次，
+   *  而那时 S.story 已被置空，直接抛 TypeError）。 */
+  const stamp = ++switchSeq;
+  const guarded = () => { if (stamp === switchSeq) runMutate(); };
+
+  // 过渡形态 / 时长全由 TRANSITIONS.screen 决定：off → 同步换、standard → 交叉淡入、
+  // rich → 交叉淡入 + 短位移。降级（?vt=0 / 不支持 VT）只对目标屏做整块淡入。
+  cancelShift();
+  const r = runTransition('screen', guarded, { scope: screenEl(name) });
+  if (r.mode === 'vt' && r.kind === 'shift') shiftNewSnapshot(r.ms);
+  return { screen: name, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
+}
+
+/* ---------- rich 的短位移（切屏专用）----------
+ * 为什么不在 css/motion.css 里写：位移需要 @keyframes，而 @keyframes 必须同步 src/core/motion.ts
+ * 的 ANIMATIONS 与两份 eval 测试（任务书「坑」）；第 3 步的改动面不含那三处。这里改用 WAAPI 直接
+ * 给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
+ * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩下面两条 ::view-transition-* 的交叉淡入。 */
+const SHIFT_PX = 8;              // 与 rowIn / leafIn 的 8–10px 同一量级（短位移，不是滑屏）
+let shiftAnim = null;
+
+function cancelShift() {
+  if (!shiftAnim) return;
+  try { shiftAnim.cancel(); } catch (_) {}
+  shiftAnim = null;
+}
+
+function easeToken() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
+    if (v) return v;
+  } catch (_) {}
+  return 'ease-out';
+}
+
+function shiftNewSnapshot(ms) {
+  if (!(ms > 0) || typeof document === 'undefined') return;
+  cancelShift();
+  let anim;
+  try {
+    anim = document.documentElement.animate(
+      [{ transform: 'translateY(' + SHIFT_PX + 'px)' }, { transform: 'none' }],
+      { duration: ms, easing: easeToken(), pseudoElement: '::view-transition-new(root)' },
+    );
+  } catch (_) {
+    return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
+  }
+  shiftAnim = anim;
+  // 收掉后清引用（被顶掉 / 被 skip 的 reject 属正常）
+  const done = () => { if (shiftAnim === anim) shiftAnim = null; };
+  try { anim.finished.then(done, done); } catch (_) { done(); }
 }
 
 /* ---------- 分支页标记（html[data-branch]）----------
