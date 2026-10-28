@@ -58,9 +58,9 @@
     return 'older';
   }
 
+  // 阶段 5 第 3 步：屏幕显隐的判定收口到 IR.Nav（本文件不再直接读 .hidden）
   function shelfVisible() {
-    const el = $('#screen-shelf');
-    return !!el && !el.classList.contains('hidden');
+    return IR.Nav.screenVisible('shelf');
   }
 
   function titleElOf(storyId) {

@@ -120,7 +120,8 @@
     }
     $('#branch-title').textContent = (st.title || '未命名') + ' · 分支';
     // 循环动画预算 ≤3（§4.5）：分支页盖在聊天页上时，暂停底下舞台的 Ken Burns 等循环
-    document.documentElement.dataset.branch = 'open';
+    // 阶段 5 第 3 步：data-branch 的写入收口到 IR.Nav（全仓唯一写入点）
+    IR.Nav.setBranchOpen(true);
     bindCanvas();
     relayout();
     render();
@@ -136,7 +137,7 @@
     V.dragging = null;
     const page = $('#branch-page');
     if (page) page.classList.add('hidden');
-    delete document.documentElement.dataset.branch;
+    IR.Nav.setBranchOpen(false);
   }
 
   /* ================= 布局 / 渲染 ================= */

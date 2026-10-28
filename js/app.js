@@ -7,6 +7,10 @@
  *  → 画师子代理 + 生图（§3.2/§4.7）→ 书记员 / 压缩（§4.1/§4.10）→ 存档点 / 导出导入（§4.11）
  * 存档：统一走 IR.Store（schema v2）；图片只存缩略图以控制体积。
  */
+// 阶段 5 第 3 步：切屏的唯一入口（屏幕登记表 + 显隐 + 分支页标记）。放在组合根这里 import，
+// 让 IR.Nav 在任何界面层需要它之前就登记好；本文件其余部分仍是 0.12.1 的 IIFE，行为不变。
+import '../src/ui/navigation.js';
+
 (function () {
   'use strict';
 
@@ -72,7 +76,8 @@
     }
 
     // 拖进窗口即可导入（书架与开始页都支持）
-    [$('#screen-shelf'), $('#screen-start')].forEach(scr => {
+    // 阶段 5 第 3 步：屏幕容器统一从 IR.Nav 取（「有哪几块屏」只在 src/ui/navigation.js 登记一次）
+    [IR.Nav.screenEl('shelf'), IR.Nav.screenEl('home')].forEach(scr => {
       scr.addEventListener('dragover', e => { e.preventDefault(); scr.classList.add('dragover'); });
       scr.addEventListener('dragleave', () => scr.classList.remove('dragover'));
       scr.addEventListener('drop', e => {

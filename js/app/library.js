@@ -332,12 +332,13 @@
     S.story = null;
     S.busy = false;
     S.live = null;
-    A.closeMenus();
-    A.closeStoryPrefs();   // UI-3：离开对话就收起本对话设置面板（不残留上一个对话的值）
-    $('#screen-start').classList.add('hidden');
-    $('#screen-game').classList.add('hidden');
-    $('#screen-shelf').classList.remove('hidden');
-    A.renderShelf();   // UI-2：会话列表（js/app/shelf.js）
+    // 切屏收口到 IR.Nav（阶段 5 第 3 步）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
+    // 这样视图过渡的新快照里书架已经是渲染好的（本步之前等价于旧的三行 classList 写入）。
+    IR.Nav.showScreen('shelf', () => {
+      A.closeMenus();
+      A.closeStoryPrefs();   // UI-3：离开对话就收起本对话设置面板（不残留上一个对话的值）
+      A.renderShelf();   // UI-2：会话列表（js/app/shelf.js）
+    });
   }
 
   // 开始页（应用入口）：三个模式先看介绍、点一张选中，再按「开始」
@@ -347,21 +348,22 @@
     S.story = null;
     S.busy = false;
     S.live = null;
-    A.closeMenus();
-    A.closeWorkbench();
-    A.closeStoryPrefs();   // UI-3
-    $('#screen-game').classList.add('hidden');
-    $('#screen-shelf').classList.add('hidden');
-    $('#screen-start').classList.remove('hidden');
-    // 有存档才出现「继续上次」，并带上最近那个故事的名字
-    const recent = Store.listStories()[0];
-    const label = recent && recent.title ? '《' + recent.title + '》' : '';
-    if (IR.HomeScreen) {
-      IR.HomeScreen.setRecent(recent ? label : null);   // 新首页（Svelte）：状态桥
-    } else {
-      $('#btn-continue').classList.toggle('hidden', !recent);
-      $('#continue-title').textContent = label;
-    }
+    // 切屏收口到 IR.Nav（阶段 5 第 3 步）：同 showShelf，「继续上次」的状态推进进 mutate，
+    // 保证过渡的新快照里首页已经是最终形态。
+    IR.Nav.showScreen('home', () => {
+      A.closeMenus();
+      A.closeWorkbench();
+      A.closeStoryPrefs();   // UI-3
+      // 有存档才出现「继续上次」，并带上最近那个故事的名字
+      const recent = Store.listStories()[0];
+      const label = recent && recent.title ? '《' + recent.title + '》' : '';
+      if (IR.HomeScreen) {
+        IR.HomeScreen.setRecent(recent ? label : null);   // 新首页（Svelte）：状态桥
+      } else {
+        $('#btn-continue').classList.toggle('hidden', !recent);
+        $('#continue-title').textContent = label;
+      }
+    });
   }
 
   // 阅读页「＋ 新故事」：先把当前这一幕落盘，再开「新故事」选模式弹窗（三个模式共用同一入口）

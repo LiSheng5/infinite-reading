@@ -693,31 +693,32 @@
     } catch (e) { console.warn('IR.Tree 初始化失败（按存档原样继续）：', e); }
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     A.renderStoryPrefs();   // UI-3 §7：切换对话整体重绘本对话设置面板（不残留上一个对话的值）
-    $('#screen-start').classList.add('hidden');
-    $('#screen-shelf').classList.add('hidden');
-    $('#screen-game').classList.remove('hidden');
-    $('#screen-game').classList.remove('stage-strip', 'text-hidden');
-    A.closeMenus();
-    S.immersiveTextHidden = false;
-    $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
-    A.syncKindSwitch();
-    S.choicesTrayOpen = false;
-    A.applyLayout();
-    renderChat();
-    renderStage();
-    renderThumbs();
-    if (fresh) {
-      S.currentChoices = A.choicesFromHead();
+    // 切屏收口到 IR.Nav（阶段 5 第 3 步）：原「三处 classList 写 .hidden」由 showScreen 统一改，
+    // 换画 / 聊天 / 布局这些 DOM 变更全部放进 mutate —— 过渡的新快照拿到的就是渲染完的阅读页。
+    IR.Nav.showScreen('read', () => {
+      $('#screen-game').classList.remove('stage-strip', 'text-hidden');
+      A.closeMenus();
+      S.immersiveTextHidden = false;
+      $('#hud-mode').textContent = MODE_LABELS[S.story.mode] || '剧情';
+      A.syncKindSwitch();
+      S.choicesTrayOpen = false;
+      A.applyLayout();
       renderChat();
-      saveAll();
-      // P-2：进入故事不再自动生成第一幕（省一次调用）；空档由 renderChat 的
-      //      「开始第一幕」按钮触发。试画锚定（P4）关闭后同样只回到这个按钮。
-    } else {
-      S.currentChoices = A.choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
-      renderNarrationToolsAfterLoad();
-      saveAll();
-      // 空档（例：锚定向导还没走完就刷新了页面）同样交给「开始第一幕」按钮
-    }
+      renderStage();
+      renderThumbs();
+      if (fresh) {
+        S.currentChoices = A.choicesFromHead();
+        renderChat();
+        saveAll();
+        // P-2：进入故事不再自动生成第一幕（省一次调用）；空档由 renderChat 的
+        //      「开始第一幕」按钮触发。试画锚定（P4）关闭后同样只回到这个按钮。
+      } else {
+        S.currentChoices = A.choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
+        renderNarrationToolsAfterLoad();
+        saveAll();
+        // 空档（例：锚定向导还没走完就刷新了页面）同样交给「开始第一幕」按钮
+      }
+    });
   }
 
   function renderNarrationToolsAfterLoad() {
