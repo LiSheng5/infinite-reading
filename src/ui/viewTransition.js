@@ -21,10 +21,12 @@
  *   · off 档同步执行 mutate（绝不 await 后再改 DOM：焦点与滚动位置会跳；任务书「坑」）。
  *   · 连续触发必须先 skipTransition() 收掉上一段，否则旧快照残留。
  *   · 降级（?vt=0 / 浏览器不支持）只做「整块淡入」：位移属 rich/standard 的上限，不能外溢到降级路径。
- *   · 快照会冻结循环动画，过渡期的暂停与循环预算复位由 src/ui/motion.js 单独处理
- *     （::view-transition-* 匹配不到 html[data-paused] * 这类普通选择器）。
+ *   · 快照会冻结循环动画：新快照拍摄前由 holdLoops() 把 live DOM 的循环停在同一相位，
+ *     过渡收尾（含被 skip）再 play() 回来；::view-transition-* 匹配不到 html[data-paused] *
+ *     这类普通选择器，所以暂停只能走 WAAPI（实现与边界见 src/ui/motion.js）。
  */
 import { Motion } from '../core/motion.ts';
+import { holdLoops } from './motion.js';
 
 const LEVELS = ['off', 'standard', 'rich'];
 
@@ -139,21 +141,39 @@ export function runTransition(name, mutate, opts) {
   // 原生 View Transition：动画本身由 css/motion.css 的 ::view-transition-* 规则提供
   if (!vtDisabled() && supportsVT()) {
     skipActiveTransition();
+    let releaseLoops = null;
+    let settled = false;
+    /* 循环冻结放在 update 回调里、mutate 之后：新快照拍的就是暂停相位，撤快照时 live DOM
+     * 从同一相位继续，不会跳。上一段被 skip 时它的解冻只减计数（见 holdLoops 的计数式释放）。 */
+    const freezeLoops = () => {
+      if (settled || releaseLoops) return;
+      releaseLoops = holdLoops();
+    };
     let vt;
     try {
-      vt = document.startViewTransition(() => { runNow(mutate); });
+      vt = document.startViewTransition(() => {
+        runNow(mutate);
+        freezeLoops();
+      });
     } catch (_) {
+      settled = true;
+      if (releaseLoops) { try { releaseLoops(); } catch (__) {} }
       return downgrade(ctx, mutate, opts);   // 文档不可见 / 上一段还没收干净 → 降级
     }
     activeVT = vt;
+    const finish = () => {
+      settled = true;
+      if (releaseLoops) {
+        try { releaseLoops(); } catch (_) {}
+        releaseLoops = null;
+      }
+      if (activeVT === vt) activeVT = null;
+    };
     /* ready 也必须接住：skipTransition()（连点被后一段顶掉 / 第 3 步的快速切屏）会让它以
      * AbortError 拒绝，没人处理就是一条 unhandledrejection（Chromium 记为 pageerror）。
      * 第 3 步接真实切屏时实测到，补这一行；finished 那条下面已经有拒绝分支。 */
     try { vt.ready.then(() => {}, () => {}); } catch (_) {}
-    const finished = vt.finished.then(
-      () => { if (activeVT === vt) activeVT = null; },
-      () => { if (activeVT === vt) activeVT = null; },   // skipTransition / 被后一段顶掉属正常
-    );
+    const finished = vt.finished.then(finish, finish);   // skip / 被后一段顶掉属正常，也要解冻
     return { name, tier, kind: spec.kind, ms: spec.ms, mode: 'vt', finished };
   }
 

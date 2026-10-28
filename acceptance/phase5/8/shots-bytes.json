@@ -1,0 +1,90 @@
+{
+  "tool": "acceptance/phase5/8/bytes-compare.mjs",
+  "generatedAt": "2026-10-28T14:56:37.006Z",
+  "dirs": {
+    "before": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ir-shoot-before",
+    "after": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ir-shoot-after",
+    "repeat": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ir-shoot-after2"
+  },
+  "count": {
+    "before": 63,
+    "after": 63,
+    "repeat": 63,
+    "both": 63
+  },
+  "identical": 52,
+  "mismatches": 11,
+  "volatile": [
+    {
+      "repeat": "b642e4e204a1c43b5bc71252bbe97b5d75e7a883b89e5d0ade83777d37ac9c4c",
+      "file": "19-seeded-branch-1280.png",
+      "before": "4dbac3847ffcd78c77ac85eaad31b6b44338f7d087d7f78e9381146aaaf414d7",
+      "after": "c6849ca68b30a8dc0166d7d7f6a04a9d83867c651c65d3aabec4ac5a7297a502"
+    },
+    {
+      "repeat": "ad2af35310e9d7de00cf18bc76f9f2fe28811d731c3c77e65a392624630c704b",
+      "file": "19-seeded-branch-390.png",
+      "before": "aa4769f9861255f35fe434b81acfdd225c25422a767fc3e5fd9fa00ab1f4ad5b",
+      "after": "698fc90c1197d4e2a7f5049e53c7c70550bdac2611b85f19c60f2edb30d2dd69"
+    },
+    {
+      "repeat": "9d6461b30c1049aff365292079cff47ecfaf622b310903a163696bcf2c538bdd",
+      "file": "20-seeded-painter-1280.png",
+      "before": "2887e762e65d61b05dd8e0f05a659bad74ce9565e614e9e43e43353cfaa9ed66",
+      "after": "68957092bffdbc87ad62134516e19ea90e4acd0a0d877aba243c5a0b46a66914"
+    },
+    {
+      "repeat": "00dc2e006e55a53adc17f34dfa6f8d70031cb50c3aee8311528532a0314b7ba7",
+      "file": "20-seeded-painter-390.png",
+      "before": "b80f191541a058f9eb6acd939c785e7575162782a8851ad0a9b2b93e286ca198",
+      "after": "ca8fdbdd62e79e18c0883883c27ac3a538d53b252ad558d9f6bd249f6130a712"
+    },
+    {
+      "repeat": "f3e8a598697397e77dc0d09de8dc301820693f658e323228131ff10854c3cee8",
+      "file": "22-seeded-card-1280.png",
+      "before": "a2668681c61a889cf0ba808d405aa401d6a2ae27b1698140e80c19400e5fbc42",
+      "after": "005facb5a3863c96d7875b5476ef22f9d0e715b965b1d66d3d1e5516a2212a39"
+    },
+    {
+      "repeat": "06b7cc123adfa111bf53276e973dd66db145df5e23c26ddd06843ee522fdcb82",
+      "file": "23-seeded-story-prefs-1280.png",
+      "before": "67205467dda226ee2eedaa003aed33ad5a748c3920b6e4d3ed326c2a52aca957",
+      "after": "180fa9120bd3208ef3a6193e0a10c5018a7f675fc953a3c7cf73b744a8f14495"
+    },
+    {
+      "repeat": "f4753661d2a48691d65e2a9d6ba1088cc68118b4bed751a8e3edb7c5037b33dd",
+      "file": "23-seeded-story-prefs-390.png",
+      "before": "839ebecbe59d9a4df3624e73b9017360be6372be65b0aaa9ab9e38430206e4b2",
+      "after": "5b8afec4f0fb694d797675d97057e048125f4e69d1dd88979f121766866b300e"
+    },
+    {
+      "repeat": "b1664de6747152897804daef8a82919184949ec37d5858b769d439ddfae8c54e",
+      "file": "24-seeded-modal-confirm-1280.png",
+      "before": "d288d75f6f7e49c8c345895e14dc528d04f38cfec53b46f822ea5123965b85db",
+      "after": "9fdabe6170aff9cde626ac90a773554f101e87128414f6a314a0e5c0280bd615"
+    },
+    {
+      "repeat": "caadbab515285a81204f91b5f0af1efd5f5330b4cc654be1b852999a8e83eeec",
+      "file": "24-seeded-modal-confirm-390.png",
+      "before": "9d45f014876f040ca89aa10d7807b4518070b70563b782a5837e49829bba5fe7",
+      "after": "2812755d78832ea91ad4d7c65c6d18e764ea318a7afc8b6bcc69318e0d987a82"
+    },
+    {
+      "repeat": "69fe5815184d24f7a05a96d1ad0a0477c79389e8602233ec878879d9043dfb5c",
+      "file": "31-seeded-story-savepoints-1280.png",
+      "before": "941cc01a4c6f4ec66f25dc5e2b8e5037d6883a3d1626eab20711b16f32607f28",
+      "after": "e923c5b84ea6341cfca7f9f4ee9e651e2b11500803ad4de24c3d0fbd864cd6ba"
+    },
+    {
+      "repeat": "be084ad459d6b2fecff25eb4c92a592f9050c146cfb13ff16e6f1682edf667a9",
+      "file": "31-seeded-story-savepoints-390.png",
+      "before": "88c6e032da6d9bce07c651b334ec8e7c05c6768e889a7db620e4c7cf528c9900",
+      "after": "76fecabcd7259a567292eb196c08460cc9496bbbcd78e504302ab4e473e7d005"
+    }
+  ],
+  "regressed": [],
+  "onlyBefore": [],
+  "onlyAfter": [],
+  "note": "抖动集 = 同一份代码（--repeat）两次跑也不一致的图；回归 = 不在抖动集里却变了",
+  "ok": true
+}

@@ -39,10 +39,13 @@
 | `js/features.js` | `IR.Features` | 主动触达的去重与排队（投递回调由 `js/app/sidecar.js` 的 `initFeatures` 注册） | `attach`、`accept`、`drain` |
 | `js/paintQueue.js` | `IR.PaintQueue` | 作画串行队列（**纯逻辑**，Node 可 `require`）：时机 / 工具 / 手动 / 重画共用一条 FIFO 队列，画师构思也在队列里；`anchor.dead` 开跑前跳过、跑完带 `dead` 供写回前丢弃 | `create`、`enqueue`、`has`、`size` |
 | `js/proposals.js` | `IR.Proposals` | 提案（**纯逻辑**，Node 可 `require`）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；不碰 DOM / story，sidecar 以参数注入、时间以 `now` 注入 | `create`、`isActionable`、`confirm`、`approveSecond`、`deny` |
-| `src/core/motion.ts`（阶段 2 前为 `js/motion.js`） | `IR.Motion` | 统一 motion 模块的纯逻辑端（Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，并持有 `TIERS` 三档政策、`LOOP_BUDGET` 循环上限与 `ANIMATIONS` 逐动画三档行为声明表，不碰 DOM | `resolve` `TIERS` `ANIMATIONS` `LOOP_BUDGET` |
+| `src/core/motion.ts`（阶段 2 前为 `js/motion.js`） | `IR.Motion` | 统一 motion 模块的纯逻辑端（Node 可 `require`）：把设置项 `ui.motion` + 系统「减少动态效果」解析成 `off / standard / rich`，并持有 `TIERS` 三档政策、`LOOP_BUDGET` 循环上限、`ANIMATIONS` 逐动画三档行为声明表与 `TRANSITIONS` 逐过渡动作三档声明表，不碰 DOM | `resolve` `TIERS` `ANIMATIONS` `LOOP_BUDGET` `TRANSITIONS` |
 | `js/prefs.js` | `IR.Prefs` | 本对话偏好（UI-3 设置分层，**纯逻辑**，Node 可 `require`）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析（profileId → 模型库）、各模式可见控件、导出剥凭证；不碰 DOM / 存储 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
 | `js/titles.js` | `IR.Titles` | 自动标题（**纯逻辑**，UI-2 §3.3）：触发判定、给小模型的 prompt、输出清洗、本地兜底、写回护栏；不碰 DOM / 网络 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
 | `js/search.js` | `IR.Search` | 全文搜索（**纯逻辑**，UI-2 §3.4）：标题 + 全部分支节点的子串检索（NFKC / 小写 / 折叠空白，AND 多词），片段带 `ranges`（**输出零 HTML**）；内存索引 `Map(id → doc)` 不持久化 | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
+| `src/ui/viewTransition.js`（阶段 5） | 无（ES module，经 `IR.Nav` / `IR.ModalHost` 被 legacy 调用） | 过渡内核：按档位决定「原生 View Transition / 降级淡入 / 同步换」，VT 的 update 回调里冻结循环；`?vt=0` 强制降级 | `runTransition`、`supportsVT`、`vtDisabled`、`vtActive`、`skipActiveTransition` |
+| `src/ui/navigation.js`（阶段 5） | `IR.Nav` | 切屏 / 舞台换画 / 分支页开合的唯一入口：屏幕登记表、`data-branch` 与循环挂起的唯一写入点 | `showScreen`、`stageArt`、`branchPage`、`setBranchOpen`、`isTransitioning` |
+| `src/ui/modalHost.js`（阶段 4 屏 6a / 阶段 5 第 7 步） | `IR.ModalHost` | 弹窗唯一入口：11 个弹窗登记、栈与层级、焦点还原、开合过渡 | `openModal`、`closeModal`、`dismissModal`、`closeTopModal`、`installShell` |
 | `sidecar/`（Node 进程） | 无（独立进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **脚本顺序是有意义的**（`index.html` 末尾）：
@@ -262,7 +265,7 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 **动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与档位参数 `--dur-off/shift/flash/none`。圆角统一 `--radius: 8px`（阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。
 
-**动效强度（阶段 3 统一 motion 模块）**：语义真源 `src/core/motion.ts`（`resolve` / `TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画三档声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 档位收口变量 `--m-*` + 动画名表 `--an-*` + 暂停规则），DOM 端 `src/ui/motion.js`（`initMotion` / `registerLoop` 循环预算 / `suspendLoops` 子树挂起）。`<html data-motion="off|standard|rich">` 由 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`js/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入；每个动画的三档行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
+**动效强度（阶段 3 统一 motion 模块）**：语义真源 `src/core/motion.ts`（`resolve` / `TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画三档声明 / `TRANSITIONS` 逐过渡动作三档声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 档位收口变量 `--m-*` + 动画名表 `--an-*` + `::view-transition-*` 时长收口 + 暂停规则），DOM 端 `src/ui/motion.js`（`initMotion` / `registerLoop` 循环预算 / `suspendLoops` 子树挂起 / `holdLoops` 过渡期冻结）。`<html data-motion="off|standard|rich">` 由 `IR.Motion.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`js/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入；每个动画的三档行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
 
 | 档 | 行为 |
 |---|---|
@@ -272,7 +275,21 @@ providers.js → prefs.js → context.js → tree.js → treeLayout.js → stora
 
 循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例），登记走 `registerLoop`（超出者挂 `data-loop="wait"` 暂停）；页面不可见 `html[data-paused]` 全局暂停；分支页打开时暂停底下阅读页的循环（旧屏走 `html[data-branch="open"]` 规则，新屏走 `suspendLoops`）。
 
-**本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。
+**过渡（阶段 5 · View Transitions）**：五个动作共用唯一入口 `src/ui/viewTransition.js` 的 `runTransition(name, mutate)`——`off` 档同步改 DOM（绝不 await 后再改：焦点与滚动位置都不动）；浏览器支持 `document.startViewTransition` 且没带 `?vt=0` 时开原生过渡，快照动画的时长 / 缓动只在 `css/motion.css` 的 `::view-transition-*` 里收口（`--m-dur-vt-*`）；浏览器不支持 / `?vt=0` / 调用抛错时降级为「对 `scope` 整块淡入」（时长 ≤ 该档透明度上限），要求同步隐藏的路径（如关弹窗）即时收。三档 kind / ms 的真源是 `Motion.TRANSITIONS`，不变式由 `eval/motion-test.js` 校验（off 一律 instant/0；standard 只准 instant|fade；shared 只准 rich；时长 ≤ 该档 `TIERS` 上限）。
+
+| 动作 | 声明 | off | standard | rich | 接线 |
+|---|---|---|---|---|---|
+| 切屏 | `screen` | 即时 | 交叉淡入 ≤160ms | 淡入 + 8px 短位移 ≈220ms | `src/ui/navigation.js`：`showScreen` |
+| 舞台换画 | `stageArt` | 即时替换 | 淡入 ≤160ms | 共享元素 `stage-art` ≈220ms | `navigation.js`：`stageArt` |
+| 分支切换 | `sibling` | 即时 | 交叉淡入 ≤160ms | 方向性短位移 ≈220ms | `js/app/turn.js`（旧 WAAPI 位移留作降级） |
+| 分支页开合 | `branchPage` | 即时 | 淡入 ≤160ms | 淡入 + 位移 ≈220ms | `navigation.js`：`branchPage` |
+| 弹窗开合 | `modal` | 即时、焦点仍正确 | 遮罩淡入 ≤160ms | 缩放 / 位移 + 背景渐隐 ≈220ms | `src/ui/modalHost.js`：`openModal` / `closeModal` |
+
+`view-transition-name` 只在过渡期挂、收尾立即撤；同一时刻必须唯一：舞台用固定的 `stage-art`（一次只给一张图）、弹窗用 `id` / `id-card` 两层、弹窗过渡期间根节点临时 `view-transition-name: none`（否则根快照会曝光固定层与弹窗内部滚动）。连续触发先 `skipTransition()` 收掉上一段，避免快照残留。
+
+**过渡期的循环**（`holdLoops`）：视图过渡的快照会盖住 live DOM，但循环并没有停——220ms 后撤快照那一下，Ken Burns / 环境光 / 流光 / 呼吸会从「快照里的相位」跳到「已推进的相位」。所以 `runTransition` 在 VT 的 update 回调里（新快照拍摄之前）把**正在跑的真实 DOM 循环**用 WAAPI `pause()` 住（跳过 `::view-transition-*` 自己的动画；本来因 `data-paused` / `data-loop="wait"` / `data-loops-paused` 停着的不碰），`finished`（含被 `skipTransition` 顶掉）计数式 `play()` 回来；过渡期间 `registerLoop` / 注销只记账、不重排预算，解冻时统一收敛一次。`?vt=0` / 不支持 VT / `off` 没有快照，不冻结也不干预。验收：`acceptance/phase5/8/loop-freeze-smoke.mjs`（8 场景 75 条断言）。
+
+**本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断；阶段 5 起主路径改走 `runTransition`，旧 WAAPI 位移留作降级）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。阶段 5 的五个过渡动作（切屏 / 舞台换画 / 切兄弟 / 分支页开合 / 弹窗开合）统一走 `runTransition`，三档与降级见下节。
 
 **分支页动效（UI-4 §4.5）**：rich = 边按深度描边生长（`stroke-dashoffset`，总时长封顶 ~600ms）+ 节点弹簧弹出（新节点单独「长出来」）+ 当前路径流光（**只挂 `pathEdgeD` 合成的一条 path**）+ head 呼吸环 + 选中 / 悬停脉冲环；standard = 整体淡入、无循环；off = 无动画。
 

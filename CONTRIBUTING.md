@@ -40,7 +40,7 @@ js/treeLayout.js    分支页画布几何（纯逻辑）：泳道分配 / 折叠
 js/prefs.js         本对话偏好与模型库解析（纯逻辑）：effective / resolveChatCfg / stripSecrets
 js/paintQueue.js    作画串行队列（纯逻辑）：手动 / 工具 / 重画共用一条 FIFO
 js/proposals.js     提案状态机（纯逻辑）：模型发起的邮件 / 下单只能产生提案，确认才执行
-js/motion.js        动效强度解析（纯逻辑）：设置项 + 系统偏好 → off / standard / rich
+src/core/motion.ts  动效强度解析（纯逻辑）：设置项 + 系统偏好 → off / standard / rich；三档政策 / 循环预算 / 动画与过渡声明表
 js/titles.js        自动标题（纯逻辑）：触发判定、prompt、输出清洗与写回护栏
 js/search.js        全文搜索（纯逻辑）：标题 + 全部分支节点检索，输出零 HTML
 js/modelCapabilities.js  模型参数登记表（默认留空）

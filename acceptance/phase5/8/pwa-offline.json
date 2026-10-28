@@ -1,0 +1,162 @@
+{
+  "project": "infinite-reading",
+  "version": "0.12.1",
+  "stage": "阶段 5 · 第 8 步 · 产物形态（file:// 双击 + PWA 断网）",
+  "generatedAt": "2026-10-28T14:59:02.235Z",
+  "tool": "acceptance/phase5/8/pwa-offline.mjs",
+  "dist": {
+    "single": "dist/single/index.html",
+    "site": "dist/site",
+    "swPrecacheInjected": true
+  },
+  "scenarios": [
+    {
+      "id": "file",
+      "url": "file:///D:/infinite-reading/dist/single/index.html",
+      "terminal": {
+        "title": "无限阅读 · ∞ Reading",
+        "motion": "rich",
+        "screens": [
+          "screen-start",
+          "screen-shelf",
+          "screen-game",
+          "branch-page"
+        ],
+        "startVisible": true,
+        "version": "",
+        "controller": false,
+        "inlineScripts": 0,
+        "inlineLinks": 0,
+        "protocol": "file:",
+        "shelfVisible": true
+      },
+      "checks": [
+        {
+          "name": "file://：单文件产物能启动（IR.App / IR.Store / 设置就绪）",
+          "ok": true,
+          "detail": "ok"
+        },
+        {
+          "name": "file://：四块屏都在 DOM 里",
+          "ok": true,
+          "detail": "screen-start,screen-shelf,screen-game,branch-page"
+        },
+        {
+          "name": "file://：首页可见（初始态正确）",
+          "ok": true,
+          "detail": "true"
+        },
+        {
+          "name": "file://：动效档位已落定（html[data-motion] 非空）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "file://：切屏可用（书架可见）",
+          "ok": true,
+          "detail": "true"
+        },
+        {
+          "name": "file://：不注册 Service Worker（浏览器在 file:// 下本就不支持）",
+          "ok": true,
+          "detail": "false"
+        },
+        {
+          "name": "file://：产物零外链（无 script[src] / 无外链样式）",
+          "ok": true,
+          "detail": "script=0 link=0"
+        },
+        {
+          "name": "file://：console error 0",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "consoleErrors": [],
+      "ok": true
+    },
+    {
+      "id": "pwa",
+      "url": "http://127.0.0.1:60193/",
+      "steps": {
+        "online": {
+          "controlled": true,
+          "cacheInfo": {
+            "keys": [
+              "ir-v0.12.1"
+            ],
+            "entries": 10
+          }
+        },
+        "offline": {
+          "reloadError": "",
+          "boot": {
+            "title": "无限阅读 · ∞ Reading",
+            "motion": "rich",
+            "startVisible": true,
+            "online": false,
+            "controlled": true,
+            "shelfVisible": true
+          }
+        }
+      },
+      "fatal": "",
+      "checks": [
+        {
+          "name": "PWA：在线打开正常（首页可见，档位落定）",
+          "ok": true,
+          "detail": "{\"title\":\"无限阅读 · ∞ Reading\",\"motion\":\"rich\",\"startVisible\":true}"
+        },
+        {
+          "name": "PWA：Service Worker 已注册并接管页面",
+          "ok": true,
+          "detail": "{\"controlled\":true,\"cacheInfo\":{\"keys\":[\"ir-v0.12.1\"],\"entries\":10}}"
+        },
+        {
+          "name": "PWA：预缓存已建立（缓存条目 > 0）",
+          "ok": true,
+          "detail": "{\"keys\":[\"ir-v0.12.1\"],\"entries\":10}"
+        },
+        {
+          "name": "PWA：断网后 reload 成功（导航回退到预缓存 index.html）",
+          "ok": true,
+          "detail": "ok"
+        },
+        {
+          "name": "PWA：断网下应用启动（IR 就绪、首页可见）",
+          "ok": true,
+          "detail": "{\"title\":\"无限阅读 · ∞ Reading\",\"motion\":\"rich\",\"startVisible\":true,\"online\":false,\"controlled\":true,\"shelfVisible\":true}"
+        },
+        {
+          "name": "PWA：断网下导航器报告离线（navigator.onLine=false）",
+          "ok": true,
+          "detail": "false"
+        },
+        {
+          "name": "PWA：断网下页面仍由 SW 控制",
+          "ok": true,
+          "detail": "true"
+        },
+        {
+          "name": "PWA：断网下切屏可用（书架可见）",
+          "ok": true,
+          "detail": "true"
+        },
+        {
+          "name": "PWA：console error 0",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "consoleErrors": [],
+      "ok": true
+    }
+  ],
+  "summary": {
+    "scenarios": 2,
+    "checks": 17,
+    "failed": 0,
+    "consoleErrors": 0,
+    "ok": true
+  }
+}

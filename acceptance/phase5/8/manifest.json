@@ -1,0 +1,3820 @@
+{
+  "project": "infinite-reading",
+  "version": "0.12.1",
+  "stage": "阶段 5 · 第 8 步 · 过渡期循环冻结（收尾）",
+  "generatedAt": "2026-10-28T15:01:04.677Z",
+  "tool": "acceptance/phase5/8/loop-freeze-smoke.mjs",
+  "entry": "file:///D:/infinite-reading/dist/single/index.html",
+  "how": {
+    "probe": "页面里插入 position:fixed 放到视口外的循环元素（kenBurns 4s infinite）+ 一个 animation-play-state:paused 的对照元素；逐帧读 document.getAnimations() 的 playState / currentTime，并同步记 IR.MotionDOM.loopsHeld()",
+    "freeze": "VT 的 update 回调里（新快照拍摄前）暂停所有正在跑的真实 DOM 循环；过渡收尾（含 skip / 被顶掉）计数式解冻",
+    "budget": "hold 期间 registerLoop / 注销只记账不重排（data-loop 不抖），解冻后统一收敛到 Motion.LOOP_BUDGET",
+    "note": "off / ?vt=0 没有快照，不冻结也不干预；本来停着的循环（data-paused / 预算排队 / 刻意暂停）不会被解冻逻辑复活"
+  },
+  "scenarios": [
+    {
+      "id": "off",
+      "tier": "off",
+      "query": "",
+      "expect": "no-freeze",
+      "cap": null,
+      "dataMotion": "off",
+      "samples": [
+        {
+          "t": 1.5,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 8.4,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 26.2,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 44.4,
+          "playState": "running",
+          "currentTime": 18,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 151.7,
+          "playState": "running",
+          "currentTime": 124.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 168.2,
+          "playState": "running",
+          "currentTime": 142.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 185.6,
+          "playState": "running",
+          "currentTime": 159.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 203.6,
+          "playState": "running",
+          "currentTime": 177.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 220.7,
+          "playState": "running",
+          "currentTime": 194.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 238,
+          "playState": "running",
+          "currentTime": 211.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 255.4,
+          "playState": "running",
+          "currentTime": 229.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 272.7,
+          "playState": "running",
+          "currentTime": 246.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 289.8,
+          "playState": "running",
+          "currentTime": 263.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 307,
+          "playState": "running",
+          "currentTime": 280.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 324.4,
+          "playState": "running",
+          "currentTime": 298.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 342.2,
+          "playState": "running",
+          "currentTime": 316,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 359.6,
+          "playState": "running",
+          "currentTime": 333.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 377.6,
+          "playState": "running",
+          "currentTime": 351.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 394.9,
+          "playState": "running",
+          "currentTime": 368.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 412,
+          "playState": "running",
+          "currentTime": 385.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 429.2,
+          "playState": "running",
+          "currentTime": 403.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 447.3,
+          "playState": "running",
+          "currentTime": 421,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 464.4,
+          "playState": "running",
+          "currentTime": 438.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 481.7,
+          "playState": "running",
+          "currentTime": 455.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 499.5,
+          "playState": "running",
+          "currentTime": 473.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 516.7,
+          "playState": "running",
+          "currentTime": 490.5,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 1262.8
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "modalOpen": false,
+        "stack": []
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=off）",
+          "ok": true,
+          "detail": "off"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":1.5,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "没有冻结：采到 0 帧 paused",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "没有 hold（loopsHeld 全程 false）",
+          "ok": true,
+          "detail": "held=0"
+        },
+        {
+          "name": "循环时间正常前进（490.5ms / 520ms 窗口）",
+          "ok": true,
+          "detail": "advance=490.5"
+        },
+        {
+          "name": "没有出现快照动画（off / ?vt=0 不开 VT）",
+          "ok": true,
+          "detail": "vtFrames=0"
+        },
+        {
+          "name": "收尾后 held=false、无残留快照",
+          "ok": true,
+          "detail": "held=false vt="
+        },
+        {
+          "name": "收尾后弹窗已关、栈空（动作本身仍成功）",
+          "ok": true,
+          "detail": "visible=false stack="
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "standard-vt",
+      "tier": "standard",
+      "query": "",
+      "expect": "freeze",
+      "cap": 160,
+      "dataMotion": "standard",
+      "samples": [
+        {
+          "t": 4.1,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 10.4,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 44.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 62.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 79.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 97.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 114.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 132,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 149.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 166.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 184.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 202.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 219.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 236.6,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 253.6,
+          "playState": "running",
+          "currentTime": 17.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 270.9,
+          "playState": "running",
+          "currentTime": 34.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 288.6,
+          "playState": "running",
+          "currentTime": 52.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 305.9,
+          "playState": "running",
+          "currentTime": 69.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 323.5,
+          "playState": "running",
+          "currentTime": 87.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 340.8,
+          "playState": "running",
+          "currentTime": 104.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 358,
+          "playState": "running",
+          "currentTime": 121.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 375.1,
+          "playState": "running",
+          "currentTime": 138.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 392.5,
+          "playState": "running",
+          "currentTime": 156.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 409.8,
+          "playState": "running",
+          "currentTime": 173.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 427,
+          "playState": "running",
+          "currentTime": 190.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 445.2,
+          "playState": "running",
+          "currentTime": 208.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 462.5,
+          "playState": "running",
+          "currentTime": 226.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 479.9,
+          "playState": "running",
+          "currentTime": 243.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 497.1,
+          "playState": "running",
+          "currentTime": 260.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 514.2,
+          "playState": "running",
+          "currentTime": 277.9,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 898.2
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "modalOpen": false,
+        "stack": []
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=standard）",
+          "ok": true,
+          "detail": "standard"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":4.1,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "过渡期间确实冻结：paused 帧 ≥ 2",
+          "ok": true,
+          "detail": "paused=11"
+        },
+        {
+          "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
+          "ok": true,
+          "detail": "firstPausedAt=44.8"
+        },
+        {
+          "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
+          "ok": true,
+          "detail": "frozenDelta=0"
+        },
+        {
+          "name": "冻结期间 hold 在位（held 帧 ≥ 2）",
+          "ok": true,
+          "detail": "held=11"
+        },
+        {
+          "name": "出现快照动画（真走 View Transition）",
+          "ok": true,
+          "detail": "vtFrames=11"
+        },
+        {
+          "name": "过渡收尾后循环恢复播放",
+          "ok": true,
+          "detail": "last={\"t\":514.2,\"playState\":\"running\",\"currentTime\":277.9,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "恢复后 currentTime 继续前进（解冻不是重置）",
+          "ok": true,
+          "detail": "resumeAdvance=277.9"
+        },
+        {
+          "name": "收尾后不再有 paused 帧（514.2ms 窗口）",
+          "ok": true,
+          "detail": "pausedLate=0"
+        },
+        {
+          "name": "收尾后 hold 已释放",
+          "ok": true,
+          "detail": "held=false"
+        },
+        {
+          "name": "收尾后无残留快照伪元素",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后文档里的循环全部在播（除刻意暂停的探针）",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后弹窗已关、栈空",
+          "ok": true,
+          "detail": "visible=false stack="
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "rich-vt-screen",
+      "tier": "rich",
+      "query": "",
+      "expect": "freeze",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [
+        {
+          "t": 4.7,
+          "playState": "running",
+          "currentTime": 400.5,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 9.8,
+          "playState": "running",
+          "currentTime": 421,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 44.3,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 61.7,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 79.8,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 97.1,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 114.3,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 131.7,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 149,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 166.2,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 183.4,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 200.7,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 218.4,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 235.9,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 253.2,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 270.2,
+          "playState": "paused",
+          "currentTime": 456.3,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 287.4,
+          "playState": "running",
+          "currentTime": 456.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 304.7,
+          "playState": "running",
+          "currentTime": 473.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 321.8,
+          "playState": "running",
+          "currentTime": 490.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 339.1,
+          "playState": "running",
+          "currentTime": 508,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 356.9,
+          "playState": "running",
+          "currentTime": 526,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 374.2,
+          "playState": "running",
+          "currentTime": 543.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 391.4,
+          "playState": "running",
+          "currentTime": 560.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 409.1,
+          "playState": "running",
+          "currentTime": 578.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 426.4,
+          "playState": "running",
+          "currentTime": 595.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 443.9,
+          "playState": "running",
+          "currentTime": 612.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 461,
+          "playState": "running",
+          "currentTime": 630,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 479.1,
+          "playState": "running",
+          "currentTime": 647.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 496.4,
+          "playState": "running",
+          "currentTime": 665.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 514.2,
+          "playState": "running",
+          "currentTime": 683.2,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 151.2
+          },
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 886.4
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "screen": "home"
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":4.7,\"playState\":\"running\",\"currentTime\":400.5,\"held\":false,\"vt\":true}"
+        },
+        {
+          "name": "过渡期间确实冻结：paused 帧 ≥ 2",
+          "ok": true,
+          "detail": "paused=14"
+        },
+        {
+          "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
+          "ok": true,
+          "detail": "firstPausedAt=44.3"
+        },
+        {
+          "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
+          "ok": true,
+          "detail": "frozenDelta=0"
+        },
+        {
+          "name": "冻结期间 hold 在位（held 帧 ≥ 2）",
+          "ok": true,
+          "detail": "held=14"
+        },
+        {
+          "name": "出现快照动画（真走 View Transition）",
+          "ok": true,
+          "detail": "vtFrames=16"
+        },
+        {
+          "name": "过渡收尾后循环恢复播放",
+          "ok": true,
+          "detail": "last={\"t\":514.2,\"playState\":\"running\",\"currentTime\":683.2,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "恢复后 currentTime 继续前进（解冻不是重置）",
+          "ok": true,
+          "detail": "resumeAdvance=226.9"
+        },
+        {
+          "name": "收尾后不再有 paused 帧（514.2ms 窗口）",
+          "ok": true,
+          "detail": "pausedLate=0"
+        },
+        {
+          "name": "收尾后 hold 已释放",
+          "ok": true,
+          "detail": "held=false"
+        },
+        {
+          "name": "收尾后无残留快照伪元素",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后文档里的循环全部在播（除刻意暂停的探针）",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "rich-vt-modal",
+      "tier": "rich",
+      "query": "",
+      "expect": "freeze",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [
+        {
+          "t": 5.4,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 17.5,
+          "playState": "running",
+          "currentTime": 18,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 52.6,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 69.8,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 87,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 106.6,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 123.7,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 141,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 159.1,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 176.5,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 193.8,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 211.7,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 229,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 246.4,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 264.1,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 281.8,
+          "playState": "paused",
+          "currentTime": 52.9,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 299,
+          "playState": "running",
+          "currentTime": 52.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 316.5,
+          "playState": "running",
+          "currentTime": 70.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 337.9,
+          "playState": "running",
+          "currentTime": 88,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 352.4,
+          "playState": "running",
+          "currentTime": 106.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 369.8,
+          "playState": "running",
+          "currentTime": 123.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 387,
+          "playState": "running",
+          "currentTime": 140.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 404.3,
+          "playState": "running",
+          "currentTime": 158.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 421.4,
+          "playState": "running",
+          "currentTime": 175.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 438.7,
+          "playState": "running",
+          "currentTime": 192.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 456,
+          "playState": "running",
+          "currentTime": 209.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 474,
+          "playState": "running",
+          "currentTime": 227.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 491.4,
+          "playState": "running",
+          "currentTime": 245.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 509.5,
+          "playState": "running",
+          "currentTime": 263.4,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1311.4
+          },
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 888.5
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "modalOpen": false,
+        "stack": []
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":5.4,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+        },
+        {
+          "name": "过渡期间确实冻结：paused 帧 ≥ 2",
+          "ok": true,
+          "detail": "paused=14"
+        },
+        {
+          "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
+          "ok": true,
+          "detail": "firstPausedAt=52.6"
+        },
+        {
+          "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
+          "ok": true,
+          "detail": "frozenDelta=0"
+        },
+        {
+          "name": "冻结期间 hold 在位（held 帧 ≥ 2）",
+          "ok": true,
+          "detail": "held=14"
+        },
+        {
+          "name": "出现快照动画（真走 View Transition）",
+          "ok": true,
+          "detail": "vtFrames=16"
+        },
+        {
+          "name": "过渡收尾后循环恢复播放",
+          "ok": true,
+          "detail": "last={\"t\":509.5,\"playState\":\"running\",\"currentTime\":263.4,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "恢复后 currentTime 继续前进（解冻不是重置）",
+          "ok": true,
+          "detail": "resumeAdvance=210.5"
+        },
+        {
+          "name": "收尾后不再有 paused 帧（509.5ms 窗口）",
+          "ok": true,
+          "detail": "pausedLate=0"
+        },
+        {
+          "name": "收尾后 hold 已释放",
+          "ok": true,
+          "detail": "held=false"
+        },
+        {
+          "name": "收尾后无残留快照伪元素",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后文档里的循环全部在播（除刻意暂停的探针）",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后弹窗已关、栈空",
+          "ok": true,
+          "detail": "visible=false stack="
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "rich-fallback",
+      "tier": "rich",
+      "query": "?vt=0",
+      "expect": "no-freeze",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [
+        {
+          "t": 2.9,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 13.5,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 31.5,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 48.5,
+          "playState": "running",
+          "currentTime": 17.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 65.9,
+          "playState": "running",
+          "currentTime": 34.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 83.4,
+          "playState": "running",
+          "currentTime": 52,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 100.7,
+          "playState": "running",
+          "currentTime": 69.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 118.7,
+          "playState": "running",
+          "currentTime": 87.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 135.9,
+          "playState": "running",
+          "currentTime": 104.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 153,
+          "playState": "running",
+          "currentTime": 121.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 170.6,
+          "playState": "running",
+          "currentTime": 139.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 187.7,
+          "playState": "running",
+          "currentTime": 156.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 204.7,
+          "playState": "running",
+          "currentTime": 173.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 222.1,
+          "playState": "running",
+          "currentTime": 190.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 239.8,
+          "playState": "running",
+          "currentTime": 208.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 256.8,
+          "playState": "running",
+          "currentTime": 225.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 274.3,
+          "playState": "running",
+          "currentTime": 242.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 292.3,
+          "playState": "running",
+          "currentTime": 261,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 310.7,
+          "playState": "running",
+          "currentTime": 279.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 328,
+          "playState": "running",
+          "currentTime": 296.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 346.1,
+          "playState": "running",
+          "currentTime": 314.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 363.4,
+          "playState": "running",
+          "currentTime": 332.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 381,
+          "playState": "running",
+          "currentTime": 349.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 398.3,
+          "playState": "running",
+          "currentTime": 366.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 415.2,
+          "playState": "running",
+          "currentTime": 383.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 432.3,
+          "playState": "running",
+          "currentTime": 401.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 449.7,
+          "playState": "running",
+          "currentTime": 418.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 466.9,
+          "playState": "running",
+          "currentTime": 435.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 484.8,
+          "playState": "running",
+          "currentTime": 453.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 502.5,
+          "playState": "running",
+          "currentTime": 470.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 519.5,
+          "playState": "running",
+          "currentTime": 488.1,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1710.3
+          },
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 1256.8
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "modalOpen": false,
+        "stack": []
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":2.9,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+        },
+        {
+          "name": "没有冻结：采到 0 帧 paused",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "没有 hold（loopsHeld 全程 false）",
+          "ok": true,
+          "detail": "held=0"
+        },
+        {
+          "name": "循环时间正常前进（488.1ms / 520ms 窗口）",
+          "ok": true,
+          "detail": "advance=488.1"
+        },
+        {
+          "name": "没有出现快照动画（off / ?vt=0 不开 VT）",
+          "ok": true,
+          "detail": "vtFrames=0"
+        },
+        {
+          "name": "收尾后 held=false、无残留快照",
+          "ok": true,
+          "detail": "held=false vt="
+        },
+        {
+          "name": "收尾后弹窗已关、栈空（动作本身仍成功）",
+          "ok": true,
+          "detail": "visible=false stack="
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "rich-interrupt",
+      "tier": "rich",
+      "query": "",
+      "expect": "settle",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [
+        {
+          "t": 5.4,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 6.7,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 41.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 59.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 76.4,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 94.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 111.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 128.9,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 146.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 164.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 182,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 200.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 217.4,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 234.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 252,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 269.4,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 286.9,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 304.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 321.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 339.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 356.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 373.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 392,
+          "playState": "running",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 409.6,
+          "playState": "running",
+          "currentTime": 17.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 427.1,
+          "playState": "running",
+          "currentTime": 34.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 445.1,
+          "playState": "running",
+          "currentTime": 53,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 462.4,
+          "playState": "running",
+          "currentTime": 70.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 479.7,
+          "playState": "running",
+          "currentTime": 87.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 496.7,
+          "playState": "running",
+          "currentTime": 104.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 514.4,
+          "playState": "running",
+          "currentTime": 122.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 531.6,
+          "playState": "running",
+          "currentTime": 139.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 548.9,
+          "playState": "running",
+          "currentTime": 156.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 566.2,
+          "playState": "running",
+          "currentTime": 174.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 584.7,
+          "playState": "running",
+          "currentTime": 192.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 601.5,
+          "playState": "running",
+          "currentTime": 209.5,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 618.6,
+          "playState": "running",
+          "currentTime": 226.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 635.9,
+          "playState": "running",
+          "currentTime": 243.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 654.2,
+          "playState": "running",
+          "currentTime": 262.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 671.5,
+          "playState": "running",
+          "currentTime": 279.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 688.8,
+          "playState": "running",
+          "currentTime": 296.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 706.5,
+          "playState": "running",
+          "currentTime": 314.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 724.5,
+          "playState": "running",
+          "currentTime": 332.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 741.8,
+          "playState": "running",
+          "currentTime": 349.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 759.1,
+          "playState": "running",
+          "currentTime": 367,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 776.2,
+          "playState": "running",
+          "currentTime": 384.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 793.7,
+          "playState": "running",
+          "currentTime": 401.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 810.9,
+          "playState": "running",
+          "currentTime": 418.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 829,
+          "playState": "running",
+          "currentTime": 437,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 846.3,
+          "playState": "running",
+          "currentTime": 454.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 863.8,
+          "playState": "running",
+          "currentTime": 471.9,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 881.7,
+          "playState": "running",
+          "currentTime": 489.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 898.8,
+          "playState": "running",
+          "currentTime": 506.9,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1346.4
+          },
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 858.3
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "stack": [
+          "modal-confirm"
+        ],
+        "heldAfterClose": false
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":5.4,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+        },
+        {
+          "name": "收尾后 hold=false（没有卡住的冻结计数）",
+          "ok": true,
+          "detail": "held=false afterClose=false"
+        },
+        {
+          "name": "收尾后无残留快照伪元素",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "收尾后文档里的循环全部在播（没有卡在 paused 的）",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "最后一次触发已落地（栈里只剩 confirm 或空）",
+          "ok": true,
+          "detail": "stack=modal-confirm"
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "paused-probe",
+      "tier": "rich",
+      "query": "",
+      "expect": "keep-paused",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [
+        {
+          "t": 6.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 12.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 48.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 65.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 82.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 100,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 117.9,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 134.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 152,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 169.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 186.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 204.8,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 222.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 239.9,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 257.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 274.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 291.9,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 309.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 326.4,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 343.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 361.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 379.5,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 396.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 413.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 430.7,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 447.9,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 465.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 482.2,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 499.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 517.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        }
+      ],
+      "tail": {
+        "held": false,
+        "loops": [
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "",
+            "playState": "running",
+            "currentTime": 1339.4
+          },
+          {
+            "id": "__lp_probe",
+            "playState": "running",
+            "currentTime": 850.6
+          },
+          {
+            "id": "__lp_paused",
+            "playState": "paused",
+            "currentTime": 0
+          }
+        ],
+        "vt": [],
+        "modalOpen": false,
+        "stack": []
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
+          "ok": true,
+          "detail": "{\"t\":6.2,\"playState\":\"paused\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+        },
+        {
+          "name": "刻意暂停的循环全程保持 paused（不被解冻逻辑复活）",
+          "ok": true,
+          "detail": "paused=30/30 advance=0"
+        },
+        {
+          "name": "过渡期间 hold 在位（说明冻结逻辑确实跑过）",
+          "ok": true,
+          "detail": "held=14"
+        },
+        {
+          "name": "收尾后它仍是 paused",
+          "ok": true,
+          "detail": "paused"
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    },
+    {
+      "id": "budget-hold",
+      "tier": "rich",
+      "query": "",
+      "expect": "settle",
+      "cap": 220,
+      "dataMotion": "rich",
+      "samples": [],
+      "budget": {
+        "before": [
+          {
+            "id": "__lb1",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb2",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb3",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb4",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb5",
+            "dataLoop": "wait"
+          }
+        ],
+        "beforeSlots": 3,
+        "mid": [
+          {
+            "id": "__lb1",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb2",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb3",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb4",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb5",
+            "dataLoop": "wait"
+          }
+        ],
+        "midAfter": [
+          {
+            "id": "__lb1",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb2",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb3",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb4",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb5",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb6",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb7",
+            "dataLoop": ""
+          }
+        ],
+        "after": [
+          {
+            "id": "__lb1",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb2",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb3",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb4",
+            "dataLoop": ""
+          },
+          {
+            "id": "__lb5",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb6",
+            "dataLoop": "wait"
+          },
+          {
+            "id": "__lb7",
+            "dataLoop": "wait"
+          }
+        ],
+        "slotsAfter": 3,
+        "unregisteredClean": true,
+        "heldMid": true,
+        "heldMidAfter": true,
+        "heldEnd": false
+      },
+      "checks": [
+        {
+          "name": "档位已落定（html[data-motion]=rich）",
+          "ok": true,
+          "detail": "rich"
+        },
+        {
+          "name": "登记 5 组 → 恰好 3 组在预算内（其余 data-loop=\"wait\"）",
+          "ok": true,
+          "detail": "[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"}]"
+        },
+        {
+          "name": "过渡开始后（hold 在位）预算没有被重排：__lb1~__lb5 的属性与登记时一致",
+          "ok": true,
+          "detail": "held=true mid=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"}]"
+        },
+        {
+          "name": "过渡中途注销 / 新登记也不重排：__lb2~__lb5 属性不变、新登记者不抢槽",
+          "ok": true,
+          "detail": "held=true midAfter=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"},{\"id\":\"__lb6\",\"dataLoop\":\"\"},{\"id\":\"__lb7\",\"dataLoop\":\"\"}]"
+        },
+        {
+          "name": "解冻后统一收敛：6 组登记里恰好 3 组在预算内",
+          "ok": true,
+          "detail": "slotsAfter=3 after=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"},{\"id\":\"__lb6\",\"dataLoop\":\"wait\"},{\"id\":\"__lb7\",\"dataLoop\":\"wait\"}]"
+        },
+        {
+          "name": "注销者的 data-loop 已清掉（不会带着排队标记留在 DOM 上）",
+          "ok": true,
+          "detail": "__lb1={\"id\":\"__lb1\",\"dataLoop\":\"\"}"
+        },
+        {
+          "name": "解冻后 hold 已释放",
+          "ok": true,
+          "detail": "heldEnd=false"
+        }
+      ],
+      "ok": true,
+      "consoleErrors": []
+    }
+  ],
+  "summary": {
+    "scenarios": 8,
+    "checks": 75,
+    "failed": 0,
+    "consoleErrors": 0,
+    "fatal": "",
+    "ok": true
+  }
+}
