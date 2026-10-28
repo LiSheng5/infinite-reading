@@ -2,6 +2,13 @@
  * js/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
  * 从 js/app.js 拆出（只搬家，不改行为）。
  */
+// 阶段 5 第 5 步：切兄弟的过渡收编进过渡内核（runTransition）。本文件仍是 legacy IIFE，
+// 但经 src/legacy.js 以 ES module 装载（js/app.js 同款），顶层 import 合法；
+// 三档 kind / 时长的唯一声明处仍是 src/core/motion.ts 的 TRANSITIONS.sibling。
+// 命名空间导入 + VT.runTransition 点名调用：tools/check-free-calls.mjs 的裸调用启发式
+// （抓「搬家后忘改 A.xxx」）不认 import 绑定，点名调用与 IR.* 互调同口径。
+import * as VT from '../../src/ui/viewTransition.js';
+
 (function () {
   'use strict';
 
@@ -574,45 +581,106 @@
   function switchSiblingFromBubble(nid, dir) {
     if (!S.story || !nid) return;
     if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法（§4.1）
+    // 阶段 5 第 5 步：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
+    // 顺带保住 0.12.1「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
+    // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
+    const head = IR.Tree.switchSibling(S.story, nid, dir);
+    if (!head) return;
+    S.currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
+    saveAll();
     animateSwap(dir, () => {
-      const head = IR.Tree.switchSibling(S.story, nid, dir);
-      if (!head) return false;
-      S.currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
-      saveAll();
       A.renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); A.renderSavepoints();
-      return true;
     });
   }
 
-  /* 切兄弟滑动（UI-1 §4.1）：聊天内容区按方向横向滑入（±24px + 透明度，--dur-base）。
-   * 顺序必须是「数据切换 + 重新渲染 → 再播入场」，不能闪出旧内容；
-   * 动画未结束时再次切换要能正确打断（cancel 上一段，最终态由最新一次渲染决定）；
-   * off 档（含系统减少动态）直接切换。WAAPI 只动 transform / opacity。 */
-  let swapAnim = null;
-  function animateSwap(dir, swap) {
-    const box = $('#chat-scroll');
-    const done = typeof swap === 'function' ? swap() : true;
-    if (done === false || !box || typeof box.animate !== 'function') return;
-    if (motionLevel() === 'off') return;
-    if (swapAnim) { try { swapAnim.cancel(); } catch (_) {} swapAnim = null; }
-    if (box.getAnimations) {
-      box.getAnimations().forEach(a => { try { a.cancel(); } catch (_) {} });
+  /* 切兄弟过渡（阶段 5 第 5 步收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
+   *   off      即时（runTransition 同步换 DOM：焦点与滚动位置都不动）
+   *   standard 交叉淡入、无横向位移（VT 的 ::view-transition-*，或降级整块淡入）
+   *   rich     方向性短位移（±24px 新快照滑入 ≈220ms；降级把旧 WAAPI 的位移段叠回淡入上）
+   * 名字只在过渡期间挂 #chat-scroll（同屏 view-transition-name 必须唯一，常驻会拖累每次切屏）。
+   * 连点：内核先 skipTransition 收上一段（防快照残留），这里再撤上一段的名字与位移；
+   * 渲染按序号只落最新一次——update 回调晚一帧，旧回调绝不能把旧分支闪回来
+   * （数据已先行切走，渲染幂等读当前状态，最终态由最新一次渲染决定）。 */
+  const SWAP_NAME = 'sibling';   // 与 TRANSITIONS.sibling 同名：验收按名字认这一对快照
+  const SWAP_PX = 24;            // 与旧 WAAPI 同量级：聊天内容区按方向横向滑入，不是滑屏
+  let swapSeq = 0;
+  let swapNameEl = null;
+  let swapShiftAnim = null;
+
+  function cancelSwapShift() {
+    if (!swapShiftAnim) return;
+    try { swapShiftAnim.cancel(); } catch (_) {}
+    swapShiftAnim = null;
+  }
+
+  function endSwapName() {
+    if (!swapNameEl) return;
+    try { swapNameEl.style.viewTransitionName = ''; } catch (_) {}
+    swapNameEl = null;
+  }
+
+  function swapEase() {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
+      if (v) return v;
+    } catch (_) {}
+    return 'cubic-bezier(.2,.8,.2,1)';   // 旧 WAAPI 的缓动，兜底同款
+  }
+
+  /* rich 的方向性位移段（WAAPI 只动 transform，不新增 @keyframes——加一条要同步
+   * src/core/motion.ts 与两份 eval 测试，任务书「坑」）：VT 路径挂在新快照伪元素上
+   * （与切屏 shiftNewSnapshot 同款）；降级路径直接动聊天盒（旧 WAAPI 的位移段）。 */
+  function playSwapShift(dir, ms, target, pseudo) {
+    if (!(ms > 0) || !target || typeof target.animate !== 'function') return;
+    cancelSwapShift();
+    const opts = { duration: ms, easing: swapEase() };
+    if (pseudo) opts.pseudoElement = pseudo;
+    else opts.fill = 'none';
+    let anim;
+    try {
+      anim = target.animate(
+        [{ transform: 'translateX(' + (dir >= 0 ? SWAP_PX : -SWAP_PX) + 'px)' }, { transform: 'none' }],
+        opts
+      );
+    } catch (_) {
+      return;   // 伪元素 WAAPI 不可用：只剩交叉淡入，不算失败
     }
-    box.style.willChange = 'transform, opacity';   // 只在动画进行时临时加
-    const anim = box.animate(
-      [
-        { transform: 'translateX(' + (dir >= 0 ? 24 : -24) + 'px)', opacity: 0 },
-        { transform: 'translateX(0)', opacity: 1 },
-      ],
-      { duration: motionMs('--dur-base', 220), easing: 'cubic-bezier(.2,.8,.2,1)' }
-    );
-    swapAnim = anim;
-    const finish = () => {
-      if (swapAnim === anim) swapAnim = null;
-      box.style.willChange = '';   // 结束移除
+    if (!pseudo) target.style.willChange = 'transform';   // 只在动画进行时临时加
+    swapShiftAnim = anim;
+    const done = () => {
+      if (swapShiftAnim === anim) swapShiftAnim = null;
+      if (!pseudo) { try { target.style.willChange = ''; } catch (_) {} }   // 结束移除
     };
-    anim.onfinish = finish;
-    anim.oncancel = finish;
+    try { anim.finished.then(done, done); } catch (_) { done(); }
+  }
+
+  function animateSwap(dir, render) {
+    const box = $('#chat-scroll');
+    const stamp = ++swapSeq;
+    let rendered = false;
+    const guarded = () => {
+      if (stamp !== swapSeq) return;   // 被更新的一次顶掉：旧回调不许落 DOM
+      rendered = true;
+      if (typeof render === 'function') render();
+    };
+    if (!box) { guarded(); return; }
+
+    cancelSwapShift();
+    endSwapName();   // 连切：上一段的名字先收干净，别叠第二对快照
+    box.style.viewTransitionName = SWAP_NAME;
+    swapNameEl = box;
+
+    const r = VT.runTransition('sibling', guarded, { scope: box });
+    if (r.kind === 'shift') {
+      if (r.mode === 'vt') playSwapShift(dir, r.ms, document.documentElement, '::view-transition-new(' + SWAP_NAME + ')');
+      else playSwapShift(dir, r.ms, box, '');   // 降级（?vt=0 / 不支持 VT）：旧 WAAPI 的位移段留作降级
+    }
+    const finish = () => {
+      if (stamp !== swapSeq) return;
+      endSwapName();
+      if (!rendered) guarded();   // 兜底：update 回调万一被吞，收尾补一次渲染（幂等读当前状态）
+    };
+    r.finished.then(finish, finish);
   }
 
   A.reg({ parseAIReply, applyToolCall, absorbReply, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
