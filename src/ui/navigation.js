@@ -18,6 +18,7 @@
  *   screenVisible(name)       该屏当前是否可见（= 没有 .hidden）
  *   currentScreen()           当前可见的屏名（都没显示时返回 ''）
  *   showScreen(name, mutate)  切到某屏：隐藏其余、显示目标；mutate 里放这次切换要一起做的 DOM 变更
+ *   stageArt(mutate)          舞台换画：共享元素 stage-art（新旧模糊副本同名），过渡期暂停 Ken Burns
  *   setBranchOpen(open)       分支页开合标记（html[data-branch]），循环暂停规则的开关
  *   isBranchOpen()            分支页是否开着
  *
@@ -29,6 +30,7 @@
  *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
  */
 import { runTransition } from './viewTransition.js';
+import { suspendLoops } from './motion.js';
 
 /** 屏幕登记表：名字 → 容器 id（切屏只认这一张表；别处不得再写 '.hidden'） */
 export const SCREENS = { home: 'screen-start', shelf: 'screen-shelf', read: 'screen-game' };
@@ -111,7 +113,8 @@ export function showScreen(name, mutate) {
  * 为什么不在 css/motion.css 里写：位移需要 @keyframes，而 @keyframes 必须同步 src/core/motion.ts
  * 的 ANIMATIONS 与两份 eval 测试（任务书「坑」）；第 3 步的改动面不含那三处。这里改用 WAAPI 直接
  * 给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
- * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩下面两条 ::view-transition-* 的交叉淡入。 */
+ * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩 css/motion.css 那三条
+ * ::view-transition-* 规则给出的交叉淡入（不算失败，验收脚本也不把位移当硬要求）。 */
 const SHIFT_PX = 8;              // 与 rowIn / leafIn 的 8–10px 同一量级（短位移，不是滑屏）
 let shiftAnim = null;
 
@@ -147,6 +150,57 @@ function shiftNewSnapshot(ms) {
   try { anim.finished.then(done, done); } catch (_) { done(); }
 }
 
+/* ---------- 舞台换画（阶段 5 第 4 步）----------
+ * 舞台的「图」有两层：上层 #stage-img（清晰图，换画时自己走 fade-swap / blur-up），
+ * 下层 #stage-backdrop（同一张图的模糊放大副本，CSS 负责模糊与压暗）。换画的**共享元素**取下层：
+ * 它是同一个元素、新旧图同名 stage-art，rich 档由 ::view-transition-group(stage-art) 补间。
+ *
+ * 名字只在这段过渡期间挂上去（同屏 view-transition-name 必须唯一，常驻会把每次切屏都拖进快照）。
+ * Ken Burns 挂在 #stage-img.has-art 上：过渡期用 src/ui/motion.js 的 suspendLoops 暂停（快照会冻住它，
+ * 不暂停的话结束后会从「快照里的旧相位」跳一下），结束后恢复——standard / off 本来就没有 Ken Burns。
+ * 只在阅读页可见时开过渡：后台（书架 / 首页）的换画不该弹一段全屏快照。 */
+const STAGE_ART_NAME = 'stage-art';
+
+let artSeq = 0;
+let artNameEl = null;
+let artResume = null;
+
+function endStageArt() {
+  if (artNameEl) {
+    try { artNameEl.style.viewTransitionName = ''; } catch (_) {}
+    artNameEl = null;
+  }
+  if (artResume) {
+    try { artResume(); } catch (_) {}
+    artResume = null;
+  }
+}
+
+/**
+ * 舞台换画过渡：把真正改 DOM 的那一步交给它（models.js 的 setStageArt）。
+ * @param {() => void} mutate 改 #stage-backdrop 的 background-image / .show 的同步函数
+ */
+export function stageArt(mutate) {
+  const run = typeof mutate === 'function' ? mutate : () => {};
+  const bd = typeof document !== 'undefined' ? document.getElementById('stage-backdrop') : null;
+  const wrap = typeof document !== 'undefined' ? document.getElementById('stage-wrap') : null;
+  if (!bd || currentScreen() !== 'read') {
+    run();   // 没有舞台 / 不在阅读页：直接换，不开快照
+    return { stage: 'stageArt', tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
+  }
+
+  const stamp = ++artSeq;
+  endStageArt();   // 连切：上一段的名字与循环暂停先收干净，别叠第二对快照
+  bd.style.viewTransitionName = STAGE_ART_NAME;
+  artNameEl = bd;
+  if (wrap) artResume = suspendLoops(wrap);
+
+  const r = runTransition('stageArt', run, { scope: bd });
+  const finish = () => { if (stamp === artSeq) endStageArt(); };
+  r.finished.then(finish, finish);
+  return { stage: 'stageArt', tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
+}
+
 /* ---------- 分支页标记（html[data-branch]）----------
  * 全仓唯一写入点：css/motion.css 的旧屏循环暂停规则、阶段 6 的分支页过渡都读这一个标记。 */
 export function setBranchOpen(open) {
@@ -170,6 +224,7 @@ export const Nav = {
   currentScreen,
   applyScreen,
   showScreen,
+  stageArt,
   setBranchOpen,
   isBranchOpen,
 };
