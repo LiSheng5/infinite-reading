@@ -78,3 +78,7 @@ import './screens/shelf/index.js';
 // 阶段 4 · 屏 4：阅读页 Svelte 重写（聊天区 / 输入区 / 选项托盘 / 舞台 / 缩略图条；
 // 默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3）
 import './screens/read/index.js';
+
+// 阶段 4 · 屏 5：分支页 Svelte 重写（顶栏 / 画布容器 / 节点详情面板；画布仍 createElementNS；
+// 默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3/4）
+import './screens/branch/index.js';

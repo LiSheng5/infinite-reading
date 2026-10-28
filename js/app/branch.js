@@ -126,7 +126,7 @@
     relayout();
     render();
     centerOn(V.selectId);
-    if (V.panelOpen) renderPanel(); else $('#branch-panel').classList.add('hidden');
+    if (V.panelOpen) renderPanel(); else setPanelOpen(false);
     updateActiveDescendant();
     const svg = $('#branch-svg');
     if (svg && svg.focus) svg.focus({ preventScroll: true });
@@ -501,8 +501,7 @@
     if (k === 'Escape') {
       e.preventDefault();
       if (V.panelOpen) {
-        V.panelOpen = false;
-        $('#branch-panel').classList.add('hidden');
+        setPanelOpen(false);
         const svg = $('#branch-svg');
         if (svg && svg.focus) svg.focus({ preventScroll: true });
       } else {
@@ -538,20 +537,22 @@
 
   /* ================= 节点面板（§4.4） ================= */
 
-  function renderPanel() {
+  /* 阶段 4 屏 5：面板已换 Svelte 实现（src/screens/branch，容器打 data-impl="svelte"）。
+   * 文本与 disabled 由 IR.BranchScreen 状态桥推视图模型；下面的旧 DOM 写法原样留给 ?ui=legacy。
+   * 视图模型口径与 0.12.1 逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
+  function panelBridge() {
+    return (window.IR && IR.BranchScreen) || null;
+  }
+
+  function setPanelOpen(open) {
+    V.panelOpen = !!open;
+    const b = panelBridge();
+    if (b) { b.panelOpen(V.panelOpen); return; }
     const panel = $('#branch-panel');
-    const t = tree();
-    const node = t && t.nodes[V.selectId];
-    if (!panel || !node) { if (panel) panel.classList.add('hidden'); return; }
-    panel.classList.remove('hidden');
+    if (panel) panel.classList.toggle('hidden', !V.panelOpen);
+  }
 
-    $('#bp-turn').textContent = node.kind === 'root' ? '开局'
-      : ('第 ' + (node.turn || 0) + ' 回合');
-    $('#bp-action').textContent = actionText(node) || (node.kind === 'root' ? '（故事起点）' : '（无玩家行动）');
-    $('#bp-reply').textContent = codeSlice(replyPreview(node), REPLY_PREVIEW) || '（无）';
-    $('#bp-time').textContent = fmtTime(node.ts) || '—';
-    $('#bp-model').textContent = (node.meta && node.meta.model) ? String(node.meta.model) : '—';
-
+  function panelModel(node, t) {
     const parent = node.parent ? t.nodes[node.parent] : null;
     const can1 = IR.Tree.canResume(S.story, node.id);          // 回到这里并从此继续 → 落到本节点
     const can2 = can1                                          // 改我说的 → 落到 parent
@@ -560,19 +561,56 @@
       && !(node.action && node.action.type === 'opening');
     const busy = isBusy();
 
-    $('#btn-bp-resume').disabled = busy || !can1;
-    $('#btn-bp-fork').disabled = busy || !can2;
-    $('#btn-bp-latest').disabled = busy;
+    let warn = '';
+    if (busy) warn = '正在生成中：这一步结束后才能切换 / 分叉。';
+    else if (!can1) warn = '旧存档早期回合没有状态快照，只能查看：「回到这里并从此继续」「改我说的」已停用；「切到这条分支的最新处」仍可用。';
+    else if (node.action && node.action.type === 'opening') warn = '开局回合不能改说的：想重开走向，用「回到这里并从此继续」。';
+    else if (!parent) warn = '这是故事起点：可以「回到这里并从此继续」，但没有「这之前」可分叉。';
+    else if (!IR.Tree.canResume(S.story, parent.id)) warn = '上一回合没有状态快照，「改我说的」会弄错世界状态，已停用。';
+
+    return {
+      turn: node.kind === 'root' ? '开局' : ('第 ' + (node.turn || 0) + ' 回合'),
+      action: actionText(node) || (node.kind === 'root' ? '（故事起点）' : '（无玩家行动）'),
+      reply: codeSlice(replyPreview(node), REPLY_PREVIEW) || '（无）',
+      time: fmtTime(node.ts) || '—',
+      model: (node.meta && node.meta.model) ? String(node.meta.model) : '—',
+      warn: warn,
+      resumeDisabled: busy || !can1,
+      forkDisabled: busy || !can2,
+      latestDisabled: busy,
+    };
+  }
+
+  function renderPanel() {
+    const t = tree();
+    const node = t && t.nodes[V.selectId];
+    const b = panelBridge();
+    if (!node) {
+      if (b) b.panelOpen(false);
+      else { const p = $('#branch-panel'); if (p) p.classList.add('hidden'); }
+      return;
+    }
+    const model = panelModel(node, t);
+    if (b) { b.panel(model); return; }
+
+    // —— 旧 DOM 路径（?ui=legacy）——
+    const panel = $('#branch-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+
+    $('#bp-turn').textContent = model.turn;
+    $('#bp-action').textContent = model.action;
+    $('#bp-reply').textContent = model.reply;
+    $('#bp-time').textContent = model.time;
+    $('#bp-model').textContent = model.model;
+
+    $('#btn-bp-resume').disabled = model.resumeDisabled;
+    $('#btn-bp-fork').disabled = model.forkDisabled;
+    $('#btn-bp-latest').disabled = model.latestDisabled;
 
     const warn = $('#bp-warn');
-    let warnText = '';
-    if (busy) warnText = '正在生成中：这一步结束后才能切换 / 分叉。';
-    else if (!can1) warnText = '旧存档早期回合没有状态快照，只能查看：「回到这里并从此继续」「改我说的」已停用；「切到这条分支的最新处」仍可用。';
-    else if (node.action && node.action.type === 'opening') warnText = '开局回合不能改说的：想重开走向，用「回到这里并从此继续」。';
-    else if (!parent) warnText = '这是故事起点：可以「回到这里并从此继续」，但没有「这之前」可分叉。';
-    else if (!IR.Tree.canResume(S.story, parent.id)) warnText = '上一回合没有状态快照，「改我说的」会弄错世界状态，已停用。';
-    if (warnText) {
-      warn.textContent = warnText;
+    if (model.warn) {
+      warn.textContent = model.warn;
       warn.classList.remove('hidden');
     } else {
       warn.textContent = '';
@@ -667,8 +705,7 @@
     $('#btn-branch-center').onclick = () => {
       const t = tree();
       if (!t || !t.head) return;
-      V.panelOpen = false;
-      $('#branch-panel').classList.add('hidden');
+      setPanelOpen(false);
       selectNode(t.head, false);
       centerOn(t.head);
     };
@@ -680,8 +717,7 @@
       render();
     };
     $('#btn-bp-close').onclick = () => {
-      V.panelOpen = false;
-      $('#branch-panel').classList.add('hidden');
+      setPanelOpen(false);
       const svg = $('#branch-svg');
       if (svg && svg.focus) svg.focus({ preventScroll: true });
     };
