@@ -237,69 +237,20 @@
     return true;
   }
 
-  /* ---------- 弹窗栈（P0-3） ----------
-   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起。
-   * 这里做一个最小的统一入口：
+  /* ---------- 弹窗栈（P0-3 → 阶段 4 屏 6a 收口） ----------
+   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起，所以有一个最小统一入口：
    *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
    *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
    *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
    *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
+   * 屏 6a 起这套语义搬到 src/ui/modalHost.js（弹窗的唯一入口，外壳见 src/ui/Modal.svelte），
+   * 这里只转发：A.modalStack 仍是同一个数组实例（js/app.js 的遮罩点击按引用读它），
    * 现有 id 与 DOM 全部保持不变。 */
-  const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings'];
-  const MODAL_IDS = [
-    'modal-new', 'modal-wizard', 'modal-import-text', 'modal-export', 'modal-painter',
-    'modal-anchor', 'modal-card', 'modal-settings', 'modal-confirm',
-    'modal-email', 'modal-payment',
-  ];
-  const modalStack = [];
-
-  function openModal(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (FEATURE_MODALS.indexOf(id) >= 0) {
-      for (const other of modalStack.slice()) {
-        if (other !== id && FEATURE_MODALS.indexOf(other) >= 0) closeModal(other);
-      }
-    }
-    const at = modalStack.indexOf(id);
-    if (at >= 0) modalStack.splice(at, 1);
-    modalStack.push(id);
-    el.classList.remove('hidden');
-    el.setAttribute('aria-hidden', 'false');
-    el.style.zIndex = String(30 + modalStack.length);
+  const Host = IR.ModalHost;
+  if (!Host) {
+    throw new Error('js/app/core.js: 缺少 IR.ModalHost —— src/legacy.js 必须先 import src/ui/modalHost.js');
   }
-
-  function closeModal(id) {
-    const el = document.getElementById(id);
-    if (el) {
-      el.classList.add('hidden');
-      el.setAttribute('aria-hidden', 'true');
-      el.style.zIndex = '';
-    }
-    const at = modalStack.indexOf(id);
-    if (at >= 0) modalStack.splice(at, 1);
-    // 关掉后重排剩下几层的层序，保持「后开的在上面」
-    modalStack.forEach((mid, i) => {
-      const m = document.getElementById(mid);
-      if (m) m.style.zIndex = String(30 + i + 1);
-    });
-  }
-
-  // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
-  function dismissModal(id) {
-    if (id === 'modal-confirm') { closeConfirm(null); return; }
-    if (id === 'modal-painter') { A.closeWorkbench(); return; }
-    if (id === 'modal-anchor') { A.closeAnchor(); return; }
-    if (id === 'modal-import-text') { A.closeImportText(); return; }
-    if (id === 'modal-card') { A.closeCardEditor(true); return; }
-    closeModal(id);
-  }
-
-  function closeTopModal() {
-    if (!modalStack.length) return false;
-    dismissModal(modalStack[modalStack.length - 1]);
-    return true;
-  }
+  const { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal } = Host;
 
   function netErrHint(e) {
     if (e instanceof TypeError) {

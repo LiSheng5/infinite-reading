@@ -30,6 +30,10 @@ import './core/titles.ts';
 import './core/search.ts';
 import './core/backupPack.ts';      // 备份打包 / 还原的纯数据逻辑（阶段 2 自 js/app/backup.js 抽出）
 
+// —— 屏 6a：弹窗的唯一入口（栈 / 层级 / 互斥 / 外壳）—— 必须在 core.js 之前求值：
+// core.js 的弹窗栈改为转发 IR.ModalHost（modalStack 仍是同一个数组实例）
+import { installShell } from './ui/modalHost.js';
+
 // —— 界面逻辑（js/app/*.js）：core 先建 IR.App / A.state / A.reg，app.js 作组合根收尾 ——
 import '../js/app/core.js';
 import '../js/app/branch.js';
@@ -82,3 +86,9 @@ import './screens/read/index.js';
 // 阶段 4 · 屏 5：分支页 Svelte 重写（顶栏 / 画布容器 / 节点详情面板；画布仍 createElementNS；
 // 默认挂新屏；?ui=legacy 退回旧 DOM，阶段 6 删；装配顺序同屏 2/3/4）
 import './screens/branch/index.js';
+
+// —— 屏 6a：弹窗外壳接管 11 个 legacy 弹窗 ——
+// import 全部求值完才执行（ES module 语义），所以这里的 DOM 已是「各屏挂载完」的终态；
+// js/app.js 的 bind() 是 boot 之后的异步回调，晚于这里，按 id 取到的仍是同一批元素。
+// 搬的只是节点本身（换父级），内部 DOM 一行不改；两层 display:contents 保证零布局变化。
+installShell();

@@ -1,8 +1,13 @@
 <script>
-  /* Modal.svelte —— 弹窗（阶段 3 组件库）
+  /* Modal.svelte —— 弹窗（阶段 3 组件库 / 阶段 4 屏 6a 起兼任「弹窗外壳」）
    * 结构对齐 css/style.css 的 .modal（遮罩 + 卡片 + 头 / 体 / 脚），但样式全部作用域限定，
    * 不复用 legacy 的全站类名（§8：组件库样式必须按作用域限定）。
-   * 关闭途径：右上关闭按钮 / Esc。遮罩点击不关（表单弹窗防误触）。 */
+   * 关闭途径：右上关闭按钮 / Esc。遮罩点击不关（表单弹窗防误触）。
+   *
+   * shell 模式（屏 6a）：只渲染一个 display:contents 的层容器，不画任何像素。
+   * 11 个 legacy 弹窗由 src/ui/modalHost.js 整块搬进这个容器（节点本身不动，内部 DOM 一行不改），
+   * 于是「弹窗有哪几块、外壳在哪」有了唯一落点——第 7 步的开合过渡与第 6b/6c 的重写都在这里接。
+   * display:contents 不生成盒子：不产生包含块 / 层叠上下文 / 布局盒，搬前搬后逐字节一致。 */
   import Icon from './Icon.svelte';
   import { onMount } from 'svelte';
 
@@ -13,9 +18,11 @@
     children,
     footer = null,
     class: cls = '',
+    shell = false,
   } = $props();
 
   onMount(() => {
+    if (shell) return;   // 外壳不接键盘：Esc 的唯一入口仍是 js/app.js 的 closeTopModal
     const onKey = (e) => {
       if (e.key === 'Escape' && onclose) onclose();
     };
@@ -24,24 +31,31 @@
   });
 </script>
 
-<div class={['ui-modal', cls].filter(Boolean).join(' ')}>
-  <div class="ui-modal-card" class:narrow role="dialog" aria-modal="true" aria-label={title}>
-    <div class="ui-modal-head">
-      <h2>{title}</h2>
-      <button type="button" class="ui-modal-close" aria-label="关闭" onclick={onclose}>
-        <Icon name="x" />
-      </button>
+{#if shell}
+  <div id="modal-shell-host" class="ui-modal-shell"></div>
+{:else}
+  <div class={['ui-modal', cls].filter(Boolean).join(' ')}>
+    <div class="ui-modal-card" class:narrow role="dialog" aria-modal="true" aria-label={title}>
+      <div class="ui-modal-head">
+        <h2>{title}</h2>
+        <button type="button" class="ui-modal-close" aria-label="关闭" onclick={onclose}>
+          <Icon name="x" />
+        </button>
+      </div>
+      <div class="ui-modal-body">
+        {@render children?.()}
+      </div>
+      {#if footer}
+        <div class="ui-modal-foot">{@render footer()}</div>
+      {/if}
     </div>
-    <div class="ui-modal-body">
-      {@render children?.()}
-    </div>
-    {#if footer}
-      <div class="ui-modal-foot">{@render footer()}</div>
-    {/if}
   </div>
-</div>
+{/if}
 
 <style>
+  /* 外壳：只做「层」这件事，不生成盒子（见文件头 shell 模式说明） */
+  .ui-modal-shell { display: contents; }
+
   .ui-modal {
     position: absolute;
     inset: 0;
