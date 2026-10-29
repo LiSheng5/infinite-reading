@@ -1,11 +1,13 @@
 /*
- * js/app/features.js —— 调度工具 / 安全项读写 / 主动联系安排 / 邮件 / 购物支付 / 提案卡
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/features.js —— 调度工具 / 安全项读写 / 主动联系安排 / 邮件 / 购物支付 / 提案卡
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Sidecar } from '../core/sidecar.ts';
+import { Proposals } from '../core/proposals.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, toast, irConfirm, openModal, fmtTime, saveAll } = A;
 
 
@@ -16,7 +18,7 @@
 
   // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时才下发
   function scheduleToolsAvailable() {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return false;
     const st = SC.status();
     return !!(st.features && st.features.schedule && st.hasToken);
@@ -25,7 +27,7 @@
   // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
   // 另外 toolsForMode 只在 chat（智能体）模式放行（红线 7）。
   function proposalToolsAvailable() {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return { email: false, payment: false };
     const st = SC.status();
     const ready = !!st.hasToken;
@@ -58,7 +60,7 @@
 
   // 执行调度工具：一律提交给侧车，且一律是「待确认」——模型可以安排，但不能让主动行为自己生效
   async function runScheduleTool(name, args) {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     const a = args || {};
     if (!SC || !SC.isOnline()) {
       return '[调度失败] 本地服务没有在运行。请告诉用户：先在「设置 → 本地服务」里启动它，否则没法定时主动联系。';
@@ -126,7 +128,7 @@
   async function loadFeatureConfig() {
     if (!A.sidecarReady()) { A.renderSidecarStatus(); return; }
     try {
-      const r = await IR.Sidecar.getConfig();
+      const r = await Sidecar.getConfig();
       const c = (r && r.config) || {};
       const set = (sel, v) => { const el = $(sel); if (el) el.value = (v === undefined || v === null) ? '' : v; };
       const chk = (sel, v) => { const el = $(sel); if (el) el.checked = !!v; };
@@ -207,7 +209,7 @@
     const key = $('#s-email-resendkey').value.trim();
     if (key) patch.email.resendApiKey = key;
     try {
-      await IR.Sidecar.putConfig(patch);
+      await Sidecar.putConfig(patch);
       $('#s-email-resendkey').value = '';
       toast('功能设置已写入本地服务');
       A.renderSidecarStatus();
@@ -229,11 +231,11 @@
       return;
     }
     try {
-      const r = await IR.Sidecar.api('GET', '/api/triggers');
+      const r = await Sidecar.api('GET', '/api/triggers');
       const list = (r && r.triggers) || [];
       const st = (r && r.stats) || {};
       if (sum) sum.textContent = '共 ' + list.length + ' 个安排 · 生效 ' + (st.active || 0) + ' · 待处理 ' + (st.pending || 0) + ' 条';
-      box.innerHTML = '';
+      box.replaceChildren();
       if (!list.length) {
         const d = document.createElement('div');
         d.className = 'hint';
@@ -268,7 +270,7 @@
           ok.className = 'mini-btn';
           ok.textContent = '确认';
           ok.onclick = async () => {
-            try { await IR.Sidecar.confirmTrigger(t.id); toast('已生效'); renderTriggerList(); }
+            try { await Sidecar.confirmTrigger(t.id); toast('已生效'); renderTriggerList(); }
             catch (e) { toast('确认失败：' + ((e && e.message) || e), true); }
           };
           acts.appendChild(ok);
@@ -277,7 +279,7 @@
         del.className = 'mini-btn';
         del.textContent = '取消';
         del.onclick = async () => {
-          try { await IR.Sidecar.cancelTrigger(t.id); toast('已取消'); renderTriggerList(); }
+          try { await Sidecar.cancelTrigger(t.id); toast('已取消'); renderTriggerList(); }
           catch (e) { toast('取消失败：' + ((e && e.message) || e), true); }
         };
         acts.appendChild(del);
@@ -296,9 +298,9 @@
     if (!box) return;
     if (!A.sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
     try {
-      const r = await IR.Sidecar.emailAudit(20);
+      const r = await Sidecar.emailAudit(20);
       const list = (r && r.audit) || [];
-      box.innerHTML = '';
+      box.replaceChildren();
       if (!list.length) { box.textContent = '还没有邮件记录。'; return; }
       const KIND = { send: '发送', draft: '草稿', confirm: '确认' };
       for (const a of list) {
@@ -317,8 +319,8 @@
     if (!box) return;
     if (!A.sidecarReady()) { box.textContent = '（本地服务未启动）'; return; }
     try {
-      const list = await IR.Sidecar.emailSentDrafts();
-      box.innerHTML = '';
+      const list = await Sidecar.emailSentDrafts();
+      box.replaceChildren();
       if (!list.length) { box.textContent = '没有待确认的草稿。'; return; }
       for (const d of list) {
         const row = document.createElement('div');
@@ -344,7 +346,7 @@
           const ok = await irConfirm('确认真的寄出这封邮件？\n\n收件人：' + d.to + '\n主题：' + (d.subject || '（无）'), { title: '确认发送邮件', okText: '发送' });
           if (!ok) return;
           try {
-            const r = await IR.Sidecar.emailSendDraft(d.id);
+            const r = await Sidecar.emailSendDraft(d.id);
             toast(r && r.ok ? '已发送' : ('没发出：' + ((r && (r.message || r.code)) || '未知原因')), !(r && r.ok));
             renderEmailDrafts();
             renderEmailAudit();
@@ -354,7 +356,7 @@
         del.className = 'mini-btn';
         del.textContent = '丢弃';
         del.onclick = async () => {
-          try { await IR.Sidecar.emailDiscardDraft(d.id); renderEmailDrafts(); } catch (_) {}
+          try { await Sidecar.emailDiscardDraft(d.id); renderEmailDrafts(); } catch (_) {}
         };
         acts.appendChild(send);
         acts.appendChild(del);
@@ -368,7 +370,7 @@
     // v0.6.0：「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
     if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
-    const st = IR.Sidecar.status();
+    const st = Sidecar.status();
     const el = $('#email-status');
     if (el) {
       el.textContent = (st.features && st.features.email)
@@ -385,14 +387,14 @@
     const body = $('#em-body').value;
     if (!to) { toast('先填收件人', true); return; }
     try {
-      let r = await IR.Sidecar.emailSend({ to: to, subject: subject, body: body });
+      let r = await Sidecar.emailSend({ to: to, subject: subject, body: body });
       if (r && r.code === 'NEED_CONFIRMATION') {
         const ok = await irConfirm(
           '这个收件人不在白名单里，已先存成草稿。\n\n收件人：' + to + '\n\n确认后才会真的寄出。',
           { title: '需要你确认', okText: '确认发送' }
         );
         if (!ok) { toast('已留作草稿，未发送'); renderEmailDrafts(); renderEmailAudit(); return; }
-        r = await IR.Sidecar.emailSendDraft(r.draftId);
+        r = await Sidecar.emailSendDraft(r.draftId);
       }
       if (r && r.ok) {
         toast('已发送');
@@ -416,14 +418,14 @@
     if (!box) return;
     if (!A.sidecarReady()) { box.textContent = A.sidecarOffHint(); if (sum) sum.textContent = ''; return; }
     try {
-      const r = await IR.Sidecar.paymentTransactions(20);
+      const r = await Sidecar.paymentTransactions(20);
       const list = (r && r.transactions) || [];
-      const s = await IR.Sidecar.paymentSummary('');
+      const s = await Sidecar.paymentSummary('');
       if (sum && s && s.summary) {
         sum.textContent = '今日已用 ' + A.yuan(s.summary.spent.dailyCents) + ' · 本月 ' + A.yuan(s.summary.spent.monthlyCents)
           + ' · 每日剩余 ' + A.yuan(s.summary.remaining.dailyCents);
       }
-      box.innerHTML = '';
+      box.replaceChildren();
       if (!list.length) {
         const d = document.createElement('div');
         d.className = 'hint';
@@ -457,7 +459,7 @@
         rec.textContent = '收据';
         rec.onclick = async () => {
           try {
-            const rr = await IR.Sidecar.paymentReceipt(t.intentId);
+            const rr = await Sidecar.paymentReceipt(t.intentId);
             if (rr && rr.receipt) A.irDownloadText('收据-' + t.intentId + '.txt', rr.receipt.text);
           } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
         };
@@ -469,7 +471,7 @@
           paid.onclick = async () => {
             const ok = await irConfirm('确认你已经在微信 / 支付宝里手动付好款了？', { title: '标记已支付', okText: '已支付' });
             if (!ok) return;
-            try { await IR.Sidecar.paymentMarkPaid(t.intentId); toast('已标记为已支付'); renderPayLedger(); }
+            try { await Sidecar.paymentMarkPaid(t.intentId); toast('已标记为已支付'); renderPayLedger(); }
             catch (e) { toast('操作失败：' + ((e && e.message) || e), true); }
           };
           acts.appendChild(paid);
@@ -484,7 +486,7 @@
     // v0.6.0：「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
     if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
-    const st = IR.Sidecar.status();
+    const st = Sidecar.status();
     const el = $('#pay-status');
     if (el) {
       el.textContent = (st.features && st.features.payment)
@@ -500,10 +502,10 @@
   // 没有授权时先问用户要不要签发一份（发起方 agent、总额度=每月上限、不限品类）——不静默代签。
   async function ensurePaymentMandate() {
     try {
-      const list = await IR.Sidecar.paymentMandates();
+      const list = await Sidecar.paymentMandates();
       const mds = (list && list.mandates) || [];
       if (mds.length) return mds[0].id;
-      const sum = await IR.Sidecar.paymentSummary();
+      const sum = await Sidecar.paymentSummary();
       const monthly = (sum && sum.summary && sum.summary.monthlyCents) || 0;
       const ok = await irConfirm(
         '下单要先有「长期授权范围」。现在按当前配置签发一份吗？\n\n'
@@ -512,7 +514,7 @@
         { title: '签发长期授权', okText: '签发授权' }
       );
       if (!ok) return '';
-      const md = await IR.Sidecar.paymentCreateMandate({
+      const md = await Sidecar.paymentCreateMandate({
         agent: 'agent', totalLimitCents: monthly, categories: [],
       });
       return (md && md.id) || '';
@@ -536,7 +538,7 @@
         toast('已取消：没有长期授权', true);
         return;
       }
-      const r = await IR.Sidecar.paymentPurchase({
+      const r = await Sidecar.paymentPurchase({
         amountCents: amountCents, merchant: merchant, category: category,
         mandateId: mandateId, items: itemsText ? [{ name: itemsText }] : [],
       });
@@ -558,7 +560,7 @@
         if (itemsText) lines.push('商品：' + itemsText);
         lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
         const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
-        const rr = ok ? await IR.Sidecar.paymentApprove(r.intentId) : await IR.Sidecar.paymentDeny(r.intentId);
+        const rr = ok ? await Sidecar.paymentApprove(r.intentId) : await Sidecar.paymentDeny(r.intentId);
         out.textContent = ok
           ? ((rr && rr.ok) ? ('已放行（' + (rr.status || 'charged') + '）') : ('未完成：' + ((rr && (rr.message || rr.code)) || '')))
           : '已拒绝这一笔。';
@@ -577,11 +579,11 @@
   }
 
   // email_propose / payment_propose → 建提案（红线 1/2/3）：
-  // 提案路径只走 IR.Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
+  // 提案路径只走 Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
   function runProposalTool(name, args) {
     const kind = name === 'email_propose' ? 'email' : 'payment';
-    const res = IR.Proposals.create(kind, args, Date.now());
+    const res = Proposals.create(kind, args, Date.now());
     if (!res || !res.ok) {
       return '[提案失败] ' + ((res && res.error) || '参数不完整') + '。可以修正后重新提出；不要说已经完成。';
     }
@@ -615,7 +617,7 @@
     d.className = 'bubble proposal-card';
     if (!p) { d.textContent = '（提案数据缺失）'; return d; }
     // 过期就地收敛状态（只改内存对象，与节点共享；下次 saveAll 落盘）
-    if (p.status === 'pending' && now >= p.expiresAt) IR.Proposals.markExpired(p);
+    if (p.status === 'pending' && now >= p.expiresAt) Proposals.markExpired(p);
 
     const title = document.createElement('div');
     title.className = 'proposal-title';
@@ -687,8 +689,8 @@
     const p = entry && entry.proposal;
     if (!p) return;
     if (p.status !== 'pending') { A.renderChat(); return; }   // 幂等：重复点击不再执行
-    if (!IR.Proposals.isActionable(p, Date.now())) {
-      IR.Proposals.markExpired(p);
+    if (!Proposals.isActionable(p, Date.now())) {
+      Proposals.markExpired(p);
       saveAll(); A.renderChat();
       return;
     }
@@ -697,7 +699,7 @@
     try {
       // 支付提案同样要挂长期授权（审查 中危 #13）：没有就先问用户签发；
       // mandateId 注入到 paymentPurchase 包装里，提案层保持纯函数、不碰授权细节
-      let svc = IR.Sidecar;
+      let svc = Sidecar;
       if (p.kind === 'payment') {
         const mandateId = await ensurePaymentMandate();
         if (!mandateId) {
@@ -706,11 +708,11 @@
           saveAll(); A.renderChat();
           return;
         }
-        svc = Object.assign({}, IR.Sidecar, {
-          paymentPurchase: payload => IR.Sidecar.paymentPurchase(Object.assign({}, payload, { mandateId: mandateId })),
+        svc = Object.assign({}, Sidecar, {
+          paymentPurchase: payload => Sidecar.paymentPurchase(Object.assign({}, payload, { mandateId: mandateId })),
         });
       }
-      res = await IR.Proposals.confirm(p, svc, Date.now());
+      res = await Proposals.confirm(p, svc, Date.now());
     } catch (err) {
       p.status = 'failed';
       p.result = { ok: false, error: String((err && err.message) || err) };
@@ -732,12 +734,12 @@
       lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
       const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
       if (ok) {
-        try { await IR.Proposals.approveSecond(p, IR.Sidecar); } catch (err) {
+        try { await Proposals.approveSecond(p, Sidecar); } catch (err) {
           p.status = 'failed';
           if (p.result) p.result.error = String((err && err.message) || err);
         }
       } else {
-        try { await IR.Proposals.deny(p, IR.Sidecar); } catch (_) {}
+        try { await Proposals.deny(p, Sidecar); } catch (_) {}
       }
     }
     A.pushLog({ type: 'tool', tool: 'proposal', summary: proposalResultSummary(p) });
@@ -751,7 +753,7 @@
   async function denyProposal(entry) {
     const p = entry && entry.proposal;
     if (!p || (p.status !== 'pending' && p.status !== 'executing')) { A.renderChat(); return; }
-    try { await IR.Proposals.deny(p, IR.Sidecar); } catch (_) {}
+    try { await Proposals.deny(p, Sidecar); } catch (_) {}
     A.pushLog({ type: 'tool', tool: 'proposal', summary: proposalResultSummary(p) });
     saveAll();
     A.renderChat();
@@ -770,4 +772,4 @@
   }
 
   A.reg({ scheduleToolsAvailable, proposalToolsAvailable, runScheduleTool, loadFeatureConfig, saveFeatureConfig, renderTriggerList, openEmailModal, doEmailSend, renderPayLedger, openPaymentModal, doPaymentSubmit, runProposalTool, proposalBubble, proposalStatusLabel, confirmProposal, denyProposal });
-})();
+

@@ -15,13 +15,11 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'sidecar.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'features.ts'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const S = (global.IR || {}).Sidecar;
+const S = core('sidecar').Sidecar;
 if (!S) {
-  console.error('加载失败：IR.Sidecar 缺失（js/sidecar.js 没被 require 进来？）');
+  console.error('加载失败：Sidecar 导出缺失');
   process.exit(1);
 }
 
@@ -121,7 +119,7 @@ async function main() {
   S.stop();
 
   /* 7. 工具门控：调度工具只在对话 / 扮演 + 后端已开启调度时下发 */
-  const Ctx = (global.IR || {}).Context;
+  const Ctx = core('context').Context;
   const namesOf = list => list.map(t => t.function.name);
   if (!Ctx) {
     check('IR.Context 可用', false);
@@ -221,7 +219,7 @@ async function main() {
   }
 
   /* 8. 主动触达编排：去重 + 排队 + 逐条送出 */
-  const F = (global.IR || {}).Features;
+  const F = core('features').Features;
   if (!F) {
     check('IR.Features 可用', false);
   } else {

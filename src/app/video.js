@@ -1,5 +1,5 @@
 /*
- * js/app/video.js —— 生视频（MiniMax V2）：独立队列 / 轮询 / 恢复 / 降级（任务书 v0.12.0 §7）
+ * src/app/video.js —— 生视频（MiniMax V2）：独立队列 / 轮询 / 恢复 / 降级（任务书 v0.12.0 §7）
  *
  * 与作画队列完全分开：视频动辄 1~3 分钟且整段轮询都在 run() 里，绝不能堵出图。
  *   🎬 入口（舞台小菜单 / 工作台）→ irConfirm 确认付费 → videoQ 串行执行 →
@@ -10,10 +10,14 @@
  * 切换故事 / 刷新：只停止本地等待，pendingVideos 留在原故事档里，回到该故事时用 poll 续上同一个
  * task_id（不重复提交、不丢已花的钱）。下载被 CORS 拦 / 空间不足 → 降级 remoteUrl（限时链接）。
  */
-(function () {
-  'use strict';
+import { PaintQueue } from '../core/paintQueue.ts';
+import { VideoProviders } from '../core/providers.ts';
+import { Storage } from '../core/storage.ts';
+import { Tree, genId } from '../core/tree.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, toast, offlineBlocked, saveAll, irConfirm } = A;
 
   const POLL_MS = 10000;              // 官方示例轮询间隔（恢复轮询的本地循环同速）
@@ -21,7 +25,7 @@
   const RESUME_TOTAL_TIMEOUT_MS = 15 * 60 * 1000;   // 与适配器 VIDEO_TOTAL_TIMEOUT_MS 同值
 
   // 第二条串行队列（§7）：run() 内部就是整段轮询，必须与 paintQ 分开
-  const videoQ = IR.PaintQueue.create({ onChange: function () { renderVideoPill(); } });
+  const videoQ = PaintQueue.create({ onChange: function () { renderVideoPill(); } });
 
   let videoPillText = '';             // 构思 / 下载阶段的文案
   let activeWait = null;              // 当前等待 { taskId, storyId, abort() }（胶囊的取消入口）
@@ -35,7 +39,7 @@
   }
 
   function videoAdapter() {
-    return IR.VideoProviders['minimax-video'] || IR.VideoProviders.minimax;
+    return VideoProviders['minimax-video'] || VideoProviders.minimax;
   }
 
   function isVideoScene(sc) { return !!(sc && sc.kind === 'video'); }
@@ -177,7 +181,7 @@
   // §5⑧：保存前判余量；不足以存下就提示并走降级（remoteUrl）
   async function spaceOk(bytes) {
     try {
-      const e = (IR.Storage && typeof IR.Storage.estimate === 'function') ? await IR.Storage.estimate() : null;
+      const e = (Storage && typeof Storage.estimate === 'function') ? await Storage.estimate() : null;
       if (e && e.quota && e.usage != null) return (e.quota - e.usage) > bytes + 1024 * 1024;
     } catch (_) {}
     try {
@@ -213,8 +217,8 @@
     const node = (nodeId && tree && tree.nodes) ? tree.nodes[nodeId] : null;
     if (nodeId && !node) return false;
     if (node && node.sealed) {
-      IR.Tree.pushLate(S.story, node.id, scene);
-      IR.Tree.pushLate(S.story, node.id, entry);
+      Tree.pushLate(S.story, node.id, scene);
+      Tree.pushLate(S.story, node.id, entry);
     } else {
       S.story.scenes.push(scene);
       S.story.log.push(entry);
@@ -230,14 +234,14 @@
     const node = (nodeId && tree && tree.nodes) ? tree.nodes[nodeId] : null;
     if (nodeId && !node) return;
     const entry = { type: 'tool', tool: 'video', summary: '出视频失败：' + message, ts: Date.now() };
-    if (node && node.sealed) IR.Tree.pushLate(S.story, node.id, entry);
+    if (node && node.sealed) Tree.pushLate(S.story, node.id, entry);
     else S.story.log.push(entry);
     saveAll();
     A.renderChat();
   }
 
   async function commitVideo(o) {
-    const id = IR.genId('vd');
+    const id = genId('vd');
     const scene = {
       id: id, kind: 'video',
       videoId: undefined, thumb: null,
@@ -283,7 +287,7 @@
     }
     // 在当前分支才动舞台 / lastBg（§4.4）
     const tree = S.story.tree;
-    const onPath = !o.nodeId || !tree || IR.Tree.pathOf(S.story, tree.head).indexOf(o.nodeId) >= 0;
+    const onPath = !o.nodeId || !tree || Tree.pathOf(S.story, tree.head).indexOf(o.nodeId) >= 0;
     if (onPath) {
       S.story.lastBg = scene.id;
       if (scene.videoId) A.setStageArt(scene.thumb || '');
@@ -606,7 +610,7 @@
   function renderWorkbenchVideo() {
     const box = $('#pw-video-list');
     if (!box || !S.pw || !S.story) return;
-    box.innerHTML = '';
+    box.replaceChildren();
     const list = (S.story.scenes || []).filter(s => s && s.kind === 'video' && s.sourceSceneId === S.pw.sceneId);
     if (!list.length) {
       const d = document.createElement('div');
@@ -654,4 +658,4 @@
     resumePendingVideos, stopVideoWaiting, cancelActiveVideo,
     renderWorkbenchVideo, pwVideoGenerate,
   });
-})();
+

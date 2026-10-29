@@ -59,7 +59,8 @@ const SCENARIOS = [
   { id: 'rich-fade', tier: 'rich', query: '?vt=0', expect: 'fallback', cap: 220 },
   { id: 'nested', tier: 'rich', query: '', expect: 'nested', cap: 220 },
   { id: 'interrupt', tier: 'rich', query: '', expect: 'interrupt', cap: 220 },
-  { id: 'legacy-ui', tier: 'rich', query: '?ui=legacy', expect: 'vt-shift', cap: 220 },
+  // 阶段 6：?ui=legacy 已删（参数失效）；保留这一档确认带该参数也走同一条 rich 过渡
+  { id: 'inert-ui-param', tier: 'rich', query: '?ui=legacy', expect: 'vt-shift', cap: 220 },
   { id: 'all-modals', tier: 'rich', query: '', expect: 'all' },
 ];
 
@@ -126,7 +127,7 @@ function installSampler() {
 
   // 状态快照：显隐 / 栈 / 层级 / 名字 / 残留快照 / 焦点 / 卡片入场动画是否让位
   window.__mkState = (ids) => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     const stack = (A.modalStack || []).slice();
     const out = { stack, modals: {}, active: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : '' };
     for (const id of ids) {
@@ -166,15 +167,17 @@ function installSampler() {
 }
 
 async function openApp(page, query) {
-  await page.goto(APP_URL + (query || ''), { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store && IR.ModalHost), null, { timeout: 20000 });
-  await page.waitForFunction(() => !!(IR.App.state && IR.App.state.settings), null, { timeout: 20000 });
+  // 阶段 6：应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
+  const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
+  await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store && __IR_TEST__.ModalHost), null, { timeout: 20000 });
+  await page.waitForFunction(() => !!(__IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 20000 });
   await sleep(400);
 }
 
 async function forceTier(page, tier) {
   const got = await page.evaluate((t) => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.state.settings.ui = A.state.settings.ui || {};
     A.state.settings.ui.motion = t;
     if (A.applyMotion) A.applyMotion();
@@ -210,7 +213,7 @@ async function openConfirm(page) {
     const btn = document.getElementById('btn-start-shelf');
     if (btn) btn.focus();
     const before = document.activeElement ? document.activeElement.id : '';
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.openModal('modal-confirm');
     const el = document.getElementById('modal-confirm');
     const immediate = {
@@ -226,7 +229,7 @@ async function openConfirm(page) {
 
 async function closeConfirmByApi(page) {
   return page.evaluate(async () => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.closeModal('modal-confirm');
     const el = document.getElementById('modal-confirm');
     const immediate = {
@@ -381,7 +384,7 @@ function judge(sc, data) {
 
 async function modalIntegrity(page) {
   return page.evaluate(() => {
-    const ids = (window.IR.ModalHost && IR.ModalHost.MODAL_IDS) || [];
+    const ids = (window.__IR_TEST__.ModalHost && __IR_TEST__.ModalHost.MODAL_IDS) || [];
     const bad = [];
     for (const id of ids) {
       const el = document.getElementById(id);
@@ -413,11 +416,11 @@ async function runScenario(browser, sc, shotDir) {
   data.dataMotion = await page.evaluate(() => document.documentElement.dataset.motion || '');
 
   if (sc.expect === 'all') {
-    const ids = await page.evaluate(() => (window.IR.ModalHost && IR.ModalHost.MODAL_IDS) || []);
+    const ids = await page.evaluate(() => (window.__IR_TEST__.ModalHost && __IR_TEST__.ModalHost.MODAL_IDS) || []);
     const rows = [];
     for (const id of ids) {
       const r = await page.evaluate(async (mid) => {
-        const A = window.IR.App;
+        const A = window.__IR_TEST__.App;
         A.openModal(mid);
         /* 开窗那一侧必须当帧就可见（不是等到 update 回调）：遗产代码里「开完立刻 focus / 量布局 /
          * scrollIntoView」的调用点都按同步语义写（irConfirm 的输入框、文本导入的 #it-text、
@@ -480,7 +483,7 @@ async function runScenario(browser, sc, shotDir) {
   if (sc.expect === 'nested') {
     // 设置 → 确认叠两层：确认弹窗不参与功能类互斥，可以压在设置上
     const open = await page.evaluate(async () => {
-      const A = window.IR.App;
+      const A = window.__IR_TEST__.App;
       A.openModal('modal-settings');
       await new Promise(r => setTimeout(r, 420));
       const mid = { stack: A.modalStack.slice(), zSettings: (document.getElementById('modal-settings') || {}).style.zIndex };
@@ -491,14 +494,14 @@ async function runScenario(browser, sc, shotDir) {
     const stateOpen = await page.evaluate(() => window.__mkState(['modal-settings', 'modal-confirm']));
     // 只关最上层（Esc 语义），设置必须还开着
     const closeTop = await page.evaluate(async () => {
-      const A = window.IR.App;
+      const A = window.__IR_TEST__.App;
       const handled = A.closeTopModal();
       const sampled = await window.__mkSample(460);
       return Object.assign({ handled }, sampled);
     });
     const stateTop = await page.evaluate(() => window.__mkState(['modal-settings', 'modal-confirm']));
     const closeRest = await page.evaluate(async () => {
-      const A = window.IR.App;
+      const A = window.__IR_TEST__.App;
       A.closeModal('modal-settings');
       const sampled = await window.__mkSample(460);
       return Object.assign({}, sampled);
@@ -554,7 +557,7 @@ async function runScenario(browser, sc, shotDir) {
      * 这条是「开窗那一侧不许把 DOM 变更推到下一帧」的回归闸——第 7 步最初把显示推迟到
      * update 回调，focus 全落空（实测 activeElement 停在触发按钮上）。 */
     const promise = await page.evaluate(async () => {
-      const A = window.IR.App;
+      const A = window.__IR_TEST__.App;
       const btn = document.getElementById('btn-start-shelf');
       if (btn) btn.focus();
       const p = A.irConfirm('开合自检：输入型确认弹窗的焦点与 Promise', { input: true, value: 'abc', title: '重命名' });
@@ -580,7 +583,7 @@ async function runScenario(browser, sc, shotDir) {
 
     if (sc.id === 'off') {
       const sync = await page.evaluate(async () => {
-        const A = window.IR.App;
+        const A = window.__IR_TEST__.App;
         const p = A.irConfirm('开合自检：确认弹窗的 Promise 收口', { okText: '好' });
         await new Promise(r => setTimeout(r, 360));
         const opened = !document.getElementById('modal-confirm').classList.contains('hidden');
@@ -601,7 +604,7 @@ async function runScenario(browser, sc, shotDir) {
     if (sc.id === 'interrupt') {
       // 打断：开 → 60ms 关 → 40ms 再开
       await page.evaluate(async () => {
-        const A = window.IR.App;
+        const A = window.__IR_TEST__.App;
         A.openModal('modal-confirm');
         await new Promise(r => setTimeout(r, 60));
         A.closeModal('modal-confirm');
@@ -627,23 +630,23 @@ async function runScenario(browser, sc, shotDir) {
         ok: st.modals[MODAL].opacity === '',
         detail: 'opacity=' + (st.modals[MODAL].opacity || '(空)'),
       });
-      await page.evaluate(() => window.IR.App.closeModal('modal-confirm'));
+      await page.evaluate(() => window.__IR_TEST__.App.closeModal('modal-confirm'));
       data.ok = data.checks.every(c => c.ok) && consoleErrors.length === 0;
     }
 
     // 中间帧：单独跑一次，停 70ms 后截图（采样窗口跑完时过渡已经结束，拍不到中间状态）
     if (sc.shot) {
       await page.evaluate(() => { const b = document.getElementById('btn-start-shelf'); if (b) b.focus(); });
-      await page.evaluate(() => window.IR.App.openModal('modal-confirm'));
+      await page.evaluate(() => window.__IR_TEST__.App.openModal('modal-confirm'));
       await sleep(70);
       await page.screenshot({ path: path.join(shotDir, 'open-' + sc.id + '-mid.png'), animations: 'allow' });
-      await page.evaluate(() => window.IR.App.closeModal('modal-confirm'));
+      await page.evaluate(() => window.__IR_TEST__.App.closeModal('modal-confirm'));
       await sleep(70);
       await page.screenshot({ path: path.join(shotDir, 'close-' + sc.id + '-mid.png'), animations: 'allow' });
       // 窄屏（390）再看一眼：模态卡在手机上不能溢出
       await page.setViewportSize({ width: 390, height: 780 });
       await sleep(120);
-      await page.evaluate(() => window.IR.App.openModal('modal-confirm'));
+      await page.evaluate(() => window.__IR_TEST__.App.openModal('modal-confirm'));
       await sleep(70);
       await page.screenshot({ path: path.join(shotDir, 'open-' + sc.id + '-390-mid.png'), animations: 'allow' });
       await sleep(400);
@@ -659,7 +662,7 @@ async function runScenario(browser, sc, shotDir) {
         ok: narrow.cardW <= narrow.vw && narrow.hidden === false,
         detail: JSON.stringify(narrow),
       });
-      await page.evaluate(() => window.IR.App.closeModal('modal-confirm'));
+      await page.evaluate(() => window.__IR_TEST__.App.closeModal('modal-confirm'));
       data.ok = data.checks.every(c => c.ok) && consoleErrors.length === 0;
     }
   }
@@ -692,7 +695,7 @@ async function main() {
     entry: APP_URL,
     how: {
       capture: '动作窗口内 requestAnimationFrame 逐帧 document.getAnimations() + 逐帧元素级 view-transition-name / 根 opt-out 值',
-      tiers: '档位靠 settings.ui.motion + IR.App.applyMotion() 显式落定，跑前校验 html[data-motion]',
+      tiers: '档位靠 settings.ui.motion + __IR_TEST__.App.applyMotion() 显式落定，跑前校验 html[data-motion]',
       degrade: '?vt=0 强制降级（不走 View Transition：开窗整块淡入、关窗同步隐藏）',
       assert: 'off 同步生效无快照；standard 只有遮罩层名字、只有 opacity、≤160ms；rich 加卡片名与 translateY/scale、≤220ms；'
         + '所有 VT 场景都没有 (root) 快照（根节点 opt-out）',

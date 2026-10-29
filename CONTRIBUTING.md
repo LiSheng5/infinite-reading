@@ -1,7 +1,6 @@
 # 贡献指南
 
-先说最重要的一条：**这个项目不需要 `npm install`**。
-改 `js/*.js` 或 `css/style.css`，刷新浏览器就能看到效果——没有构建、没有打包、没有编译步骤。
+先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（24 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
 
 感谢你愿意花时间。本文包含四部分：**贡献流程（一~八）**、**行为准则（九）**、**安全说明（十）**、**第三方资源与许可（十一）**；后三部分按需查阅。
 
@@ -12,53 +11,46 @@
 ```bash
 git clone <你的 fork 地址>
 cd infinite-reading
+npm ci          # 只装构建 / 测试依赖（Vite、Svelte、TypeScript、Playwright）
+npm run dev     # 开发服务器（热更新）
 ```
 
-三种打开方式，任选其一：
+需要 **Node ≥ 22.5**（侧车用内置 `node:sqlite`；`package.json` 的 `engines` 有记录）。
+
+发布前请用**构建产物**验收（dev server 与产物行为可能不同，Service Worker、单文件内联都只在产物里）：
 
 | 方式 | 命令 / 操作 | 说明 |
 |---|---|---|
-| 直接开 | 双击 `index.html` | 最省事，但 `file://` 下直连 API 更容易被 CORS 拦 |
-| 本地服务（推荐） | `npx serve .` 或 `python -m http.server 8000` | 起在 `http://localhost`，界面与线上一致 |
-| npm 脚本 | `npm run serve` | 等价于 `npx serve .` |
+| 多文件产物 | `npm run build:site` → `npx serve dist/site` | 与 GitHub Pages / Docker 同一份产物，PWA 可安装 |
+| 单文件产物 | `npm run build:single` → 双击 `dist/single/index.html` | `file://` 的真实形态（JS/CSS/图片全内联） |
+| 二次打包 | `npm run bundle` → `dist/ir.html` | 把单文件产物复制成对外发布的名字 |
+| 一键启动 | 双击 `启动.bat`（Windows） | 没有产物会先构建，再起本地服务（Python 优先，退回 `tools/serve.ps1`） |
 
 > ⚠️ `file://` 和 `http://localhost` 是**两套独立的本地存储（IndexedDB / localStorage 都按 origin 隔离）**，开发时固定用其中一种，别来回切。
 
-Node 只在可选处用到（都不是必须的）：跑离线评测 `node eval/run.js`、同步版本号 `node tools/sync-version.mjs`、以及可选的本地服务 `sidecar/`（`node sidecar/server.mjs`）。要求 **Node ≥ 22.5**（侧车用到内置 `node:sqlite`：22.5–23.3 需加 `--experimental-sqlite`，≥ 23.4 无需；见 `package.json` 的 `engines` 与 `sidecar/README.md`）。
+验收脚本（`acceptance/`）需要读 / 写内部状态时，给产物 URL 加 `?ir-test=1`：`src/main.js` 末尾会把当前模块的真实导出挂到 `window.__IR_TEST__`（`App / Store / Tree / Context / Motion / Nav / ModalHost / providers / Sidecar`）。不带该参数时这个对象不存在，产物与普通双击完全一致；**应用代码不得引用它**。
 
 ## 二、目录地图
 
 ```
-index.html          单页骨架：所有界面区块 + 脚本加载顺序
-css/style.css       全部样式（CSS 变量 + 主题）
-js/providers.js     适配器层：ChatProviders / ImageProviders / VideoProviders['minimax-video']
-js/context.js       上下文组装与压缩：assembleAI1 / assemblePainter / compressStory
-js/storage.js       IndexedDB 适配器（唯一碰 IndexedDB 的地方，无 IndexedDB 时退回 localStorage）
-js/store.js         存档层（唯一出口）：内存优先 + 异步落盘、schema 迁移、书架、存档点
-js/tree.js          分支树数据层（回合树唯一真源）：投影 / 兄弟切换 / 分叉；裁剪窗口常量与 genId / clone / plainReply 公共工具也在这里
-js/treeLayout.js    分支页画布几何（纯逻辑）：泳道分配 / 折叠长单链 / pathEdgeD
-js/prefs.js         本对话偏好与模型库解析（纯逻辑）：effective / resolveChatCfg / stripSecrets
-js/paintQueue.js    作画串行队列（纯逻辑）：手动 / 工具 / 重画共用一条 FIFO
-js/proposals.js     提案状态机（纯逻辑）：模型发起的邮件 / 下单只能产生提案，确认才执行
-src/core/motion.ts  动效强度解析（纯逻辑）：设置项 + 系统偏好 → off / standard / rich；三档政策 / 循环预算 / 动画与过渡声明表
-js/titles.js        自动标题（纯逻辑）：触发判定、prompt、输出清洗与写回护栏
-js/search.js        全文搜索（纯逻辑）：标题 + 全部分支节点检索，输出零 HTML
-js/modelCapabilities.js  模型参数登记表（默认留空）
-js/roleCard.js      SillyTavern V2/V3 PNG 角色卡解析
-js/zip.js           零依赖手写 ZIP：带原图的全量备份打包 / 解包
-js/sidecar.js       可选本地服务客户端：/health 探测、token、SSE 退避重连
-js/features.js      主动触达的去重与排队（投递回调由 js/app/sidecar.js 的 initFeatures 注册）
-js/app.js           组合根：事件绑定 + 启动（业务模块拆在 js/app/*.js，现 20 个）
-eval/run.js         离线评测（零依赖、不花 API）
-eval/mock-story.js  评测用的 32 回合长局剧本
-eval/zip-smoke.js   ZIP 读写冒烟（第二套 CRC32 复算 + 手工解析中央目录）
-eval/scheduler-test.js / email-test.js / payment-test.js / sidecar-smoke.js / frontend-smoke.js  侧车与前端特性测试（接入 npm test）
-sidecar/            可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events / util / statuses
-manifest.webmanifest / sw.js / js/pwa.js   PWA：清单、Service Worker、注册
-icons/              应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
-Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx）
-启动.bat             Windows 一键启动（Python 优先，退回 tools/serve.ps1）
-tools/              可选脚本（版本号同步、单文件打包、图标生成、本地服务器、生视频本地转发 video-proxy.mjs），不属于运行时代码
+index.html              单页骨架：只留挂载容器（旧 DOM 已删）+ 图标 sprite + 唯一入口 <script type="module" src="src/main.js">
+src/main.js             唯一入口：应用层 → 各屏 → 组合根 → PWA（import 顺序即依赖顺序）
+src/app/                界面行为层（21 个 ES module + 组合根 main.js）：事件绑定 / 回合编排 / 渲染推进 / 弹窗流程；A.state 共享状态 + A.reg 注册表
+src/core/               核心逻辑（TS，Node 可 require）：providers / context / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / version
+src/ui/                 基础组件库（Svelte 5）+ 动效 / 切屏 / 弹窗栈 / 视图过渡内核
+src/screens/            7 个屏幕的组件与 $state 模块：home / settings / storyPrefs / shelf / read / branch / modal
+css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角）；:root 之外不写颜色字面量
+css/style.css           屏幕样式（全部按作用域限定）
+css/motion.css          动效档位收口 + @keyframes 唯一定义点 + 暂停规则
+eval/run.js             离线评测（不花 API）
+eval/mock-story.js      评测用的 32 回合长局剧本
+eval/*-test.js          24 个门禁：tokens / motion / settings-ids / schema / tree / prefs / proposals / zip / 侧车 …
+sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events
+manifest.webmanifest / sw.js / src/pwa.js   PWA：清单、Service Worker、注册
+icons/                  应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
+Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx 托管 dist/site）
+启动.bat                Windows 一键启动（构建 + 本地服务）
+tools/                  构建与验收脚本（版本号同步、单文件打包、图标生成、本地服务器、video-proxy.mjs），不属于运行时代码
 ```
 
 架构与数据流的细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
@@ -66,34 +58,41 @@ tools/              可选脚本（版本号同步、单文件打包、图标生
 ## 三、动手前请先跑一遍自检
 
 ```bash
-node eval/run.js                      # 离线评测：应全部 [命中]，总分不低于基线
-node tools/sync-version.mjs --check   # 版本号一致性
+npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 24 个 eval 门禁 + 结构门禁 + tsc
 ```
 
-`eval/run.js` 用固定剧本重放 32 回合，检查「上下文组装 / 压缩 / 启发式召回 / 角色卡 / 画像」是否被改坏。
-它**不调用任何 API、不产生费用**，是我们防回归的第一道闸门——改记忆机制前尤其要先跑。
+它的组成与用途：
+
+- `node eval/run.js`：用固定剧本重放 32 回合，检查「上下文组装 / 压缩 / 启发式召回 / 角色卡 / 画像」是否被改坏——**不调用任何 API、不产生费用**，改记忆机制前尤其要先跑。
+- `node eval/tokens-test.js` / `node eval/motion-test.js`：`:root` 之外无颜色字面量、`@keyframes` 属性白名单、三档动效声明表与 CSS 逐项对齐。
+- `node eval/settings-ids-test.js`：154 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）。
+- `node eval/app-structure-test.js`：入口 import 顺序、模块行数上限、`A.reg` 键唯一、顶层解构白名单。
+- `tsc --noEmit`：`src/core/*.ts` 的类型检查。
 
 ## 四、代码取向
 
-- **零依赖**：不引入第三方 JS 库，不引入构建工具。需要什么就写什么，标准库优先。
-- **不破坏 `file://`**：代码不得依赖模块系统或需要编译的语法，源码要能被 `<script src>` 直接加载。
-- **模块写法**：IIFE + 往全局 `IR` 上挂命名空间（`IR.Context`、`IR.Store`…），新模块照抄现有文件的头尾即可。
-- **加载顺序**：`index.html` 里脚本顺序是 `providers → … → storage → store → … → app → pwa`。`storage.js` 必须赶在 `store.js` 之前（`store.js` 启动时要拿 `IR.Storage`）；`app.js` 会立即读取前面所有模块，所以业务模块必须排在它之前；`pwa.js` 是唯一允许排在它之后的（只注册 Service Worker，不碰 `IR`）。完整顺序以 `ARCHITECTURE.md` §2 为准。
+- **构建期依赖可以有，运行时第三方依赖不行**：不引入运行时 JS 库；不新增任何远程请求（字体、CDN、统计）。项目承诺「纯本地运行」。
+- **数据层不许动**：`story` 结构 / `.irstory.json` / `.irbackup.json` / `.zip` 备份一个字段都不许改；改动结构必须走 `src/core/store.ts` 的 `migrateStory` / `SCHEMA` 升级，老存档要能继续打开（`eval/schema-test.js` + 回归夹具守着）。
+- **模块写法**：核心逻辑是 ES module（`src/core/*.ts`，各自 export 真实 API、模块间静态 import）；界面行为层是 ES module + `src/app/core.js` 的注册表 `A`——**不要**新建全局命名空间（旧的 `window.IR` 已删）。跨模块调用写 `A.xxx()`，只在顶部解构 core 的导出。
+- **界面写法**：屏幕用 Svelte 5（`$state` / `$props`），状态模块与组件分离；容器只替换内容，屏幕可见性仍归 `src/ui/navigation.js` 的 `Nav.showScreen`。安全红线：用户 / 模型产出**一律文本插值**，禁止 `{@html}` 与 `innerHTML`（`eval/ui-lib-test.js` 会拦）。
+- **动效**：任何新动画都要在 `src/core/motion.ts` 的 `ANIMATIONS` / `TRANSITIONS` 声明三档行为；`@keyframes` 只写在 `css/motion.css`；`off` 档不许有位移与循环。
 - **改了前端资源看不到变化**：先用 DevTools → Application → Service Workers 注销（`sw.js` 会缓存静态资源），别怀疑人生。
-- **渲染安全**：AI 返回的文本一律走 `textContent` / `createTextNode`，**不要**把模型输出拼进 `innerHTML`。
 - **文案**：界面与注释用简体中文，术语保持一致（如「世界状态卡」「画师子代理」「存档点」）。
-- **数据兼容**：改动 `story` 结构必须走 `js/store.js` 的 `migrateStory` / `SCHEMA` 升级，老存档要能继续打开。
 
 ## 五、版本号
 
-`VERSION` 是唯一真源，不要手改任何内嵌版本号（`?v=`、页脚版本戳、徽章等）：
+`VERSION` 是唯一真源；**运行时版本号全部构建注入**，源码里不许写 `vX.Y.Z`：
+
+- 首页版本文字：`src/screens/home/HomeScreen.svelte` 的 `__IR_VERSION__`（vite `define`）
+- 导出包 / 备份包戳：`src/core/version.ts` 的 `APP_VERSION`（同一占位）
+- Service Worker 缓存名：`sw.js` 的 `'ir-v' + '__IR_VERSION__'`，构建期替换
 
 ```bash
-echo 0.3.1 > VERSION        # 1) 改真源
-node tools/sync-version.mjs # 2) 同步到全部落点
+echo 0.13.0 > VERSION      # 1) 改真源
+npm run sync:version       # 2) 同步 package.json 与 README 徽章/「当前版本」行
 ```
 
-同步范围（`tools/sync-version.mjs` 的 TARGETS）：`index.html` 的 `?v=` 与页脚「无限阅读 vX.Y.Z」、`package.json` 的 `version`、`sw.js` 的缓存名、`README.md` / `README.en.md` 的徽章与「当前版本」行、`js/store.js` 与 `js/app/backup.js` 导出包的版本戳。`npm test` 会先跑 `--check`，版本漂移直接红。
+`node tools/sync-version.mjs --check`（`npm test` 第一步）会守三条红线：占位符不许丢、`?v=` 不许回来、`src/` 与 `sw.js` 里不许出现当前版本的字面量。
 
 ## 六、许可红线（重要）
 
@@ -105,16 +104,16 @@ node tools/sync-version.mjs # 2) 同步到全部落点
 
 ## 七、提交与 PR
 
-1. Fork → 建分支（`feat/xxx`、`fix/xxx`）→ 改代码 → 本地自检 → 提 PR。
+1. Fork → 建分支（`feat/xxx`、`fix/xxx`）→ 改代码 → `npm test` + `npm run build` 本地自检 → 提 PR。
 2. 一个 PR 只做一件事。提交信息用 `feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 前缀，一句话说清「改了什么、为什么」。
-3. PR 里请写：**改了什么**、**为什么**、**怎么验证的**（贴 `npm test` 的结果最好）。
-4. CI 会跑 `node eval/run.js` + 版本号检查 + JS 语法检查，红了请先修再请人 review。
-5. 新增用户可见功能请同步更新 `README.md`。
+3. PR 里请写：**改了什么**、**为什么**、**怎么验证的**（贴 `npm test` 的结果最好；界面改动请附 390 / 1280 两个宽度的前后截图）。
+4. CI 会跑语法检查、结构门禁、版本号、离线评测、构建与产物自检；红了请先修再请人 review。
+5. 新增用户可见功能请同步更新 `README.md` 与（必要时）`ARCHITECTURE.md`。
 
 ## 八、想帮忙但不知道从哪下手
 
 - README 末尾的 Backlog 就是任务池；挑一个开着 Issue 的来。
-- 内容也是贡献：`.irstory.json` 故事、`.irstyle.json` 画风包、角色卡、开局包——不需要写代码。
+- 内容也是贡献：`.irstory.json` 故事、角色卡、开局包——不需要写代码。
 - 文档纠错、错误提示「人话化」、README 翻译，同样有价值。
 
 ---
@@ -214,7 +213,7 @@ node tools/sync-version.mjs # 2) 同步到全部落点
 |---|---|---|
 | API Key 明文存 `IndexedDB` | 网页版没有系统凭据库可用，这是刻意的取舍 | 共享设备上别填 Key；导出备份默认不含 Key |
 | 数据可能被浏览器清掉 | 清「Cookie 和网站数据」、无痕关窗、Safari 7 天未交互都会丢 | 定期「一键导出全部备份」（想把原图一起留，勾上「带上原图」导出 `.zip`）；应用启动时会申请持久化存储 |
-| 字体与图标走 CDN | 字体从 jsDelivr / Google Fonts 加载，理论上存在供应链与隐私（外链请求）问题 | 离线或强隐私场景请自备字体文件本地化；应用图标是本地生成的，不走 CDN |
+| 不加载远程字体 / 图标 | 字体走系统自带栈（旁白衬线 / 界面无衬线 / 提示词等宽），图标是本地 sprite 与本地生成的 PNG——运行时**没有任何外链请求** | 断网也能用；想换字体请自备本地字体文件并登记许可见 §十一 |
 | Service Worker 会缓存本站静态资源 | 便于离线打开；但**跨域请求一律不拦截、不缓存** | 改完前端看不到变化时，先注销 SW（DevTools → Application）；详见 `sw.js` 顶部注释 |
 | `file://` 与 `http://localhost` 数据不通 | 两个 origin 各自独立 | 用导入导出迁移 |
 | CORS 被拦 | 部分服务商不允许浏览器直连 | 改用本地静态服务；生视频可用 `tools/video-proxy.mjs` 本地转发。这是服务商策略，不是本项目能修的 |
@@ -222,8 +221,8 @@ node tools/sync-version.mjs # 2) 同步到全部落点
 ### 代码里的安全底线（贡献者请注意）
 
 - **模型输出不拼 HTML**：AI 返回的文本一律经 `textContent` / `createTextNode` 渲染，禁止把模型输出或导入文件内容写进 `innerHTML`。新增渲染代码请沿用这条规则。
-- **导入文件要校验**：`.irstory.json` / `.irbackup.json` / `.irbackup.zip` 先检查 `format`、`schema` 与包内清单再落库（见 `js/store.js` 与 `js/app/backup.js` 的 `applyImport` / `applyBackupImport`）。只导入你自己信任来源的文件。
-- **ZIP 解包不写磁盘**：`js/zip.js` 只把字节切片还原成 Blob 交给上层，不接受也不生成任何文件路径，因此没有 zip slip（路径穿越）问题；另设条目数 / 解出总长上限，畸形包一律「拒绝处理」而不是硬解。它只读调用方按清单指定的条目，不遍历整包。
+- **导入文件要校验**：`.irstory.json` / `.irbackup.json` / `.irbackup.zip` 先检查 `format`、`schema` 与包内清单再落库（见 `src/core/store.ts` 与 `src/app/backup.js` 的 `applyImport` / `applyBackupImport`）。只导入你自己信任来源的文件。
+- **ZIP 解包不写磁盘**：`src/core/zip.ts` 只把字节切片还原成 Blob 交给上层，不接受也不生成任何文件路径，因此没有 zip slip（路径穿越）问题；另设条目数 / 解出总长上限，畸形包一律「拒绝处理」而不是硬解。它只读调用方按清单指定的条目，不遍历整包。
 - **接口地址是用户自填的**：不要假设 Base URL 可信，也不要往请求里塞除必要字段以外的信息。
 - **不要提交密钥**：提交前检查 `git diff` 与截图里没有真实 API Key；`sidecar/data/` 已在 `.gitignore` 里，别把它挪出忽略清单。
 - **侧车接口一律鉴权**：新增侧车路由时，除 `/health`（只回布尔能力位）外都必须走 token 校验；请求日志不得输出 token 或邮件正文。
@@ -231,43 +230,29 @@ node tools/sync-version.mjs # 2) 同步到全部落点
 
 ### 依赖与第三方资源
 
-运行时代码**没有任何第三方 JS 依赖**，第三方资源只有字体，清单与许可见本文「[十一、第三方资源与许可](#十一第三方资源与许可)」。若发现某处引入了带已知漏洞的资源，请按上面的渠道告知我们。
+运行时代码**没有任何第三方 JS 依赖**，也没有远程字体 / 图标；构建与测试依赖（Vite / Svelte / TypeScript / Playwright）的清单与许可见本文「[十一、第三方资源与许可](#十一第三方资源与许可)」。若发现某处引入了带已知漏洞的资源，请按上面的渠道告知我们。
 
 ---
 
 ## 十一、第三方资源与许可
 
-本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`js/` 下的代码均为本项目原创，只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。**可选本地服务（`sidecar/`）同样零第三方依赖**，只用 Node 内置能力（`node:http`、`node:sqlite`、`node:fs`、`node:crypto`）。
+本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`src/` 下的代码均为本项目原创（Svelte 运行时会被编译进产物，见下表），只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。**可选本地服务（`sidecar/`）同样零第三方依赖**，只用 Node 内置能力（`node:http`、`node:sqlite`、`node:fs`、`node:crypto`）。
 
-唯一的第三方资源是**字体**。下面是完整清单，以及分发时需要随附的许可。
+运行时不加载任何第三方字体或图标：字体走系统自带栈（没有远程 `<link>`），图标是本地 sprite 与 `tools/make-icons.mjs` 生成的 PNG。若将来引入字体文件，请把文件与对应许可文本一并放入仓库并在本节登记。
 
-### 字体
+### 构建与测试依赖（不进入运行时，Svelte 运行时会编译进产物）
 
-字体目前以**外链**方式从 CDN 加载（见 `index.html` 的 `<link>` 标签），仓库内**未包含字体文件**。若后续做本地化 / 打包分发，请把字体文件与对应许可文本（OFL 全文）一并放入仓库并在本节补充路径。
-
-| 字体 | 用途 | 来源 | 许可 |
-|---|---|---|---|
-| 霞鹜文楷 LXGW WenKai | 正文 / 旁白 | npm `lxgw-wenkai-webfont@1.7.0`，经 jsDelivr 分发 | SIL Open Font License 1.1 |
-| Noto Serif SC（思源宋体） | 标题 / 正文本 | Google Fonts | SIL Open Font License 1.1 |
-| Liu Jian Mao Cao（刘建毛草） | 装饰字 | Google Fonts | SIL Open Font License 1.1 |
-| Ma Shan Zheng（马善政毛笔楷书） | 装饰字 | Google Fonts | SIL Open Font License 1.1 |
-| Long Cang（龙藏） | 装饰字 | Google Fonts | SIL Open Font License 1.1 |
-| ZCOOL XiaoWei（站酷小薇） | 装饰字 | Google Fonts | SIL Open Font License 1.1 |
-| Cormorant Garamond | 西文衬线 | Google Fonts | SIL Open Font License 1.1 |
-| IM Fell English | 西文复古 | Google Fonts | SIL Open Font License 1.1 |
-
-> Google Fonts 上架的字体一律以 OFL-1.1 或同类自由许可发布；上表的许可类别以各字体官方仓库 / Google Fonts 页面声明为准。
-
-**OFL-1.1 的要点**（完整条款以 [OFL-1.1 原文](https://openfontlicense.org/) 为准）：
-
-- 允许免费使用、修改、再分发，包括用于商业项目；
-- 再分发字体文件时必须随附 OFL 全文，并保留字体名称与版权声明；
-- 修改后的字体**不得**继续使用原「保留字体名称」；
-- 不得单独售卖字体文件本身。
+| 依赖 | 用途 | 许可 |
+|---|---|---|
+| `vite` / `vite-plugin-singlefile` | 构建、单文件内联 | MIT |
+| `svelte`（含运行时） | 界面组件与编译产物 | MIT |
+| `@sveltejs/vite-plugin-svelte` | Svelte 的 Vite 插件 | MIT |
+| `typescript` / `tsc` | `src/core/*.ts` 类型检查 | Apache-2.0 |
+| `playwright` | 验收脚本（截图 / 夹具 / 冒烟），只在本地跑 | Apache-2.0 |
 
 ### 外部服务（非本项目代码，仅作默认值提示）
 
-`index.html` 的 Base URL 下拉框里预置了一批服务商地址（智谱、阿里云百炼、DeepSeek、OpenAI、Ollama…），仅为**填表方便**，不构成任何推荐或合作：
+设置页的 Base URL 下拉框里预置了一批服务商地址（智谱、阿里云百炼、DeepSeek、OpenAI、Ollama…，见 `src/screens/settings/settingsForm.js`），仅为**填表方便**，不构成任何推荐或合作：
 
 - 不预置模型名，不需要任何服务商 SDK；
 - 用哪个服务、是否收费、数据如何处理，由使用者与该服务商的条款决定；

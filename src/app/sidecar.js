@@ -1,18 +1,20 @@
 /*
- * js/app/sidecar.js —— 可选本地服务：连接状态、主动消息投递、下拉菜单
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/sidecar.js —— 可选本地服务：连接状态、主动消息投递、下拉菜单
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Sidecar } from '../core/sidecar.ts';
+import { Features } from '../core/features.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, toast } = A;
 
 
   /* ---- 侧车连接状态与主动消息投递 ---- */
 
   function sidecarReady() {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     return !!(SC && typeof SC.isOnline === 'function' && SC.isOnline() && SC.status().hasToken);
   }
 
@@ -21,7 +23,7 @@
   }
 
   function renderSidecarStatus() {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {}, lastError: '' };
     const el = $('#sidecar-state');
     if (el) {
@@ -58,7 +60,7 @@
       plus.setAttribute('aria-expanded', 'false');
       return;
     }
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
     // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（v0.6.0 行为变更）
@@ -121,8 +123,8 @@
 
   // 页面打开 / 重新上线时补跑：把侧车里排队的触达捞回来（页面关着时侧车只入队，不打扰）
   async function pullProactive() {
-    const SC = IR.Sidecar;
-    const F = IR.Features;
+    const SC = Sidecar;
+    const F = Features;
     if (!SC || !F || !SC.isOnline() || !SC.status().hasToken) return;
     try {
       const list = await SC.listPending();
@@ -134,13 +136,13 @@
   }
 
   async function ackProactive(fireId) {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     if (!SC || !fireId) return;
     try { await SC.ackPending(fireId); } catch (_) {}
   }
 
   function initFeatures() {
-    const F = IR.Features;
+    const F = Features;
     if (!F) return;
     F.attach({
       // 什么时候能把主动消息送进回合流程：不忙、有故事、是对话 / 扮演模式、且在线
@@ -159,14 +161,14 @@
   }
 
   function initSidecar() {
-    const SC = IR.Sidecar;
+    const SC = Sidecar;
     if (!SC) return;
     SC.configure(S.settings.sidecar || {});
     SC.on('state', () => {
       renderSidecarStatus();
       if (SC.isOnline() && SC.status().hasToken) { pullProactive(); A.loadFeatureConfig(); }
     });
-    SC.on('fire', payload => { if (IR.Features) IR.Features.accept(payload); });
+    SC.on('fire', payload => { if (Features) Features.accept(payload); });
     SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { A.renderTriggerList(); } catch (_) {} } });
     SC.start();
     renderSidecarStatus();
@@ -175,4 +177,4 @@
   }
 
   A.reg({ sidecarReady, sidecarOffHint, renderSidecarStatus, featuresAllowed, renderFeatureBar, closeMenus, toggleMenu, yuan, irDownloadText, ackProactive, initFeatures, initSidecar });
-})();
+

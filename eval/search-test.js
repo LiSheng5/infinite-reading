@@ -18,12 +18,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.plainReply 在 tree.js（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'src', 'core', 'search.ts'));
-
-const S = (global.IR || {}).Search;
+const S = require(path.join(__dirname, '..', 'src', 'core', 'search.ts')).Search;
 if (!S) {
-  console.error('加载失败：IR.Search 缺失（js/search.js 没被 require 进来？）');
+  console.error('加载失败：Search 导出缺失');
   process.exit(1);
 }
 

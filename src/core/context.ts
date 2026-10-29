@@ -2,7 +2,7 @@
  * 无限阅读 · 上下文组装（AI1 剧情对话）v2
  *
  * 这里是「AI1 每轮发给模型的 messages 怎么拼、旧回合怎么压」的唯一实现：
- * 运行时（js/app.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
+ * 运行时（src/app/main.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
  *
  * 组装（§3.1 + §4.10 C-A/C-C，2026-10-14 评审后）：
  *   [system]  AI1 系统提示词（按 mode：choice / chat / rp；rp 无卡时用降级提示）
@@ -18,14 +18,11 @@
  * 压缩（§4.10 C-A/C-B）：以 scene_change 为边界做事件级摘要；占满时递归合并最旧两幕。
  * 提供纯函数 + 可注入的 summarize（真实用书记员模型，失败兜底用 localSummarize）。
  *
- * 纯函数、零依赖；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
+ * 纯函数、零依赖；UMD 兜底，浏览器挂 应用层注册表，Node 亦可加载。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/context.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/context.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   /* 上下文预算表（C-C，token 估算；中文 1 字 ≈ 1 token） */
   const BUDGET = {
@@ -79,7 +76,7 @@ const global = globalThis as any;
    * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
 
   // 智能体模式（原「对话」，v0.6.0）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
-  // 发邮件与花钱只是「提案」：用户在界面上确认前不得声称已完成（红线在 js/proposals.js 落地）。
+  // 发邮件与花钱只是「提案」：用户在界面上确认前不得声称已完成（红线在 src/core/proposals.ts 落地）。
   const CHAT_SYSTEM = '你是用户的智能助手。回答直接、简洁，用中文。需要时可以使用你拥有的能力（画图、记事、定时提醒、写邮件、下单），但不要在回复里提「工具」「函数」。发邮件和花钱只是向用户提出请求：先用一两句话说明你要做什么，由用户在界面上确认；在用户确认之前，不要说已经发出或已经付款。';
 
   // 扮演模式：同 CHAT_SYSTEM 的定位，多一句人设锚定与两条硬规则（不出戏 / 不替玩家行事）
@@ -378,7 +375,7 @@ const global = globalThis as any;
 
   /* ---------------- 邮件 / 下单工具（提案制，v0.6.0） ----------------
    * 模型发起的邮件 / 下单只能产生「提案」：执行必须由用户在界面上点确认触发
-   * （状态机与执行在 js/proposals.js，红线见该文件头注释）。 */
+   * （状态机与执行在 src/core/proposals.ts，红线见该文件头注释）。 */
 
   const EMAIL_PROPOSE_TOOL = {
     type: 'function',
@@ -1694,7 +1691,7 @@ const global = globalThis as any;
   }
 
   /* ---------------- 一回合归档：条目形状 + 工具吸收（审查 可维护性 二·10） ----------------
-   * 此前 js/app/turn.js 与 eval/run.js 各写一份归档，字段已漂移（run.js 缺 versions /
+   * 此前 src/app/turn.js 与 eval/run.js 各写一份归档，字段已漂移（run.js 缺 versions /
    * activeVersion、没跳过提案留痕、画像无门控）。这里收敛成纯函数，turn.js 与评测共用：
    *   slimReply / narrationEntry / assistantEntry —— 条目形状的唯一口径；
    *   absorbToolCalls(story, calls, opts)        —— 世界卡 / 画像吸收 + tool 留痕。
@@ -1797,5 +1794,4 @@ const global = globalThis as any;
     assembleAI1, messagesToText, estimateContextTokens, estimateTokensOf,
     slimReply, narrationEntry, assistantEntry, toolSummary, absorbToolCalls,
   };
-  registerIR({ Context });
   export { Context };

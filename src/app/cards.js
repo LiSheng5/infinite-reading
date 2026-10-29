@@ -1,11 +1,13 @@
 /*
- * js/app/cards.js —— 角色卡 / 用户画像（数据与导入）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/cards.js —— 角色卡 / 用户画像（数据与导入）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { RoleCard } from '../core/roleCard.ts';
+import { Context } from '../core/context.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, rpPremise, toast, openModal, closeModal, fmtTime, saveAll } = A;
 
 
@@ -61,11 +63,11 @@
   function openCardEditor(opts) {
     opts = opts || {};
     const mode = opts.mode === 'new' ? 'new' : 'edit';
-    const card = opts.card || ((mode === 'edit' && S.story && S.story.characterCard) || IR.RoleCard.emptyCard());
+    const card = opts.card || ((mode === 'edit' && S.story && S.story.characterCard) || RoleCard.emptyCard());
     cardEditor = { mode: mode, source: card.source || 'custom', onCancel: opts.onCancel || null };
     fillCardForm(card);
     $('#card-modal-title').textContent = mode === 'new' ? '选一张角色卡（扮演开局）' : '角色卡';
-    $('#card-source-hint').textContent = '来源：' + IR.RoleCard.sourceLabel(card)
+    $('#card-source-hint').textContent = '来源：' + RoleCard.sourceLabel(card)
       + (mode === 'new' ? '。可以空白自建，也可以导入你自己的 SillyTavern V2/V3 PNG 卡；导入后可随意改。' : '（改完即生效，下一回合开始用新卡）');
     $('#btn-rc-save').textContent = mode === 'new' ? '用这张卡开局' : '保存角色卡';
     openModal('modal-card');
@@ -79,7 +81,7 @@
   }
 
   function fillCardForm(card) {
-    const c = IR.RoleCard.normalize(card);
+    const c = RoleCard.normalize(card);
     if (cardEditor) cardEditor.source = c.source;
     $('#rc-name').value = c.name;
     $('#rc-appearance').value = c.appearance;
@@ -92,7 +94,7 @@
   }
 
   function readCardForm() {
-    return IR.RoleCard.normalize({
+    return RoleCard.normalize({
       name: $('#rc-name').value,
       appearance: $('#rc-appearance').value,
       personality: $('#rc-personality').value,
@@ -131,10 +133,10 @@
     const reader = new FileReader();
     reader.onload = () => {
       let card = null;
-      try { card = IR.RoleCard.parsePNG(new Uint8Array(reader.result)); } catch (_) { card = null; }
+      try { card = RoleCard.parsePNG(new Uint8Array(reader.result)); } catch (_) { card = null; }
       if (!card) { toast('没能从这张 PNG 里读到角色卡：支持 SillyTavern V2 / V3 内嵌 JSON 的卡', true, true); return; }
       fillCardForm(card);
-      toast('已读入角色卡「' + card.name + '」（' + IR.RoleCard.sourceLabel(card) + '），可以随意改，改完保存', false, true);
+      toast('已读入角色卡「' + card.name + '」（' + RoleCard.sourceLabel(card) + '），可以随意改，改完保存', false, true);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -142,10 +144,10 @@
   // 卡 → 世界卡人物条目（personality / speech 对接，§4.12）；用户手改过的字段按 mergeWorld 规则保护
   function syncWorldCharacter(card) {
     if (!S.story || !card) return;
-    const entry = IR.RoleCard.worldCharacter(card);
+    const entry = RoleCard.worldCharacter(card);
     if (!entry) return;
     S.story.world = S.story.world || Store.defaultWorld();
-    IR.Context.mergeWorld(S.story.world, { characters: [entry] });
+    Context.mergeWorld(S.story.world, { characters: [entry] });
   }
 
   // 开场白 = rp 首条旁白（不花一次 AI 调用；§4.12）
@@ -163,8 +165,8 @@
       characterCard: card,
     });
     if (syncWorld) {
-      const entry = IR.RoleCard.worldCharacter(card);
-      if (entry) IR.Context.mergeWorld(s.world, { characters: [entry] });
+      const entry = RoleCard.worldCharacter(card);
+      if (entry) Context.mergeWorld(s.world, { characters: [entry] });
     }
     S.story = s;
     A.enterGame(true, { deferOpening: true });   // rp 不做开局锚定（P4）；开场白直接进日志
@@ -181,7 +183,7 @@
 
   function profileOn() {
     const up = S.settings.userProfile || {};
-    return IR.Context.profileEnabledFor(up.enabled, (S.story && S.story.mode) || 'choice');
+    return Context.profileEnabledFor(up.enabled, (S.story && S.story.mode) || 'choice');
   }
 
   // 当前生效的画像条目（按 scope 取全局或本档）；关开关 / 没故事 → 空
@@ -195,12 +197,12 @@
   // 写入画像：关开关即停止收集；合并去重（同文只留最新），不设条数上限（§4.12 存储无上限）
   function applyProfileEntries(list) {
     if (!S.story || !profileOn() || !Array.isArray(list) || !list.length) return 0;
-    const inc = IR.Context.normalizeProfile(list);
+    const inc = Context.normalizeProfile(list);
     if (!inc.length) return 0;
     if ((S.settings.userProfile || {}).scope === 'global') {
-      Store.saveUserProfile(IR.Context.mergeProfile(Store.loadUserProfile(), inc));
+      Store.saveUserProfile(Context.mergeProfile(Store.loadUserProfile(), inc));
     } else {
-      S.story.userProfile = IR.Context.mergeProfile(S.story.userProfile || [], inc);
+      S.story.userProfile = Context.mergeProfile(S.story.userProfile || [], inc);
     }
     return inc.length;
   }
@@ -209,7 +211,7 @@
   function collectProfileLocal() {
     const last = [...((S.story && S.story.log) || [])].reverse().find(e => e.type === 'player' || e.type === 'choice');
     if (!last) return;
-    const got = IR.Context.localProfileExtract(last.text);
+    const got = Context.localProfileExtract(last.text);
     if (got.length) { applyProfileEntries(got); saveAll(); }
   }
 
@@ -221,4 +223,4 @@
   }
 
   A.reg({ openCardEditor, closeCardEditor, saveCardFromEditor, importCardFile, profileOn, activeProfileEntries, applyProfileEntries, collectProfileLocal, scribeProfileHint });
-})();
+

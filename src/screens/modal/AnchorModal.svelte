@@ -1,11 +1,11 @@
 <script>
   /* AnchorModal.svelte —— #modal-anchor「锚定画风」（屏 6c 重建）
    * 两步：挑候选（#anchor-step-pick）→ 改设定卡（#anchor-step-card）。
-   * 步骤显隐、候选网格内容、卡表单回填 / 读取都由 js/app/styleanchor.js 直接操作：
+   * 步骤显隐、候选网格内容、卡表单回填 / 读取都由 src/app/styleanchor.js 直接操作：
    *   #anchor-grid 是候选卡容器（legacy 逐个 createElement + onclick），组件只给空容器；
    *   #anchor-step-* 的 hidden 由 openAnchor / anchorDraftCard / #btn-anchor-back 切换；
    *   #btn-anchor-use 的 disabled 与文案由 setAnchorBusy / anchorDraftCard 改。
-   * 所有按钮的 handler 都在 js/app.js；这里一个都不挂（否则双触发一次开锚定 / 锁定）。
+   * 所有按钮的 handler 都在 src/app/main.js；这里一个都不挂（否则双触发一次开锚定 / 锁定）。
    */
   import Card from './Card.svelte';
   import Field from '../../ui/Field.svelte';

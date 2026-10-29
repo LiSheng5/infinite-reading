@@ -1,11 +1,17 @@
 /*
- * js/app/settings.js —— 设置界面 / 故事记忆面板 / 注入记忆 / 用户画像面板
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/settings.js —— 设置界面 / 故事记忆面板 / 注入记忆 / 用户画像面板
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Sidecar } from '../core/sidecar.ts';
+import { ImageProviders, VideoProviders, ChatProviders } from '../core/providers.ts';
+import { Context } from '../core/context.ts';
+import { RoleCard } from '../core/roleCard.ts';
+import { Tree } from '../core/tree.ts';
+import { syncDirty } from '../screens/storyPrefs/panel.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, MODE_LABELS, IMAGE_ASPECTS, applyMotion, toast, irConfirm, fmtTime, saveAll, miniBtn } = A;
 
   function syncSettingsToForm() {
@@ -114,7 +120,7 @@
       port: Number(($('#s-sidecar-port') || {}).value) || 4319,
       token: (($('#s-sidecar-token') || {}).value || '').trim(),
     };
-    if (IR.Sidecar) IR.Sidecar.configure(S.settings.sidecar);
+    if (Sidecar) Sidecar.configure(S.settings.sidecar);
     S.settings.chat.provider = 'openai-compatible';
     S.settings.chat.baseUrl = $('#s-chat-base').value.trim();
     S.settings.chat.model = $('#s-chat-model').value.trim();
@@ -270,10 +276,10 @@
 
     const { cfg, inherited } = readTestCfg(t);
     const adapter = t.kind === 'image'
-      ? (IR.ImageProviders[cfg.provider] || IR.ImageProviders['openai-images'])
+      ? (ImageProviders[cfg.provider] || ImageProviders['openai-images'])
       : t.kind === 'video'
-        ? (IR.VideoProviders[cfg.provider] || IR.VideoProviders['minimax-video'])
-        : (IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible']);
+        ? (VideoProviders[cfg.provider] || VideoProviders['minimax-video'])
+        : (ChatProviders[cfg.provider] || ChatProviders['openai-compatible']);
     if (!adapter || typeof adapter.test !== 'function') { set('fail', '这个适配器不支持测试连接。'); return; }
 
     const oldText = btn ? btn.textContent : '';
@@ -303,7 +309,7 @@
       $('#style-card-state').textContent = '视觉设定卡 v' + (card.version || 1)
         + (card.updatedAt ? '（' + fmtTime(card.updatedAt) + ' 锁定）' : '') + '：之后每张画都带着它。';
       $('#style-card-view').classList.remove('hidden');
-      $('#style-card-text').textContent = IR.Context.styleCardText(card) || '（卡是空的）';
+      $('#style-card-text').textContent = Context.styleCardText(card) || '（卡是空的）';
       $('#s-card-note').value = card.note || '';
     } else {
       $('#style-card-state').textContent = has
@@ -324,10 +330,9 @@
   // 世界卡表单的「判变」账本：上次整画时对应的故事 id（换故事必须整画，同故事脏了不冲）
   let worldFormStoryId = null;
 
-  // 阶段 4 屏 2：Svelte 面板的状态桥（window.IR.StoryPanel，见 src/screens/storyPrefs）——
-  // 重绘后对账「判变」，让「保存世界卡」的禁用态跟表单一致；旧屏（?ui=legacy）没有这个桥，跳过
+  // 本对话设置面板的「判变」对账：重绘后让「保存世界卡」的禁用态跟表单一致
   function syncStoryPanel() {
-    if (globalThis.IR && IR.StoryPanel && IR.StoryPanel.syncDirty) IR.StoryPanel.syncDirty();
+    syncDirty();
   }
 
   function renderStoryPanels() {
@@ -368,10 +373,10 @@
         + ' · 人物 ' + chars + ' 位 · 摘要 ' + ((S.story.summaries || []).length) + ' 幕';
     }
     $('#world-scribe-at').textContent = w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString()) : '尚未校对';
-    const sl = $('#summary-list'); sl.innerHTML = '';
+    const sl = $('#summary-list'); sl.replaceChildren();
     (S.story.summaries || []).forEach(s => { const d = document.createElement('div'); d.className = 'mono-line'; d.textContent = s; sl.appendChild(d); });
     $('#sum-count').textContent = (S.story.summaries || []).length;
-    const tl = $('#tool-list'); tl.innerHTML = '';
+    const tl = $('#tool-list'); tl.replaceChildren();
     S.story.log.filter(e => e.type === 'tool').slice(-40).forEach(e => {
       const d = document.createElement('div'); d.className = 'mono-line';
       d.textContent = '· ' + (e.tool || '') + '：' + (e.summary || '');
@@ -390,24 +395,22 @@
       el.textContent = '还没有角色卡：切到「扮演」会先让你建一张 / 导入一张（SillyTavern V2/V3 PNG 也可）。';
       return;
     }
-    el.textContent = '角色卡：' + (card.name || '（无名）') + '（' + IR.RoleCard.sourceLabel(card) + '）'
+    el.textContent = '角色卡：' + (card.name || '（无名）') + '（' + RoleCard.sourceLabel(card) + '）'
       + (S.story.mode === 'rp' ? ' · 扮演中：每轮常驻，开场白已进场' : ' · 已保留：切到扮演模式即启用');
   }
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
   // 阶段 4 屏 2：新面板里改「行卡」形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
-  // 向导 / 文本导入两处仍是表格形态。旧屏（?ui=legacy）没有 data-impl 标记，沿用表格不变。
+  // 向导 / 文本导入两处仍是表格形态；本对话面板用行卡形态。
   let wCharEdInst = null;
   function wCharEd() {
-    const panelEl = document.getElementById('story-prefs');
-    const variant = (panelEl && panelEl.dataset.impl === 'svelte') ? 'card' : 'row';
     return wCharEdInst || (wCharEdInst = A.charEditor($('#w-characters'), [
       { key: 'name', label: '名字', placeholder: '姓名' },
       { key: 'presence', label: '在场 / 离场', placeholder: '在场' },
       { key: 'personality', label: '性格', placeholder: '性格' },
       { key: 'speech', label: '说话方式', placeholder: '说话方式' },
       { key: 'note', label: '备注', placeholder: '手改后书记员不覆盖' },
-    ], $('#btn-w-char-add'), { variant: variant }));
+    ], $('#btn-w-char-add'), { variant: 'card' }));
   }
 
   // 表单与当前世界卡是否不一致：modal「保存」用它决定要不要顺带落盘世界卡（没改就不写，避免误锁备注）
@@ -463,7 +466,7 @@
     });
     w.updatedAt = Date.now();
     // 手改的派生数据要同步进 head 的内联状态，否则下次 project（刷新 / 切分支）会回滚这次编辑
-    try { IR.Tree.resyncState(S.story); } catch (_) { /* 树还没建好时忽略 */ }
+    try { Tree.resyncState(S.story); } catch (_) { /* 树还没建好时忽略 */ }
     saveAll();
     renderStoryPanels();
     if (!(opts && opts.silent)) toast('世界卡已保存，下一回合生效');
@@ -510,19 +513,19 @@
     const el = $('#profile-list');
     if (!el) return;
     const st = profileStore();
-    const on = IR.Context.profileEnabledFor((S.settings.userProfile || {}).enabled, (S.story && S.story.mode) || 'choice');
+    const on = Context.profileEnabledFor((S.settings.userProfile || {}).enabled, (S.story && S.story.mode) || 'choice');
     $('#profile-state').textContent = (st.scope === 'per-story' && !S.story)
       ? '范围 = 仅当前故事：进入一个故事后才有本档画像；也可以切成「全局」。'
       : ('范围：' + (st.scope === 'global' ? '全局（跨故事共享）' : '仅当前故事') + ' · 共 ' + st.entries.length + ' 条'
         + (on ? ' · 当前模式已开启（收集 + 按需注入）' : ' · 当前模式开关未开（停止收集，已存条目保留）'));
-    el.innerHTML = '';
+    el.replaceChildren();
     st.entries.slice().reverse().forEach((e) => {
       const idx = st.entries.indexOf(e);
       const row = document.createElement('div');
       row.className = 'mono-row';
       const text = document.createElement('span');
       text.className = 'mono-line';
-      text.textContent = (IR.Context.PROFILE_KIND_LABEL[e.kind] || '事实') + '｜' + e.text;
+      text.textContent = (Context.PROFILE_KIND_LABEL[e.kind] || '事实') + '｜' + e.text;
       row.appendChild(text);
       row.appendChild(miniBtn('删除', () => deleteProfileEntry(idx)));
       el.appendChild(row);
@@ -599,4 +602,4 @@
   }
 
   A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderStoryPanels, worldFormChanged, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
-})();
+

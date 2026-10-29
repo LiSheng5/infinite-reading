@@ -12,10 +12,9 @@
  *            在第 10 / 20 / 30 回合插入「追问回合」，供 eval 判定组装后的上下文命中率。
  * 剧情：伏笔「挑便宜的就走」「灯灭之前，别回头」埋下并在后期回收；含场景切换与玩家事实。
  */
-(function (global) {
-  'use strict';
+'use strict';
 
-  const MockStory = {
+const MockStory = {
     title: '雨夜便利店',
     premise: [
       '标题：雨夜便利店',
@@ -359,5 +358,4 @@
     ],
   };
 
-  global.IR = Object.assign(global.IR || {}, { MockStory });
-})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+module.exports = { MockStory };

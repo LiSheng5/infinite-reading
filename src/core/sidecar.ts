@@ -12,11 +12,9 @@
  *
  * 零依赖，纯浏览器原生；在 Node 下也能加载（看不到 EventSource 就跳过订阅），便于单测。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/sidecar.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+/* ↑ 阶段 2 搬迁自 src/core/sidecar.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 const global = globalThis as any;
 
   const DEFAULT_PORT = 4319;
@@ -312,8 +310,7 @@ const global = globalThis as any;
   function paymentMandates() { return api('GET', '/api/payment/mandates'); }
   function paymentCreateMandate(m) { return api('POST', '/api/payment/mandates', m).then(r => unwrap(r, 'mandate')); }
 
-  const __irApi = {
-    Sidecar: {
+  const Sidecar = {
       DEFAULT_PORT: DEFAULT_PORT,
       configure: configure,
       config: config,
@@ -356,7 +353,5 @@ const global = globalThis as any;
       paymentReceipt: paymentReceipt,
       paymentMandates: paymentMandates,
       paymentCreateMandate: paymentCreateMandate,
-    },
   };
-  registerIR(__irApi);
-  export const { Sidecar } = __irApi;
+  export { Sidecar };

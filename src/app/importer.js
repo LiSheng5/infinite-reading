@@ -1,11 +1,15 @@
 /*
- * js/app/importer.js —— 剧情文本导入（R12 路径②）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/importer.js —— 剧情文本导入（R12 路径②）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Context } from '../core/context.ts';
+import { ChatProviders } from '../core/providers.ts';
+import { ImportText } from '../core/importText.ts';
+import { charApi } from '../screens/modal/state.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, Cap, toast, openModal, closeModal, resolveSub } = A;
 
 
@@ -76,7 +80,7 @@
   function importPlanHint() {
     const raw = ($('#it-text').value || '').trim();
     const win = importContextWindow();
-    const plan = IR.Context.planImport(raw, win);
+    const plan = Context.planImport(raw, win);
     const parts = [
       '整理模型：' + importModelLabel(),
       win > 0 ? ('窗口 ' + Cap.formatWindow(win) + ' token') : '窗口未知（按一次调用处理）',
@@ -111,34 +115,22 @@
   }
 
   async function callImportChat(cfg, task, text, meta) {
-    const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
-    return adapter.chat(cfg, IR.Context.assembleImporter(task, text, meta));
+    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
+    return adapter.chat(cfg, Context.assembleImporter(task, text, meta));
   }
 
   // 纯解析逻辑（模型回包 JSON / 本地兜底规则 / 人物行）已抽到 src/core/importText.ts，
-  // 这里只留界面流；阶段 2 起经 IR.ImportText 调用，函数体与 0.12.1 逐字一致
-  function parseImportJson(raw) { return IR.ImportText.parseImportJson(raw); }
-  function parseImportSummary(raw) { return IR.ImportText.parseImportSummary(raw); }
-  function parseImportResult(raw) { return IR.ImportText.parseImportResult(raw); }
-  function localImport(text) { return IR.ImportText.localImport(text); }
-  function parseImportCharacters(text) { return IR.ImportText.parseImportCharacters(text); }
+  // 这里只留界面流；阶段 2 起经 ImportText 调用，函数体与 0.12.1 逐字一致
+  function parseImportJson(raw) { return ImportText.parseImportJson(raw); }
+  function parseImportSummary(raw) { return ImportText.parseImportSummary(raw); }
+  function parseImportResult(raw) { return ImportText.parseImportResult(raw); }
+  function localImport(text) { return ImportText.localImport(text); }
+  function parseImportCharacters(text) { return ImportText.parseImportCharacters(text); }
 
-  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式
-  // 屏 6b 起：新形态由 src/screens/modal/CharRows.svelte 渲染，行数据在状态桥里
-  // （IR.ModalScreens.chars('import')，与 A.charEditor 同形的 set / get / add）；
-  // ?ui=legacy 不注册状态桥，退回命令式注入的 charEditor（旧 DOM 照旧）。
-  let itCharEd = null;
+  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式。
+  // 行数据在 src/screens/modal/state.svelte.js，charApi 与旧 A.charEditor 同形的 set / get / add。
   function itChars() {
-    const bridge = IR.ModalScreens;
-    if (bridge && typeof bridge.chars === 'function' && bridge.has('modal-import-text')) {
-      return bridge.chars('import');
-    }
-    return itCharEd || (itCharEd = A.charEditor($('#it-characters'), [
-      { key: 'name', label: '名字', placeholder: '姓名' },
-      { key: 'presence', label: '在场 / 离场', placeholder: '在场' },
-      { key: 'personality', label: '性格', placeholder: '性格' },
-      { key: 'speech', label: '说话方式', placeholder: '说话方式' },
-    ], $('#btn-it-char-add')));
+    return charApi('import');
   }
 
   function fillImportForm(res, plan) {
@@ -161,7 +153,7 @@
   async function reduceImportSummaries(cfg, summaries, budget) {
     let list = summaries.slice();
     for (let round = 0; round < 4; round++) {
-      const batches = IR.Context.planImportMerge(list, budget);
+      const batches = Context.planImportMerge(list, budget);
       if (batches.length <= 1) break;                 // 已能一次装下（或只剩一条）
       const next = [];
       for (let i = 0; i < batches.length; i++) {
@@ -179,7 +171,7 @@
     const raw = ($('#it-text').value || '').trim();
     if (raw.length < 20) { toast('先贴一段剧情文本（至少 20 字），再点「开始整理」', true); return; }
     const cfg = importCfg();
-    const plan = IR.Context.planImport(raw, importContextWindow());
+    const plan = Context.planImport(raw, importContextWindow());
     S.importJob = { raw: raw, plan: plan, busy: true, result: null, err: '' };
     $('#it-step-paste').classList.add('hidden');
     $('#it-step-confirm').classList.add('hidden');
@@ -251,4 +243,4 @@
   }
 
   A.reg({ importPlanHint, openImportText, closeImportText, runImportText, startFromImport });
-})();
+

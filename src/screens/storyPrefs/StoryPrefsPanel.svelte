@@ -1,10 +1,10 @@
 <script>
   /* 阶段 4 屏 2 · 「本对话设置」面板（Svelte 5 重写）
    * 两级视图（面板内下钻，阶段 4 屏 2 迁移方案 · 方案 A）：
-   *   一级 = 对话覆盖行（#prefs-body，界面层 renderStoryPrefs 按 IR.Prefs.visibleFor 渲染，本次不动）
+   *   一级 = 对话覆盖行（#prefs-body，界面层 renderStoryPrefs 按 Prefs.visibleFor 渲染，本次不动）
    *        + 故事数据（推进模式 / 存档点 / 世界状态卡摘要与编辑入口 / 角色卡）；
    *   二级 = 世界状态卡编辑器（WorldCardEditor）。
-   * 行为仍由 js/app/* 按 id 完成（s-story-mode / sp-* / memory-* / rc-status / btn-edit-card …），
+   * 行为仍由 src/app/* 按 id 完成（s-story-mode / sp-* / memory-* / rc-status / btn-edit-card …），
    * 本组件只产标记 + 视图切换（滚动位置 / 焦点 / Esc 见 panel.svelte.js）。 */
   import Icon from '../../ui/Icon.svelte';
   import WorldCardEditor from './WorldCardEditor.svelte';

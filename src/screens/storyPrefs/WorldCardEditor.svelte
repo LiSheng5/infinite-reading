@@ -1,6 +1,6 @@
 <script>
   /* 阶段 4 屏 2 · 世界状态卡编辑器（独立组件，不进设置字段配置系统——它是故事数据的编辑器）
-   * 只产标记、不带读写：w-* 的回填 / 判变 / 落盘仍在 js/app/settings.js
+   * 只产标记、不带读写：w-* 的回填 / 判变 / 落盘仍在 src/app/settings.js
    *（renderStoryPanels / worldFormChanged / saveWorldFromForm），人物行由 charEditor
    *（variant: card）渲染进 #w-characters，摘要栈与留痕照旧由界面层填。
    * 布局：正文内滚 + 底部 sticky 保存栏（btn-save-world + world-scribe-at，§3.2）；

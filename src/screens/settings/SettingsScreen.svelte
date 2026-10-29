@@ -4,8 +4,8 @@
    * 取代 0.12.1 的 legend 文字正则归类（GROUP_BY_LEGEND）。行为零改动：
    * syncSettingsToForm / applyFormToSettings / syncAdvPanels / openSettingsGroup … 仍按 id 读写，
    * 因此这里只产标记、不建响应式值绑定（legacy 界面层直接改 value / classList）。
-   * 分组面板（section.set-panel）按配置直接落位，js/app/prefsui.js 的 initSettingsNav
-   * 见 #set-panels[data-impl="svelte"] 就跳过「按 legend 归类搬 DOM」那一步。 */
+   * 分组面板（section.set-panel）按配置直接落位，src/app/prefsui.js 的 initSettingsNav
+   * 分组面板由本组件按字段配置直接渲染（不再按 legend 归类搬 DOM）。 */
   import Icon from '../../ui/Icon.svelte';
   import Inline from './Inline.svelte';
   import Node from './Node.svelte';

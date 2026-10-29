@@ -32,17 +32,16 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const T = (global.IR || {}).Tree;
-const S = (global.IR || {}).Store;
+const T = core('tree').Tree;
+const S = core('store').Store;
 if (!T) {
-  console.error('加载失败：IR.Tree 缺失（js/tree.js 没被 require 进来？）');
+  console.error('加载失败：Tree 导出缺失');
   process.exit(1);
 }
 if (!S) {
-  console.error('加载失败：IR.Store 缺失（js/store.js 没被 require 进来？）');
+  console.error('加载失败：Store 导出缺失');
   process.exit(1);
 }
 
@@ -798,13 +797,14 @@ function headTo(story, nodeId) {
     !!s.tree.nodes[q2.id] && !!s.tree.nodes[q3.id] && s.tree.nodes[q2.id].parent === q1.id);
 }
 
-/* ---------------- boot 关键依赖自检（审查 可维护性 #9） ---------------- */
+/* ---------------- 依赖装配（阶段 6：静态 import） ---------------- */
 {
-  // 本加载器只引 tree.js + store.js（按设计无 IR.Prefs）：assertDeps 必须点名缺什么、且码是 IR_DEP_MISSING
-  let e = null;
-  try { IR.Store.assertDeps(); } catch (err) { e = err; }
-  check('boot 自检：缺 IR.Prefs 抛 IR_DEP_MISSING 并点名缺失模块',
-    !!e && e.code === 'IR_DEP_MISSING' && /IR\.Prefs/.test(e.message), e ? e.message : '（没抛）');
+  // 原来靠「只引 tree + store，再让 assertDeps 报缺 Prefs」守住加载顺序；
+  // 现在 store 静态 import prefs，这条缺位路径在结构上不存在——改成验证清洗真的生效。
+  const clean = S.sanitizePrefsSafe({ profileId: 'p1', unknownKey: 1 });
+  check('store 静态装配 Prefs：未知键被丢弃、已知键保留',
+    clean.profileId === 'p1' && clean.unknownKey === undefined, JSON.stringify(clean));
+  check('加载顺序自检已随静态 import 删除', S.assertDeps === undefined);
 }
 
 /* ---------------- 汇总 ---------------- */

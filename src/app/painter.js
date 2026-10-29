@@ -1,20 +1,24 @@
 /*
- * js/app/painter.js —— 画师子代理 + 生图 / 画师工作台
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/painter.js —— 画师子代理 + 生图 / 画师工作台
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { PaintQueue } from '../core/paintQueue.ts';
+import { Tree, genId } from '../core/tree.ts';
+import { ChatProviders, ImageProviders } from '../core/providers.ts';
+import { Context } from '../core/context.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, STYLE_PRESETS, IMAGE_ASPECTS, toast, openModal, closeModal, netErrHint, offlineBlocked, fmtTime, saveAll, resolveSub, imageCfg } = A;
 
 
   /* ================= 画师子代理 + 生图（§3.2/§4.3，T-P3-1） =================
-   * v0.5.1（§3.B）：出图全走同一条串行队列 IR.PaintQueue，画师构思也在队列里跑
+   * v0.5.1（§3.B）：出图全走同一条串行队列 PaintQueue，画师构思也在队列里跑
    *（不与队列外的构思并发）；request_image 已异步化、不卡回合（§3.A）。
    * P-1（v0.11.0）：时机出图已删除——剧情模式只剩手动 🎨 / 工作台重画，外加 chat / rp 的工具直出。 */
 
-  const paintQ = IR.PaintQueue.create({ onChange: function () { renderGenPill(); } });
+  const paintQ = PaintQueue.create({ onChange: function () { renderGenPill(); } });
 
   // —— 作画胶囊 #gen-status（§3.B）：显示「构思中 / 作画中」并带上队列长度；队列清空才隐藏 ——
   let genPillText = '';
@@ -59,7 +63,7 @@
     const node = (nodeId && tree && tree.nodes) ? tree.nodes[nodeId] : null;
     if (nodeId && !node) return;
     const entry = { type: 'tool', tool: 'image', summary: summary, ts: Date.now() };
-    if (node && node.sealed) IR.Tree.pushLate(S.story, node.id, entry);
+    if (node && node.sealed) Tree.pushLate(S.story, node.id, entry);
     else S.story.log.push(entry);
     saveAll();
     A.renderChat();
@@ -262,8 +266,8 @@
   // 画师子代理：隔离上下文、用完即弃（§3.2）；命中 recall_recent_plot 时带记录重发一次
   async function painterCompose(opts) {
     const cfg = resolveSub('painter');
-    const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
-    const messages = IR.Context.assemblePainter(S.story, opts);
+    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
+    const messages = Context.assemblePainter(S.story, opts);
     let wantPlot = false;
     const hooks = {
       onToolCalls(calls) {
@@ -276,7 +280,7 @@
       // 后台作画不受它中断（超时沿用适配器自己的；本期不为作画再造取消按钮）
     };
     const useTools = !!opts.tools && S.settings.toolsEnabled !== 'off';
-    const cfg2 = useTools ? Object.assign({}, cfg, { tools: [IR.Context.RECALL_RECENT_PLOT_TOOL] }) : cfg;
+    const cfg2 = useTools ? Object.assign({}, cfg, { tools: [Context.RECALL_RECENT_PLOT_TOOL] }) : cfg;
     let raw;
     try {
       raw = await adapter.chat(cfg2, messages, hooks);
@@ -285,7 +289,7 @@
       raw = await adapter.chat(cfg, messages, hooks);   // 该模型不吃 tools：这一次不带工具重发
     }
     if (wantPlot && !opts.plot) {
-      const raw2 = await adapter.chat(cfg, IR.Context.assemblePainter(S.story, Object.assign({}, opts, { plot: true })));
+      const raw2 = await adapter.chat(cfg, Context.assemblePainter(S.story, Object.assign({}, opts, { plot: true })));
       return parsePainterReply(raw2);
     }
     return parsePainterReply(raw);
@@ -334,7 +338,7 @@
     // 工具出图在 commit 之前提交：写回时才从回合锚点取 nodeId（§3.A.4）
     const nodeId = opts.nodeId || (anchor && anchor.nodeId) || null;
     const cfgImg = imageCfg(opts.params);
-    const imgAdapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
+    const imgAdapter = ImageProviders[cfgImg.provider] || ImageProviders['openai-images'];
     // 参考图（设置里开了「用上一张图」且适配器支持）：把上一张图当 subject_reference 的硬锚。
     // 拿不到图（第一次作画 / 只存了缩略图也没有）就按纯文生图跑，绝不因为参考图失败拦下这次作画。
     if (S.settings.image.refMode === 'prev' && imgAdapter.supportsReference) {
@@ -366,10 +370,10 @@
       toast('这张图所属的回合已不在分支树里，刚画好的图已丢弃');
       return null;
     }
-    const onPath = !node || IR.Tree.pathOf(S.story, tree.head).indexOf(node.id) >= 0;
+    const onPath = !node || Tree.pathOf(S.story, tree.head).indexOf(node.id) >= 0;
 
     const scene = {
-      id: IR.genId('sc'),
+      id: genId('sc'),
       prompt: opts.prompt, promptRaw: opts.promptRaw || '', alt: opts.alt || '',
       src, ts: Date.now(),
       model: cfgImg.model || '', size: cfgImg.size || '',
@@ -391,8 +395,8 @@
     };
     if (node && node.sealed) {
       // 晚到（§4.4）：先写节点；在路径上再把同一个对象插到该节点末条之后（别追加到末尾）
-      IR.Tree.pushLate(S.story, node.id, scene);
-      IR.Tree.pushLate(S.story, node.id, entry);
+      Tree.pushLate(S.story, node.id, scene);
+      Tree.pushLate(S.story, node.id, entry);
     } else {
       S.story.scenes.push(scene);
       S.story.log.push(entry);
@@ -507,7 +511,7 @@
 
   function renderPainterThread() {
     const box = $('#pw-thread');
-    box.innerHTML = '';
+    box.replaceChildren();
     const th = (S.story && S.story.painterThread) || [];
     if (!th.length) {
       const d = document.createElement('div');
@@ -698,4 +702,4 @@
   }
 
   A.reg({ paintQ, imageBrief, submitToolPaint, enqueueImage, styleSuffixText, composePrompt, painterVideoPrompt, openWorkbench, closeWorkbench, pwShowWh, painterThreadSend, redrawFromWorkbench, forceRedrawByCard });
-})();
+

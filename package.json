@@ -1,8 +1,8 @@
 {
   "name": "infinite-reading",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "private": true,
-  "description": "无限阅读 · ∞ Reading —— 一本「读不完」的 AI 视觉小说（纯前端、零构建、零依赖）",
+  "description": "无限阅读 · ∞ Reading —— 一本「读不完」的 AI 视觉小说（纯本地运行、零运行时第三方依赖）",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,7 +18,7 @@
     "test:shelf": "局部快速回归（仅书架/搜索子集，非全量）"
   },
   "scripts": {
-    "serve": "npx serve .",
+    "serve": "npx serve dist/site",
     "dev": "vite",
     "build": "vite build --mode single && vite build",
     "build:single": "vite build --mode single",
@@ -42,7 +42,7 @@
     "text-adventure",
     "sillytavern",
     "openai-compatible",
-    "no-build"
+    "local-first"
   ],
   "engines": {
     "node": ">=22.5"

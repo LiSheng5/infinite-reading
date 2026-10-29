@@ -3,10 +3,10 @@
    * 任务书 §7.3：功能与交互不变，DOM 与 0.12.1 的 #game-layout 子树逐节点同结构（截图逐像素对齐）。
    *
    * 分工（同屏 3 书架的架构约定）：
-   *   - 动态区（消息流 / 开场引导 / 内联选项 / 托盘 / 缩略条）→ IR.ReadScreen 状态桥推视图模型，
+   *   - 动态区（消息流 / 开场引导 / 内联选项 / 托盘 / 缩略条）→ ReadScreen 状态桥推视图模型，
    *     组件按旧 DOM 渲染；{#key chatSeq} 整体重建 = 旧 chat-scroll.innerHTML='' 语义；
    *   - 静态区（#player-input / #btn-send / 做说导演 / 灵感钮 / 舞台按钮 / 视频菜单 / 分隔条 /
-   *     历史提示条 / 「＋」菜单）→ 组件只出同 id 结构，不带 handler——js/app.js 的 bind() 与
+   *     历史提示条 / 「＋」菜单）→ 组件只出同 id 结构，不带 handler——src/app/main.js 的 bind() 与
    *     bindSplitter() 在 Store.boot() 后按 id 原样绑定（挂载在 import 期完成），行为零改动；
    *   - 命令式逻辑照旧直接写 DOM：renderStage（换画 blur-up / fade-swap）、流式气泡 interior
    *     （span.delta，fillLiveDom 回填空壳）、syncKindSwitch、setSendButtonsBusy、
@@ -16,8 +16,9 @@
   import Icon from '../../ui/Icon.svelte';
   import ChatBubble from './ChatBubble.svelte';
   import { read } from './read.svelte.js';
+  import { A as appApi } from '../../app/core.js';
 
-  const A = () => window.IR.App;
+  const A = () => appApi;
 
   // 「开始第一幕」：与旧 renderOpeningHint 的按钮闭包同语义
   function runOpening() {

@@ -19,11 +19,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'treeLayout.ts'));
-
-const TL = (global.IR || {}).TreeLayout;
+const TL = require(path.join(__dirname, '..', 'src', 'core', 'treeLayout.ts')).TreeLayout;
 if (!TL) {
-  console.error('加载失败：IR.TreeLayout 缺失');
+  console.error('加载失败：TreeLayout 导出缺失');
   process.exit(1);
 }
 

@@ -6,10 +6,10 @@
  *
  * 职责边界（任务书 §3.B）：
  *  - 纯逻辑：不碰 DOM、不碰 story、不联网；Node 里 require 就能测
- *  - 零依赖、零构建：IIFE 挂到全局 IR.PaintQueue
+ *  - 零依赖、零构建：IIFE 挂到全局 PaintQueue
  *
  * API：
- *   const q = IR.PaintQueue.create({ onChange(size) {} });
+ *   const q = PaintQueue.create({ onChange(size) {} });
  *   q.enqueue({ key, anchor, run })   // 同步返回 Promise<{ ok, value, error, skipped, dead }>
  *   q.has(key)                        // 同 key 是否已排队 / 进行中（去重由调用方用它拦截）
  *   q.size()                          // 排队 + 进行中的任务数
@@ -20,12 +20,9 @@
  *  - run 进行中置 dead → run 照常跑完，返回值带 dead: true，供调用方写回前丢弃
  *  - enqueue 本身同步返回、不阻塞调用方；key 只用于 has()，队列本身不去重
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/paintQueue.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/paintQueue.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   function create(opts) {
     const onChange = opts && typeof opts.onChange === 'function' ? opts.onChange : null;
@@ -99,8 +96,5 @@ const global = globalThis as any;
     return { enqueue: enqueue, has: has, size: size };
   }
 
-  const __irApi = {
-    PaintQueue: { create: create },
-  };
-  registerIR(__irApi);
-  export const { PaintQueue } = __irApi;
+  const PaintQueue = { create: create };
+  export { PaintQueue };

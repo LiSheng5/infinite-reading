@@ -3,15 +3,16 @@
  *
  * view：'list'（一级：对话覆盖行 + 故事数据）/ 'world'（二级：世界状态卡编辑器，面板内下钻，
  *  见阶段 4 屏 2 迁移方案 · 方案 A）。窄屏 76vh 底部弹层与桌面停靠面板同一套交互。
- * dirty：世界卡表单是否改动过——真源是 js/app/settings.js 的 worldFormChanged（判变账本），
+ * dirty：世界卡表单是否改动过——真源是 src/app/settings.js 的 worldFormChanged（判变账本），
  *  决定「保存世界卡」是否可点；输入事件与界面层 renderStoryPanels 重绘后都对账一次。
  *
- * 界面层（js/app/*）经 window.IR.StoryPanel 调 syncDirty / onOpen / esc：
- * 旧屏（?ui=legacy）不注册这个桥，行为与 0.12.1 一致。
+ * 界面层（src/app/*）直接 import syncDirty / onOpen / esc（阶段 6 去掉了 应用层注册表 桥）。
  */
+import { A } from '../../app/core.js';
+
 export const panel = $state({ view: 'list', dirty: false, listScroll: 0 });
 
-const app = () => (globalThis.IR && globalThis.IR.App) || null;
+const app = () => A;
 
 /** 用「判变」真源对账保存钮状态（表单没动过就不给点，防误锁备注） */
 export function syncDirty() {

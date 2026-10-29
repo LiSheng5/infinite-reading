@@ -1,9 +1,9 @@
 <script>
   /* EmailModal.svelte —— #modal-email「写邮件」（屏 6c 重建）
    * 只展示本地服务策略，前端不做收件人 / 白名单校验：白名单、每日上限、审计都由
-   * sidecar 在代码层强制（js/app/features.js 的 openEmailModal / doEmailSend）。
+   * sidecar 在代码层强制（src/app/features.js 的 openEmailModal / doEmailSend）。
    * 状态行（#email-status）与待确认草稿（#email-drafts，legacy 逐条 append 并带「确认发送 / 丢弃」）
-   * 都由 features.js 维护；组件只给容器。发送钮 handler 在 js/app.js（A.doEmailSend），不重复挂。
+   * 都由 features.js 维护；组件只给容器。发送钮 handler 在 src/app/main.js（A.doEmailSend），不重复挂。
    */
   import Card from './Card.svelte';
   import Field from '../../ui/Field.svelte';

@@ -17,13 +17,10 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.sleep 在 tree.js（providers 轮询依赖，三·5）
-require(path.join(__dirname, '..', 'src', 'core', 'providers.ts'));
-
-const P = (global.IR || {}).ImageProviders;
+const P = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts')).ImageProviders;
 const mm = P && P['minimax-image'];
 if (!mm) {
-  console.error('加载失败：IR.ImageProviders["minimax-image"] 缺失');
+  console.error('加载失败：ImageProviders["minimax-image"] 缺失');
   process.exit(1);
 }
 

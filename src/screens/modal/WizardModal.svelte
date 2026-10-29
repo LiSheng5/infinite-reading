@@ -1,9 +1,9 @@
 <script>
   /* WizardModal.svelte —— #modal-wizard「开局设定」（屏 6b 重建，剧情模式的开局向导）
-   * 行为仍在 js/app/wizard.js：openWizard 往里灌 prefill、draftWizard 起草、startFromWizard 建新档，
+   * 行为仍在 src/app/wizard.js：openWizard 往里灌 prefill、draftWizard 起草、startFromWizard 建新档，
    * 全部按 id 读写；这里只把标记换成组件库（Field / TextInput / 本目录的 Textarea / Button）。
    * 人物行是唯一走状态桥的部分（见 CharRows.svelte / state.svelte.js）：
-   * wizard.js 的 wzChars() 在 Svelte 形态下取 IR.ModalScreens.chars('wizard')。
+   * wizard.js 的 wzChars() 在 Svelte 形态下取 ModalScreens.chars('wizard')。
    * 取消 / 关闭额外挂一次 closeModal：0.12.1 这两个钮是直接 classList.add('hidden')，
    * 会把记录留在弹窗栈里（6a 清单里的遗留），这里借重建顺手收口；app.js 的旧绑定
    * 随后再执行一次 hidden 也无害（关过一次的弹窗 class 已经对了）。 */

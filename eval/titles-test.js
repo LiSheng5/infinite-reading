@@ -16,11 +16,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'titles.ts'));
-
-const T = (global.IR || {}).Titles;
+const T = require(path.join(__dirname, '..', 'src', 'core', 'titles.ts')).Titles;
 if (!T) {
-  console.error('加载失败：IR.Titles 缺失（js/titles.js 没被 require 进来？）');
+  console.error('加载失败：Titles 导出缺失');
   process.exit(1);
 }
 

@@ -15,11 +15,9 @@ const path = require('path');
 const zlib = require('zlib');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'zip.ts'));
-
-const Zip = (global.IR || {}).Zip;
+const Zip = require(path.join(__dirname, '..', 'src', 'core', 'zip.ts')).Zip;
 if (!Zip || typeof Zip.build !== 'function' || typeof Zip.read !== 'function') {
-  console.error('加载失败：IR.Zip 缺失（js/zip.js 没被 require 进来？）');
+  console.error('加载失败：Zip 导出缺失');
   process.exit(1);
 }
 

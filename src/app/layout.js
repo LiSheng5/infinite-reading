@@ -1,14 +1,15 @@
 /*
- * js/app/layout.js —— 布局状态（P2 的统一入口 · UI-3 §3.5 分层）
- * 从 js/app/render.js 拆出（只搬家，不改行为）：render.js 在 800 行红线（app-structure-test §2）。
+ * src/app/layout.js —— 布局状态（P2 的统一入口 · UI-3 §3.5 分层）
+ * 从 src/app/render.js 拆出（只搬家，不改行为）：render.js 在 800 行红线（app-structure-test §2）。
  *
  * 所有排版只由 #screen-game 的 data-layout 决定：
  *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
  * 有效值 = story.prefs.ui 覆盖 → settings.ui 全局默认；story.ui 只记输入类型。 */
-(function () {
-  'use strict';
+import { Prefs } from '../core/prefs.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, persistSettings } = A;
 
   const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
@@ -24,7 +25,7 @@
 
   // 有效 UI（只读合并快照）：本对话覆盖 → 全局默认（UI-3 §3.5）
   function effectiveUi() {
-    return IR.Prefs.effective(S.settings, S.story, 'ui');
+    return Prefs.effective(S.settings, S.story, 'ui');
   }
 
   // 写回：本对话已覆盖的键写 story.prefs.ui，未覆盖的写全局 settings.ui
@@ -159,4 +160,4 @@
   }
 
   A.reg({ effectiveLayout, renderLayoutHint, isImmersive, applyLayout, toggleStagePanel, enterImmersive, exitImmersive, bindSplitter });
-})();
+

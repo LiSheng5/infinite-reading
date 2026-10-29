@@ -2,8 +2,8 @@
  * src/ui/navigation.js —— 切屏的唯一入口（阶段 5 · 第 3 步）
  *
  * 为什么要有这个文件：0.12.1 起「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
- * 直接写 DOM 的（js/app/library.js 的 showShelf / showStart、js/app/render.js 的 enterGame），
- * 「分支页是否盖在上面」又是直接写 documentElement.dataset.branch（js/app/branch.js）。
+ * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），
+ * 「分支页是否盖在上面」又是直接写 documentElement.dataset.branch（src/app/branch.js）。
  * 阶段 5 要给切屏接视图过渡，就必须先有**一个地方**知道「屏幕有哪几块、当前在哪块」，
  * 否则过渡内核没有稳定的收口点。
  *
@@ -11,7 +11,7 @@
  *   · 本文件 = 屏幕登记表 + 显隐开关 + 分支页标记的唯一写入点（界面层只准从这里切屏）
  *   · src/ui/viewTransition.js = 过渡内核（要不要开 VT、什么时候改 DOM、降级怎么收）
  *   · src/core/motion.ts 的 TRANSITIONS.screen / stageArt = 三档 kind 与时长的唯一声明处
- *   · js/app/*.js（legacy IIFE）经 IR.Nav 调用（旧界面层与 core 模块的既定桥法）
+ *   · src/app/*.js（legacy IIFE）经 Nav 调用（旧界面层与 core 模块的既定桥法）
  *
  * 公开 API：
  *   screenEl(name)            屏幕容器（home | shelf | read）
@@ -27,7 +27,7 @@
  * 铁律：
  *   · 目标屏已经可见时**不跑过渡**（连点同一入口不该产生快照），mutate 照常执行。
  *   · off 档与 instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动（任务书「坑」）。
- *   · 屏幕名不认识时退化为「只跑 mutate」，不抛错——?ui=legacy 与半挂载状态都不至于白屏。
+ *   · 屏幕名不认识时退化为「只跑 mutate」，不抛错。
  *   · rich 的「淡入 + 短位移」用 WAAPI 挂在 ::view-transition-new(root) 上（见 shiftNewSnapshot）：
  *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
  */
@@ -45,7 +45,7 @@ const HIDDEN = 'hidden';
 /** 切屏序号：每开一段真过渡自增；过渡的 update 回调靠它判断「自己是不是最新那一次」 */
 let switchSeq = 0;
 
-/** 屏幕容器（找不到就是 null：?ui=legacy / 半挂载时都可能缺） */
+/** 屏幕容器（找不到就是 null：极早期 / 单测环境可能缺） */
 export function screenEl(name) {
   if (typeof document === 'undefined') return null;
   const id = SCREENS[name];
@@ -239,7 +239,7 @@ export function isBranchOpen() {
  *   rich     → 交叉淡入 + 新快照 translateY(±8px) 短位移（开 = 从下往上，关 = 往上退）
  * 降级（?vt=0 / 不支持 VT）→ 只对 scope 做整块淡入：开 = 分支页，关 = 阅读页。
  *
- * 调用约定（js/app/branch.js 侧）：
+ * 调用约定（src/app/branch.js 侧）：
  *   mutate 里只做「显隐 + 渲染 + 焦点」这类必须与新快照同一帧的 DOM 变更；
  *   过渡结束（或被下一段顶掉）后不再回调 —— 需要收尾的（centering / 入场动画 / 焦点还原）
  *   由调用方拿 finished 自己接。
@@ -292,7 +292,7 @@ export function isTransitioning() {
   return vtActive();
 }
 
-/* ---------- IR 兼容层（legacy 界面层的既定桥法；阶段 6 随 IR 一起删） ---------- */
+/* ---------- 屏幕登记表（应用层直接 import；阶段 6 去掉了 Nav） ---------- */
 export const Nav = {
   SCREENS,
   ORDER: ORDER.slice(),
@@ -307,7 +307,3 @@ export const Nav = {
   setBranchOpen,
   isBranchOpen,
 };
-
-const g = globalThis;
-g.IR = g.IR || {};
-g.IR.Nav = Nav;

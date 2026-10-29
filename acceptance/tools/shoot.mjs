@@ -34,6 +34,7 @@ let ONLY = null;   // --only=<PLAN.key>：只拍这个 key 的图（其余步骤
 // 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
+const VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
 
 const VIEWPORTS = [
   { width: 390, height: 844 },
@@ -105,9 +106,13 @@ function parseArgs() {
 }
 
 async function openApp(page, query) {
-  await page.goto(APP_URL + (query || ''), { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 15000 });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.App.state && IR.App.state.settings), null, { timeout: 15000 });
+  // 阶段 6：应用不再有全局 IR；种子 / 档位 / 断言用的测试面只在 ?ir-test=1 时挂载。
+  const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
+  await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
+  // 启动完成的信号 = init() 写完 html[data-motion] 且弹窗外壳已安装。
+  await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 15000 });
+  await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => !!window.__IR_TEST__, null, { timeout: 15000 });
   await sleep(600);
 }
 
@@ -173,8 +178,8 @@ async function main() {
 
   const manifest = {
     project: 'infinite-reading',
-    version: '0.12.1',
-    stage: '0（迁移基线）',
+    version: VERSION,
+    stage: '阶段 6 · 收尾发布 · 逐屏截图',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/shoot.mjs',
     entry: APP_URL,
@@ -186,6 +191,7 @@ async function main() {
     },
     motion: null,
     notes: [
+      '阶段 6 起应用没有全局 IR：页面一律以 ?ir-test=1 打开，经 src/main.js 的验收钩子（window.__IR_TEST__）播种 / 锁档位；不带该参数时产物没有这个对象（pwa-offline 已做负向检查）。',
       '截图前隐藏瞬态 toast、鼠标移到 (2,2) 中性点（阅读页特意悬停舞台以完整显示舞台按钮），避免半悬停态。',
       'modal-email / modal-payment / 定时主动的入口只在智能体(chat)/扮演(rp)模式出现：seeded 尾段用「本对话设置 → 推进模式」把播种故事切到智能体后再截，其余截图都保持剧情(choice)模式。',
       '全部截图只截 viewport（fullPage:false）。',
@@ -304,7 +310,7 @@ async function runPass(browser, state, vp, manifest) {
   manifest.console.push({ state, width: vp.width, dataMotion: motion, navigatorOnLine: onLine, errors, failedRequests });
   if (!manifest.motion) manifest.motion = {
     level: motion,
-    how: "context(reducedMotion:'reduce') + 页面里把 settings.ui.motion 置 'off' 后 applyMotion()，截图前校验 html[data-motion]",
+    how: "context(reducedMotion:'reduce') + 页面里把 settings.ui.motion 置 'off' 后 applyMotion()（经 ?ir-test=1 钩子），截图前校验 html[data-motion]",
   };
   await ctx.close();
 }
@@ -312,7 +318,7 @@ async function runPass(browser, state, vp, manifest) {
 /* ---------- empty：无存档 ---------- */
 async function runEmpty(page, snap, vp, manifest) {
   await openApp(page, '');
-  const stories = await page.evaluate(() => (window.IR && IR.Store && IR.Store.listStories) ? IR.Store.listStories().length : -1);
+  const stories = await page.evaluate(() => (window.__IR_TEST__ && __IR_TEST__.Store && __IR_TEST__.Store.listStories) ? __IR_TEST__.Store.listStories().length : -1);
   if (stories !== 0) manifest.skipped.push({ item: 'empty 存档清零校验', state: 'empty', width: vp.width, reason: '上下文里读到 ' + stories + ' 个故事（预期 0）' });
 
   await snap('start');
@@ -379,23 +385,23 @@ async function runEmpty(page, snap, vp, manifest) {
 
   // 动效档位显式锁 off（截图稳定性）
   await page.evaluate(() => {
-    if (window.IR && IR.App && IR.App.state && IR.App.state.settings) {
-      IR.App.state.settings.ui = IR.App.state.settings.ui || {};
-      IR.App.state.settings.ui.motion = 'off';
-      if (IR.App.applyMotion) IR.App.applyMotion();
+    if (window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings) {
+      __IR_TEST__.App.state.settings.ui = __IR_TEST__.App.state.settings.ui || {};
+      __IR_TEST__.App.state.settings.ui.motion = 'off';
+      if (__IR_TEST__.App.applyMotion) __IR_TEST__.App.applyMotion();
     }
   });
 }
 
 /* ---------- seeded 播种：页面内直接写入一局（含回合 / 分叉 / 两张图 / 存档点） ----------
- * 离线演示模式下线后，seeded 不再依赖任何内置剧本：用 IR.Store / IR.Tree / IR.Context
+ * 离线演示模式下线后，seeded 不再依赖任何内置剧本：用 __IR_TEST__.Store / __IR_TEST__.Tree / __IR_TEST__.Context
  * 的真实写入路径造一份存档（与 acceptance/tools/fixture.mjs 同口径），再进阅读页截图。
  * 画师 / 锚定 / 本地服务需要「有回包才能开界面」的地方，只在页面里注册测试用桩，
  * 不写回仓库源码、不发任何真实请求。 */
 async function seedStory(page) {
   return page.evaluate(async () => {
     try {
-      const { Store, Tree, Context, App, genId } = window.IR;
+      const { Store, Tree, Context, App, genId } = window.__IR_TEST__;
       const S = App.state;
 
       const makeThumb = i => {
@@ -542,11 +548,11 @@ async function seedStory(page) {
         g.fillText(String(prompt || '').slice(0, 48), 24, 368);
         return c.toDataURL('image/jpeg', 0.8);
       };
-      IR.ImageProviders['acceptance-image'] = {
+      __IR_TEST__.ImageProviders['acceptance-image'] = {
         label: '验收桩（canvas 占位图）',
         generate: async (cfg, prompt) => draw(prompt),
       };
-      IR.ChatProviders['acceptance-chat'] = {
+      __IR_TEST__.ChatProviders['acceptance-chat'] = {
         label: '验收桩（固定 JSON）',
         chat: async (cfg, messages) => {
           const all = (messages || []).map(m => String(m.content || '')).join('\n');
@@ -583,7 +589,7 @@ async function seedStory(page) {
         schedule: { enabled: true, paused: false, quietHours: [{ start: '23:00', end: '08:00' }], dailyCap: 5, missedPolicy: 'SKIP' },
         payment: { enabled: true, provider: 'mock', currency: 'CNY', perTx: 10000, daily: 20000, monthly: 50000, autoApprove: 500, cooldownMin: 0, merchantAllowlist: [], merchantBlocklist: [], categoryAllowlist: [], categoryBlocklist: [], budgets: {} },
       };
-      const SC = IR.Sidecar;
+      const SC = __IR_TEST__.Sidecar;
       Object.assign(SC, {
         isOnline: () => true,
         status: () => ({ state: 'online', online: true, port: 4319, hasToken: true, features: { email: true, schedule: true, payment: true }, version: 'acceptance', lastError: '', health: { ok: true } }),
@@ -636,10 +642,10 @@ async function runSeeded(page, snap, vp, manifest) {
 
   // 动效档位显式锁 off（播种后再锁一次，防启动期覆盖）
   await page.evaluate(() => {
-    if (window.IR && IR.App && IR.App.state && IR.App.state.settings) {
-      IR.App.state.settings.ui = IR.App.state.settings.ui || {};
-      IR.App.state.settings.ui.motion = 'off';
-      if (IR.App.applyMotion) IR.App.applyMotion();
+    if (window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings) {
+      __IR_TEST__.App.state.settings.ui = __IR_TEST__.App.state.settings.ui || {};
+      __IR_TEST__.App.state.settings.ui.motion = 'off';
+      if (__IR_TEST__.App.applyMotion) __IR_TEST__.App.applyMotion();
     }
   });
 
@@ -671,9 +677,9 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.click('#btn-pw-anchor');     // 关工作台、开锚定，自动试画 4 张候选
   await page.waitForSelector('#modal-anchor:not(.hidden)', { timeout: 8000 });
   await page.waitForFunction(
-    () => !!(window.IR && IR.App && IR.App.state.anchor)
-      && !IR.App.state.anchor.busy
-      && IR.App.state.anchor.candidates.filter(c => c && c.src).length > 0,
+    () => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state.anchor)
+      && !__IR_TEST__.App.state.anchor.busy
+      && __IR_TEST__.App.state.anchor.candidates.filter(c => c && c.src).length > 0,
     null, { timeout: 90000 }
   ).catch(() => {});
   await sleep(500);
@@ -715,7 +721,7 @@ async function runSeeded(page, snap, vp, manifest) {
 
   // —— 存档点列表（打两个点：摘要行「n 个存档点 · 退出自动存档」+ 列表） ——
   await page.evaluate(() => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     const S = A.state;
     if (S.story && !(S.story.savepoints || []).length) {
       A.addSavepoint('手动存档 · 车厢');
@@ -824,7 +830,7 @@ async function runSeeded(page, snap, vp, manifest) {
 
   // —— 世界状态卡二级视图 · 空世界（直接开一个新故事：世界卡是空表单，「保存世界卡」默认禁用） ——
   await page.evaluate(() => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.closeStoryPrefs();
     A.createStoryImmediate('chat');
   });

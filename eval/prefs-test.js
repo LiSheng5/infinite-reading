@@ -6,14 +6,11 @@
 'use strict';
 const path = require('path');
 
-require(path.join(__dirname, '..', 'src', 'core', 'prefs.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const P = global.IR.Prefs;
-const C = global.IR.Context;
-const Store = global.IR.Store;
+const P = core('prefs').Prefs;
+const C = core('context').Context;
+const Store = core('store').Store;
 
 let failed = 0;
 function ok(cond, msg) {
@@ -269,24 +266,16 @@ console.log('[9] 生视频三参数唯一源 = 面板控件（审查 三·2 双�
   eq(s2.video.extraParams, s.video.extraParams, '幂等：extraParams 不再变化');
 }
 
-console.log('[10] boot 关键依赖自检（审查 可维护性 #9）');
+console.log('[10] 依赖装配（阶段 6：静态 import，加载顺序不再是约束）');
 {
-  ok(typeof Store.assertDeps === 'function', 'Store.assertDeps 已导出');
-  let threw = null;
-  try { Store.assertDeps(); } catch (e) { threw = e; }
-  ok(!threw, '依赖齐全（IR.Tree + IR.Prefs）→ assertDeps 通过' + (threw ? '（抛了：' + threw.message + '）' : ''));
-  const saved = global.IR.Prefs;
-  try {
-    delete global.IR.Prefs;
-    let e2 = null;
-    try { Store.assertDeps(); } catch (e) { e2 = e; }
-    ok(!!e2 && e2.code === 'IR_DEP_MISSING', '缺 IR.Prefs → 抛 IR_DEP_MISSING（启动即失败，不静默降级）');
-  } finally {
-    global.IR.Prefs = saved;
-    let e3 = null;
-    try { Store.assertDeps(); } catch (e) { e3 = e; }
-    ok(!e3, '恢复依赖后自检重新通过');
-  }
+  // 原来靠「删掉 global.IR.Prefs 看 assertDeps 是否报错」守住加载顺序；
+  // 现在 store 静态 import tree / prefs，缺位路径在结构上不可能出现——改成验证两条依赖真的在位。
+  const clean = Store.sanitizePrefsSafe({ profileId: 'p1', unknownKey: 1 });
+  ok(clean.profileId === 'p1' && clean.unknownKey === undefined, 'store 依赖的 Prefs 在位（未知键被丢弃）');
+  ok(Store.serializeStory({ log: [], scenes: [], savepoints: [] }).log.length === 0
+    && Store.serializeStory({ log: [], scenes: [], savepoints: [] }).scenes.length === 0,
+  'store 依赖的 Tree 在位（裁剪窗口可用）');
+  ok(Store.assertDeps === undefined, '加载顺序自检已随静态 import 删除');
 }
 
 if (failed) {

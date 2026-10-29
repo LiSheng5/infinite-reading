@@ -2,7 +2,7 @@
  * 无限阅读 · 分支树布局（UI-4 §3，纯逻辑，Node 可测）
  *
  * 职责：把 story.tree 算成分支页画布要的几何数据。不碰 DOM、不联网、无副作用：
- *   IR.TreeLayout.compute(tree, opts)
+ *   TreeLayout.compute(tree, opts)
  *     opts: { collapseRun: 8, laneW: 36, rowH: 44, labelLen: 24,
  *             selected, bookmarks, expanded, expandAll }   // 后四项为视图态（不进存档）
  *     → { nodes:[{ id, x, y, lane, row, onPath, isHead, isFork, collapsedCount?, label }],
@@ -22,12 +22,9 @@
  *   - pathEdgeD = 当前路径合成一条 SVG path 的 d（流光动画只挂这一条）；
  *   - 确定性：同一棵树同一参数 → 输出完全相同。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/treeLayout.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/treeLayout.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const DEFAULTS = {
     collapseRun: 8,
@@ -425,8 +422,5 @@ const global = globalThis as any;
     return geometryOf(L, F, cfg);            // 几何
   }
 
-  const __irApi = {
-    TreeLayout: { DEFAULTS: DEFAULTS, compute: compute, pointsToD: pointsToD, codeSlice: codeSlice },
-  };
-  registerIR(__irApi);
-  export const { TreeLayout } = __irApi;
+  const TreeLayout = { DEFAULTS: DEFAULTS, compute: compute, pointsToD: pointsToD, codeSlice: codeSlice };
+  export { TreeLayout };

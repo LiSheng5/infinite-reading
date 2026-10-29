@@ -1,11 +1,14 @@
 /*
- * js/app/styleanchor.js —— 画风锚定（R3 / §5）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/styleanchor.js —— 画风锚定（R3 / §5）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { ImageProviders, ChatProviders } from '../core/providers.ts';
+import { genId } from '../core/tree.ts';
+import { Context } from '../core/context.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, toast, openModal, closeModal, offlineBlocked, saveAll, resolveSub, imageCfg } = A;
 
 
@@ -58,7 +61,7 @@
 
   function renderAnchorGrid(placeholder) {
     const grid = $('#anchor-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     if (!S.anchor) return;
     if (placeholder || !S.anchor.candidates.length) {
       const d = document.createElement('div');
@@ -99,7 +102,7 @@
   async function paintCandidate(promptEn) {
     if (offlineBlocked('这次试画')) return null;
     const cfgImg = imageCfg();
-    const adapter = IR.ImageProviders[cfgImg.provider] || IR.ImageProviders['openai-images'];
+    const adapter = ImageProviders[cfgImg.provider] || ImageProviders['openai-images'];
     return adapter.generate(cfgImg, promptEn);
   }
 
@@ -229,7 +232,7 @@
     }
     const old = S.story.styleCard;
     S.story.styleCard = Object.assign({
-      id: (old && old.id) || IR.genId('style'),
+      id: (old && old.id) || genId('style'),
       version: ((old && +old.version) || 0) + 1,
       locked: true,
       updatedAt: Date.now(),
@@ -272,11 +275,11 @@
   // 锚定调用：同样走画师子代理（隔离上下文、用完即弃）
   async function painterAnchorCompose(opts) {
     const cfg = resolveSub('painter');
-    const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
-    const messages = IR.Context.assemblePainter(S.story, opts);
+    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
+    const messages = Context.assemblePainter(S.story, opts);
     const raw = await adapter.chat(cfg, messages);
     return parsePainterAnchor(raw);
   }
 
   A.reg({ openAnchor, closeAnchor, runAnchorBatch, anchorDraftCard, anchorCardChat, anchorLock });
-})();
+

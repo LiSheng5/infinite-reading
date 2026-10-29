@@ -1,37 +1,26 @@
 /*
- * 无限阅读 · 主逻辑（v0.4）
+ * src/app/main.js —— 组合根：事件绑定 + 启动（阶段 6 起是唯一的界面入口）
  *
  * 结构：
  *  书架（应用入口，§7/T-P2-1）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
- *  → 阅读页（聊天记录 : 画面 双栏，§4.6）→ AI1 回合（上下文走 IR.Context，与评测同源）
+ *  → 阅读页（聊天记录 : 画面 双栏，§4.6）→ AI1 回合（上下文走 Context，与评测同源）
  *  → 画师子代理 + 生图（§3.2/§4.7）→ 书记员 / 压缩（§4.1/§4.10）→ 存档点 / 导出导入（§4.11）
- * 存档：统一走 IR.Store（schema v2）；图片只存缩略图以控制体积。
+ * 存档：统一走 Store（schema v3）；图片只存缩略图以控制体积。
  */
-// 阶段 5 第 3 步：切屏的唯一入口（屏幕登记表 + 显隐 + 分支页标记）。放在组合根这里 import，
-// 让 IR.Nav 在任何界面层需要它之前就登记好；本文件其余部分仍是 0.12.1 的 IIFE，行为不变。
-import '../src/ui/navigation.js';
+import { Sidecar } from '../core/sidecar.ts';
+import { Nav } from '../ui/navigation.js';
+import { installShell } from '../ui/modalHost.js';
+import { esc as storyPanelEsc } from '../screens/storyPrefs/panel.svelte.js';
+import { A } from './core.js';
 
-(function () {
-  'use strict';
-
-  const A = IR.App, S = A.state;
+  const S = A.state;
   const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
 
   /* ================= 事件绑定 ================= */
 
   function bind() {
-    // 新屏（Svelte）挂载后容器打 data-impl="svelte"（src/screens/*/index.js）：见标记跳过旧 DOM 绑定，
-    // 避免双重触发（同屏 1 的 startSvelte 判定）。搜索框 / 键盘 / 空状态按钮不在此列——
-    // 仍由 js/app/shelf.js 的 initShelf 按 id 绑定，行为零改动。
-    const startSvelte = !!document.querySelector('#screen-start[data-impl="svelte"]');
-    const shelfSvelte = !!document.querySelector('#screen-shelf[data-impl="svelte"]');
-    // —— 书架 ——（书架 Svelte 屏的顶部按钮由组件自带 handler）
-    if (!shelfSvelte) {
-      $('#btn-new-story').onclick = () => openModal('modal-new');
-      $('#btn-shelf-settings').onclick = A.openSettings;
-      $('#btn-shelf-home').onclick = A.showStart;
-      $('#btn-import').onclick = () => $('#file-import').click();
-    }
+    // 首页 / 书架的顶部按钮由各自组件自带 handler（src/screens/home、src/screens/shelf）；
+    // 搜索框 / 键盘 / 空状态按钮仍由 src/app/shelf.js 的 initShelf 按 id 绑定。
     $('#btn-close-new').onclick = () => closeModal('modal-new');
     document.querySelectorAll('#modal-new .mode-card').forEach(b => {
       b.onclick = () => {
@@ -41,12 +30,10 @@ import '../src/ui/navigation.js';
         else A.createStoryImmediate(mode);
       };
     });
-    A.initShelf();   // UI-2：搜索框 / 键盘 / 空状态按钮（js/app/shelf.js）
+    A.initShelf();   // UI-2：搜索框 / 键盘 / 空状态按钮（src/app/shelf.js）
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 
     // —— 剧情文本导入（R12 路径②，§4.11 / T-P6-1） ——
-    if (!shelfSvelte) $('#btn-import-text').onclick = A.openImportText;
-    if (!startSvelte) $('#btn-start-import').onclick = A.openImportText;
     $('#btn-close-import-text').onclick = A.closeImportText;
     $('#btn-it-cancel').onclick = A.closeImportText;
     $('#btn-it-run').onclick = A.runImportText;
@@ -64,20 +51,9 @@ import '../src/ui/navigation.js';
     };
     $('#btn-it-start').onclick = A.startFromImport;
 
-    // —— 开始页：三张模式卡即三个开局入口，点哪张就按哪种模式开局（无「开始」按钮）——
-    //（新首页是 Svelte 自带 handler，见 src/screens/home；旧 DOM 保留到阶段 6）
-    if (!startSvelte) {
-      document.querySelectorAll('#start-modes .mode-card').forEach(b => {
-        b.onclick = () => A.startFromStart(b.dataset.mode);
-      });
-      $('#btn-start-shelf').onclick = A.showShelf;
-      $('#btn-open-settings').onclick = A.openSettings;
-      $('#btn-continue').onclick = A.continueLast;
-    }
-
     // 拖进窗口即可导入（书架与开始页都支持）
-    // 阶段 5 第 3 步：屏幕容器统一从 IR.Nav 取（「有哪几块屏」只在 src/ui/navigation.js 登记一次）
-    [IR.Nav.screenEl('shelf'), IR.Nav.screenEl('home')].forEach(scr => {
+    // 屏幕容器统一从 Nav 取（「有哪几块屏」只在 src/ui/navigation.js 登记一次）
+    [Nav.screenEl('shelf'), Nav.screenEl('home')].forEach(scr => {
       scr.addEventListener('dragover', e => { e.preventDefault(); scr.classList.add('dragover'); });
       scr.addEventListener('dragleave', () => scr.classList.remove('dragover'));
       scr.addEventListener('drop', e => {
@@ -333,7 +309,7 @@ import '../src/ui/navigation.js';
     // —— 可选本地服务：探测 / 功能入口 / 安排与台账 ——
     const probeBtn = $('#btn-sidecar-probe');
     if (probeBtn) probeBtn.onclick = () => {
-      const SC = IR.Sidecar;
+      const SC = Sidecar;
       if (!SC) return;
       S.settings.sidecar = {
         port: Number(($('#s-sidecar-port') || {}).value) || 4319,
@@ -436,8 +412,8 @@ import '../src/ui/navigation.js';
       if (closeTopModal()) return;
       const openMenu = document.querySelector('.menu:not(.hidden)');
       if (openMenu) { A.closeMenus(); return; }
-      // 本对话设置面板（Svelte 新屏才注册）：Esc 先退世界卡二级视图、再关面板
-      if (IR.StoryPanel && IR.StoryPanel.esc && IR.StoryPanel.esc()) return;
+      // 本对话设置面板：Esc 先退世界卡二级视图、再关面板
+      if (storyPanelEsc()) return;
       A.exitImmersive();
     });
 
@@ -521,6 +497,7 @@ import '../src/ui/navigation.js';
     }
     A.watchStageVisibility();           // Ken Burns 离屏暂停
     buildInfinity();                    // 首页无限符号（逐字上色 + 深浅蓝循环）
+    installShell();                     // 11 个弹窗搬进唯一的壳层（幂等）
     bind();
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
@@ -533,13 +510,11 @@ import '../src/ui/navigation.js';
 
   // 先进 boot（装载 IndexedDB / 把 localStorage 旧数据迁过来），再进界面。
   // boot 失败会自己退回 localStorage 模式：功能一样，只是容量仍是约 5MB —— 数据不会丢。
-  // 但「关键依赖缺失」（IR_DEP_MISSING，加载顺序错了）是启动错误，直接抛出失败——不静默降级。
   (async () => {
     let info = null;
     try {
       info = await Store.boot();
     } catch (e) {
-      if (e && e.code === 'IR_DEP_MISSING') throw e;
       console.warn('存储初始化失败：', e);
     }
     init();
@@ -549,4 +524,3 @@ import '../src/ui/navigation.js';
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();
-})();

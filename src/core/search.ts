@@ -1,22 +1,21 @@
 /*
- * 无限阅读 · 全文搜索（IR.Search，纯逻辑，Node 可测，UI-2 §3.4）
+ * 无限阅读 · 全文搜索（Search，纯逻辑，Node 可测，UI-2 §3.4）
  *
  * 职责：
  *   buildDoc(story)      故事 → 搜索文档（含全部分支节点；文本已规整）
  *   query(docs, q, opts) 子串匹配 + AND 多词 + 评分排序；命中片段带 ranges（不是 HTML）
- *   createIndex()        内存索引（增量重建 / 删除），默认单例 IR.Search.index
+ *   createIndex()        内存索引（增量重建 / 删除），默认单例 Search.index
  *   notifySave(story)    saveStory 后防抖（约 800ms）增量重建该 id
  *   drop(id)             deleteStory 同步移除
  *
  * 硬约束：零依赖、无 DOM、无网络；输出里不含任何 HTML（高亮由 UI 用 createElement('mark') 做）；
  * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/search.js（IIFE → ES module，函数体逐字未动）。
+/* ↑ 阶段 2 搬迁自 src/core/search.ts（IIFE → ES module，函数体逐字未动）。
  * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+ * 导出即真实 API。 */
+import { plainReply as plainReplyOfTree } from './tree.ts';
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */
 
@@ -61,11 +60,9 @@ const global = globalThis as any;
 
   /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
 
-  // 助手回复 → 纯文本：唯一实现在 IR.plainReply（tree.js，审查 可维护性 三·4）。
+  // 助手回复 → 纯文本：唯一实现在 plainReply（tree.js，审查 可维护性 三·4）。
   // store.js 的书架摘要共用同一口径，schema 演进只改一处；tree.js 必须先加载，缺了直接报错不静默降级
-  const plainReply = (global.IR && global.IR.plainReply) || function () {
-    throw new Error('IR.plainReply 未加载：tree.js 必须先于 search.js（见 ARCHITECTURE 加载顺序）');
-  };
+  const plainReply = plainReplyOfTree;
 
   // 玩家行动文本：去掉 [玩家行动] / [设定] 标记
   function plainAction(raw) {
@@ -293,5 +290,4 @@ const global = globalThis as any;
     notifySave: notifySave,
     drop: drop,
   };
-  registerIR({ Search });
   export { Search };

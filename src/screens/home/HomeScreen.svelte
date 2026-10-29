@@ -3,9 +3,10 @@
    * 版式与 0.12.1 保持：ASCII 无限符号 → 「继续上次」→ 三张模式卡 → 底部文字入口 → 版本文字。
    * 无限符号沿用逐字拆 span 的实现（深色在底、浅色在 ::after 叠层只动 opacity），
    * 三档行为不变：只有 rich 档循环，其余档停在「深 → 浅 → 深」静态渐变（css/style.css 的 .inf）。
-   * 动作全部直连 IR.App（过渡期兼容层），阶段 6 换成直连 import。 */
+   * 动作直连应用层注册表（src/app/core.js 的 A）。 */
   import Icon from '../../ui/Icon.svelte';
   import { home } from './home.svelte.js';
+  import { A as appApi } from '../../app/core.js';
 
   const VERSION = __IR_VERSION__;   // 构建注入（vite.config.mjs 的 define）：版本号不再手写
 
@@ -20,7 +21,7 @@
     "    '-~~~~-'       '-~~~~-'",
   ];
 
-  // 逐字拆行（与 js/app.js 的 buildInfinity 同算法）：
+  // 逐字拆行（与 src/app/main.js 的 buildInfinity 同算法）：
   //   --x = 所在列（循环相位，色带从左往右流）；--t = 静态时的浅蓝占比
   const width = Math.max(...ART.map(r => r.length));
   const rows = ART.map(row => {
@@ -34,7 +35,7 @@
     return cells;
   });
 
-  const A = () => window.IR.App;
+  const A = () => appApi;
   const MODES = [
     { mode: 'choice', icon: 'book', label: '剧情' },
     { mode: 'chat', icon: 'chat', label: '智能体' },

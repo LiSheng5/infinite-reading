@@ -1,8 +1,8 @@
 {
   "project": "infinite-reading",
-  "version": "0.12.1",
-  "stage": "0（迁移基线）· 回归夹具 roundtrip",
-  "generatedAt": "2026-10-25T14:25:56.815Z",
+  "version": "0.13.0",
+  "stage": "阶段 6 · 收尾发布 · 回归夹具 roundtrip",
+  "generatedAt": "2026-10-29T04:48:33.094Z",
   "tool": "acceptance/tools/fixture.mjs roundtrip",
   "how": "每个夹具文件各起一个干净浏览器上下文（file://）：真实 UI 导入（#file-import）→ 还原 → 真实 UI 再导出 → 与夹具原文件逐字段比对",
   "comparePolicy": {
@@ -31,6 +31,9 @@
     "story": {
       "label": "单故事档案",
       "ignore": [
+        [
+          "app"
+        ],
         [
           "createdAt"
         ],
@@ -69,7 +72,7 @@
         {
           "name": "还原 3 个故事",
           "ok": true,
-          "detail": "[{\"id\":\"smvnj24hs14ci\",\"title\":\"雨夜便利店\",\"mode\":\"choice\",\"turn\":6,\"savepoints\":2,\"scenes\":2,\"treeNodes\":8},{\"id\":\"smvnj24jex88d\",\"title\":\"新对话\",\"mode\":\"chat\",\"turn\":2,\"savepoints\":0,\"scenes\":0,\"treeNodes\":3},{\"id\":\"smvnj24jeojc9\",\"title\":\"凌霜的航线夜谈\",\"mode\":\"rp\",\"turn\":3,\"savepoints\":0,\"scenes\":0,\"treeNodes\":4}]"
+          "detail": "[{\"id\":\"smvnj24hs14ci\",\"title\":\"雨夜便利店\",\"mode\":\"choice\",\"turn\":6,\"savepoints\":2,\"scenes\":2,\"treeNodes\":8},{\"id\":\"smvnj24jeojc9\",\"title\":\"凌霜的航线夜谈\",\"mode\":\"rp\",\"turn\":3,\"savepoints\":0,\"scenes\":0,\"treeNodes\":4},{\"id\":\"smvnj24jex88d\",\"title\":\"新对话\",\"mode\":\"chat\",\"turn\":2,\"savepoints\":0,\"scenes\":0,\"treeNodes\":3}]"
         },
         {
           "name": "夹具与再导出均为有效档案（防空比对）",
@@ -128,7 +131,7 @@
         {
           "name": "导入故事已还原",
           "ok": true,
-          "detail": "{\"id\":\"smvnx701b1acp\",\"title\":\"雨夜便利店（导入）\",\"log\":15,\"scenes\":2,\"withImageId\":1,\"treeNodes\":8,\"savepoints\":0,\"characterCard\":null,\"turn\":6}"
+          "detail": "{\"id\":\"smvt2bvla1p44\",\"title\":\"雨夜便利店（导入）\",\"log\":15,\"scenes\":2,\"withImageId\":1,\"treeNodes\":8,\"savepoints\":0,\"characterCard\":null,\"turn\":6}"
         },
         {
           "name": "原图换键落定",
@@ -160,7 +163,7 @@
         {
           "name": "导入故事已还原",
           "ok": true,
-          "detail": "{\"id\":\"smvnx77bj1q83\",\"title\":\"凌霜的航线夜谈（导入）\",\"log\":6,\"scenes\":0,\"withImageId\":0,\"treeNodes\":4,\"savepoints\":0,\"characterCard\":\"凌霜\",\"turn\":3}"
+          "detail": "{\"id\":\"smvt2c2tl14vz\",\"title\":\"凌霜的航线夜谈（导入）\",\"log\":6,\"scenes\":0,\"withImageId\":0,\"treeNodes\":4,\"savepoints\":0,\"characterCard\":\"凌霜\",\"turn\":3}"
         },
         {
           "name": "原图换键落定",

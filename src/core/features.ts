@@ -9,12 +9,9 @@
  * app.js 拥有唯一的回合链路（sendPlayerAction），所以这里不自己调模型，
  * 只负责「什么时候把消息递过去」。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/features.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/features.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const SEEN_MAX = 500;
   let hooks: any = { canDeliver: function () { return false; }, deliver: async function () {} };
@@ -63,15 +60,12 @@ const global = globalThis as any;
   function size() { return queue.length; }
   function clear() { queue.length = 0; }
 
-  const __irApi = {
-    Features: {
-      attach: attach,
-      accept: accept,
-      drain: drain,
-      size: size,
-      clear: clear,
-      resetSeen: function () { seen.clear(); seenOrder.length = 0; },
-    },
+  const Features = {
+    attach: attach,
+    accept: accept,
+    drain: drain,
+    size: size,
+    clear: clear,
+    resetSeen: function () { seen.clear(); seenOrder.length = 0; },
   };
-  registerIR(__irApi);
-  export const { Features } = __irApi;
+  export { Features };

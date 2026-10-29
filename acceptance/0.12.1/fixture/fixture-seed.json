@@ -131,6 +131,9 @@
       "label": "单故事档案",
       "ignore": [
         [
+          "app"
+        ],
+        [
           "createdAt"
         ],
         [

@@ -2,7 +2,7 @@
  * 无限阅读 · 提案（模型发起的有副作用动作，v0.6.0）
  *
  * 模型发起的邮件 / 下单**只能产生提案**，执行必须由用户在界面上点「确认」触发。
- * 本模块是纯逻辑层：不碰 DOM、不碰 story、不直接依赖 IR.Sidecar（sidecar 以参数注入 S），
+ * 本模块是纯逻辑层：不碰 DOM、不碰 story、不直接依赖 Sidecar（sidecar 以参数注入 S），
  * 时间以参数 now 注入（默认 Date.now()），方便 Node 里离线测试。
  *
  * 安全红线（任务书 §2，这里是最核心的落点）：
@@ -12,14 +12,13 @@
  *     **confirm（用户点击）之前绝不能调用 paymentPurchase**；
  *   - 确认是幂等的：confirm 同步抢占状态为 executing 再 await，并发再点不会二次执行。
  *
- * 纯函数、零外部依赖（ID 生成共用 js/tree.js 的 IR.genId）；UMD 兜底，浏览器挂 window.IR，Node 亦可加载。
+ * 纯函数、零外部依赖（ID 生成共用 src/core/tree.ts 的 genId）；UMD 兜底，浏览器挂 应用层注册表，Node 亦可加载。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/proposals.js（IIFE → ES module，函数体逐字未动）。
+/* ↑ 阶段 2 搬迁自 src/core/proposals.ts（IIFE → ES module，函数体逐字未动）。
  * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+ * 导出即真实 API。 */
+import { genId as rootGenId } from './tree.ts';
 
   const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 提案有效期（默认 30 分钟，常量可调）
   const MAX_AMOUNT_CENTS = 200000;        // 客户端金额兜底上限（2000 元）；真额度由 sidecar mandate 管
@@ -32,9 +31,9 @@ const global = globalThis as any;
   const MAX_REASON = 200;
   const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
-  // ID 生成统一走 IR.genId（js/tree.js，审查 可维护性 #5）；now 仍可注入（测试确定性）。
+  // ID 生成统一走 tree 的 genId（审查 可维护性 #5）；now 仍可注入（测试确定性）。
   function genId(now) {
-    return IR.genId('pp-', now);
+    return rootGenId('pp-', now);
   }
 
   function fail(msg) { return { ok: false, error: String(msg || '提案无效') }; }
@@ -266,5 +265,4 @@ const global = globalThis as any;
     yuanToCents,
     create, isActionable, markExpired, confirm, approveSecond, deny,
   };
-  registerIR({ Proposals });
   export { Proposals };

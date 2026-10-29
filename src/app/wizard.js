@@ -1,11 +1,13 @@
 /*
- * js/app/wizard.js —— 开局向导（T-P2-3）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/wizard.js —— 开局向导（T-P2-3）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { ChatProviders } from '../core/providers.ts';
+import { charApi } from '../screens/modal/state.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, DEFAULT_TOPIC, CHAT_PREMISE, DRAFT_SYSTEM, toast, openModal, closeModal, netErrHint, sleep, fmtTime, resolveSub } = A;
 
 
@@ -75,21 +77,10 @@
 
   /* ================= 开局向导（T-P2-3 / §4.8） ================= */
 
-  // 人物设定独立控件（可增删行）：姓名 / 性格 / 说话方式，替代竖线文本框
-  // 屏 6b 起：新形态由 src/screens/modal/CharRows.svelte 渲染，行数据在状态桥里
-  // （IR.ModalScreens.chars('wizard')，与 A.charEditor 同形的 set / get / add）；
-  // ?ui=legacy 不注册状态桥，退回命令式注入的 charEditor（旧 DOM 照旧）。
-  let wzCharEd = null;
+  // 人物设定独立控件（可增删行）：姓名 / 性格 / 说话方式。
+  // 行数据在 src/screens/modal/state.svelte.js，charApi 与旧 A.charEditor 同形的 set / get / add。
   function wzChars() {
-    const bridge = IR.ModalScreens;
-    if (bridge && typeof bridge.chars === 'function' && bridge.has('modal-wizard')) {
-      return bridge.chars('wizard');
-    }
-    return wzCharEd || (wzCharEd = A.charEditor($('#wz-characters'), [
-      { key: 'name', label: '名字', placeholder: '如：周叙' },
-      { key: 'personality', label: '性格', placeholder: '如：话里有话、克制' },
-      { key: 'speech', label: '说话方式', placeholder: '如：简短、喜欢反问' },
-    ], $('#btn-wz-char-add')));
+    return charApi('wizard');
   }
 
   function openWizard(prefill) {
@@ -177,7 +168,7 @@
         await sleep(500);
         d = localDraft(topic);
       } else {
-        const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
+        const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
         const raw = await adapter.chat(cfg, [
           { role: 'system', content: DRAFT_SYSTEM },
           { role: 'user', content: topic },
@@ -193,7 +184,6 @@
     } finally {
       btn.disabled = false;
       label.textContent = '起草';
-      if (label === btn) btn.innerHTML = A.icon('pencil', 'ic-l') + '起草';   // 旧 DOM：图标与文字一起还原
     }
   }
 
@@ -247,4 +237,4 @@
   }
 
   A.reg({ openWizard, draftWizard, startFromWizard, createStoryImmediate });
-})();
+

@@ -3,7 +3,7 @@
  *
  * 职责：story.tree 是回合树的**唯一真源**；story.log / messages / scenes / world / …
  * 全是「根 → head」这条路径的派生物（任务书 §2 / §3）。
- *  - 纯逻辑：不碰 DOM、不碰 IR.Storage、不联网；Node 里 require 就能测
+ *  - 纯逻辑：不碰 DOM、不碰 Storage、不联网；Node 里 require 就能测
  *  - 零依赖、零构建：IIFE 挂到全局 IR
  *
  * 另承载 IR 根级纯工具（genId / clone / sleep / plainReply，审查 可维护性 #5 与三·1/三·4/三·5）：
@@ -33,13 +33,10 @@
  *     messages 窗口 = 从第 msgFloor 个 turn 节点起，依次展开 [userMsg, assistantMsg]。
  *   - 窗口对不上（messages 奇数条 / 与路径末尾对不齐）→ 节点退化存整窗口快照 msgSnap。
  */
-import { IR, registerIR } from './ir.ts';
 import type { Story, StoryTree } from './schema.ts';
 
-/* ↑ 阶段 2 搬迁自 js/tree.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/tree.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const TREE_V = 1;
   // story 裁剪窗口的唯一口径：store.js 的 serializeStory 与书架导出一律引用这里的导出，
@@ -51,7 +48,7 @@ const global = globalThis as any;
 
   let seq = 0;
   // ID 生成的唯一口径（审查 可维护性 #5）：前端各处（store / painter / library / video /
-  // styleanchor / proposals）一律用 IR.genId(prefix)，不要再各写 Date.now().toString(36)+random 变体。
+  // styleanchor / proposals）一律用 genId(prefix)，不要再各写 Date.now().toString(36)+random 变体。
   //   prefix —— 实体前缀（n/st/s/pf/sc/sp/vd/style/pp…）；
   //   now    —— 可选时间戳（提案等需要「以注入时间为准」的确定性场景），缺省 Date.now()。
   // seq 自增 + 3 位随机，保证同一毫秒内多次调用也不撞 id。
@@ -62,7 +59,7 @@ const global = globalThis as any;
 
   // 深拷贝的唯一口径（审查 可维护性 三·1）：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
   // 循环引用不炸）；环境没有或内容不可克隆（函数等）时回落 JSON 往返。
-  // State / msgSnap 等一律用 IR.clone，不要再各写 JSON.parse(JSON.stringify(x))。
+  // State / msgSnap 等一律用 clone，不要再各写 JSON.parse(JSON.stringify(x))。
   function clone(x) {
     if (x == null || typeof x !== 'object') return x;
     if (typeof structuredClone === 'function') {
@@ -414,7 +411,7 @@ const global = globalThis as any;
       mapSavepoints(story, t);        // §6：旧存档点 sp.turn → nodeId（只补缺失，幂等）
       return t;                       // 合法树直接用（幂等）
     }
-    if (t) console.warn('IR.Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不丢）');
+    if (t) console.warn('Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不丢）');
     story.tree = buildLinear(story);
     mapSavepoints(story, story.tree);
     return story.tree;
@@ -463,7 +460,7 @@ const global = globalThis as any;
   function seal(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
-    if (!node) { console.warn('IR.Tree.seal：节点不存在', nodeId); return null; }
+    if (!node) { console.warn('Tree.seal：节点不存在', nodeId); return null; }
     if (node.sealed) return node;      // 幂等
 
     // entries / scenes 再切一遍片：收进 postTurn 追加的 tool 条目与迟到的图（§4.1）
@@ -701,19 +698,11 @@ const global = globalThis as any;
     return out;
   }
 
-  const __irApi = {
-    // IR 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
-    genId: genId,
-    clone: clone,
-    sleep: sleep,
-    plainReply: plainReply,
-    Tree: {
-      TREE_V, LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
-      ensure, begin, commit, seal, project, pathOf, resyncState,
-      siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
-      pushLate, imageIdsOf,
-    },
+  // 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
+  const Tree = {
+    TREE_V, LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
+    ensure, begin, commit, seal, project, pathOf, resyncState,
+    siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
+    pushLate, imageIdsOf,
   };
-  registerIR(__irApi);
-  export { genId, clone, sleep, plainReply };
-  export const { Tree } = __irApi;
+  export { genId, clone, sleep, plainReply, Tree };

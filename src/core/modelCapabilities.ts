@@ -5,7 +5,7 @@
  * 上下文窗口（70% 压缩阈值要用到它）、思考档位、图片尺寸、视频参数、额外字段等
  * 全部由用户在「模型设置」里手填，功能一样完整。
  *
- * 真正稳定的硬约定是适配器接口（js/providers.js）：
+ * 真正稳定的硬约定是适配器接口（src/core/providers.ts）：
  *   ChatProviders[provider].chat(cfg, messages, hooks)
  *   ImageProviders[provider].generate(cfg, prompt)
  * 手填通道（providers.js 支持）：
@@ -19,12 +19,9 @@
  * 需要临时预填：在下面按 { provider, model, contextWindow } 结构加一行即可，逻辑不用动
  * （image / video 也支持同样结构）——但默认留空，避免跟着厂商模型变动一直维护。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/modelCapabilities.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/modelCapabilities.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const VERSION = '0.2.0';
   const RECORDED_AT = '2026-10-04';
@@ -109,12 +106,9 @@ const global = globalThis as any;
     return String(n);
   }
 
-  const __irApi = {
-    ModelCapabilities: {
-      VERSION, RECORDED_AT,
-      chat: CHAT, image: IMAGE, video: VIDEO,
-      find, findAny, contextWindowOf, summarize, formatWindow,
-    },
+  const ModelCapabilities = {
+    VERSION, RECORDED_AT,
+    chat: CHAT, image: IMAGE, video: VIDEO,
+    find, findAny, contextWindowOf, summarize, formatWindow,
   };
-  registerIR(__irApi);
-  export const { ModelCapabilities } = __irApi;
+  export { ModelCapabilities };

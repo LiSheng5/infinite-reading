@@ -18,10 +18,10 @@
  * 就是失效开关（内容变 → 文件名变 → 老缓存自然不再被引用），SWR 对它无害。
  * 本变更为 Service Worker 唯一改动点，随本版本**单独上线、观察一个版本周期**后再继续阶段 2（任务书 §11）。
  *
- * CACHE 名里的版本号由 tools/sync-version.mjs 从根目录 VERSION 注入（别手改）：
+ * CACHE 名里的版本号在**构建期**由 vite.config.mjs 从根目录 VERSION 注入（__IR_VERSION__ 占位，别手改）：
  * 版本一变 → 新缓存 → 旧的整批删掉，等价于「跟着发布节奏清缓存」。
  */
-const CACHE = 'ir-v0.12.1';
+const CACHE = 'ir-v' + '__IR_VERSION__';
 
 const CORE = ['./', './index.html', './manifest.webmanifest'];
 

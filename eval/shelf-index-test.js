@@ -27,14 +27,12 @@ const path = require('path');
 })();
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'search.ts'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const Store = (global.IR || {}).Store;
-const Search = (global.IR || {}).Search;
+const Store = core('store').Store;
+const Search = core('search').Search;
 if (!Store) {
-  console.error('加载失败：IR.Store 缺失');
+  console.error('加载失败：Store 导出缺失');
   process.exit(1);
 }
 

@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 自动标题（IR.Titles，纯逻辑，Node 可测，UI-2 §3.3）
+ * 无限阅读 · 自动标题（Titles，纯逻辑，Node 可测，UI-2 §3.3）
  *
  * 职责：给智能体 / 扮演对话自动起标题的全部纯逻辑——
  *   needsTitle    什么时候该起标题（titleAuto + 回合触发点）
@@ -8,14 +8,11 @@
  *   fallback      本地兜底标题（不发请求）
  *   applyTitle    写回护栏（id 一致 + titleAuto 仍为真才写）
  *
- * 硬约束：零依赖、无 DOM、无网络；IIFE 挂 window.IR，Node 里 require 也能跑。
+ * 硬约束：零依赖、无 DOM、无网络；IIFE 挂 应用层注册表，Node 里 require 也能跑。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/titles.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/titles.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   /* ---------------- 码点安全的小工具 ---------------- */
 
@@ -27,7 +24,7 @@ const global = globalThis as any;
 
   /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
 
-  // 用户话：去掉 [设定] 前缀、[玩家行动] 标记与（做/说/导演）内层标记（与 js/tree.js 同口径）
+  // 用户话：去掉 [设定] 前缀、[玩家行动] 标记与（做/说/导演）内层标记（与 src/core/tree.ts 同口径）
   function userText(raw) {
     return String(raw == null ? '' : raw)
       .replace(/^\[设定\][\s\S]*?\n\n/, '')
@@ -184,5 +181,4 @@ const global = globalThis as any;
     fallback: fallback,
     applyTitle: applyTitle,
   };
-  registerIR({ Titles });
   export { Titles };

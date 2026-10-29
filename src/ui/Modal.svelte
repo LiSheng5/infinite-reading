@@ -22,7 +22,7 @@
   } = $props();
 
   onMount(() => {
-    if (shell) return;   // 外壳不接键盘：Esc 的唯一入口仍是 js/app.js 的 closeTopModal
+    if (shell) return;   // 外壳不接键盘：Esc 的唯一入口仍是 src/app/main.js 的 closeTopModal
     const onKey = (e) => {
       if (e.key === 'Escape' && onclose) onclose();
     };

@@ -7,13 +7,14 @@
  *  - 与世界卡对接：卡 → world.characters 一条人物条目（personality / speech 对接）
  *
  * 合规（§4.12）：只兼容**格式**，不复制任何代码与内容；解析的是用户自己的卡。
- * 纯逻辑、零依赖；IIFE 挂 window.IR，Node 亦可加载（评测用）。
+ * 纯逻辑、零依赖；IIFE 挂 应用层注册表，Node 亦可加载（评测用）。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/roleCard.js（IIFE → ES module，函数体逐字未动）。
+/* ↑ 阶段 2 搬迁自 src/core/roleCard.ts（IIFE → ES module，函数体逐字未动）。
  * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
+ * 导出即真实 API。 */
+import { Zip } from './zip.ts';
+
 const global = globalThis as any;
 declare const Buffer: any;
 
@@ -58,11 +59,10 @@ declare const Buffer: any;
     return s;
   }
 
-  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 IR.Zip.crc32（zip.js，
+  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 Zip.crc32（zip.js，
   // 审查 可维护性 三·5）。roleCard.js 在 zip.js 之前加载，取值放调用时，缺了直接抛不静默降级。
   function crc32(b) {
-    const fn = global.IR && global.IR.Zip && global.IR.Zip.crc32;
-    if (typeof fn !== 'function') throw new Error('IR.Zip.crc32 未加载：解析 PNG 前必须先加载 zip.js');
+    const fn = Zip.crc32;
     return fn(b);
   }
 
@@ -207,12 +207,9 @@ declare const Buffer: any;
     return '自建';
   }
 
-  const __irApi = {
-    RoleCard: {
-      CARD_FIELDS, SOURCES, TEXT_KEYWORDS,
-      emptyCard, normalize, fromST, parsePNG, readTextChunks,
-      speechHint, worldCharacter, sourceLabel,
-    },
+  const RoleCard = {
+    CARD_FIELDS, SOURCES, TEXT_KEYWORDS,
+    emptyCard, normalize, fromST, parsePNG, readTextChunks,
+    speechHint, worldCharacter, sourceLabel,
   };
-  registerIR(__irApi);
-  export const { RoleCard } = __irApi;
+  export { RoleCard };

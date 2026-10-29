@@ -12,7 +12,6 @@
  *   - eval/schema-test.js 用下面的 check* 运行时校验器跑夹具回归（schema 回归测试）：
  *     ① 三份真实夹具全部过检；② 导入 → 还原 → 导出逐字段一致；③ 0.11 及更早存档能迁移。
  */
-import { registerIR } from './ir.ts';
 
 /* ============================ 世界 / 风格 / 角色 ============================ */
 
@@ -526,5 +525,4 @@ const Schema = {
   checkStory, checkStoryPack, checkBackupPack, checkTree,
 };
 
-registerIR({ Schema });
 export { Schema, checkStory, checkStoryPack, checkBackupPack, checkTree };

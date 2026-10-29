@@ -1,20 +1,21 @@
 <script>
-  /* ChatBubble.svelte —— 聊天流一条消息（阶段 4 屏 4，js/app/render.js 的 bubbleFor 同构）
+  /* ChatBubble.svelte —— 聊天流一条消息（阶段 4 屏 4，src/app/render.js 的 bubbleFor 同构）
    * 按 entry.kind 分派：text / note / image / video / agent / proposal；
    * DOM 与 0.12.1 各子渲染器（textBubble / toolNoteBubble / imageRowBubble / inlineImageBubble /
    * videoBubble / agentBubble / proposalBubble）逐节点同结构——类名、title、aria 全保留。
    * 安全红线（§8）：用户 / 模型产出一律文本插值（≡ textContent），绝不 {@html}。
    * 思考链开合是组件本地状态：每次 renderChat 的 {#key} 重建即复位（旧 DOM innerHTML='' 同语义）。
-   * 点击动作直连 IR.App 注册函数（过渡期兼容层），阶段 6 换成直连 import。
+   * 点击动作直连应用层注册表（src/app/core.js 的 A）。
    *
    * ⚠ 模板必须紧凑书写（兄弟节点间零空白）：.bubble 是 white-space: pre-wrap（style.css），
    *   Svelte 在 {#if} 锚点两侧留下的 " " 空白文本节点会被渲染成空行 / 行首空格，
    *   把文字整体推歪（换行点漂移）。注释不渲染，可作行内分隔。 */
   import Icon from '../../ui/Icon.svelte';
+  import { A as appApi } from '../../app/core.js';
 
   let { entry: e } = $props();
 
-  const A = () => window.IR.App;
+  const A = () => appApi;
   let reasonOpen = $state(false);
 
   // 点图 / 点文字 = 在右侧舞台选中这张（同旧 selectScene / selectVideo）

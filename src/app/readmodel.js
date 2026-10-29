@@ -1,18 +1,21 @@
 /*
- * js/app/readmodel.js —— 阅读页视图模型（阶段 4 屏 4：IR.ReadScreen 状态桥的弹药）
+ * src/app/readmodel.js —— 阅读页视图模型（阶段 4 屏 4：ReadScreen 状态桥的弹药）
  *
  * render.js 的 renderChat / renderThumbs 在 Svelte 屏（src/screens/read）在位时取这里的
  * 纯数据模型推给组件；切分 / 分派口径与旧拼装路径（bubbleFor / renderOpeningHint /
  * renderChoices / renderThumbs）共用同一套 helper（imageSceneById / sceneSrc / safeImgSrc /
- * KIND_LABELS / IR.Tree.siblings …），不另起一套。
+ * KIND_LABELS / Tree.siblings …），不另起一套。
  * 用户 / 模型产出的文字只以字符串进模型（组件文本插值渲染 ≡ textContent，红线 §8）；
- * 条目附原条目引用（entry），点击动作（选场景 / 灯箱 / 工作台 / 提案确认拒绝）原样走 IR.App。
- * 旧屏（?ui=legacy）不走这里（render.js 走 DOM 拼装老路），行为与 0.12.1 一致。
+ * 条目附原条目引用（entry），点击动作（选场景 / 灯箱 / 工作台 / 提案确认拒绝）原样走 App。
+ * 视图模型口径与 0.12.1 的 DOM 拼装逐字段一致（截图逐像素对齐）。
  */
-(function () {
-  'use strict';
+import { Tree } from '../core/tree.ts';
+import { Prefs } from '../core/prefs.ts';
+import { Proposals } from '../core/proposals.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
 
   /* ================= 单条条目：e.type → 模型（分派表同 BUBBLE_RENDERERS） ================= */
 
@@ -25,7 +28,7 @@
       ? String(e.reasoning) : '';
     // 分支导航（§4.3/§5⑤）：凡是有兄弟的旁白都显示 ‹ n/m ›；「↻ 重试」仍只在最后一条（§5⑤）
     const sibs = (e.type === 'narration' && e.nid && S.story && S.story.tree)
-      ? IR.Tree.siblings(S.story, e.nid) : [];
+      ? Tree.siblings(S.story, e.nid) : [];
     const showRetry = e.type === 'narration' && index === A.lastNarrationIndex() && !S.busy && !!A.lastActionEntry();
     const nav = (e.type === 'narration' && !S.busy && sibs.length > 1)
       ? { index: sibs.indexOf(e.nid) + 1, count: sibs.length } : null;
@@ -43,7 +46,7 @@
   }
 
   function showReasoning() {
-    return IR.Prefs.effective(S.settings, S.story, 'showReasoning');
+    return Prefs.effective(S.settings, S.story, 'showReasoning');
   }
 
   // 工具 / 系统注记：一行纯文本
@@ -101,7 +104,7 @@
     const p = e && e.proposal;
     const now = Date.now();
     if (!p) return { kind: 'proposal', empty: true };
-    if (p.status === 'pending' && now >= p.expiresAt) IR.Proposals.markExpired(p);
+    if (p.status === 'pending' && now >= p.expiresAt) Proposals.markExpired(p);
     const rows = [];
     const row = (k, v) => { rows.push({ k: k, v: String(v == null ? '' : v) }); };
     if (p.kind === 'email') {
@@ -177,7 +180,7 @@
     // 选项（renderChoices 同口径）：always 内联在旁白下；默认收在「灵感」托盘
     const canShow = !S.busy && !S.live && story.mode === 'choice'
       && Array.isArray(S.currentChoices) && S.currentChoices.length > 0;
-    const inline = IR.Prefs.effective(S.settings, story, 'choices') === 'always';
+    const inline = Prefs.effective(S.settings, story, 'choices') === 'always';
     if (canShow && inline) m.choices = S.currentChoices.slice();
     if (canShow && !inline) {
       m.inspiration = true;
@@ -213,4 +216,4 @@
   }
 
   A.reg({ readChatModel, readThumbsModel });
-})();
+

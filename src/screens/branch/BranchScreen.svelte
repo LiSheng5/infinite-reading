@@ -1,15 +1,15 @@
 <script>
   /* BranchScreen.svelte —— 阶段 4 · 屏 5 分支页重写（整页分支树 + 节点详情面板）
-   * 任务书 §7.3：功能与交互不变，视觉套新组件库；分支页的布局算法（IR.TreeLayout）与
+   * 任务书 §7.3：功能与交互不变，视觉套新组件库；分支页的布局算法（TreeLayout）与
    * SVG 构造方式（createElementNS、绝不用 innerHTML）**保持**。
    *
    * 分工：
    *   - 静态骨架（顶栏 / 画布容器 / 面板外壳）→ 本组件，id 与 0.12.1 的 #branch-page 子树逐个保留，
-   *     旧逻辑（js/app/branch.js 的 openBranch / render / bindCanvas / initBranch）按 id 照常命中，
+   *     旧逻辑（src/app/branch.js 的 openBranch / render / bindCanvas / initBranch）按 id 照常命中，
    *     行为零改动；
-   *   - 节点详情面板（六个文本字段 + 三个按钮的 disabled）→ 状态桥 IR.BranchScreen（branch.svelte.js），
+   *   - 节点详情面板（六个文本字段 + 三个按钮的 disabled）→ 状态桥 BranchScreen（branch.svelte.js），
    *     renderPanel 推视图模型，组件按旧 DOM 渲染；
-   *   - SVG 画布（边 / 节点 / 箭头 / 折叠超级节点）→ 仍由 js/app/branch.js 命令式构建：任务书明确
+   *   - SVG 画布（边 / 节点 / 箭头 / 折叠超级节点）→ 仍由 src/app/branch.js 命令式构建：任务书明确
    *     要求保持 createElementNS，且 400 节点级的重建属命令式渲染，组件化只会把几何算两遍。
    * 安全红线（§8）：标签文本 / 面板文本一律文本插值；本组件不含任何 {@html}。
    */
@@ -30,7 +30,7 @@
 
 <div class="branch-body">
   <div id="branch-canvas" class="branch-canvas">
-    <!-- SVG 一律 createElementNS 构造，不用 innerHTML（由 js/app/branch.js 命令式填充） -->
+    <!-- SVG 一律 createElementNS 构造，不用 innerHTML（由 src/app/branch.js 命令式填充） -->
     <svg id="branch-svg" role="tree" aria-label="分支树" tabindex="0"></svg>
   </div>
   <aside id="branch-panel" class="branch-panel" class:hidden={!branch.panelOpen} aria-label="节点详情">

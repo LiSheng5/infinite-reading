@@ -2,7 +2,7 @@
  *
  * 分工与屏 4/5 一致：DOM 契约（按 id 读写）归 legacy 界面层，**动态面**归组件。
  * 5 个轻弹窗里只有「人物行」是真正的动态面（可增删行）；其余字段都是「打开时灌一次值、
- * 提交时读一次值」，继续由 js/app/wizard.js / importer.js 直接写 input.value（零改动）。
+ * 提交时读一次值」，继续由 src/app/wizard.js / importer.js 直接写 input.value（零改动）。
  *
  * 为什么人物行必须搬进状态桥：0.12.1 的 A.charEditor 是命令式 DOM 注入（往容器里 createElement）。
  * 容器一旦归 Svelte 管，两层写同一棵子树迟早打架（重渲染会清掉注入的行）；而且注入的

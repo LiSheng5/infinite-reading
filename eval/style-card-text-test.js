@@ -17,8 +17,7 @@
  */
 const path = require('path');
 
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-const C = global.IR.Context;
+const C = require(path.join(__dirname, '..', 'src', 'core', 'context.ts')).Context;
 
 let failed = 0;
 function ok(cond, msg) {

@@ -71,7 +71,7 @@ function check(name, ok, detail) {
 /* ---------- 允许名单：确实不能用令牌的色值（每条带理由） ---------- */
 const ALLOW_COLORS = [
   {
-    file: 'js/app/video.js',
+    file: 'src/app/video.js',
     reason: '视频抓帧失败时的兜底封面是 canvas 现画的「图片内容」（黑底 + 手绘播放三角，§6.3 特意不依赖字体画 ▶），不是 UI 配色',
   },
 ];
@@ -207,10 +207,9 @@ for (const { name, text } of CSS_SOURCES) {
 }
 check('style/motion/组件样式 :root 之外无颜色字面量', cssHits.length === 0, cssHits.join(' | '));
 
-// js/*.js 与 src/**（.ts/.js）：业务代码不得写死颜色（canvas 画图内容进允许名单）
+// src/**（.ts/.js）：业务代码不得写死颜色（canvas 画图内容进允许名单）
 const jsHits = [];
 const SCAN_DIRS = [
-  { dir: path.join(ROOT, 'js'), rel: 'js', exts: ['.js'] },
   { dir: path.join(ROOT, 'src'), rel: 'src', exts: ['.js', '.ts'] },
 ];
 for (const { dir, rel, exts } of SCAN_DIRS) {

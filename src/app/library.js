@@ -1,11 +1,15 @@
 /*
- * js/app/library.js —— 原图（Blob）/ 存档点 / 书架 / 导入导出
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/library.js —— 原图（Blob）/ 存档点 / 书架 / 导入导出
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Motion } from '../core/motion.ts';
+import { genId, Tree } from '../core/tree.ts';
+import { Nav } from '../ui/navigation.js';
+import { home } from '../screens/home/home.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, MODE_LABELS, toast, irConfirm, openModal, closeModal, clone, fmtTime, saveAll, miniBtn } = A;
 
   let startMode = 'choice';      // 开始页选中的模式（choice | chat | rp）
@@ -22,7 +26,7 @@
 
   /* ================= 动效基座（UI-1） ================= */
 
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ IR.Motion.resolve
+  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
 
   // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
 
@@ -212,12 +216,12 @@
 
   function snapshotStory(s, name) {
     return {
-      id: IR.genId('sp'),
+      id: genId('sp'),
       name: name || ('存档点 ' + new Date().toLocaleString('zh-CN')),
       ts: Date.now(),
       turn: s.turn || 0,
       mode: s.mode || 'choice',
-      log: clone((s.log || []).slice(-IR.Tree.LOG_WINDOW)),
+      log: clone((s.log || []).slice(-Tree.LOG_WINDOW)),
       messages: clone((s.messages || []).slice(-40)),
       summaries: clone(s.summaries || []),
       world: clone(s.world || {}),
@@ -259,7 +263,7 @@
     S.story.savepoints = S.story.savepoints || [];
     const sp = snapshotStory(S.story, name);
     S.story.savepoints.push(sp);
-    if (S.story.savepoints.length > IR.Tree.SAVEPOINT_KEEP) S.story.savepoints = S.story.savepoints.slice(-IR.Tree.SAVEPOINT_KEEP);
+    if (S.story.savepoints.length > Tree.SAVEPOINT_KEEP) S.story.savepoints = S.story.savepoints.slice(-Tree.SAVEPOINT_KEEP);
     saveAll();
     renderSavepoints();
     return sp;
@@ -279,12 +283,12 @@
     addSavepoint('回档前 · ' + fmtTime(Date.now()));
     if (hasNode) {
       if (!(S.story.tree && S.story.tree.nodes[sp.nodeId])) S.story.tree = clone(sp.tree);   // 树被重置过：从存档点把整棵接回来
-      IR.Tree.switchTo(S.story, sp.nodeId);   // 含 project：head 落到该节点，世界卡 / 窗口跟着走
+      Tree.switchTo(S.story, sp.nodeId);   // 含 project：head 落到该节点，世界卡 / 窗口跟着走
     } else {
       restoreSnapshot(S.story, sp);
       S.story.tree = null;                    // 没有分支可回：整棵树重置为线性链（§4.6）
-      IR.Tree.ensure(S.story);
-      IR.Tree.project(S.story);
+      Tree.ensure(S.story);
+      Tree.project(S.story);
     }
     S.currentChoices = A.choicesFromHead();
     saveAll();
@@ -298,7 +302,7 @@
     $('#sp-panel').classList.toggle('hidden', !has);
     if (!has) return;
     const list = $('#sp-list');
-    list.innerHTML = '';
+    list.replaceChildren();
     const sps = (S.story.savepoints || []).slice().reverse();
     const sum = $('#sp-summary');   // 摘要行（阶段 4 屏 2 一级视图：n 个存档点 · 退出自动存档）
     if (sum) sum.textContent = sps.length + ' 个存档点 · 退出自动存档';
@@ -332,12 +336,12 @@
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 IR.Nav（阶段 5 第 3 步）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
+    // 切屏收口到 Nav（阶段 5 第 3 步）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
     // 这样视图过渡的新快照里书架已经是渲染好的（本步之前等价于旧的三行 classList 写入）。
-    IR.Nav.showScreen('shelf', () => {
+    Nav.showScreen('shelf', () => {
       A.closeMenus();
       A.closeStoryPrefs();   // UI-3：离开对话就收起本对话设置面板（不残留上一个对话的值）
-      A.renderShelf();   // UI-2：会话列表（js/app/shelf.js）
+      A.renderShelf();   // UI-2：会话列表（src/app/shelf.js）
     });
   }
 
@@ -348,21 +352,16 @@
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 IR.Nav（阶段 5 第 3 步）：同 showShelf，「继续上次」的状态推进进 mutate，
+    // 切屏收口到 Nav（阶段 5 第 3 步）：同 showShelf，「继续上次」的状态推进进 mutate，
     // 保证过渡的新快照里首页已经是最终形态。
-    IR.Nav.showScreen('home', () => {
+    Nav.showScreen('home', () => {
       A.closeMenus();
       A.closeWorkbench();
       A.closeStoryPrefs();   // UI-3
       // 有存档才出现「继续上次」，并带上最近那个故事的名字
       const recent = Store.listStories()[0];
       const label = recent && recent.title ? '《' + recent.title + '》' : '';
-      if (IR.HomeScreen) {
-        IR.HomeScreen.setRecent(recent ? label : null);   // 新首页（Svelte）：状态桥
-      } else {
-        $('#btn-continue').classList.toggle('hidden', !recent);
-        $('#continue-title').textContent = label;
-      }
+      home.recent = recent ? label : null;   // 首页「继续上次」的状态
     });
   }
 
@@ -394,7 +393,7 @@
     A.resumePendingVideos();   // §7：刷新 / 重开后续上生视频轮询
   }
 
-  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 js/app/shelf.js（UI-2）：
+  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 src/app/shelf.js（UI-2）：
      renderShelf 只读索引；openStory(id, opts) 支持滚动到命中消息（§3.7）。 */
 
   /* ================= 导入 / 导出（T-P2-4 / §4.11） ================= */
@@ -408,7 +407,7 @@
 
   async function buildExportPack(st, kind, withSrc) {
     const images = [];
-    for (const s of (st.scenes || []).slice(-IR.Tree.SCENE_WINDOW)) {
+    for (const s of (st.scenes || []).slice(-Tree.SCENE_WINDOW)) {
       // §0/§10：视频不随备份导出（体积）——只留封面，条目标 videoOmitted:true，导入后显示「视频未随备份导出」
       if (s.kind === 'video') {
         images.push({
@@ -479,4 +478,4 @@
   }
 
   A.reg({ storeOriginal, sceneSrc, refImageDataUrl, typewrite, addSavepoint, renderSavepoints, showShelf, showStart, newStoryFromGame, startFromStart, continueLast, openExport, downloadBlob, download, doExport });
-})();
+

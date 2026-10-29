@@ -1,6 +1,6 @@
 <script>
   /* ImportTextModal.svelte —— #modal-import-text「粘贴剧情文本导入」（屏 6b 重建）
-   * 三步（粘贴 → 整理中 → 确认）仍由 js/app/importer.js 切 .hidden 控制：
+   * 三步（粘贴 → 整理中 → 确认）仍由 src/app/importer.js 切 .hidden 控制：
    *   #it-step-paste / #it-step-run.hidden / #it-step-confirm.hidden
    * 所以三个容器只渲染一次、不写 class 表达式（避免 Svelte 重渲染把 legacy 的显隐打回去）。
    * 人物行同样走状态桥（kind = 'import'），与确认页的 itChars() 是同一份数据。 */

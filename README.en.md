@@ -1,17 +1,17 @@
 # ∞ Reading · 无限阅读
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![version](https://img.shields.io/badge/version-0.12.1-blue.svg)
-[![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#architecture)
-[![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#quick-start)
+![version](https://img.shields.io/badge/version-0.13.0-blue.svg)
+[![runtime deps: 0](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](#architecture)
+[![built with Vite + Svelte](https://img.shields.io/badge/build-Vite%20%2B%20Svelte%205-blue.svg)](#quick-start)
 
 > Finite pages, infinite story.
 
 An AI visual novel that never ends: you improvise the story with an LLM, and an AI painter draws each scene on the spot — with the prompt visible and editable.
 
-**Pure front-end · no build · no dependencies · no backend.** Double-click `index.html` and you are playing. All data stays in your own browser.
+**Pure front-end · zero runtime dependencies · no backend.** Build it once (Vite + Svelte 5), then double-click the single-file output and you are playing. All data stays in your own browser.
 
-**Current version: v0.12.1** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [中文说明](README.md)
+**Current version: v0.13.0** ｜ Docs: [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [中文说明](README.md)
 
 ## Features
 
@@ -34,9 +34,17 @@ git clone git@github.com:LiSheng5/infinite-reading.git   # or https://github.com
 cd infinite-reading
 ```
 
-1. Run it — either way works:
-   - Double-click `index.html` (pure front-end, no build, no dependencies)
-   - Or serve it locally (more robust, recommended): `npx serve .` or `python -m http.server 8000`
+1. Build it (Node ≥ 22.5; the source is ES modules + Svelte, so the repository root cannot be opened directly):
+
+   ```bash
+   npm ci
+   npm run build        # dist/site (multi-file) + dist/single/index.html (single file)
+   ```
+
+   Then run it — either way works:
+   - **Single file**: double-click `dist/single/index.html` (everything inlined, `file://` works; `npm run bundle` copies it to `dist/ir.html`)
+   - **Local server** (more robust, recommended): `npx serve dist/site` or `python -m http.server 8000 --directory dist/site`
+   - **Development**: `npm run dev` (Vite dev server with HMR; ship the built output)
 2. Click **⚙ Connect a model** and fill in **Base URL** (pick from the dropdown or type your own), **API Key**, and **model name**. Image models are configured the same way.
 3. **Click one of the three mode cards to start** — Story, Agent (a tool-using assistant: draw, remember, schedule, draft email, buy — the last two need your confirmation), or Role-play — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode.
    - **📄 Import text**: hand over existing text (a setting document, a novel fragment, a chat log) and let the AI turn it into a starting premise.
@@ -91,8 +99,8 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 
 | Way | Command / action | Good for |
 |---|---|---|
-| Local server | `npx serve .` (or `启动.bat` on Windows) | Daily use: avoids the `file://` CORS and storage split |
-| Single file | `npm run bundle` → `dist/ir.html` (~530 KB) | Sharing: one HTML file, double-click and play |
+| Local server | `npx serve dist/site` (or `启动.bat` on Windows) | Daily use: avoids the `file://` CORS and storage split |
+| Single file | `npm run bundle` → `dist/ir.html` (~560 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
 | Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22.5 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
@@ -118,17 +126,19 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 
 | File | Role |
 |---|---|
-| `js/providers.js` | Adapter layer: `ChatProviders` / `ImageProviders` (`openai-images` generic-compatible · `minimax-image` official `/v1/image_generation`) / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
-| `js/context.js` | Context assembly, compression chain, text import |
-| `js/tree.js` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
-| `js/storage.js` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
-| `js/store.js` | Persistence (memory-first + async flush; schema v3, legacy migration, shelf, save points) |
-| `js/zip.js` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
-| `js/roleCard.js` | Character cards (SillyTavern PNG parsing) |
-| `js/modelCapabilities.js` | Model parameter registry (empty by default) |
-| `js/app.js` | Composition root: event binding + boot (business logic lives in the 20 modules under `js/app/` — see ARCHITECTURE.md §2.1) |
-| `js/sidecar.js` + `js/features.js` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
-| `js/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
+| `src/main.js` | **Single entry**: app layer → screens → composition root → PWA, in dependency order (the old `src/legacy.js` is gone) |
+| `src/core/providers.ts` | Adapter layer: `ChatProviders` / `ImageProviders` (`openai-images` generic-compatible · `minimax-image` official `/v1/image_generation`) / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
+| `src/core/context.ts` | Context assembly, compression chain, text import |
+| `src/core/tree.ts` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
+| `src/core/storage.ts` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
+| `src/core/store.ts` | Persistence (memory-first + async flush; schema v3, legacy migration, shelf, save points) |
+| `src/core/zip.ts` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
+| `src/core/roleCard.ts` | Character cards (SillyTavern PNG parsing) |
+| `src/core/modelCapabilities.ts` | Model parameter registry (empty by default) |
+| `src/app/main.js` | Composition root: installs the modal shell, binds events, boots (business logic lives in the 21 modules under `src/app/` — see ARCHITECTURE.md §2.1) |
+| `src/screens/` + `src/ui/` | Svelte 5 screens and the base component library (icons / buttons / modal shell / view transitions) |
+| `src/core/sidecar.ts` + `src/core/features.ts` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
+| `src/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
 | `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
@@ -145,9 +155,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 **Installable + distributable (2026-10-10)**: **PWA** (manifest + Service Worker, works offline; the cache name follows the version), icon generator (vector + PNGs incl. maskable / iOS), Windows **one-click `启动.bat`** (Python first, falls back to a dependency-free PowerShell server), **Dockerfile + compose** for self-hosting.
 
-**v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `js/zip.js`), and mobile polish (safe areas, 44px touch targets).
+**v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `src/core/zip.ts`), and mobile polish (safe areas, 44px touch targets).
 
 **v0.12 — video generation (2026-10-22)**: **MiniMax V2 video** (image-to-video / text-to-video, painter writes the motion prompt), a dedicated video queue (never blocks image generation), a paid-task confirmation, automatic task resume after reload / story switch, MP4 stored in IndexedDB with a timed-link fallback when CORS or disk space blocks the download, covers-only backups, and a full offline test suite.
+
+**v0.13 — build migration & front-end rewrite (2026-10-28)**: every screen rewritten with Vite + Svelte 5 (component library / design tokens / three motion tiers / View Transitions), core logic moved to `src/core/` (key modules typed with TypeScript), with the data layer and import/export formats untouched; the `file://` single-file output is preserved and `?demo=1` was removed. The closing phase deleted the legacy entry, the global `IR` compatibility layer, the 0.12.1 DOM and the old/new switches; every version string is now build-injected. Regression fixture: import → restore → export is field-identical, and 25 screenshots at 390 / 1280 are byte-identical.
 
 **Backlog**
 
@@ -168,7 +180,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 ## Contributing and license
 
-- **Code**: no `npm install` needed — edit `js/*.js`, refresh the browser. Please run `node eval/run.js` first (offline, no API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
+- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (24 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -5,8 +5,8 @@
  *  - 存储前缀统一 ir:（settings / story:<id> / story-index / current / user-profile）
  *  - story schema v3：log / world / styleCard / rollingStyle / characterCard /
  *    userProfile / painterThread / messages / mode / savepoints（设计 §2）
- *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 js/tree.js）
- *  - 主库 = IndexedDB（见 js/storage.js）：解除 localStorage 约 5MB 的天花板，
+ *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 src/core/tree.ts）
+ *  - 主库 = IndexedDB（见 src/core/storage.ts）：解除 localStorage 约 5MB 的天花板，
  *    原图以 Blob 存 images store，不再转成 base64 塞进文本
  *  - v0.1 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
  *
@@ -21,18 +21,22 @@
  *   任何一步失败都不写标记、不改动 localStorage，并让本次会话退回 localStorage 模式运行。
  *   成功后 localStorage 里的旧数据**原样保留**（作为回退快照，只增不减），所以不会丢档。
  *
- * 纯逻辑、零依赖；IIFE 挂 window.IR，Node 亦可加载（评测/迁移自测用：
+ * 纯逻辑、零依赖；IIFE 挂 应用层注册表，Node 亦可加载（评测/迁移自测用：
  * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与 v0.2 一致）。
  */
-import { IR, registerIR } from './ir.ts';
-import type { Story, StoryPack, StoryPrefs, BackupImageEntry } from './schema.ts';
-
-/* ↑ 阶段 2 搬迁自 js/store.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
 const global = globalThis as any;
 
-  // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 IR.Tree.ensure
+import type { Story, StoryPack, StoryPrefs, BackupImageEntry } from './schema.ts';
+import { Storage } from './storage.ts';
+import { genId as rootGenId, plainReply, Tree } from './tree.ts';
+import { Prefs } from './prefs.ts';
+import { Search } from './search.ts';
+import { APP_VERSION } from './version.ts';
+
+/* ↑ 阶段 2 搬迁自 src/core/store.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：依赖改为静态 import（模块图是 DAG）——不再有「加载顺序错了才发现」的缺位路径。 */
+
+  // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 Tree.ensure
   const SCHEMA = 3;
 
   const KEYS = {
@@ -54,8 +58,7 @@ const global = globalThis as any;
 
   /* ---------------- 存储后端：IndexedDB 优先，失败退回 localStorage ---------------- */
 
-  const Storage = (global.IR && global.IR.Storage) || null;
-  const hasIDB = !!(Storage && Storage.available);
+  const hasIDB = !!Storage.available;
   let useIDB = hasIDB;                            // 迁移/读取失败会置 false，本次会话退回 localStorage
 
   const MEM = { kv: Object.create(null), stories: new Map() };
@@ -182,10 +185,10 @@ const global = globalThis as any;
     catch (e) { console.warn('写入失败（可能超出本地存储限额）', key, e); }
   }
 
-  // ID 生成统一走 IR.genId（js/tree.js，审查 可维护性 #5）：不再各写时间戳+随机变体。
+  // ID 生成统一走 tree 的 genId（审查 可维护性 #5）：不再各写时间戳+随机变体。
   // 默认前缀 's'（故事），需要别的前缀时显式传（如 genId('pf')）。
   function genId(prefix?) {
-    return IR.genId(prefix || 's');
+    return rootGenId(prefix || 's');
   }
 
   /* ---------------- schema v2 默认值 ---------------- */
@@ -563,7 +566,7 @@ const global = globalThis as any;
       ? raw.pendingVideos.filter(x => x && x.taskId)
       : [];
     if (!out.world.scene && out.lastSceneSummary) out.world.scene = out.lastSceneSummary;
-    // 分支树原样透传（schema v3）：这里不校验、不依赖 IR.Tree——合法性与降级重建由 IR.Tree.ensure 负责
+    // 分支树原样透传（schema v3）：这里不校验、不依赖 Tree——合法性与降级重建由 Tree.ensure 负责
     // 视频字段归一同样扫一遍树里的 scenes / entries（§5③：漏了会留下两种字段名并存）
     if (raw.tree) {
       out.tree = raw.tree;
@@ -584,14 +587,9 @@ const global = globalThis as any;
     return out;
   }
 
-  // prefs 清洗统一入口：IR.Prefs 缺位时的兜底（只放行白名单键，安全上只会更严）
+  // prefs 清洗统一入口（唯一实现在 Prefs，静态导入 = 永远在位；不再有「缺位兜底」死路径）
   function sanitizePrefsSafe(raw: any): StoryPrefs {
-    const P = (global.IR && global.IR.Prefs) || null;
-    if (P && typeof P.sanitizePrefs === 'function') return P.sanitizePrefs(raw);
-    const out: StoryPrefs = {};
-    if (typeof raw.profileId === 'string' && raw.profileId) out.profileId = raw.profileId.trim().slice(0, 64);
-    if (typeof raw.profileLabel === 'string' && raw.profileLabel) out.profileLabel = raw.profileLabel.trim().slice(0, 120);
-    return out;
+    return Prefs.sanitizePrefs(raw);
   }
 
   // 视频条目字段归一（§5）：旧档的 poster / videoUrl 就是现在的 thumb / remoteUrl
@@ -661,30 +659,7 @@ const global = globalThis as any;
     return report;
   }
 
-  /* ---------------- 关键依赖自检（审查 可维护性 #9） ----------------
-   * 加载顺序错了要「启动即报错」，不能表现为功能悄悄降级：
-   *   - IR.Tree    裁剪窗口 / 树遍历（serializeStory / imageIdsOf 的真源），缺了存档口径就错；
-   *   - IR.Prefs   凭证清洗真源（stripSecrets）：缺位时导出备份可能带出密钥，不是可降级项；
-   *   - IR.Storage 存储后端——浏览器里必须在（缺了会静默退回 localStorage）；Node 评测按设计无它（进程内内存）。
-   * IR.Search 是设计内的可选依赖（缺位只跳过搜索索引），不在此列。
-   * app.js 对 IR_DEP_MISSING 重新抛出（启动失败），其它 boot 错误照旧降级 localStorage。 */
-  function assertDeps() {
-    const R = global.IR || {};
-    const missing = [];
-    if (!R.Tree || !R.Tree.LOG_WINDOW || typeof R.Tree.imageIdsOf !== 'function') missing.push('IR.Tree（tree.js）');
-    if (!R.Prefs || typeof R.Prefs.stripSecrets !== 'function') missing.push('IR.Prefs（prefs.js）');
-    if (typeof document !== 'undefined' && (!R.Storage || typeof R.Storage.get !== 'function')) {
-      missing.push('IR.Storage（storage.js）');
-    }
-    if (missing.length) {
-      const e: any = new Error('store.js 关键依赖未就绪：' + missing.join('、') + '——请按 ARCHITECTURE.md 的加载顺序先引入');
-      e.code = 'IR_DEP_MISSING';
-      throw e;
-    }
-  }
-
   async function boot() {
-    assertDeps();
     const out = { backend: 'localstorage', migrated: null, error: null };
     if (!hasIDB) return out;                       // Node / 老浏览器：与 v0.2 行为一致
 
@@ -780,9 +755,8 @@ const global = globalThis as any;
   }
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
   function serializeStory(story: Story): Story {
-    // 裁剪窗口的唯一口径在 IR.Tree（tree.js 必须先于 store.js 加载；缺了直接报错，不静默用错窗口）
-    const T = global.IR && global.IR.Tree;
-    if (!T || !T.LOG_WINDOW) throw new Error('IR.Tree 未加载：tree.js 必须先于 store.js（见 ARCHITECTURE 加载顺序）');
+    // 裁剪窗口的唯一口径在 Tree（静态导入，必然在位）
+    const T = Tree;
     const out = Object.assign({}, story, {
       log: (story.log || []).slice(-T.LOG_WINDOW).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
       // scene 字段是白名单（§5①）：新字段不加会在这里被丢掉
@@ -809,7 +783,7 @@ const global = globalThis as any;
     // UI-3 §3.2/§3.4：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
     if (story.prefs && typeof story.prefs === 'object') out.prefs = sanitizePrefsSafe(story.prefs);
     else delete out.prefs;
-    // 落盘快照一律深拷贝（与 IR.Tree 的「深拷贝存入」同口径）：out 若与在用 story 共享
+    // 落盘快照一律深拷贝（与 Tree 的「深拷贝存入」同口径）：out 若与在用 story 共享
     // world / tree / messages 引用，mergeWorld 等就地改写会污染「已保存」内存快照，
     // 异步 put 的结构化克隆时机不定还会把未 save 的现场写进库里
     return JSON.parse(JSON.stringify(out));
@@ -820,9 +794,9 @@ const global = globalThis as any;
    * 安全红线：prefs 只带 profileId（不透明 id）与 profileLabel（仅显示）；
    * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
   function buildStoryPack(st: Story, kind: string, images: any[], settings: any): StoryPack {
-    const P = (global.IR && global.IR.Prefs) || null;
+    const P = Prefs;
     const pack: StoryPack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v0.12.1',
+      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v' + APP_VERSION,   // 构建注入
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
@@ -874,10 +848,8 @@ const global = globalThis as any;
       snippet: storySnippet(story),   // 每次重算（切兄弟 / 重试后会变，不缓存）
     });
     writeKV(KEYS.index, idx);
-    // 搜索索引增量重建（防抖约 800ms；js/search.js 已加载才做，纯逻辑层互不依赖）
-    if (global.IR && global.IR.Search && typeof global.IR.Search.notifySave === 'function') {
-      global.IR.Search.notifySave(story);
-    }
+    // 搜索索引增量重建（防抖约 800ms；Search 静态导入，永远在位）
+    Search.notifySave(story);
     return ok;
   }
   function loadStory(id: string): Story | null {
@@ -892,18 +864,14 @@ const global = globalThis as any;
     if (getCurrentId() === id) setCurrentId(null);
     imageIdsOf(raw).forEach(x => releaseImage(x));   // 顺手删原图，不留孤儿占空间
     // UI-2 §3.1：同步清理搜索文档
-    if (global.IR && global.IR.Search && typeof global.IR.Search.drop === 'function') {
-      global.IR.Search.drop(id);
-    }
+    Search.drop(id);
   }
 
   /* ---------------- 索引条目：snippet 与旧索引迁移（UI-2 §3.1） ---------------- */
 
-  // 助手回复纯文本：唯一实现在 IR.plainReply（tree.js，审查 可维护性 三·4），
-  // 与 search.js 索引共用同一口径——「JSON 旁白提取」不再有第二份实现
-  const plainReplyText = (global.IR && global.IR.plainReply) || function () {
-    throw new Error('IR.plainReply 未加载：tree.js 必须先于 store.js（见 ARCHITECTURE 加载顺序）');
-  };
+  // 助手回复纯文本：唯一实现在 tree 的 plainReply（审查 可维护性 三·4），
+  // 与 search 索引共用同一口径——「JSON 旁白提取」不再有第二份实现
+  const plainReplyText = plainReply;
 
   // 最近一条消息摘要（≤60 字，码点）：当前路径末条旁白 / 回复的纯文本，剥掉 JSON 与标记
   function storySnippet(story) {
@@ -992,9 +960,9 @@ const global = globalThis as any;
     });
     // 分支树里引用到的图/视频也算（含非当前分支）：漏掉就会在删除故事 /「清理孤儿原图」时
     // **静默删掉别的分支的图**（任务书 §10）。tree 形状的遍历（含 videoId，§5③）只有
-    // IR.Tree.imageIdsOf 一份实现，这里只负责 log / scenes——两份实现一旦漂移就是删档级事故。
+    // Tree.imageIdsOf 一份实现，这里只负责 log / scenes——两份实现一旦漂移就是删档级事故。
     if (rawStory.tree) {
-      global.IR.Tree.imageIdsOf(rawStory.tree).forEach(x => out.push(x));
+      Tree.imageIdsOf(rawStory.tree).forEach(x => out.push(x));
     }
     return out;
   }
@@ -1197,8 +1165,7 @@ const global = globalThis as any;
     } catch (_) {}
   }
 
-  const __irApi = {
-    Store: {
+  const Store = {
       SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
@@ -1212,8 +1179,8 @@ const global = globalThis as any;
       getCurrentId, setCurrentId, loadCurrent,
       migrateLegacy, clearAll,
 
-      // 存储后端（IndexedDB 主库 + 回退）；assertDeps = 关键依赖清单自检（boot 会先跑）
-      boot, flush, storageInfo, assertDeps,
+      // 存储后端（IndexedDB 主库 + 回退）
+      boot, flush, storageInfo,
       setPersistErrorHandler(fn) { onPersistErrorFn = (typeof fn === 'function') ? fn : null; },
       setImageReadyHandler(fn) { onImageReadyFn = (typeof fn === 'function') ? fn : null; },
 
@@ -1222,7 +1189,5 @@ const global = globalThis as any;
       listImageKeys, knownImageIds,
       // 视频（Blob，键名 vid:<sceneId>，§5④）
       putVideo, getVideo, videoURL, releaseVideo,
-    },
   };
-  registerIR(__irApi);
-  export const { Store } = __irApi;
+  export { Store };

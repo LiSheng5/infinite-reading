@@ -1,13 +1,18 @@
 /*
- * js/app/core.js —— 默认值与提示词 / 共享状态 / 动效基座 / 小工具 / 弹窗栈
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/core.js —— 默认值与提示词 / 共享状态 / 动效基座 / 小工具 / 弹窗栈
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
+ *
+ * 阶段 6：这是应用层的内核模块。它建立注册表 A（共享状态 + 晚绑定函数表）并把 core 的
+ * 真实导出转接进 A；其余 app 模块 `import { A } from './core.js'`，不再碰全局 IR。
  */
-(function () {
-  'use strict';
+import { Store } from '../core/store.ts';
+import { ModelCapabilities as Cap } from '../core/modelCapabilities.ts';   // 模型能力登记表（T-M-1）
+import { Motion } from '../core/motion.ts';
+import { sleep, clone } from '../core/tree.ts';
+import { applyMotion as setMotionTier, applyPaused as syncPausedAttr } from '../ui/motion.js';
+import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal } from '../ui/modalHost.js';
 
   const $ = s => document.querySelector(s);
-  const Store = IR.Store;
-  const Cap = IR.ModelCapabilities;   // 模型能力登记表（T-M-1）
 
   /* ================= 默认值与提示词 ================= */
 
@@ -31,16 +36,6 @@
     const name = (card && card.name) || '角色';
     return '角色扮演：「' + name + '」。以第一人称与玩家对话，保持性格与说话方式一致。';
   }
-
-  // 画师子代理（原 AI2）：把剧情写成绘画提示词。P3 会搬进画师工作台。
-  const AI2_SYSTEM = [
-    '你是视觉小说的「AI 画师导演」。根据给出的画面参考与最近剧情，决定当前这一幕画什么：可以是纯场景、人物、或两者结合，由你根据叙事需要自行判断。',
-    '',
-    '只输出一个 JSON 对象（禁止多余文字）：',
-    '{"prompt_en":"English image prompt, composition/light/atmosphere/medium, under 40 words","subject":"scene|character|both","alt":"中文一句话，说明这张图画了什么"}',
-    '',
-    '规则：prompt_en 用英文、具体、有画面感；不要出现任何文字、水印、签名的描述；alt 与 prompt 内容一致。',
-  ].join('\n');
 
   const SCRIBE_SYSTEM = [
     '你是这部视觉小说的「书记员」。读当前世界状态卡与最近剧情，重写整张卡：修正越写越偏的人物 / 时间 / 地点，补上尚未回收的伏笔，去掉已了结的。',
@@ -78,8 +73,8 @@
     '9:16': [720, 1280],
     '1:1': [1024, 1024],
   };
-  /* ---------- IR.App.state：原「状态」节的共享可变状态 ---------- */
-  const A = (IR.App = IR.App || {});
+  /* ---------- A.state：原「状态」节的共享可变状态 ---------- */
+  const A = {};
   A.state = {
     settings: Store.loadSettings(),
     story: null,              // 进行中的故事
@@ -104,7 +99,7 @@
   };
   A.reg = function reg(map) {
     for (const k of Object.keys(map)) {
-      if (Object.prototype.hasOwnProperty.call(A, k)) throw new Error('IR.App.reg: 重复注册 ' + k);
+      if (Object.prototype.hasOwnProperty.call(A, k)) throw new Error('A.reg: 重复注册 ' + k);
       A[k] = map[k];
     }
     return A;
@@ -139,21 +134,19 @@
     ? window.matchMedia('(prefers-reduced-motion: reduce)')
     : null;
 
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ IR.Motion.resolve
+  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
   function motionLevel() {
-    return IR.Motion.resolve((S.settings.ui && S.settings.ui.motion) || 'auto', !!(motionMQ && motionMQ.matches));
+    return Motion.resolve((S.settings.ui && S.settings.ui.motion) || 'auto', !!(motionMQ && motionMQ.matches));
   }
 
   function applyMotion() {
-    const lv = motionLevel();
-    document.documentElement.dataset.motion = lv;
-    return lv;
+    const pref = (S.settings.ui && S.settings.ui.motion) || 'auto';
+    return setMotionTier(document.documentElement, pref);
   }
 
   // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
   function applyPaused() {
-    if (document.hidden) document.documentElement.dataset.paused = '1';
-    else delete document.documentElement.dataset.paused;
+    syncPausedAttr(document.documentElement, document);
   }
 
   // 动效令牌里的时长（毫秒）：JS 侧的 WAAPI 与 CSS 共用同一个真源
@@ -244,14 +237,8 @@
    *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
    *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
    * 屏 6a 起这套语义搬到 src/ui/modalHost.js（弹窗的唯一入口，外壳见 src/ui/Modal.svelte），
-   * 这里只转发：A.modalStack 仍是同一个数组实例（js/app.js 的遮罩点击按引用读它），
+   * 这里只转发：A.modalStack 仍是同一个数组实例（src/app/main.js 的遮罩点击按引用读它），
    * 现有 id 与 DOM 全部保持不变。 */
-  const Host = IR.ModalHost;
-  if (!Host) {
-    throw new Error('js/app/core.js: 缺少 IR.ModalHost —— src/legacy.js 必须先 import src/ui/modalHost.js');
-  }
-  const { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal } = Host;
-
   function netErrHint(e) {
     if (e instanceof TypeError) {
       return '网络请求失败：可能是 CORS 限制或地址不可达。建议用本地静态服务打开（如 `npx serve` 或 `python -m http.server`），并检查 Base URL / API Key。';
@@ -270,10 +257,8 @@
     return false;
   }
 
-  // sleep / clone 的唯一口径在 IR.sleep / IR.clone（tree.js，审查 可维护性 三·1 / 三·5）：
+  // sleep / clone 的唯一口径在 tree（审查 可维护性 三·1 / 三·5）：
   // 这里只转接进 A.reg，app 模块照旧解构 { sleep, clone }，实现全仓只有一份
-  const sleep = IR.sleep;
-  const clone = IR.clone;
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -346,9 +331,14 @@
     return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
   }
   function iconEl(name, cls) {
-    const t = document.createElement('template');
-    t.innerHTML = icon(name, cls);
-    return t.content.firstChild;
+    // 不用 innerHTML：sprite 的 <use href="#i-名字"> 直接建元素（name 只来自固定清单）
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', cls ? 'ic ' + cls : 'ic');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#i-' + name);
+    svg.appendChild(use);
+    return svg;
   }
 
   function miniBtn(text, fn, cls) {
@@ -398,7 +388,7 @@
         row.appendChild(inp);
       });
       const del = miniBtn('', () => row.remove(), 'char-del');
-      del.innerHTML = icon('x');
+      del.replaceChildren(iconEl('x'));
       del.title = '删除这一行'; del.setAttribute('aria-label', '删除这一行');
       row.appendChild(del);
       return row;
@@ -492,4 +482,5 @@
     imageCfg,
     miniBtn,
   });
-})();
+
+  export { A };

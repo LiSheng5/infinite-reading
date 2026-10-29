@@ -21,11 +21,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts'));
-
-const PQ = (global.IR || {}).PaintQueue;
+const PQ = require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts')).PaintQueue;
 if (!PQ || typeof PQ.create !== 'function') {
-  console.error('加载失败：IR.PaintQueue 缺失（js/paintQueue.js 没被 require 进来？）');
+  console.error('加载失败：PaintQueue 导出缺失');
   process.exit(1);
 }
 

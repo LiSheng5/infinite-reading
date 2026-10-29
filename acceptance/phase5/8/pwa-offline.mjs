@@ -107,37 +107,40 @@ async function runFile(browser) {
 
   try {
     await page.goto(url, { waitUntil: 'load' });
-    await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 20000 });
-    await page.waitForFunction(() => !!(IR.App.state && IR.App.state.settings), null, { timeout: 20000 });
+    // 阶段 6：全局 IR 已删除。产物启动完成的信号 = init() 写完 html[data-motion] 且弹窗外壳已安装。
+    await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 20000 });
+    await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 20000 });
     await sleep(500);
     boot = await page.evaluate(() => ({
       title: document.title,
       motion: document.documentElement.dataset.motion || '',
       screens: ['screen-start', 'screen-shelf', 'screen-game', 'branch-page'].filter(id => !!document.getElementById(id)),
       startVisible: !!document.querySelector('#screen-start:not(.hidden)'),
-      version: (window.IR && IR.App && IR.App.VERSION) || '',
+      version: ((document.querySelector('#screen-start .version') || {}).textContent || '').trim(),
       controller: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
       inlineScripts: document.querySelectorAll('script[src]').length,
       inlineLinks: document.querySelectorAll('link[rel="stylesheet"][href^="http"], link[rel="stylesheet"][href^="./"], link[rel="stylesheet"][href^="assets"]').length,
       protocol: location.protocol,
+      testHook: !!window.__IR_TEST__,
     }));
     // 真的切一次屏：file:// 下也能跑过渡内核（off / rich 都走同一条链路）
-    await page.evaluate(() => window.IR.Nav.showScreen('shelf'));
-    await sleep(420);
-    boot.shelfVisible = await page.evaluate(() => !!document.querySelector('#screen-shelf:not(.hidden)'));
-    await page.evaluate(() => window.IR.App.applyMotion && null);
+    await page.click('#btn-start-shelf');
+    await page.waitForSelector('#screen-shelf:not(.hidden)', { timeout: 8000 });
+    boot.shelfVisible = true;
   } catch (e) {
     boot.error = String((e && e.stack) || e);
   }
 
-  add('file://：单文件产物能启动（IR.App / IR.Store / 设置就绪）', !boot.error, boot.error || 'ok');
+  add('file://：单文件产物能启动（首页 / 四块屏 / 设置就绪）', !boot.error, boot.error || 'ok');
   add('file://：四块屏都在 DOM 里', (boot.screens || []).length === 4, (boot.screens || []).join(','));
   add('file://：首页可见（初始态正确）', boot.startVisible === true, String(boot.startVisible));
   add('file://：动效档位已落定（html[data-motion] 非空）', !!boot.motion, boot.motion || '(空)');
+  add('file://：版本号由构建注入（底部版本文字非空）', /^v\d+\.\d+\.\d+/.test(boot.version || ''), boot.version || '(空)');
   add('file://：切屏可用（书架可见）', boot.shelfVisible === true, String(boot.shelfVisible));
   add('file://：不注册 Service Worker（浏览器在 file:// 下本就不支持）', boot.controller === false, String(boot.controller));
   add('file://：产物零外链（无 script[src] / 无外链样式）', boot.inlineScripts === 0 && boot.inlineLinks === 0,
     'script=' + boot.inlineScripts + ' link=' + boot.inlineLinks);
+  add('file://：不带 ?ir-test=1 时没有验收测试面（产物与普通双击完全一致）', boot.testHook === false, String(boot.testHook));
   add('file://：console error 0', errors.length === 0, errors.join(' | '));
 
   await ctx.close();
@@ -160,7 +163,8 @@ async function runPwa(browser, port) {
 
   try {
     await page.goto(base, { waitUntil: 'load' });
-    await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 20000 });
+    await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 20000 });
+    await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 20000 });
     onlineBoot = await page.evaluate(() => ({
       title: document.title,
       motion: document.documentElement.dataset.motion || '',
@@ -176,7 +180,7 @@ async function runPwa(browser, port) {
     }
     if (!controlled) {
       await page.reload({ waitUntil: 'load' });
-      await page.waitForFunction(() => !!(window.IR && IR.App), null, { timeout: 20000 });
+      await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 20000 });
       controlled = await page.evaluate(() => !!navigator.serviceWorker.controller);
     }
 
@@ -200,8 +204,8 @@ async function runPwa(browser, port) {
       reloadError = String((e && e.message) || e);
     }
     if (!reloadError) {
-      await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 20000 });
-      await page.waitForFunction(() => !!(IR.App.state && IR.App.state.settings), null, { timeout: 20000 });
+      await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 20000 });
+      await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 20000 });
       await sleep(400);
       offlineBoot = await page.evaluate(() => ({
         title: document.title,
@@ -211,9 +215,9 @@ async function runPwa(browser, port) {
         controlled: !!navigator.serviceWorker.controller,
       }));
       // 断网下再切一次屏：JS 与样式都来自缓存
-      await page.evaluate(() => window.IR.Nav.showScreen('shelf'));
-      await sleep(420);
-      offlineBoot.shelfVisible = await page.evaluate(() => !!document.querySelector('#screen-shelf:not(.hidden)'));
+      await page.click('#btn-start-shelf');
+      await page.waitForSelector('#screen-shelf:not(.hidden)', { timeout: 8000 });
+      offlineBoot.shelfVisible = true;
     }
     data.steps.offline = { reloadError, boot: offlineBoot };
   } catch (e) {
@@ -230,8 +234,8 @@ async function runPwa(browser, port) {
     !!(data.steps.online && data.steps.online.cacheInfo && data.steps.online.cacheInfo.entries > 0),
     JSON.stringify((data.steps.online || {}).cacheInfo || {}));
   add('PWA：断网后 reload 成功（导航回退到预缓存 index.html）', !reloadError, reloadError || 'ok');
-  add('PWA：断网下应用启动（IR 就绪、首页可见）',
-    offlineBoot.startVisible === true, JSON.stringify(offlineBoot));
+  add('PWA：断网下应用启动（首页可见、档位落定）',
+    offlineBoot.startVisible === true && !!offlineBoot.motion, JSON.stringify(offlineBoot));
   add('PWA：断网下导航器报告离线（navigator.onLine=false）', offlineBoot.online === false, String(offlineBoot.online));
   add('PWA：断网下页面仍由 SW 控制', offlineBoot.controlled === true, String(offlineBoot.controlled));
   add('PWA：断网下切屏可用（书架可见）', offlineBoot.shelfVisible === true, String(offlineBoot.shelfVisible));

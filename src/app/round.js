@@ -1,11 +1,17 @@
 /*
- * js/app/round.js —— 回合编排：callAI1 / 玩家行动 / 开场 / 工具执行 / 旁白收尾
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/round.js —— 回合编排：callAI1 / 玩家行动 / 开场 / 工具执行 / 旁白收尾
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Context } from '../core/context.ts';
+import { Proposals } from '../core/proposals.ts';
+import { Prefs } from '../core/prefs.ts';
+import { ChatProviders } from '../core/providers.ts';
+import { Tree } from '../core/tree.ts';
+import { Features } from '../core/features.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, KIND_LABELS, isStopError, setSendButtonsBusy, toast, netErrHint, offlineBlocked, saveAll } = A;
 
   async function handleToolCalls(calls) {
@@ -24,8 +30,8 @@
         continue;
       }
       A.applyToolCall(rawCall);
-      if (IR.Context.isRecallTool(c.name)) {
-        recallScopes.push(IR.Context.RECALL_TOOL_SCOPE[c.name]);
+      if (Context.isRecallTool(c.name)) {
+        recallScopes.push(Context.RECALL_TOOL_SCOPE[c.name]);
       } else if (c.name === 'request_image') {
         // §3.A：不再 await——任务进作画队列立刻返回，图在后台出、完成后落回本回合
         A.submitToolPaint(c.args);
@@ -33,9 +39,9 @@
           + '\n（图会稍后自动出现在聊天里。正文里可以自然提一句，但不要声称图已经画好，也不要说「工具」「系统」。）');
       } else if (c.name === 'update_memory') {
         feedback.push('[记忆已更新]\n' + ((c.args && c.args.text) || '世界卡 / 关系已写入'));
-      } else if (IR.Context.isScheduleTool(c.name)) {
+      } else if (Context.isScheduleTool(c.name)) {
         feedback.push(await A.runScheduleTool(c.name, c.args));
-      } else if (IR.Context.isProposalTool(c.name)) {
+      } else if (Context.isProposalTool(c.name)) {
         // 提案制（红线 1）：只产生提案卡，绝不执行发送 / 扣款；执行要等用户在界面上点「确认」
         feedback.push(A.runProposalTool(c.name, c.args));
       }
@@ -49,7 +55,7 @@
   }
 
   // email_propose / payment_propose → 建提案（红线 1/2/3）：
-  // 提案路径只走 IR.Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
+  // 提案路径只走 Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
 
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发（§4.5）
@@ -59,17 +65,17 @@
   function buildAI1Request(playerAction, opts) {
     opts = opts || {};
     // UI-3 §3.3：主模型配置一律走 resolveChatCfg（本对话 profile → 模型库；缺省 = 默认主模型）
-    const resolved = IR.Prefs.resolveChatCfg(S.settings, S.story);
+    const resolved = Prefs.resolveChatCfg(S.settings, S.story);
     const cfg = resolved.cfg;
     S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
-    const adapter = IR.ChatProviders[cfg.provider] || IR.ChatProviders['openai-compatible'];
+    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
 
     S.turnAnchor = { nodeId: null, dead: false };   // §3.A.4：本回合锚点，工具出图任务提交时带上
     // C-E 启发式注入（T-P5-3）：玩家输入命中世界卡 / 伏笔实体词 → 本轮自动带上对应条目（与工具召回并行）。
     // 只在「新回合」留痕（重试不重复记），条目本身由 assembleAI1 注入，用户可在留痕面板看到：静默忽略工具时也照带。
     const prevEntry = S.story.log[S.story.log.length - 1];
     if (prevEntry && (prevEntry.type === 'player' || prevEntry.type === 'choice')) {
-      const hit = IR.Context.matchEntityTerms(playerAction, S.story.world);
+      const hit = Context.matchEntityTerms(playerAction, S.story.world);
       if (hit.terms.length) pushLog({ type: 'tool', tool: 'heuristic', summary: '自动带上相关记忆：' + hit.terms.join('、') });
     }
     // 🧠 注入记忆（§4.4 手动层）：一次性，本轮把完整记忆直接压进上下文（不用 tool_choice，第十六轮定案）
@@ -81,8 +87,8 @@
     }
 
     // UI-3 §3.3：工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）
-    const prefsTools = IR.Prefs.effective(S.settings, S.story, 'tools');
-    const toolAllowed = (t) => prefsTools[IR.Prefs.toolCategory(t.function.name)] !== false;
+    const prefsTools = Prefs.effective(S.settings, S.story, 'tools');
+    const toolAllowed = (t) => prefsTools[Prefs.toolCategory(t.function.name)] !== false;
     const toolsOn = opts.tools !== false && !opts.recall
       && S.settings.toolsEnabled !== 'off' && !A.noToolsFor(cfg);
     // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
@@ -96,7 +102,7 @@
     };
     const asmOpts = Object.assign({}, opts);
     if (toolsOn) {
-      asmOpts.tools = IR.Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed).map(t => t.function.name);
+      asmOpts.tools = Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed).map(t => t.function.name);
     }
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = A.activeProfileEntries();   // R13：画像按开关 / 范围注入（关则空数组，零成本）
@@ -106,21 +112,21 @@
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
     // 审查 三·3：估算直接用本次组装结果（estimateTokensOf），不再「估一次、组一次、压缩时再估一次」；
     // 超预算才压一次并重组——常态一回合只组装一次。
-    let messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
+    let messages = Context.assembleAI1(S.story, playerAction, asmOpts);
     try {
       const cw = asmOpts.contextWindow;
       if (cw > 0) {
-        const est = IR.Context.estimateTokensOf(messages);
-        if (est > IR.Context.compressThreshold(cw)) {
-          IR.Context.compressStory(S.story, {
-            summarize: IR.Context.localSummarize, contextWindow: cw, estimatedTokens: est,
+        const est = Context.estimateTokensOf(messages);
+        if (est > Context.compressThreshold(cw)) {
+          Context.compressStory(S.story, {
+            summarize: Context.localSummarize, contextWindow: cw, estimatedTokens: est,
           });
-          messages = IR.Context.assembleAI1(S.story, playerAction, asmOpts);
+          messages = Context.assembleAI1(S.story, playerAction, asmOpts);
         }
       }
     } catch (_) { /* 压缩失败不拦回合：最坏按原样发 */ }
     const cfgTools = toolsOn
-      ? Object.assign({}, cfg, { tools: IR.Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed) })
+      ? Object.assign({}, cfg, { tools: Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed) })
       : cfg;
     return { adapter: adapter, cfg: cfg, cfgTools: cfgTools, messages: messages, asmOpts: asmOpts, toolsOn: toolsOn };
   }
@@ -149,11 +155,11 @@
     // 同名同参去重（流式与回包可能重复上报），再按每轮上限裁剪（§4.5）
     calls = calls.filter((c, i) => calls.findIndex(x => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args)) === i);
     // P2-10（2026-10-14）：超出上限的调用不再静默丢弃——留痕让玩家可见，重发时也告知模型
-    const droppedCalls = calls.slice(IR.Context.MAX_TOOL_CALLS_PER_TURN);
+    const droppedCalls = calls.slice(Context.MAX_TOOL_CALLS_PER_TURN);
     if (droppedCalls.length) {
       pushLog({ type: 'tool', tool: 'limit', summary: '已达本轮工具上限，未执行：' + droppedCalls.map(c => c.name).join('、') });
     }
-    calls = calls.slice(0, IR.Context.MAX_TOOL_CALLS_PER_TURN);
+    calls = calls.slice(0, Context.MAX_TOOL_CALLS_PER_TURN);
     reply1.tool_calls = [];   // 已经处理过：避免 absorbReply 再记一次留痕
 
     const effect = calls.length ? await handleToolCalls(calls) : { recallScopes: [], feedback: [], toolUnavailable: false };
@@ -180,7 +186,7 @@
       const secondOpts = Object.assign({}, asmOpts, { recall: effect.recallScopes, inject: injects });
       delete secondOpts.tools;
       const second = await A.streamAI1(adapter, cfg,
-        IR.Context.assembleAI1(S.story, playerAction, secondOpts),
+        Context.assembleAI1(S.story, playerAction, secondOpts),
         { onReasoning(piece) { reasoning += piece; if (S.live) S.live.reasoning = reasoning; A.updateLiveReasoning(); } });
       const reply2 = A.parseAIReply(second.text);
       const ok2 = !!(reply2.narration || reply2.choices.length);
@@ -268,7 +274,7 @@
     S.choicesTrayOpen = false;
     setSendButtonsBusy(true);   // P0-1：busy 期间发送按钮变身「停止」
 
-    const mark = IR.Tree.begin(S.story);   // 记 logMark：必须在 pushLog 之前（§4.1）
+    const mark = Tree.begin(S.story);   // 记 logMark：必须在 pushLog 之前（§4.1）
     pushLog(agentMsg
       ? { type: 'agent', text: action, trigger: meta.triggerName || '', reason: meta.reason || '', fireId: meta.fireId || '' }
       : { type: isChoice ? 'choice' : 'player', text: action, kind: kind || 'do' });
@@ -279,7 +285,7 @@
       const reply = res.reply;
       S.story.turn += 1;
       S.story.lastSceneSummary = reply.scene_summary || S.story.lastSceneSummary;
-      const userMsg = { role: 'user', content: IR.Context.playerContent(S.story.premise, sentAction) };
+      const userMsg = { role: 'user', content: Context.playerContent(S.story.premise, sentAction) };
       const asst = A.assistantMessage(reply, res.reasoning);
       S.story.messages.push(userMsg, asst);
       A.pushNarrationEntry(reply.narration, res.reasoning);
@@ -289,7 +295,7 @@
       A.renderChat();
       // §4.1 回合落节点：entries = log.slice(logMark)，head 前移；失败 / 停止不建节点
       // UI-3 §3.3：meta.model 记下本回合实际用的模型名（不含任何密钥 / URL），分支页可显示
-      const node = IR.Tree.commit(S.story, {
+      const node = Tree.commit(S.story, {
         action: {
           type: agentMsg ? 'agent' : (isChoice ? 'choice' : 'player'),
           text: action, kind: kind || null, sent: sentAction,
@@ -299,7 +305,7 @@
       });
       S.turnAnchor.nodeId = node.id;                // §3.A.4：锚点补 nodeId，后台出图任务写回时落位
       await A.postTurn();
-      IR.Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
+      Tree.seal(S.story, node.id);               // 必须在 postTurn 之后（§10）：收进压缩 / 书记员的 tool 条目
       A.maybeAutoTitle();                          // UI-2 §3.3：seal 后异步起标题，不占 busy、不阻塞下一次发送
       if (agentMsg && meta.fireId) await A.ackProactive(meta.fireId);   // 已送达：从侧车队列里销掉
     } catch (e) {
@@ -318,7 +324,7 @@
       S.live = null; S.liveEl = null;
       setSendButtonsBusy(false);
       A.renderChat();
-      if (IR.Features) IR.Features.drain();   // 忙完了，看看排队的主动消息能不能送
+      if (Features) Features.drain();   // 忙完了，看看排队的主动消息能不能送
     }
   }
 
@@ -350,13 +356,13 @@
     S.busy = true;
     S.stopRequested = false; S.chatAbortCtrl = null;   // P0-1
     setSendButtonsBusy(true);
-    const mark = IR.Tree.begin(S.story);             // 记 logMark（§4.1）
+    const mark = Tree.begin(S.story);             // 记 logMark（§4.1）
     try {
       const res = await callAI1(OPENING_ACTION, { includePremise: true });
       const reply = res.reply;
       S.story.turn += 1;
       S.story.lastSceneSummary = reply.scene_summary || '';
-      const userMsg = { role: 'user', content: IR.Context.playerContent(S.story.premise, OPENING_ACTION, { includePremise: true }) };
+      const userMsg = { role: 'user', content: Context.playerContent(S.story.premise, OPENING_ACTION, { includePremise: true }) };
       const asst = A.assistantMessage(reply, res.reasoning);
       S.story.messages.push(userMsg, asst);
       A.pushNarrationEntry(reply.narration, res.reasoning);
@@ -365,14 +371,14 @@
       S.currentChoices = reply.choices;
       A.renderChat();
       // 开局同样是节点（§4.1）：action.type = 'opening'，sent = OPENING_ACTION
-      const node = IR.Tree.commit(S.story, {
+      const node = Tree.commit(S.story, {
         action: { type: 'opening', text: OPENING_ACTION, kind: null, sent: OPENING_ACTION },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
         meta: { model: S.turnModel || '' },   // UI-3 §3.3
       });
       S.turnAnchor.nodeId = node.id;                 // §3.A.4：锚点补 nodeId
       await A.postTurn();
-      IR.Tree.seal(S.story, node.id);                // 必须在 postTurn 之后（§10）
+      Tree.seal(S.story, node.id);                // 必须在 postTurn 之后（§10）
       A.maybeAutoTitle();                           // UI-2 §3.3：开局回合同样触发自动标题
       // P-1（§3.1）：开局不再自动出图——图只来自用户点 🎨（作画）/ 工作台重画
       toast('已开局。想看画面随时点右上角「作画」。');
@@ -417,4 +423,4 @@
   }
 
   A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText });
-})();
+

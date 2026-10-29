@@ -1,12 +1,12 @@
 <script>
   /* PainterModal.svelte —— #modal-painter「画师工作台」（屏 6c 重建）
-   * 行为全在 js/app/painter.js + js/app/video.js，按 legacy 的 id 读写：
+   * 行为全在 src/app/painter.js + src/app/video.js，按 legacy 的 id 读写：
    *   pw-preview / pw-alt / pw-prompt / pw-meta（renderWorkbench 灌值）
    *   pw-aspect / pw-width / pw-height / pw-size（pwParamsToForm / pwShowWh 双向读写）
    *   pw-thread（renderPainterThread 逐条 append）/ pw-video-list（renderWorkbenchVideo append）
    * 这三块动态面仍由 legacy 负责：组件只给一个空容器，Svelte 不管它的子节点，
    * 所以「清空 + 重新追加」的老写法不会和组件打架（与屏 2 设置屏的 mono-list 同一口径）。
-   * 关闭按钮（btn-close-painter / btn-pw-close）由 js/app.js 绑到 A.closeWorkbench，
+   * 关闭按钮（btn-close-painter / btn-pw-close）由 src/app/main.js 绑到 A.closeWorkbench，
    * 这里不挂 handler——挂了会双触发一次 closeModal。
    */
   import Card from './Card.svelte';

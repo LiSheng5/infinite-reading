@@ -1,14 +1,13 @@
 {
   "project": "infinite-reading",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "stage": "阶段 5 · 第 8 步 · 过渡期循环冻结（收尾）",
-  "generatedAt": "2026-10-28T15:01:04.677Z",
+  "generatedAt": "2026-10-29T04:40:12.637Z",
   "tool": "acceptance/phase5/8/loop-freeze-smoke.mjs",
   "entry": "file:///D:/infinite-reading/dist/single/index.html",
   "how": {
-    "probe": "页面里插入 position:fixed 放到视口外的循环元素（kenBurns 4s infinite）+ 一个 animation-play-state:paused 的对照元素；逐帧读 document.getAnimations() 的 playState / currentTime，并同步记 IR.MotionDOM.loopsHeld()",
+    "probe": "页面里插入 position:fixed 放到视口外的循环元素（kenBurns 4s infinite）+ 一个 animation-play-state:paused 的对照元素；逐帧读 document.getAnimations() 的 playState / currentTime，并同步记 __IR_TEST__.MotionDOM.loopsHeld()",
     "freeze": "VT 的 update 回调里（新快照拍摄前）暂停所有正在跑的真实 DOM 循环；过渡收尾（含 skip / 被顶掉）计数式解冻",
-    "budget": "hold 期间 registerLoop / 注销只记账不重排（data-loop 不抖），解冻后统一收敛到 Motion.LOOP_BUDGET",
     "note": "off / ?vt=0 没有快照，不冻结也不干预；本来停着的循环（data-paused / 预算排队 / 刻意暂停）不会被解冻逻辑复活"
   },
   "scenarios": [
@@ -21,184 +20,205 @@
       "dataMotion": "off",
       "samples": [
         {
-          "t": 1.5,
+          "t": 1,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 8.4,
+          "t": 10.8,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 26.2,
+          "t": 27.4,
           "playState": "running",
-          "currentTime": 0,
+          "currentTime": 16.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 44.4,
+          "t": 102.6,
           "playState": "running",
-          "currentTime": 18,
+          "currentTime": 83.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 151.7,
+          "t": 111,
           "playState": "running",
-          "currentTime": 124.8,
+          "currentTime": 100.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 168.2,
+          "t": 127.6,
           "playState": "running",
-          "currentTime": 142.1,
+          "currentTime": 117,
           "held": false,
           "vt": false
         },
         {
-          "t": 185.6,
+          "t": 144.3,
           "playState": "running",
-          "currentTime": 159.2,
+          "currentTime": 133.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 203.6,
+          "t": 160.8,
           "playState": "running",
-          "currentTime": 177.2,
+          "currentTime": 150.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 220.7,
+          "t": 177.7,
           "playState": "running",
-          "currentTime": 194.5,
+          "currentTime": 167,
           "held": false,
           "vt": false
         },
         {
-          "t": 238,
+          "t": 194.3,
           "playState": "running",
-          "currentTime": 211.8,
+          "currentTime": 183.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 255.4,
+          "t": 210.8,
           "playState": "running",
-          "currentTime": 229.3,
+          "currentTime": 200.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 272.7,
+          "t": 227.4,
           "playState": "running",
-          "currentTime": 246.5,
+          "currentTime": 216.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 289.8,
+          "t": 243.9,
           "playState": "running",
-          "currentTime": 263.6,
+          "currentTime": 233.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 307,
+          "t": 260.5,
           "playState": "running",
-          "currentTime": 280.9,
+          "currentTime": 250.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 324.4,
+          "t": 277.2,
           "playState": "running",
-          "currentTime": 298.1,
+          "currentTime": 266.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 342.2,
+          "t": 293.9,
           "playState": "running",
-          "currentTime": 316,
+          "currentTime": 283.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 359.6,
+          "t": 310.9,
           "playState": "running",
-          "currentTime": 333.3,
+          "currentTime": 300.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 377.6,
+          "t": 327.6,
           "playState": "running",
-          "currentTime": 351.3,
+          "currentTime": 317,
           "held": false,
           "vt": false
         },
         {
-          "t": 394.9,
+          "t": 343.9,
           "playState": "running",
-          "currentTime": 368.8,
+          "currentTime": 333.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 412,
+          "t": 360.8,
           "playState": "running",
-          "currentTime": 385.9,
+          "currentTime": 350.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 429.2,
+          "t": 377.5,
           "playState": "running",
-          "currentTime": 403.1,
+          "currentTime": 366.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 447.3,
+          "t": 394,
           "playState": "running",
-          "currentTime": 421,
+          "currentTime": 383.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 464.4,
+          "t": 410.9,
           "playState": "running",
-          "currentTime": 438.2,
+          "currentTime": 400.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 481.7,
+          "t": 427.4,
           "playState": "running",
-          "currentTime": 455.5,
+          "currentTime": 416.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 499.5,
+          "t": 443.9,
           "playState": "running",
-          "currentTime": 473.1,
+          "currentTime": 433.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 516.7,
+          "t": 460.5,
           "playState": "running",
-          "currentTime": 490.5,
+          "currentTime": 450,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 477.1,
+          "playState": "running",
+          "currentTime": 466.6,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 494,
+          "playState": "running",
+          "currentTime": 483.4,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 510.6,
+          "playState": "running",
+          "currentTime": 500.1,
           "held": false,
           "vt": false
         }
@@ -209,7 +229,7 @@
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 1262.8
+            "currentTime": 1266.7
           },
           {
             "id": "__lp_paused",
@@ -230,7 +250,7 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":1.5,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+          "detail": "{\"t\":1,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
         },
         {
           "name": "没有冻结：采到 0 帧 paused",
@@ -243,9 +263,9 @@
           "detail": "held=0"
         },
         {
-          "name": "循环时间正常前进（490.5ms / 520ms 窗口）",
+          "name": "循环时间正常前进（500.1ms / 520ms 窗口）",
           "ok": true,
-          "detail": "advance=490.5"
+          "detail": "advance=500.1"
         },
         {
           "name": "没有出现快照动画（off / ?vt=0 不开 VT）",
@@ -275,212 +295,226 @@
       "dataMotion": "standard",
       "samples": [
         {
-          "t": 4.1,
+          "t": 3.2,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 10.4,
+          "t": 5.7,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 44.8,
+          "t": 22.2,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 62.5,
+          "t": 39.4,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 79.7,
+          "t": 56.1,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 97.7,
+          "t": 72.5,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 114.8,
+          "t": 89.4,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 132,
+          "t": 105.7,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 149.5,
+          "t": 122.5,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 166.8,
+          "t": 139.2,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 184.7,
+          "t": 155.6,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 202.1,
+          "t": 172.8,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 219.3,
+          "t": 189.1,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 236.6,
+          "t": 205.6,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 253.6,
+          "t": 222.4,
           "playState": "running",
-          "currentTime": 17.3,
+          "currentTime": 16.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 270.9,
+          "t": 239.1,
           "playState": "running",
-          "currentTime": 34.6,
+          "currentTime": 33.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 288.6,
+          "t": 255.4,
           "playState": "running",
-          "currentTime": 52.3,
+          "currentTime": 49.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 305.9,
+          "t": 272.2,
           "playState": "running",
-          "currentTime": 69.6,
+          "currentTime": 66.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 323.5,
+          "t": 289.2,
           "playState": "running",
-          "currentTime": 87.3,
+          "currentTime": 83.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 340.8,
+          "t": 305.6,
           "playState": "running",
-          "currentTime": 104.5,
+          "currentTime": 100,
           "held": false,
           "vt": false
         },
         {
-          "t": 358,
+          "t": 322.6,
           "playState": "running",
-          "currentTime": 121.7,
+          "currentTime": 117,
           "held": false,
           "vt": false
         },
         {
-          "t": 375.1,
+          "t": 339.2,
           "playState": "running",
-          "currentTime": 138.9,
+          "currentTime": 133.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 392.5,
+          "t": 355.7,
           "playState": "running",
-          "currentTime": 156.1,
+          "currentTime": 150.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 409.8,
+          "t": 372.1,
           "playState": "running",
-          "currentTime": 173.4,
+          "currentTime": 166.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 427,
+          "t": 388.7,
           "playState": "running",
-          "currentTime": 190.8,
+          "currentTime": 183.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 445.2,
+          "t": 405.2,
           "playState": "running",
-          "currentTime": 208.7,
+          "currentTime": 199.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 462.5,
+          "t": 422.1,
           "playState": "running",
-          "currentTime": 226.3,
+          "currentTime": 216.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 479.9,
+          "t": 438.7,
           "playState": "running",
-          "currentTime": 243.6,
+          "currentTime": 233.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 497.1,
+          "t": 455.4,
           "playState": "running",
-          "currentTime": 260.8,
+          "currentTime": 250,
           "held": false,
           "vt": false
         },
         {
-          "t": 514.2,
+          "t": 472.4,
           "playState": "running",
-          "currentTime": 277.9,
+          "currentTime": 266.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 488.7,
+          "playState": "running",
+          "currentTime": 283.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 505.8,
+          "playState": "running",
+          "currentTime": 300.2,
           "held": false,
           "vt": false
         }
@@ -491,7 +525,7 @@
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 898.2
+            "currentTime": 933.5
           },
           {
             "id": "__lp_paused",
@@ -512,7 +546,7 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":4.1,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+          "detail": "{\"t\":3.2,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
         },
         {
           "name": "过渡期间确实冻结：paused 帧 ≥ 2",
@@ -522,7 +556,7 @@
         {
           "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
           "ok": true,
-          "detail": "firstPausedAt=44.8"
+          "detail": "firstPausedAt=22.2"
         },
         {
           "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
@@ -542,15 +576,15 @@
         {
           "name": "过渡收尾后循环恢复播放",
           "ok": true,
-          "detail": "last={\"t\":514.2,\"playState\":\"running\",\"currentTime\":277.9,\"held\":false,\"vt\":false}"
+          "detail": "last={\"t\":505.8,\"playState\":\"running\",\"currentTime\":300.2,\"held\":false,\"vt\":false}"
         },
         {
           "name": "恢复后 currentTime 继续前进（解冻不是重置）",
           "ok": true,
-          "detail": "resumeAdvance=277.9"
+          "detail": "resumeAdvance=300.2"
         },
         {
-          "name": "收尾后不再有 paused 帧（514.2ms 窗口）",
+          "name": "收尾后不再有 paused 帧（505.8ms 窗口）",
           "ok": true,
           "detail": "pausedLate=0"
         },
@@ -587,212 +621,219 @@
       "dataMotion": "rich",
       "samples": [
         {
-          "t": 4.7,
+          "t": 4.3,
           "playState": "running",
-          "currentTime": 400.5,
+          "currentTime": 433.4,
           "held": false,
           "vt": true
         },
         {
-          "t": 9.8,
+          "t": 13.2,
           "playState": "running",
-          "currentTime": 421,
+          "currentTime": 450.4,
           "held": false,
           "vt": true
         },
         {
-          "t": 44.3,
+          "t": 45.2,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 61.7,
+          "t": 62.1,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 79.8,
+          "t": 78.4,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 97.1,
+          "t": 95.3,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 114.3,
+          "t": 111.9,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 131.7,
+          "t": 128.6,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 149,
+          "t": 145.7,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 166.2,
+          "t": 161.9,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 183.4,
+          "t": 178.6,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 200.7,
+          "t": 195.6,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 218.4,
+          "t": 211.9,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 235.9,
+          "t": 228.9,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 253.2,
+          "t": 245.5,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 270.2,
+          "t": 261.9,
           "playState": "paused",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": true,
           "vt": true
         },
         {
-          "t": 287.4,
+          "t": 278.6,
+          "playState": "paused",
+          "currentTime": 483.4,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 295.1,
           "playState": "running",
-          "currentTime": 456.3,
+          "currentTime": 483.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 304.7,
+          "t": 311.7,
           "playState": "running",
-          "currentTime": 473.5,
+          "currentTime": 500,
           "held": false,
           "vt": false
         },
         {
-          "t": 321.8,
+          "t": 328.5,
           "playState": "running",
-          "currentTime": 490.8,
+          "currentTime": 516.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 339.1,
+          "t": 345.1,
           "playState": "running",
-          "currentTime": 508,
+          "currentTime": 533.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 356.9,
+          "t": 361.8,
           "playState": "running",
-          "currentTime": 526,
+          "currentTime": 550,
           "held": false,
           "vt": false
         },
         {
-          "t": 374.2,
+          "t": 378.9,
           "playState": "running",
-          "currentTime": 543.3,
+          "currentTime": 567,
           "held": false,
           "vt": false
         },
         {
-          "t": 391.4,
+          "t": 395,
           "playState": "running",
-          "currentTime": 560.4,
+          "currentTime": 583.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 409.1,
+          "t": 411.8,
           "playState": "running",
-          "currentTime": 578.2,
+          "currentTime": 599.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 426.4,
+          "t": 428.8,
           "playState": "running",
-          "currentTime": 595.4,
+          "currentTime": 616.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 443.9,
+          "t": 445.1,
           "playState": "running",
-          "currentTime": 612.8,
+          "currentTime": 633.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 461,
+          "t": 461.8,
           "playState": "running",
-          "currentTime": 630,
+          "currentTime": 650.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 479.1,
+          "t": 478.3,
           "playState": "running",
-          "currentTime": 647.9,
+          "currentTime": 666.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 496.4,
+          "t": 495,
           "playState": "running",
-          "currentTime": 665.4,
+          "currentTime": 683.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 514.2,
+          "t": 511.6,
           "playState": "running",
-          "currentTime": 683.2,
+          "currentTime": 700,
           "held": false,
           "vt": false
         }
@@ -803,302 +844,302 @@
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 151.2
+            "currentTime": 150.1
           },
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 886.4
+            "currentTime": 900.2
           },
           {
             "id": "__lp_paused",
@@ -1118,17 +1159,17 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":4.7,\"playState\":\"running\",\"currentTime\":400.5,\"held\":false,\"vt\":true}"
+          "detail": "{\"t\":4.3,\"playState\":\"running\",\"currentTime\":433.4,\"held\":false,\"vt\":true}"
         },
         {
           "name": "过渡期间确实冻结：paused 帧 ≥ 2",
           "ok": true,
-          "detail": "paused=14"
+          "detail": "paused=15"
         },
         {
           "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
           "ok": true,
-          "detail": "firstPausedAt=44.3"
+          "detail": "firstPausedAt=45.2"
         },
         {
           "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
@@ -1138,25 +1179,25 @@
         {
           "name": "冻结期间 hold 在位（held 帧 ≥ 2）",
           "ok": true,
-          "detail": "held=14"
+          "detail": "held=15"
         },
         {
           "name": "出现快照动画（真走 View Transition）",
           "ok": true,
-          "detail": "vtFrames=16"
+          "detail": "vtFrames=17"
         },
         {
           "name": "过渡收尾后循环恢复播放",
           "ok": true,
-          "detail": "last={\"t\":514.2,\"playState\":\"running\",\"currentTime\":683.2,\"held\":false,\"vt\":false}"
+          "detail": "last={\"t\":511.6,\"playState\":\"running\",\"currentTime\":700,\"held\":false,\"vt\":false}"
         },
         {
           "name": "恢复后 currentTime 继续前进（解冻不是重置）",
           "ok": true,
-          "detail": "resumeAdvance=226.9"
+          "detail": "resumeAdvance=216.6"
         },
         {
-          "name": "收尾后不再有 paused 帧（514.2ms 窗口）",
+          "name": "收尾后不再有 paused 帧（511.6ms 窗口）",
           "ok": true,
           "detail": "pausedLate=0"
         },
@@ -1188,205 +1229,219 @@
       "dataMotion": "rich",
       "samples": [
         {
-          "t": 5.4,
+          "t": 4.9,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": true
         },
         {
-          "t": 17.5,
+          "t": 6.1,
           "playState": "running",
-          "currentTime": 18,
+          "currentTime": 0,
           "held": false,
           "vt": true
         },
         {
-          "t": 52.6,
+          "t": 38.2,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 69.8,
+          "t": 54.6,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 87,
+          "t": 72.1,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 106.6,
+          "t": 88.2,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 123.7,
+          "t": 105,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 141,
+          "t": 121.7,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 159.1,
+          "t": 138.4,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 176.5,
+          "t": 154.5,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 193.8,
+          "t": 171.1,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 211.7,
+          "t": 187.8,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 229,
+          "t": 204.5,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 246.4,
+          "t": 221.5,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 264.1,
+          "t": 237.9,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 281.8,
+          "t": 254.5,
           "playState": "paused",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 299,
+          "t": 271.3,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 287.8,
           "playState": "running",
-          "currentTime": 52.9,
+          "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 316.5,
+          "t": 304.8,
           "playState": "running",
-          "currentTime": 70.3,
+          "currentTime": 17,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 321.9,
+          "playState": "running",
+          "currentTime": 33.7,
           "held": false,
           "vt": false
         },
         {
           "t": 337.9,
           "playState": "running",
-          "currentTime": 88,
+          "currentTime": 50,
           "held": false,
           "vt": false
         },
         {
-          "t": 352.4,
+          "t": 354.8,
           "playState": "running",
-          "currentTime": 106.2,
+          "currentTime": 66.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 369.8,
+          "t": 371.2,
           "playState": "running",
-          "currentTime": 123.6,
+          "currentTime": 83.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 387,
+          "t": 387.9,
           "playState": "running",
-          "currentTime": 140.9,
+          "currentTime": 100.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 404.3,
+          "t": 404.6,
           "playState": "running",
-          "currentTime": 158.1,
+          "currentTime": 116.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 421.4,
+          "t": 421.2,
           "playState": "running",
-          "currentTime": 175.4,
+          "currentTime": 133.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 438.7,
+          "t": 437.9,
           "playState": "running",
-          "currentTime": 192.6,
+          "currentTime": 150.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 456,
+          "t": 454.6,
           "playState": "running",
-          "currentTime": 209.9,
+          "currentTime": 166.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 474,
+          "t": 471.1,
           "playState": "running",
-          "currentTime": 227.8,
+          "currentTime": 183.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 491.4,
+          "t": 488,
           "playState": "running",
-          "currentTime": 245.2,
+          "currentTime": 200.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 509.5,
+          "t": 504.9,
           "playState": "running",
-          "currentTime": 263.4,
+          "currentTime": 217,
           "held": false,
           "vt": false
         }
@@ -1397,302 +1452,302 @@
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1311.4
+            "currentTime": 1317.1
           },
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 888.5
+            "currentTime": 833.6
           },
           {
             "id": "__lp_paused",
@@ -1713,17 +1768,17 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":5.4,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+          "detail": "{\"t\":4.9,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
         },
         {
           "name": "过渡期间确实冻结：paused 帧 ≥ 2",
           "ok": true,
-          "detail": "paused=14"
+          "detail": "paused=15"
         },
         {
           "name": "冻结发生在过渡开头（首帧 paused ≤ 150ms）",
           "ok": true,
-          "detail": "firstPausedAt=52.6"
+          "detail": "firstPausedAt=38.2"
         },
         {
           "name": "冻结期间 currentTime 不动（差 ≤ 2ms）",
@@ -1733,25 +1788,25 @@
         {
           "name": "冻结期间 hold 在位（held 帧 ≥ 2）",
           "ok": true,
-          "detail": "held=14"
+          "detail": "held=15"
         },
         {
           "name": "出现快照动画（真走 View Transition）",
           "ok": true,
-          "detail": "vtFrames=16"
+          "detail": "vtFrames=17"
         },
         {
           "name": "过渡收尾后循环恢复播放",
           "ok": true,
-          "detail": "last={\"t\":509.5,\"playState\":\"running\",\"currentTime\":263.4,\"held\":false,\"vt\":false}"
+          "detail": "last={\"t\":504.9,\"playState\":\"running\",\"currentTime\":217,\"held\":false,\"vt\":false}"
         },
         {
           "name": "恢复后 currentTime 继续前进（解冻不是重置）",
           "ok": true,
-          "detail": "resumeAdvance=210.5"
+          "detail": "resumeAdvance=217"
         },
         {
-          "name": "收尾后不再有 paused 帧（509.5ms 窗口）",
+          "name": "收尾后不再有 paused 帧（504.9ms 窗口）",
           "ok": true,
           "detail": "pausedLate=0"
         },
@@ -1788,219 +1843,226 @@
       "dataMotion": "rich",
       "samples": [
         {
-          "t": 2.9,
+          "t": 2.2,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 13.5,
+          "t": 15.2,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 31.5,
+          "t": 32.3,
           "playState": "running",
-          "currentTime": 0,
+          "currentTime": 16.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 48.5,
+          "t": 48.8,
           "playState": "running",
-          "currentTime": 17.1,
+          "currentTime": 33.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 65.9,
+          "t": 65.2,
           "playState": "running",
-          "currentTime": 34.4,
+          "currentTime": 50,
           "held": false,
           "vt": false
         },
         {
-          "t": 83.4,
+          "t": 82,
           "playState": "running",
-          "currentTime": 52,
+          "currentTime": 66.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 100.7,
+          "t": 99.2,
           "playState": "running",
-          "currentTime": 69.2,
+          "currentTime": 83.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 118.7,
+          "t": 115.2,
           "playState": "running",
-          "currentTime": 87.1,
+          "currentTime": 100,
           "held": false,
           "vt": false
         },
         {
-          "t": 135.9,
+          "t": 132.8,
           "playState": "running",
-          "currentTime": 104.3,
+          "currentTime": 117,
           "held": false,
           "vt": false
         },
         {
-          "t": 153,
+          "t": 148.8,
           "playState": "running",
-          "currentTime": 121.5,
+          "currentTime": 133.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 170.6,
+          "t": 165.7,
           "playState": "running",
-          "currentTime": 139.1,
+          "currentTime": 150.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 187.7,
+          "t": 182.3,
           "playState": "running",
-          "currentTime": 156.3,
+          "currentTime": 166.7,
           "held": false,
           "vt": false
         },
         {
-          "t": 204.7,
+          "t": 198.9,
           "playState": "running",
-          "currentTime": 173.4,
+          "currentTime": 183.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 222.1,
+          "t": 215.2,
           "playState": "running",
-          "currentTime": 190.8,
+          "currentTime": 200,
           "held": false,
           "vt": false
         },
         {
-          "t": 239.8,
+          "t": 232.1,
           "playState": "running",
-          "currentTime": 208.3,
+          "currentTime": 216.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 256.8,
+          "t": 248.8,
           "playState": "running",
-          "currentTime": 225.4,
+          "currentTime": 233.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 274.3,
+          "t": 265.3,
           "playState": "running",
-          "currentTime": 242.9,
+          "currentTime": 250,
           "held": false,
           "vt": false
         },
         {
-          "t": 292.3,
+          "t": 282.2,
           "playState": "running",
-          "currentTime": 261,
+          "currentTime": 266.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 310.7,
+          "t": 298.7,
           "playState": "running",
-          "currentTime": 279.3,
+          "currentTime": 283.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 328,
+          "t": 315.6,
           "playState": "running",
-          "currentTime": 296.7,
+          "currentTime": 300.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 346.1,
+          "t": 332.5,
           "playState": "running",
-          "currentTime": 314.8,
+          "currentTime": 316.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 363.4,
+          "t": 348.7,
           "playState": "running",
-          "currentTime": 332.1,
+          "currentTime": 333.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 381,
+          "t": 365.8,
           "playState": "running",
-          "currentTime": 349.4,
+          "currentTime": 350.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 398.3,
+          "t": 382.2,
           "playState": "running",
-          "currentTime": 366.5,
+          "currentTime": 366.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 415.2,
+          "t": 398.7,
           "playState": "running",
-          "currentTime": 383.8,
+          "currentTime": 383.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 432.3,
+          "t": 415.4,
           "playState": "running",
-          "currentTime": 401.1,
+          "currentTime": 400,
           "held": false,
           "vt": false
         },
         {
-          "t": 449.7,
+          "t": 432.1,
           "playState": "running",
-          "currentTime": 418.3,
+          "currentTime": 416.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 466.9,
+          "t": 448.6,
           "playState": "running",
-          "currentTime": 435.5,
+          "currentTime": 433.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 484.8,
+          "t": 465.4,
           "playState": "running",
-          "currentTime": 453.5,
+          "currentTime": 450,
           "held": false,
           "vt": false
         },
         {
-          "t": 502.5,
+          "t": 482,
           "playState": "running",
-          "currentTime": 470.8,
+          "currentTime": 466.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 519.5,
+          "t": 498.7,
           "playState": "running",
-          "currentTime": 488.1,
+          "currentTime": 483.3,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 515.5,
+          "playState": "running",
+          "currentTime": 500.2,
           "held": false,
           "vt": false
         }
@@ -2011,302 +2073,302 @@
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1710.3
+            "currentTime": 1699.8
           },
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 1256.8
+            "currentTime": 1266.6
           },
           {
             "id": "__lp_paused",
@@ -2327,7 +2389,7 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":2.9,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
+          "detail": "{\"t\":2.2,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":false}"
         },
         {
           "name": "没有冻结：采到 0 帧 paused",
@@ -2340,9 +2402,9 @@
           "detail": "held=0"
         },
         {
-          "name": "循环时间正常前进（488.1ms / 520ms 窗口）",
+          "name": "循环时间正常前进（500.2ms / 520ms 窗口）",
           "ok": true,
-          "detail": "advance=488.1"
+          "detail": "advance=500.2"
         },
         {
           "name": "没有出现快照动画（off / ?vt=0 不开 VT）",
@@ -2372,366 +2434,380 @@
       "dataMotion": "rich",
       "samples": [
         {
-          "t": 5.4,
+          "t": 4.3,
           "playState": "running",
           "currentTime": 0,
           "held": false,
           "vt": true
         },
         {
-          "t": 6.7,
+          "t": 16.1,
           "playState": "running",
-          "currentTime": 0,
+          "currentTime": 16.7,
           "held": false,
           "vt": true
         },
         {
-          "t": 41.5,
+          "t": 49.3,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 59.6,
+          "t": 65.9,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 76.4,
+          "t": 82.3,
           "playState": "running",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": false,
           "vt": true
         },
         {
-          "t": 94.6,
+          "t": 99,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 111.8,
+          "t": 115.8,
+          "playState": "running",
+          "currentTime": 50,
+          "held": false,
+          "vt": true
+        },
+        {
+          "t": 132.3,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 128.9,
-          "playState": "running",
-          "currentTime": 0,
-          "held": false,
-          "vt": true
-        },
-        {
-          "t": 146.5,
+          "t": 149.4,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 164.3,
+          "t": 166.2,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 182,
+          "t": 182.7,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 200.3,
+          "t": 199.3,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 217.4,
+          "t": 215.9,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 234.8,
+          "t": 232.4,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 252,
+          "t": 249.2,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 269.4,
+          "t": 265.9,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 286.9,
+          "t": 282.5,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 304.3,
+          "t": 299.2,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 321.7,
+          "t": 316.2,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 339.5,
+          "t": 332.5,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 356.6,
+          "t": 349.3,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 373.7,
+          "t": 366.2,
           "playState": "paused",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": true,
           "vt": true
         },
         {
-          "t": 392,
+          "t": 382.8,
           "playState": "running",
-          "currentTime": 0,
+          "currentTime": 50,
           "held": false,
           "vt": false
         },
         {
-          "t": 409.6,
+          "t": 399.5,
           "playState": "running",
-          "currentTime": 17.4,
+          "currentTime": 66.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 427.1,
+          "t": 416.5,
           "playState": "running",
-          "currentTime": 34.9,
+          "currentTime": 83.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 445.1,
+          "t": 432.5,
           "playState": "running",
-          "currentTime": 53,
+          "currentTime": 99.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 462.4,
+          "t": 449.1,
           "playState": "running",
-          "currentTime": 70.4,
+          "currentTime": 116.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 479.7,
+          "t": 465.8,
           "playState": "running",
-          "currentTime": 87.6,
+          "currentTime": 133.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 496.7,
+          "t": 482.5,
           "playState": "running",
-          "currentTime": 104.8,
+          "currentTime": 149.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 514.4,
+          "t": 499.2,
           "playState": "running",
-          "currentTime": 122.3,
+          "currentTime": 166.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 531.6,
+          "t": 515.9,
           "playState": "running",
-          "currentTime": 139.6,
+          "currentTime": 183.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 548.9,
+          "t": 532.4,
           "playState": "running",
-          "currentTime": 156.8,
+          "currentTime": 199.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 566.2,
+          "t": 549.2,
           "playState": "running",
-          "currentTime": 174.2,
+          "currentTime": 216.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 584.7,
+          "t": 565.9,
           "playState": "running",
-          "currentTime": 192.3,
+          "currentTime": 233.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 601.5,
+          "t": 582.7,
           "playState": "running",
-          "currentTime": 209.5,
+          "currentTime": 250.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 618.6,
+          "t": 599.4,
           "playState": "running",
-          "currentTime": 226.7,
+          "currentTime": 266.6,
           "held": false,
           "vt": false
         },
         {
-          "t": 635.9,
+          "t": 616.2,
           "playState": "running",
-          "currentTime": 243.9,
+          "currentTime": 283.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 654.2,
+          "t": 633.2,
           "playState": "running",
-          "currentTime": 262.1,
+          "currentTime": 300,
           "held": false,
           "vt": false
         },
         {
-          "t": 671.5,
+          "t": 649.4,
           "playState": "running",
-          "currentTime": 279.4,
+          "currentTime": 316.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 688.8,
+          "t": 665.8,
           "playState": "running",
-          "currentTime": 296.6,
+          "currentTime": 333.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 706.5,
-          "playState": "running",
-          "currentTime": 314.4,
-          "held": false,
-          "vt": false
-        },
-        {
-          "t": 724.5,
-          "playState": "running",
-          "currentTime": 332.7,
-          "held": false,
-          "vt": false
-        },
-        {
-          "t": 741.8,
+          "t": 682.7,
           "playState": "running",
           "currentTime": 349.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 759.1,
+          "t": 699.2,
           "playState": "running",
-          "currentTime": 367,
+          "currentTime": 366.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 776.2,
+          "t": 715.8,
           "playState": "running",
-          "currentTime": 384.1,
+          "currentTime": 383.1,
           "held": false,
           "vt": false
         },
         {
-          "t": 793.7,
+          "t": 732.6,
           "playState": "running",
-          "currentTime": 401.7,
+          "currentTime": 399.9,
           "held": false,
           "vt": false
         },
         {
-          "t": 810.9,
+          "t": 749.2,
           "playState": "running",
-          "currentTime": 418.9,
+          "currentTime": 416.5,
           "held": false,
           "vt": false
         },
         {
-          "t": 829,
+          "t": 765.9,
           "playState": "running",
-          "currentTime": 437,
+          "currentTime": 433.2,
           "held": false,
           "vt": false
         },
         {
-          "t": 846.3,
+          "t": 782.7,
           "playState": "running",
-          "currentTime": 454.4,
+          "currentTime": 449.8,
           "held": false,
           "vt": false
         },
         {
-          "t": 863.8,
+          "t": 799.1,
           "playState": "running",
-          "currentTime": 471.9,
+          "currentTime": 466.4,
           "held": false,
           "vt": false
         },
         {
-          "t": 881.7,
+          "t": 816.1,
           "playState": "running",
-          "currentTime": 489.7,
+          "currentTime": 483.3,
           "held": false,
           "vt": false
         },
         {
-          "t": 898.8,
+          "t": 833.2,
           "playState": "running",
-          "currentTime": 506.9,
+          "currentTime": 500.1,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 849.6,
+          "playState": "running",
+          "currentTime": 516.7,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 866.2,
+          "playState": "running",
+          "currentTime": 533.2,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 882.7,
+          "playState": "running",
+          "currentTime": 549.8,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 899.4,
+          "playState": "running",
+          "currentTime": 566.4,
           "held": false,
           "vt": false
         }
@@ -2742,302 +2818,302 @@
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1346.4
+            "currentTime": 1366.3
           },
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 858.3
+            "currentTime": 916.4
           },
           {
             "id": "__lp_paused",
@@ -3060,7 +3136,7 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":5.4,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+          "detail": "{\"t\":4.3,\"playState\":\"running\",\"currentTime\":0,\"held\":false,\"vt\":true}"
         },
         {
           "name": "收尾后 hold=false（没有卡住的冻结计数）",
@@ -3095,126 +3171,140 @@
       "dataMotion": "rich",
       "samples": [
         {
-          "t": 6.2,
+          "t": 4.5,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": true
         },
         {
-          "t": 12.2,
+          "t": 9.3,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": true
         },
         {
-          "t": 48.1,
+          "t": 26.6,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 65.2,
+          "t": 42.9,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 82.7,
+          "t": 60.1,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 100,
+          "t": 76.3,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 117.9,
+          "t": 92.9,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 134.7,
+          "t": 109.8,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 152,
+          "t": 126.5,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 169.2,
+          "t": 142.8,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 186.6,
+          "t": 159.9,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 204.8,
+          "t": 176.6,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 222.1,
+          "t": 193,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 239.9,
+          "t": 209.4,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 257.6,
+          "t": 226.5,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 274.6,
+          "t": 243,
           "playState": "paused",
           "currentTime": 0,
           "held": true,
           "vt": true
         },
         {
-          "t": 291.9,
+          "t": 259.6,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": true,
+          "vt": true
+        },
+        {
+          "t": 276.5,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 309.1,
+          "t": 293.1,
+          "playState": "paused",
+          "currentTime": 0,
+          "held": false,
+          "vt": false
+        },
+        {
+          "t": 309.5,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
@@ -3228,77 +3318,77 @@
           "vt": false
         },
         {
-          "t": 343.7,
+          "t": 342.6,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 361.2,
+          "t": 359.4,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 379.5,
+          "t": 376,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 396.3,
+          "t": 392.6,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 413.6,
+          "t": 409.4,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 430.7,
+          "t": 426,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 447.9,
+          "t": 442.7,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 465.3,
+          "t": 459.7,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 482.2,
+          "t": 476.2,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 499.6,
+          "t": 492.7,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
           "vt": false
         },
         {
-          "t": 517.1,
+          "t": 509.5,
           "playState": "paused",
           "currentTime": 0,
           "held": false,
@@ -3311,302 +3401,302 @@
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "",
             "playState": "running",
-            "currentTime": 1339.4
+            "currentTime": 1316.4
           },
           {
             "id": "__lp_probe",
             "playState": "running",
-            "currentTime": 850.6
+            "currentTime": 849.6
           },
           {
             "id": "__lp_paused",
@@ -3627,17 +3717,17 @@
         {
           "name": "测速循环确实在跑（采样首帧 currentTime 有值）",
           "ok": true,
-          "detail": "{\"t\":6.2,\"playState\":\"paused\",\"currentTime\":0,\"held\":false,\"vt\":true}"
+          "detail": "{\"t\":4.5,\"playState\":\"paused\",\"currentTime\":0,\"held\":false,\"vt\":true}"
         },
         {
           "name": "刻意暂停的循环全程保持 paused（不被解冻逻辑复活）",
           "ok": true,
-          "detail": "paused=30/30 advance=0"
+          "detail": "paused=32/32 advance=0"
         },
         {
           "name": "过渡期间 hold 在位（说明冻结逻辑确实跑过）",
           "ok": true,
-          "detail": "held=14"
+          "detail": "held=15"
         },
         {
           "name": "收尾后它仍是 paused",
@@ -3647,171 +3737,11 @@
       ],
       "ok": true,
       "consoleErrors": []
-    },
-    {
-      "id": "budget-hold",
-      "tier": "rich",
-      "query": "",
-      "expect": "settle",
-      "cap": 220,
-      "dataMotion": "rich",
-      "samples": [],
-      "budget": {
-        "before": [
-          {
-            "id": "__lb1",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb2",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb3",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb4",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb5",
-            "dataLoop": "wait"
-          }
-        ],
-        "beforeSlots": 3,
-        "mid": [
-          {
-            "id": "__lb1",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb2",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb3",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb4",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb5",
-            "dataLoop": "wait"
-          }
-        ],
-        "midAfter": [
-          {
-            "id": "__lb1",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb2",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb3",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb4",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb5",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb6",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb7",
-            "dataLoop": ""
-          }
-        ],
-        "after": [
-          {
-            "id": "__lb1",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb2",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb3",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb4",
-            "dataLoop": ""
-          },
-          {
-            "id": "__lb5",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb6",
-            "dataLoop": "wait"
-          },
-          {
-            "id": "__lb7",
-            "dataLoop": "wait"
-          }
-        ],
-        "slotsAfter": 3,
-        "unregisteredClean": true,
-        "heldMid": true,
-        "heldMidAfter": true,
-        "heldEnd": false
-      },
-      "checks": [
-        {
-          "name": "档位已落定（html[data-motion]=rich）",
-          "ok": true,
-          "detail": "rich"
-        },
-        {
-          "name": "登记 5 组 → 恰好 3 组在预算内（其余 data-loop=\"wait\"）",
-          "ok": true,
-          "detail": "[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"}]"
-        },
-        {
-          "name": "过渡开始后（hold 在位）预算没有被重排：__lb1~__lb5 的属性与登记时一致",
-          "ok": true,
-          "detail": "held=true mid=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"}]"
-        },
-        {
-          "name": "过渡中途注销 / 新登记也不重排：__lb2~__lb5 属性不变、新登记者不抢槽",
-          "ok": true,
-          "detail": "held=true midAfter=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"wait\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"},{\"id\":\"__lb6\",\"dataLoop\":\"\"},{\"id\":\"__lb7\",\"dataLoop\":\"\"}]"
-        },
-        {
-          "name": "解冻后统一收敛：6 组登记里恰好 3 组在预算内",
-          "ok": true,
-          "detail": "slotsAfter=3 after=[{\"id\":\"__lb1\",\"dataLoop\":\"\"},{\"id\":\"__lb2\",\"dataLoop\":\"\"},{\"id\":\"__lb3\",\"dataLoop\":\"\"},{\"id\":\"__lb4\",\"dataLoop\":\"\"},{\"id\":\"__lb5\",\"dataLoop\":\"wait\"},{\"id\":\"__lb6\",\"dataLoop\":\"wait\"},{\"id\":\"__lb7\",\"dataLoop\":\"wait\"}]"
-        },
-        {
-          "name": "注销者的 data-loop 已清掉（不会带着排队标记留在 DOM 上）",
-          "ok": true,
-          "detail": "__lb1={\"id\":\"__lb1\",\"dataLoop\":\"\"}"
-        },
-        {
-          "name": "解冻后 hold 已释放",
-          "ok": true,
-          "detail": "heldEnd=false"
-        }
-      ],
-      "ok": true,
-      "consoleErrors": []
     }
   ],
   "summary": {
-    "scenarios": 8,
-    "checks": 75,
+    "scenarios": 7,
+    "checks": 68,
     "failed": 0,
     "consoleErrors": 0,
     "fatal": "",

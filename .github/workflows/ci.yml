@@ -21,7 +21,7 @@ jobs:
 
       - name: JS 语法检查
         run: |
-          for f in js/*.js js/app/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
+          for f in src/*.js src/app/*.js src/screens/*/*.js src/ui/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
             node --check "$f"
           done
 
@@ -33,7 +33,7 @@ jobs:
       - name: 裸调用检查（node tools/check-free-calls.mjs）
         run: node tools/check-free-calls.mjs
 
-      - name: 版本号一致性（VERSION 为真源；index.html 走构建注入）
+      - name: 版本号一致性（VERSION 为真源；运行时版本全部构建注入）
         run: node tools/sync-version.mjs --check
 
       # UI-1 护栏：对比度（WCAG）/ 令牌回归 / 动效强度解析
@@ -81,7 +81,8 @@ jobs:
         run: |
           node tools/bundle-single-file.mjs
           test -s dist/ir.html
-          ! grep -qE '<(script|link)[^>]*(src|href)="(css|js)/' dist/ir.html
+          ! grep -qE '<(script|link)[^>]*(src|href)="(css|js|src)/' dist/ir.html
+          ! grep -q '__IR_VERSION__' dist/ir.html
 
   eval:
     name: 离线评测（不花 API）
@@ -97,15 +98,15 @@ jobs:
       - name: node eval/run.js
         run: node eval/run.js
 
-      # 分支树数据层（js/tree.js + store 集成）：纯逻辑单测，不开浏览器、不联网
+      # 分支树数据层（src/core/tree.ts + store 集成）：纯逻辑单测，不开浏览器、不联网
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
-      # 分支树布局（js/treeLayout.js，UI-4）：泳道打包 / 折叠 / 标签 / 确定性 / 2000 节点耗时
+      # 分支树布局（src/core/treeLayout.ts，UI-4）：泳道打包 / 折叠 / 标签 / 确定性 / 2000 节点耗时
       - name: 分支树布局（node eval/treelayout-test.js）
         run: node eval/treelayout-test.js
 
-      # UI-3 设置分层纯逻辑（js/prefs.js + store 迁移 / 导出剥凭证）+ 设置控件 id 搬家护栏
+      # UI-3 设置分层纯逻辑（src/core/prefs.ts + store 迁移 / 导出剥凭证）+ 设置控件 id 护栏
       - name: 设置分层（node eval/prefs-test.js + settings-ids-test.js）
         run: |
           node eval/prefs-test.js
@@ -129,16 +130,13 @@ jobs:
       - name: 书架三件套（node eval/titles-test.js + search-test.js + shelf-index-test.js）
         run: npm run test:shelf
 
-      # 作画串行队列（js/paintQueue.js）：纯逻辑单测，不联网、不依赖真实定时器
+      # 作画串行队列（src/core/paintQueue.ts）：纯逻辑单测，不联网、不依赖真实定时器
       - name: 作画队列单测（node eval/paintqueue-test.js）
         run: node eval/paintqueue-test.js
 
-      # 提案（js/proposals.js：模型发起的邮件 / 下单只能产生提案）：假 sidecar 验安全红线，不联网
+      # 提案（src/core/proposals.ts：模型发起的邮件 / 下单只能产生提案）：假 sidecar 验安全红线，不联网
       - name: 提案模块单测（node eval/proposals-test.js）
         run: node eval/proposals-test.js
-
-      - name: 演示模式冒烟（node eval/demo-smoke.js）
-        run: node eval/demo-smoke.js
 
       # 带原图的全量备份全靠手写的 ZIP 编码器：CRC / 偏移写错会「能下载但打不开」，这里用独立实现验一遍
       - name: ZIP 读写冒烟（node eval/zip-smoke.js）

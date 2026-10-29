@@ -216,9 +216,9 @@ function splitTopCommas(s) {
   return out;
 }
 
-// JS 内置与浏览器全局（含项目命名空间 IR）
+// JS 内置与浏览器全局（阶段 6 起项目不再有全局 IR 命名空间）
 const GLOBALS = new Set(`
-IR arguments
+arguments
 console Math JSON Object Array String Number Boolean Symbol Promise Map Set WeakMap WeakSet Date RegExp
 Error TypeError RangeError SyntaxError URIError EvalError AggregateError
 Uint8Array Int8Array Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array ArrayBuffer DataView
@@ -247,6 +247,19 @@ function checkFile(file) {
   const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const code = codeOnlyView(text);
   const declared = declaredNames(code);
+
+  // 阶段 6：应用层改成 ESM 后，import 绑定就是本地声明（默认导入 / 命名导入 / 别名）
+  const importRe = /import\s+(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"][^'"]+['"]/g;
+  for (const im of text.matchAll(importRe)) {
+    if (im[1]) declared.add(im[1]);
+    if (im[2]) {
+      for (const piece of im[2].split(',')) {
+        const name = (piece.trim().match(/(?:\bas\s+)?([A-Za-z_$][\w$]*)$/) || [])[1];
+        if (name) declared.add(name);
+      }
+    }
+  }
+
   const problems = [];
   const re = /(^|[^.\w$])([A-Za-z_$][\w$]*)\s*\(/g;
   let m;
@@ -274,8 +287,8 @@ function checkFile(file) {
   return problems;
 }
 
-const files = ['js/app.js']
-  .concat(fs.readdirSync(path.join(ROOT, 'js', 'app')).filter(f => f.endsWith('.js')).sort().map(f => 'js/app/' + f));
+const files = ['src/app/main.js']
+.concat(fs.readdirSync(path.join(ROOT, 'src', 'app')).filter(f => f.endsWith('.js') && f !== 'main.js').sort().map(f => 'src/app/' + f));
 let all = [];
 for (const f of files) all = all.concat(checkFile(f));
 

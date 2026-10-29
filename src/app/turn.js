@@ -1,25 +1,28 @@
 /*
- * js/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 // 阶段 5 第 5 步：切兄弟的过渡收编进过渡内核（runTransition）。本文件仍是 legacy IIFE，
-// 但经 src/legacy.js 以 ES module 装载（js/app.js 同款），顶层 import 合法；
+// 但经 src/main.js 以 ES module 装载（src/app/main.js 同款），顶层 import 合法；
 // 三档 kind / 时长的唯一声明处仍是 src/core/motion.ts 的 TRANSITIONS.sibling。
 // 命名空间导入 + VT.runTransition 点名调用：tools/check-free-calls.mjs 的裸调用启发式
-// （抓「搬家后忘改 A.xxx」）不认 import 绑定，点名调用与 IR.* 互调同口径。
+// （抓「搬家后忘改 A.xxx」）认得 import 绑定，跨模块调用与 A.xxx 同口径。
 import * as VT from '../../src/ui/viewTransition.js';
 
-(function () {
-  'use strict';
+import { Context } from '../core/context.ts';
+import { ChatProviders } from '../core/providers.ts';
+import { Tree } from '../core/tree.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, isStopError, setSendButtonsBusy, motionLevel, motionMs, toast, netErrHint, saveAll, resolveSub } = A;
 
   function parseAIReply(raw) {
     const text = String(raw || '').trim();
     // 宽容解析（裸换行 / 截断 / 围栏都能救）：剧情模式中文键契约（v0.3）经
     // normalizeAIReply 映射回内部英文结构；坏包不直接展示给玩家
-    const j = IR.Context.normalizeAIReply(IR.Context.tolerantJSONParse(text));
+    const j = Context.normalizeAIReply(Context.tolerantJSONParse(text));
     if (j) {
       return {
         narration: String(j.narration || '').trim(),
@@ -41,16 +44,16 @@ import * as VT from '../../src/ui/viewTransition.js';
     return { narration: text, choices: [], scene_change: false, scene_summary: '', parseFailed: true, looksJson: looksJson };
   }
 
-  // 归档形状 / 工具吸收的唯一口径在 IR.Context（审查 可维护性 二·10）：
-  // assistant 消息内容 = IR.Context.slimReply 的 JSON；applyToolCall 只是转接，
+  // 归档形状 / 工具吸收的唯一口径在 Context（审查 可维护性 二·10）：
+  // assistant 消息内容 = Context.slimReply 的 JSON；applyToolCall 只是转接，
   // 评测（eval/run.js）走同一实现，字段不会再漂移。
   // 画像门控 = applyProfile 注入点（这里给 A.applyProfileEntries：关开关即停止收集，§4.12）。
   function applyToolCall(c) {
-    IR.Context.absorbToolCalls(S.story, [c], { applyProfile: A.applyProfileEntries });
+    Context.absorbToolCalls(S.story, [c], { applyProfile: A.applyProfileEntries });
   }
 
   function absorbReply(reply) {
-    if (reply.world) IR.Context.mergeWorld(S.story.world, reply.world);
+    if (reply.world) Context.mergeWorld(S.story.world, reply.world);
     if (Array.isArray(reply.tool_calls)) for (const c of reply.tool_calls) applyToolCall(c);
     // chat / rp 纯文本没有 scene_summary：拿旁白原文当画面参考，免得「🎨 作画」越画越旧
     if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp') && !reply.scene_summary && reply.narration) {
@@ -65,7 +68,7 @@ import * as VT from '../../src/ui/viewTransition.js';
     if (!sc.aiTasks || !sc.enabled) return false;
     const cfg = resolveSub('scribe');
     if (!cfg.provider || !cfg.model) return false;
-    return !!IR.ChatProviders[cfg.provider];
+    return !!ChatProviders[cfg.provider];
   }
 
   // 书记员（C-B）：每 N 回合校对世界卡（压缩触发时由 runSmartCompress 顺带完成）；失败时用本地规则兜底
@@ -76,11 +79,11 @@ import * as VT from '../../src/ui/viewTransition.js';
       if (cfg.provider && cfg.model) {
         const recent = S.story.log.filter(l => l.type === 'narration').slice(-12).map(l => '· ' + l.text).join('\n');
         const said = S.story.log.filter(l => l.type === 'player' || l.type === 'choice').slice(-12).map(l => '· ' + l.text).join('\n');
-        const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
+        const raw = await ChatProviders[cfg.provider].chat(cfg, [
           { role: 'system', content: SCRIBE_SYSTEM },
           {
             role: 'user',
-            content: '[当前世界卡]\n' + IR.Context.worldCardText(S.story.world)
+            content: '[当前世界卡]\n' + Context.worldCardText(S.story.world)
               + '\n\n[最近剧情]\n' + (recent || '（无）')
               + '\n\n[玩家最近说过的话]\n' + (said || '（无）')   // R13：画像提取的来源
               + '\n\n' + A.scribeProfileHint(),
@@ -89,9 +92,9 @@ import * as VT from '../../src/ui/viewTransition.js';
         result = parseScribe(raw);
       }
     } catch (_) { result = null; }
-    if (!result) result = IR.Context.localScribe(S.story.world);
+    if (!result) result = Context.localScribe(S.story.world);
     // 书记员是整卡重写（最终仲裁）：允许空数组清空
-    if (result.world) IR.Context.mergeWorld(S.story.world, result.world, { allowEmpty: true });
+    if (result.world) Context.mergeWorld(S.story.world, result.world, { allowEmpty: true });
     if (result.profile && result.profile.length) A.applyProfileEntries(result.profile);   // R13：顺手提取的画像
     S.story.world.scribeAt = Date.now();
     S.story.log.push({ type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() });
@@ -119,7 +122,7 @@ import * as VT from '../../src/ui/viewTransition.js';
 
   // 待压缩原回合 → 书记员输入（按幕分组，越靠前越旧）
   function buildCompressInput(groups) {
-    const parts = ['[当前世界状态卡]\n' + IR.Context.worldCardText(S.story.world)];
+    const parts = ['[当前世界状态卡]\n' + Context.worldCardText(S.story.world)];
     parts.push('[待压缩的原回合]（按幕分组，越靠前越旧）');
     let n = (S.story.summaries || []).length;
     for (const grp of groups) {
@@ -161,10 +164,10 @@ import * as VT from '../../src/ui/viewTransition.js';
   // 模型压缩（C-B 双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底
   async function runSmartCompress() {
     if (!S.story || !scribeUsable()) return null;
-    const plan = IR.Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
+    const plan = Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
     if (!plan) return null;
     const cfg = resolveSub('scribe');
-    const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
+    const raw = await ChatProviders[cfg.provider].chat(cfg, [
       { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
       { role: 'user', content: buildCompressInput(plan.groups) },
     ]);
@@ -173,8 +176,8 @@ import * as VT from '../../src/ui/viewTransition.js';
 
     S.story.summaries = (S.story.summaries || []).concat(parsed.summaries);
     S.story.messages = S.story.messages.slice(plan.candidate.length);
-    IR.Context.trimSummaries(S.story.summaries, IR.Context.DEFAULT_MAX_SUMMARIES);
-    if (parsed.world) IR.Context.mergeWorld(S.story.world, parsed.world, { allowEmpty: true });
+    Context.trimSummaries(S.story.summaries, Context.DEFAULT_MAX_SUMMARIES);
+    if (parsed.world) Context.mergeWorld(S.story.world, parsed.world, { allowEmpty: true });
     if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   // R13
     S.story.world.scribeAt = Date.now();
     S.story.log.push({
@@ -202,15 +205,15 @@ import * as VT from '../../src/ui/viewTransition.js';
     if (!S.story || !scene || !scribeUsable()) return;
     const sid = S.story.id;
     const cfg = resolveSub('scribe');
-    const cur = IR.Context.rollingStyleText(S.story.rollingStyle);
+    const cur = Context.rollingStyleText(S.story.rollingStyle);
     const card = S.story.styleCard;
     try {
-      const raw = await IR.ChatProviders[cfg.provider].chat(cfg, [
+      const raw = await ChatProviders[cfg.provider].chat(cfg, [
         { role: 'system', content: SCRIBE_ROLLING_SYSTEM },
         {
           role: 'user',
           content: '[现有滚动风格摘要]\n' + (cur || '（无）')
-            + '\n\n[锚定视觉设定卡]\n' + ((card && card.locked !== false) ? IR.Context.styleCardText(card) : '（未锚定）')
+            + '\n\n[锚定视觉设定卡]\n' + ((card && card.locked !== false) ? Context.styleCardText(card) : '（未锚定）')
             + '\n\n[刚出的这张图]\nalt：' + (scene.alt || '') + '\nprompt：' + (scene.prompt || ''),
         },
       ]);
@@ -237,8 +240,8 @@ import * as VT from '../../src/ui/viewTransition.js';
     if (!comp) {
       // 未触发 / 失败：本地确定性摘要器兜底（不花 API）
       try {
-        comp = IR.Context.compressStory(S.story, {
-          summarize: IR.Context.localSummarize,
+        comp = Context.compressStory(S.story, {
+          summarize: Context.localSummarize,
           contextWindow: A.chatContextWindow(),   // T-M-1：登记表 / 手填容量 → 70% 阈值
         });
       } catch (_) { comp = null; }
@@ -257,13 +260,13 @@ import * as VT from '../../src/ui/viewTransition.js';
   }
 
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
-  // 旁白条目 / assistant 条目：唯一口径在 IR.Context.narrationEntry / assistantEntry（二·10）
+  // 旁白条目 / assistant 条目：唯一口径在 Context.narrationEntry / assistantEntry（二·10）
   function pushNarrationEntry(text, reasoning) {
-    S.story.log.push(IR.Context.narrationEntry(text, reasoning));
+    S.story.log.push(Context.narrationEntry(text, reasoning));
   }
 
   function assistantMessage(reply, reasoning) {
-    return IR.Context.assistantEntry(reply, reasoning);
+    return Context.assistantEntry(reply, reasoning);
   }
 
   // 流式清洗：从累积的 JSON 文本里抠出旁白可读部分
@@ -406,8 +409,6 @@ import * as VT from '../../src/ui/viewTransition.js';
     }
     return out;
   }
-  function toolNamesIn(calls) { return toolList(calls).map(c => c.name); }
-
   // 单次请求（流式写进 live 气泡）：带 tools 被显式 400 拒绝 → 记住该 baseUrl+model 并降级重发一次
   async function streamAI1(adapter, cfg, messages, hooks) {
     let preview = '';
@@ -519,11 +520,11 @@ import * as VT from '../../src/ui/viewTransition.js';
     const act = old.action;
     const isRetryOpening = act.type === 'opening';
     const sent = act.sent || A.withKindMarker(act.text, act.kind);
-    const userMsg = old.userMsg || { role: 'user', content: IR.Context.playerContent(S.story.premise, sent) };
+    const userMsg = old.userMsg || { role: 'user', content: Context.playerContent(S.story.premise, sent) };
 
     // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正（§10）：
     // 以前重试是在已被上一版改写过的世界卡上重来
-    IR.Tree.switchTo(S.story, old.parent);
+    Tree.switchTo(S.story, old.parent);
     S.story.turn += 1;            // 与正常回合同口径：turn 在提交前 +1
     S.currentChoices = [];
 
@@ -531,7 +532,7 @@ import * as VT from '../../src/ui/viewTransition.js';
     S.stopRequested = false; S.chatAbortCtrl = null;   // P0-1
     setSendButtonsBusy(true);
     A.renderChat();
-    const mark = IR.Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前（§4.1）
+    const mark = Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前（§4.1）
     if (!isRetryOpening) {
       // 重新 pushLog 同一条玩家行动（§4.2）：project 到父节点后旧回合的条目已不在窗口里
       A.pushLog(act.type === 'agent'
@@ -551,20 +552,20 @@ import * as VT from '../../src/ui/viewTransition.js';
       S.currentChoices = reply.choices;
       A.renderChat();
       // 成功：parent = 原 head 的父节点（投影已停在那），落一个新兄弟
-      const node = IR.Tree.commit(S.story, {
+      const node = Tree.commit(S.story, {
         action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
         meta: { model: S.turnModel || '' },   // UI-3 §3.3：重试同样记模型名
       });
       S.turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
       await postTurn();
-      IR.Tree.seal(S.story, node.id);
+      Tree.seal(S.story, node.id);
       A.maybeAutoTitle();   // UI-2 §3.3：重试回合 seal 后同样触发自动标题
       saveAll();
     } catch (e) {
       // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）
       S.turnAnchor.dead = true;        // §3.A.4：失败分支置位，本次重试排队中的工具出图丢弃
-      IR.Tree.switchTo(S.story, old.id);
+      Tree.switchTo(S.story, old.id);
       S.currentChoices = choicesFromHead();
       if (isStopError(e)) toast('已停止');
       else toast(netErrHint(e), true, true);
@@ -584,7 +585,7 @@ import * as VT from '../../src/ui/viewTransition.js';
     // 阶段 5 第 5 步：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
     // 顺带保住 0.12.1「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
     // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
-    const head = IR.Tree.switchSibling(S.story, nid, dir);
+    const head = Tree.switchSibling(S.story, nid, dir);
     if (!head) return;
     S.currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
     saveAll();
@@ -684,4 +685,4 @@ import * as VT from '../../src/ui/viewTransition.js';
   }
 
   A.reg({ parseAIReply, applyToolCall, absorbReply, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
-})();
+

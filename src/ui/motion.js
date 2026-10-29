@@ -4,14 +4,13 @@
  * 分工：档位语义与三档行为声明在 src/core/motion.ts（纯逻辑、Node 可测）；
  * 政策变量、@keyframes、暂停规则在 css/motion.css。本文件只做 DOM 接线：
  *
- *   initMotion(opts)  一站式：写 html[data-motion] + 跟随系统「减少动态效果」+ 页面不可见暂停
- *   registerLoop(el)  循环动画登记（同屏 ≤ Motion.LOOP_BUDGET 组，超出者挂 data-loop="wait" 暂停）
- *   suspendLoops(el)  子树挂起（分支页打开时暂停底下阅读页的循环），返回恢复函数
- *   holdLoops()       过渡期循环冻结（阶段 5）：暂停所有正在跑的真实 DOM 循环，返回解冻函数
+ *   applyMotion(root, pref)  解析档位并写 html[data-motion]
+ *   applyPaused(root, doc)   页面不可见 → html[data-paused]
+ *   suspendLoops(el)         子树挂起（分支页打开 / 舞台换画时暂停底下循环），返回恢复函数
+ *   holdLoops()              过渡期循环冻结（阶段 5）：暂停所有正在跑的真实 DOM 循环，返回解冻函数
  *
  * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（0.12.1 起的机制，原样保留）。
- * 旧界面层（js/app/core.js 的 applyMotion / applyPaused）仍走 IR.Motion 自己接线，行为一致；
- * 新组件与阶段 4 起重写的屏幕统一从这里拿。 */
+ * 阶段 6：应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
 import { Motion } from '../core/motion.ts';
 
 const REDUCED_MQ = '(prefers-reduced-motion: reduce)';
@@ -35,39 +34,37 @@ export function applyPaused(root, doc) {
   else delete root.dataset.paused;
 }
 
-/* ---------- 循环动画预算（同屏 ≤ Motion.LOOP_BUDGET 组） ----------
- * 登记按先来后到占坑；超出预算的挂 data-loop="wait"（CSS 暂停它），有坑腾出再放行。
- * 一组 = 一个 DOM 元素上的循环动画；同名 keyframes 的错相多实例（首页符号波）只登记容器一次。 */
-const loops = [];
-
-/* 过渡冻结期间只记账、不重排（阶段 5 第 8 步）：过渡中途换屏 / 挂载新屏时，
- * 旧的一组刚释放、新的一组刚登记，同一帧重排会把「谁在预算里」抖动一次；
- * 解冻时统一收敛（见 resumeFrozenLoops），也正好对应任务书「过渡期间不重复计循环预算」。 */
-function reconcileLoops() {
-  if (holdDepth > 0) { budgetDirty = true; return; }
-  const budget = Motion.LOOP_BUDGET;
-  loops.forEach((el, i) => {
-    if (i >= budget) el.setAttribute('data-loop', 'wait');
-    else el.removeAttribute('data-loop');
-  });
-  budgetDirty = false;
-}
-
-export function registerLoop(el) {
-  if (loops.indexOf(el) < 0) loops.push(el);
-  reconcileLoops();
-  return () => {
-    const i = loops.indexOf(el);
-    if (i >= 0) loops.splice(i, 1);
-    el.removeAttribute('data-loop');
-    reconcileLoops();
-  };
-}
-
-/** 子树挂起：分支页打开时暂停底下阅读页的循环（对应旧规则 html[data-branch="open"] #screen-game） */
+/** 子树挂起：分支页打开 / 舞台换画时暂停底下阅读页的循环（对应旧规则 html[data-branch="open"] #screen-game） */
 export function suspendLoops(el) {
   el.setAttribute('data-loops-paused', '');
-  return () => el.removeAttribute('data-loops-paused');
+  // CSS 的 animation-play-state 在 WAAPI play() 之后不一定会把已有 Animation 收回来（Chromium 实测：
+  // 计算值已是 paused，getAnimations() 的 playState 仍是 running），这里显式 pause 子树里的循环；
+  // 恢复时只 play() 自己暂停的那批，且仍被挂起的（data-paused / 预算排队）不动。
+  const paused = [];
+  try {
+    for (const anim of document.getAnimations()) {
+      try {
+        const target = anim.effect && anim.effect.target;
+        if (!target || !el.contains(target) || !isLoopAnimation(anim)) continue;
+        if (!isViewTransitionAnimation(anim) && anim.playState === 'running') {
+          anim.pause();
+          paused.push(anim);
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return () => {
+    el.removeAttribute('data-loops-paused');
+    for (const anim of paused) {
+      try {
+        if (anim.playState !== 'paused') continue;
+        const target = anim.effect && anim.effect.target;
+        if (target && target.isConnected === false) continue;
+        if (isCssSuspended(target)) continue;
+        anim.play();
+      } catch (_) {}
+    }
+  };
 }
 
 /* ---------- 过渡期循环冻结（阶段 5 第 8 步） ----------
@@ -88,7 +85,6 @@ export function suspendLoops(el) {
  */
 let holdDepth = 0;
 let frozenLoops = [];
-let budgetDirty = false;
 
 function isViewTransitionAnimation(anim) {
   try {
@@ -108,6 +104,23 @@ function isLoopAnimation(anim) {
   }
 }
 
+// 已被 CSS 规则挂起的循环（页面不可见 / 分支页打开 / 预算排队）：不要接管。
+// 为什么不能只看 playState：分支页 open 与 VT 的 update 在同一帧里改 DOM，属性刚写上时
+// 样式重算还没把 playState 变成 paused，捕获阶段会把它当成「正在跑」；过渡收尾 play()
+// 又会盖掉 animation-play-state: paused，结果分支页开着、底下环境光却在跑。
+function isCssSuspended(target) {
+  if (!target) return false;
+  try {
+    if (document.documentElement.dataset.paused) return true;
+    let node = target.nodeType === 1 ? target : target.parentElement;
+    while (node && node !== document.documentElement) {
+      if (node.hasAttribute && (node.hasAttribute('data-loops-paused') || node.getAttribute('data-loop') === 'wait')) return true;
+      node = node.parentElement;
+    }
+  } catch (_) {}
+  return false;
+}
+
 function captureRunningLoops() {
   if (typeof document === 'undefined' || typeof document.getAnimations !== 'function') return;
   let list = [];
@@ -117,13 +130,14 @@ function captureRunningLoops() {
       if (anim.playState !== 'running') continue;   // 已停着的（data-paused / 预算排队）不接管
       if (isViewTransitionAnimation(anim) || !isLoopAnimation(anim)) continue;
       if (frozenLoops.indexOf(anim) >= 0) continue;
+      if (isCssSuspended(anim.effect && anim.effect.target)) continue;   // 见 isCssSuspended 注释
       anim.pause();
       frozenLoops.push(anim);
     } catch (_) {}
   }
 }
 
-/** 解冻：恢复自己暂停的那些（已被移除 / 已取消的跳过），再统一收敛一次循环预算 */
+/** 解冻：恢复自己暂停的那些（已被移除 / 已取消的跳过） */
 function resumeFrozenLoops() {
   const list = frozenLoops;
   frozenLoops = [];
@@ -132,10 +146,11 @@ function resumeFrozenLoops() {
       if (anim.playState !== 'paused') continue;
       const target = anim.effect && anim.effect.target;
       if (target && target.isConnected === false) continue;
+      // 过渡期间又挂起了（分支页 open 的 data-loops-paused 等）：保持暂停，别用 play() 盖掉 CSS 的挂起
+      if (isCssSuspended(target)) { try { anim.pause(); } catch (_) {} continue; }
       anim.play();
     } catch (_) {}
   }
-  if (budgetDirty) reconcileLoops();
 }
 
 /**
@@ -159,48 +174,4 @@ export function loopsHeld() {
   return holdDepth > 0;
 }
 
-/** 一站式接线：档位 + 系统偏好跟随 + 页面可见性。返回 { level, setPref, destroy }。 */
-export function initMotion({ getPref = () => 'auto', root = document.documentElement, doc = document } = {}) {
-  let prefFn = getPref;
-
-  const refresh = () => applyMotion(root, prefFn());
-  refresh();
-  applyPaused(root, doc);
-
-  const onVisibility = () => applyPaused(root, doc);
-  doc.addEventListener('visibilitychange', onVisibility);
-
-  const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(REDUCED_MQ) : null;
-  const onMQ = () => refresh();
-  if (mq) {
-    if (mq.addEventListener) mq.addEventListener('change', onMQ);
-    else if (mq.addListener) mq.addListener(onMQ);
-  }
-
-  return {
-    level: () => root.dataset.motion,
-    setPref(fn) { prefFn = fn; refresh(); },
-    destroy() {
-      doc.removeEventListener('visibilitychange', onVisibility);
-      if (mq) {
-        if (mq.removeEventListener) mq.removeEventListener('change', onMQ);
-        else if (mq.removeListener) mq.removeListener(onMQ);
-      }
-    },
-  };
-}
-
 export { Motion };
-
-/* ---------- IR 兼容层（验收脚本 / legacy 排查用；阶段 6 随 IR 一起删） ---------- */
-const g = globalThis;
-g.IR = g.IR || {};
-g.IR.MotionDOM = {
-  applyMotion,
-  applyPaused,
-  initMotion,
-  registerLoop,
-  suspendLoops,
-  holdLoops,
-  loopsHeld,
-};

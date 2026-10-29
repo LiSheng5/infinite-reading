@@ -1,6 +1,6 @@
 <script>
   /* Node.svelte —— 字段配置节点渲染器（settingsForm.js 的 k 分支）
-   * 只产标记、不带行为：控件 id 与 0.12.1 逐字一致，读写仍由 js/app/* 按 id 完成
+   * 只产标记、不带行为：控件 id 与 0.12.1 逐字一致，读写仍由 src/app/* 按 id 完成
    *（syncSettingsToForm / applyFormToSettings / syncAdvPanels / renderModelProfiles …）。
    * 静态渲染、不建响应式绑定——legacy 界面层直接改 value / classList，两边不打架。 */
   import Icon from '../../ui/Icon.svelte';

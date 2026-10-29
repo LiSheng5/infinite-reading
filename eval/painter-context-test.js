@@ -19,8 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-const C = global.IR.Context;
+const C = require(path.join(__dirname, '..', 'src', 'core', 'context.ts')).Context;
 
 let failed = 0;
 function ok(cond, msg) {
@@ -238,7 +237,7 @@ console.log('[6] video 模式（§6）：隔离清单同 scene；图生带源画
 
 console.log('[7] 静态断言：turn.js / round.js 不再调用 enqueueImage（含 maybeEnqueueImage）');
 {
-  const read = (p) => fs.readFileSync(path.join(__dirname, '..', 'js', 'app', p), 'utf8');
+  const read = (p) => fs.readFileSync(path.join(__dirname, '..', 'src', 'app', p), 'utf8');
   const turnSrc = read('turn.js');
   const roundSrc = read('round.js');
   ok(!/enqueueImage\s*\(/.test(turnSrc), 'turn.js 无 enqueueImage 调用');

@@ -6,12 +6,12 @@
  *
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/providers.js（IIFE → ES module，函数体逐字未动）。
+/* ↑ 阶段 2 搬迁自 src/core/providers.ts（IIFE → ES module，函数体逐字未动）。
  * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+ * 导出即真实 API。 */
+import { ModelCapabilities } from './modelCapabilities.ts';
+import { sleep } from './tree.ts';
 
   async function readError(res) {
     let detail = '';
@@ -122,7 +122,7 @@ const global = globalThis as any;
 
   // 预填参考表（可选）：命中时用它填默认参数；未命中就不管，全部由 cfg 手填
   function capOf(kind, cfg) {
-    const C = global.IR && global.IR.ModelCapabilities;
+    const C = ModelCapabilities;
     if (!C || !cfg || !cfg.model) return null;
     try { return C.find(kind, cfg.model, cfg.provider); } catch (_) { return null; }
   }
@@ -667,8 +667,8 @@ const global = globalThis as any;
     return Math.max(min, Math.min(max, n));
   }
 
-  // sleep 的唯一口径在 IR.sleep（tree.js，审查 可维护性 三·5）；providers 加载早于 tree.js，
-  // 这里不取值、只在调用时经 global.IR.sleep 走（缺了会直接抛，不静默降级）
+  // sleep 的唯一口径在 sleep（tree.js，审查 可维护性 三·5）；providers 加载早于 tree.js，
+  // 这里不取值、只在调用时经 global.sleep 走（缺了会直接抛，不静默降级）
 
   /* 图片入参：先缩到长边 ≤ 1280、JPEG 0.9，再转 data URL（控制体积，避开 64 MB 上限）。
    * Node（单测）里没有 document / Image：原样返回，不影响请求形状断言。 */
@@ -874,7 +874,7 @@ const global = globalThis as any;
           // 轮询阶段：单次网络错误容忍，连续 3 次才判失败（§4）
           netFails += 1;
           if (netFails >= VIDEO_POLL_MAX_NETFAIL) throw e;
-          await global.IR.sleep(pollMs);
+          await sleep(pollMs);
           continue;
         }
         if (hooks.onStatus) { try { hooks.onStatus(q.status, q); } catch (_) {} }
@@ -884,7 +884,7 @@ const global = globalThis as any;
         if (q.status === 'failed' || q.status === 'cancelled' || q.status === 'expired') {
           throw new Error(q.error || ('任务' + q.status));
         }
-        await global.IR.sleep(pollMs);
+        await sleep(pollMs);
       }
     },
   };
@@ -895,10 +895,4 @@ const global = globalThis as any;
     'openai-videos': MiniMaxVideo,  // 旧值别名（同上）
   };
 
-  const __irApi = {
-    ChatProviders,
-    ImageProviders,
-    VideoProviders,
-  };
-  registerIR(__irApi);
   export { ChatProviders, ImageProviders, VideoProviders };

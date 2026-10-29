@@ -21,11 +21,9 @@
  *   · src/ui/viewTransition.js = 过渡内核（runTransition / supportsVT / ?vt=0 降级）
  * 由 eval/tokens-test.js 交叉对账：@keyframes 一条不多一条不少、--an-* 逐档可推导、
  * ::view-transition-* 的时长只走 --m-dur-vt-*。 */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/motion.js（IIFE → ES module），阶段 3 扩展出声明表；
- * 函数体 resolve 逐字未动。模块间现存的 global.IR 惰性互访按铁律保留（见 src/core/ir.ts 头注）。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/motion.ts（IIFE → ES module），阶段 3 扩展出声明表；
+ * 函数体 resolve 逐字未动。阶段 6：模块间依赖改为静态 import。 */
 
   var LEVELS = ['off', 'standard', 'rich'];
 
@@ -97,18 +95,15 @@ const global = globalThis as any;
     modal:      { off: { kind: 'instant', ms: 0 }, standard: { kind: 'fade',   ms: 160 }, rich: { kind: 'shift',  ms: 220 } },
   };
 
-  const __irApi = {
-    Motion: {
-      resolve: resolve,
-      LEVELS: LEVELS.slice(),
-      TIERS: TIERS,
-      LOOP_BUDGET: LOOP_BUDGET,
-      ANIMATIONS: ANIMATIONS,
-      TRANSITIONS: TRANSITIONS,
-    },
+  const Motion = {
+    resolve: resolve,
+    LEVELS: LEVELS.slice(),
+    TIERS: TIERS,
+    LOOP_BUDGET: LOOP_BUDGET,
+    ANIMATIONS: ANIMATIONS,
+    TRANSITIONS: TRANSITIONS,
   };
-  registerIR(__irApi);
-  export const { Motion } = __irApi;
+  export { Motion };
   export const TIERS_POLICY = TIERS;
   export const ANIMATION_SPECS = ANIMATIONS;
   export const TRANSITION_SPECS = TRANSITIONS;

@@ -20,12 +20,14 @@
  * 约定：
  *  - 只新增文件，不改任何应用源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
+ *  - 阶段 6 起应用不再有全局 IR：脚本给产物 URL 加 ?ir-test=1，经 src/main.js 的验收钩子
+ *    （window.__IR_TEST__）访问与旧 IR 同名的真实模块导出；不带参数时产物没有这个对象。
  *  - 播种数据的形状以 0.12.1 真实写入路径为准：
- *      回合       → IR.Tree.begin / commit / seal（与 js/app/round.js·turn.js 同口径）
- *      日志条目   → IR.Context.narrationEntry / assistantEntry / absorbToolCalls / mergeWorld / compressStory
- *      晚到的图   → IR.Tree.pushLate（sealed 节点后补图，painter.js 的真实路径）
- *      原图 / 视频 → IR.Store.putImage / putVideo，键名 img:<sceneId> / vid:<sceneId>（同 storeOriginal）
- *      存档点     → IR.App.addSavepoint（library.js snapshotStory 的真实路径）
+ *      回合       → __IR_TEST__.Tree.begin / commit / seal（与 src/app/round.js·turn.js 同口径）
+ *      日志条目   → __IR_TEST__.Context.narrationEntry / assistantEntry / absorbToolCalls / mergeWorld / compressStory
+ *      晚到的图   → __IR_TEST__.Tree.pushLate（sealed 节点后补图，painter.js 的真实路径）
+ *      原图 / 视频 → __IR_TEST__.Store.putImage / putVideo，键名 img:<sceneId> / vid:<sceneId>（同 storeOriginal）
+ *      存档点     → __IR_TEST__.App.addSavepoint（library.js snapshotStory 的真实路径）
  *  - 「导出 / 导入」一律走真实 UI（#btn-backup-all / #btn-do-export / #file-import + 确认弹窗），
  *    夹具文件 = 用户真能拿到的文件。
  *  - 逐字段比对只放行「注定会变」的字段（导出时刻 / 版本串 / 导入刷新的 updatedAt 等），
@@ -46,11 +48,11 @@ const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'fixture');
 // 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
+const APP_VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
 
 // zip 读写用应用自己的 src/core/zip.ts（Node 里 require 与 eval/zip-smoke.js 同款用法）：
 // 夹具比对的是「同一份代码打出的包」，解析器也必须是同一份，避免两套 zip 实现各自有偏差。
-require(path.join(ROOT, 'src', 'core', 'zip.ts'));
-const Zip = (globalThis.IR && globalThis.IR.Zip) || null;
+const { Zip } = require(path.join(ROOT, 'src', 'core', 'zip.ts'));
 
 const log = (...a) => console.log('[fixture]', ...a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -77,6 +79,7 @@ const RULES_BACKUP = {
 const RULES_STORY = {
   label: '单故事档案',
   ignore: [
+    ['app'],                         // 版本串随发版变（与全量备份同口径）
     ['createdAt'],                   // 导入新建故事，创建时刻必变
     ['updatedAt'],                   // 同上
     ['images', '*', 'ts'],           // 导入重建 scenes 时 ts = 导入时刻（视频条目会带出旧 ts，再导出即新 ts）
@@ -190,8 +193,10 @@ const STORY_A_PREMISE = [
 /* ================= 小工具：真实 UI 的入口动作 ================= */
 
 async function openApp(page, query) {
-  await page.goto(APP_URL + (query || ''), { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 15000 });
+  // 阶段 6：应用不再有全局 IR。测试面统一走 ?ir-test=1（src/main.js 末尾的验收钩子）。
+  const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
+  await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store), null, { timeout: 15000 });
   await sleep(500);
 }
 
@@ -328,13 +333,13 @@ async function buildFixture() {
 
     const seedManifest = {
       project: 'infinite-reading',
-      version: '0.12.1',
+      version: APP_VERSION,
       stage: '0（迁移基线）· 回归夹具',
       generatedAt: new Date().toISOString(),
       tool: 'acceptance/tools/fixture.mjs build',
       entry: APP_URL,
       how: {
-        seed: '页面内经 IR.Store / IR.Tree / IR.Context 的真实写入路径播种（见 fixture.mjs 头注）',
+        seed: '页面内经 __IR_TEST__.Store / __IR_TEST__.Tree / __IR_TEST__.Context 的真实写入路径播种（见 fixture.mjs 头注）',
         export: '全部经真实 UI：设置→数据→「一键导出全部备份」/ 书架行菜单→导出弹窗',
       },
       stories: seedResult.stories,
@@ -358,7 +363,7 @@ async function buildFixture() {
 // 在页面里播种（真实写入路径）
 async function seedInPage(page) {
   return page.evaluate(async ({ turnsA, premiseA, FAKE_KEY }) => {
-    const { Store, Tree, Context } = window.IR;
+    const { Store, Tree, Context } = window.__IR_TEST__;
     const out = { ok: true, errors: [], stories: [], globalUserProfile: [], images: [], videos: [] };
     let clock = Date.now() - 30 * 24 * 3600 * 1000;   // 时间戳铺在过去 30 天内，单调递增
     const nextTs = () => (clock += 61 * 1000);
@@ -428,7 +433,7 @@ async function seedInPage(page) {
       const { thumb, png } = makeThumb(i);
       const blob = await fetch(png).then(r => r.blob());
       const scene = {
-        id: window.IR.genId('sc'),
+        id: window.__IR_TEST__.genId('sc'),
         prompt: 'cinematic still, rainy convenience store at night, warm amber light, watercolor',
         promptRaw: 'fixture prompt raw #' + i,
         alt: '雨夜便利店场景图 ' + (i + 1),
@@ -500,8 +505,8 @@ async function seedInPage(page) {
         styleCustom: '暖黄灯光，冷蓝雨夜，水彩质感',
         sidecar: { port: 4319, token: 'fixture-sidecar-token' },
       });
-      window.IR.App.state.settings = settings;
-      window.IR.App.persistSettings();
+      window.__IR_TEST__.App.state.settings = settings;
+      window.__IR_TEST__.App.persistSettings();
 
       /* ---------- 全局用户画像（ir:user-profile） ---------- */
       const gProfile = [
@@ -516,7 +521,7 @@ async function seedInPage(page) {
       const stA = Store.newStory({ title: '雨夜便利店', premise: premiseA, mode: 'choice' });
       stA.styleTone = '克制的悬疑，日常里藏着一丝奇异';
       stA.styleCard = {
-        id: window.IR.genId('style'), version: 2, locked: true, updatedAt: nextTs(),
+        id: window.__IR_TEST__.genId('style'), version: 2, locked: true, updatedAt: nextTs(),
         styleKeywords: ['cinematic', 'warm amber light', 'rainy night'],
         medium: 'watercolor',
         palette: 'amber, deep blue',
@@ -567,13 +572,13 @@ async function seedInPage(page) {
         createdAt: nextTs(), promptRaw: 'fixture pending prompt', alt: '储物间纸箱特写',
       }];
 
-      // 存档点：真实路径 IR.App.addSavepoint（library.js snapshotStory）
-      window.IR.App.state.story = stA;
-      window.IR.App.addSavepoint('开局前夜');
+      // 存档点：真实路径 __IR_TEST__.App.addSavepoint（library.js snapshotStory）
+      window.__IR_TEST__.App.state.story = stA;
+      window.__IR_TEST__.App.addSavepoint('开局前夜');
       Tree.switchTo(stA, nodes[2].id);
-      window.IR.App.addSavepoint('周叙登场');
+      window.__IR_TEST__.App.addSavepoint('周叙登场');
       Tree.switchTo(stA, nodes[nodes.length - 1].id);
-      window.IR.App.state.story = null;
+      window.__IR_TEST__.App.state.story = null;
 
       Store.saveStory(stA);
 
@@ -691,7 +696,7 @@ function stabilizeBackup(obj) {
 }
 
 async function readZipEntries(buf) {
-  if (!Zip || !Zip.read) throw new Error('IR.Zip 未加载（src/core/zip.ts require 失败）');
+  if (!Zip || !Zip.read) throw new Error('src/core/zip.ts 的 Zip 未加载（require 失败）');
   return Zip.read(new Blob([buf]));
 }
 
@@ -752,16 +757,16 @@ async function roundtrip() {
       const r = { file: art.file, ok: true, checks: [], diffs: [], imageDiffs: [], consoleErrors };
       try {
         await openApp(page, '');
-        const before = await page.evaluate(() => IR.Store.listStories().length);
+        const before = await page.evaluate(() => __IR_TEST__.Store.listStories().length);
         r.checks.push({ name: '导入前无存档', ok: before === 0, detail: 'listStories=' + before });
 
         await importFile(page, art.path);
 
         if (art.kind === 'ir-backup' || art.kind === 'ir-backup-zip') {
           // 还原：3 个故事
-          await page.waitForFunction(() => IR.Store.listStories().length >= 3, null, { timeout: 20000 });
-          const restored = await page.evaluate(() => IR.Store.listStories().map(it => {
-            const st = IR.Store.loadStory(it.id);
+          await page.waitForFunction(() => __IR_TEST__.Store.listStories().length >= 3, null, { timeout: 20000 });
+          const restored = await page.evaluate(() => __IR_TEST__.Store.listStories().map(it => {
+            const st = __IR_TEST__.Store.loadStory(it.id);
             return { id: st.id, title: st.title, mode: st.mode, turn: st.turn, savepoints: (st.savepoints || []).length, scenes: (st.scenes || []).length, treeNodes: st.tree ? Object.keys(st.tree.nodes).length : 0 };
           }));
           r.checks.push({ name: '还原 3 个故事', ok: restored.length === 3, detail: JSON.stringify(restored) });
@@ -769,11 +774,11 @@ async function roundtrip() {
             // 还原：原图逐张取回（尺寸对上 manifest）
             const imgCheck = await page.evaluate(async () => {
               const out = [];
-              for (const it of IR.Store.listStories()) {
-                const st = IR.Store.loadStory(it.id);
+              for (const it of __IR_TEST__.Store.listStories()) {
+                const st = __IR_TEST__.Store.loadStory(it.id);
                 for (const s of (st.scenes || [])) {
                   if (s.imageId) {
-                    const blob = await IR.Store.getImage(s.imageId);
+                    const blob = await __IR_TEST__.Store.getImage(s.imageId);
                     out.push({ imageId: s.imageId, size: blob ? blob.size : 0 });
                   }
                 }
@@ -800,16 +805,16 @@ async function roundtrip() {
           }
         } else {
           // 单故事档案：等「（导入）」故事 + 带原图的异步换键落定
-          await page.waitForFunction(() => IR.Store.listStories().length >= 1, null, { timeout: 20000 });
+          await page.waitForFunction(() => __IR_TEST__.Store.listStories().length >= 1, null, { timeout: 20000 });
           await page.waitForFunction(() => {
-            const it = IR.Store.listStories().find(x => /（导入）/.test(x.title));
+            const it = __IR_TEST__.Store.listStories().find(x => /（导入）/.test(x.title));
             if (!it) return false;
-            const st = IR.Store.loadStory(it.id);
+            const st = __IR_TEST__.Store.loadStory(it.id);
             return !!st && (st.scenes || []).every(s => s.kind === 'video' || s.thumb == null || !!s.imageId);
           }, null, { timeout: 20000 }).catch(() => {});
           const info = await page.evaluate(() => {
-            const it = IR.Store.listStories().find(x => /（导入）/.test(x.title)) || IR.Store.listStories()[0];
-            const st = IR.Store.loadStory(it.id);
+            const it = __IR_TEST__.Store.listStories().find(x => /（导入）/.test(x.title)) || __IR_TEST__.Store.listStories()[0];
+            const st = __IR_TEST__.Store.loadStory(it.id);
             return {
               id: st.id, title: st.title, log: (st.log || []).length,
               scenes: (st.scenes || []).length,
@@ -860,8 +865,8 @@ async function roundtrip() {
   const ok = results.every(r => r.ok);
   const report = {
     project: 'infinite-reading',
-    version: '0.12.1',
-    stage: '0（迁移基线）· 回归夹具 roundtrip',
+    version: APP_VERSION,
+    stage: '阶段 6 · 收尾发布 · 回归夹具 roundtrip',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/fixture.mjs roundtrip',
     how: '每个夹具文件各起一个干净浏览器上下文（file://）：真实 UI 导入（#file-import）→ 还原 → 真实 UI 再导出 → 与夹具原文件逐字段比对',
@@ -932,13 +937,13 @@ async function selftest() {
     const page = await ctx.newPage();
     await openApp(page, '');
     await importFile(page, path.join(OUT, 'backup-plain.irbackup.json'));
-    await page.waitForFunction(() => IR.Store.listStories().length >= 3, null, { timeout: 20000 });
+    await page.waitForFunction(() => __IR_TEST__.Store.listStories().length >= 3, null, { timeout: 20000 });
     const poke = await page.evaluate(() => {
-      const it = IR.Store.listStories().find(x => x.title === '雨夜便利店');
+      const it = __IR_TEST__.Store.listStories().find(x => x.title === '雨夜便利店');
       if (!it) return '找不到故事';
-      const st = IR.Store.loadStory(it.id);
+      const st = __IR_TEST__.Store.loadStory(it.id);
       st.world.place = '（selftest 故意改坏）';
-      IR.Store.saveStory(st);
+      __IR_TEST__.Store.saveStory(st);
       return 'ok';
     });
     check('页面内改坏故事世界卡', poke === 'ok', poke);

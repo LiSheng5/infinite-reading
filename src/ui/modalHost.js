@@ -2,15 +2,15 @@
  * src/ui/modalHost.js —— 弹窗的唯一入口（阶段 4 · 屏 6a「外壳与通用出入」）
  *
  * 为什么要有这个文件：0.12.1 起「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
- *   · js/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
- *   · js/app.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
+ *   · src/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
+ *   · src/app/main.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
  * 屏 6 要把 11 个弹窗换成 Svelte 重写、第 7 步还要给开合接视图过渡，必须先有**一个地方**
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
  * 分工：
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
  *   · src/ui/Modal.svelte = 外壳（shell 模式只出一个 display:contents 的层容器，不画任何像素）
- *   · js/app/core.js 只转发（IR.App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
+ *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
  *   · 第 7 步（弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *
  * 6a 的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
@@ -24,7 +24,7 @@
  *     注意 .modal-top 的 32 只是 CSS 兜底，被内联 z-index 覆盖——这一行为故意不「修正」。
  *   · 互斥：FEATURE_MODALS（邮件 / 支付 / 设置）开一个先关掉其它功能类；确认弹窗不参与互斥。
  *   · Esc：只关最上层；确认弹窗必须走 closeConfirm（收掉 Promise），见 dismissModal。
- *   · 遮罩点击：规则仍写在 js/app.js 的绑定里（本步允许改的文件不含它），
+ *   · 遮罩点击：规则仍写在 src/app/main.js 的绑定里（本步允许改的文件不含它），
  *     它读的 modalStack 就是本文件导出的同一个数组实例。
  *   · 焦点还原：0.12.1 没有（关窗后焦点留在已隐藏的元素上）。6a 补上「开第一个弹窗前的那一帧」
  *     的还原，且 focus({ preventScroll:true })——不抢脚本新放的焦点、不触发滚动。
@@ -35,6 +35,8 @@
 import { mount } from 'svelte';
 import Modal from './Modal.svelte';
 import { runTransition, transitionSpec, supportsVT, vtDisabled } from './viewTransition.js';
+// 应用层注册表（循环依赖是安全的：只在 dismissModal 被调用时读，eval 期不取值）
+import { A as appApi } from '../app/core.js';
 
 /** 11 个弹窗（顺序 = index.html 里的 DOM 顺序，搬进外壳时按它排，别改成字母序） */
 export const MODAL_IDS = [
@@ -46,7 +48,7 @@ export const MODAL_IDS = [
 /** 功能类弹窗：互斥（开一个先关掉其它功能类） */
 export const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings'];
 
-/** 栈：活的数组实例（core.js 把它挂到 IR.App 上，js/app.js 的遮罩点击按引用读它） */
+/** 栈：活的数组实例（core.js 把它挂到 App 上，src/app/main.js 的遮罩点击按引用读它） */
 export const modalStack = [];
 
 const HIDDEN = 'hidden';
@@ -72,7 +74,7 @@ export function shellInstalled() {
 
 /**
  * 安装外壳：把 index.html 里的 11 个弹窗整块搬进 Modal.svelte 的壳层。
- * 幂等；DOM 不在（?ui=legacy 半挂载 / 极早期）时什么都不做，弹窗照原样留在 #app 下。
+ * 幂等；DOM 不在（极早期 / 单测环境）时什么都不做，弹窗照原样留在 #app 下。
  * @returns {HTMLElement|null} 壳层根
  */
 export function installShell() {
@@ -489,7 +491,7 @@ export function closeModal(id) {
  * @param {string} id
  */
 export function dismissModal(id) {
-  const A = (typeof IR !== 'undefined' && IR.App) || {};
+  const A = appApi;
   if (id === 'modal-confirm') {
     if (typeof A.closeConfirm === 'function') A.closeConfirm(null);
     else closeModal(id);
@@ -509,22 +511,5 @@ export function closeTopModal() {
   return true;
 }
 
-/* ---------- IR 兼容层（legacy 界面层的既定桥法；阶段 6 随 IR 一起删） ---------- */
-export const ModalHost = {
-  MODAL_IDS,
-  FEATURE_MODALS,
-  modalStack,
-  installShell,
-  shellHostEl,
-  shellInstalled,
-  openModal,
-  closeModal,
-  dismissModal,
-  closeTopModal,
-  isModalOpen,
-  topModal,
-};
-
-const g = globalThis;
-g.IR = g.IR || {};
-g.IR.ModalHost = ModalHost;
+/* 阶段 6：不再导出 ModalHost 兼容对象 / 不再挂 应用层注册表——
+ * 应用层直接 import 上面的函数（core.js 一次取齐），外壳由组合根安装。 */

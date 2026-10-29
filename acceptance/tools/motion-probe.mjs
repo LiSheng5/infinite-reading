@@ -11,7 +11,7 @@
  *
  * 每个动作窗口内用 document.getAnimations() 逐帧采集（rAF 采样 + 动作收尾再补一次），
  * 记下每条动画的时长 / 迭代次数 / 动的属性 / 目标元素 / 伪元素 / 触发步，
- * 再按三档上限断言（真源 = 页面里的 IR.Motion.TIERS / LOOP_BUDGET，与 css/motion.css 收口一致）：
+ * 再按三档上限断言（真源 = 页面里的 __IR_TEST__.Motion.TIERS / LOOP_BUDGET，与 css/motion.css 收口一致）：
  *
  *   off       无位移（maxShiftMs 0）、无颜色过渡、透明度 ≤80ms、循环 0 组
  *   standard  位移 ≤160ms、透明度 ≤160ms、颜色 ≤220ms、循环 0 组
@@ -35,7 +35,7 @@
  * 约定：
  *  - 只新增文件，不改产品代码；页面一律 file:// 打开，不联网（本地服务探测被本地路由接住）。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
- *  - 档位靠 settings.ui.motion + IR.App.applyMotion() 显式落定，并校验 html[data-motion]，
+ *  - 档位靠 settings.ui.motion + __IR_TEST__.App.applyMotion() 显式落定，并校验 html[data-motion]，
  *    不依赖 auto 的系统偏好推测；上下文 reducedMotion 取 no-preference。
  *  - 截图不开 animations:'disabled'——要的就是动画进行中的中间帧。
  */
@@ -50,6 +50,7 @@ const { chromium } = require('playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
+const VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
 
 const TIERS = ['off', 'standard', 'rich'];
 const ACTIONS = ['screen', 'stage', 'sibling', 'modal'];
@@ -201,15 +202,16 @@ async function settle(page) {
 }
 
 async function openApp(page) {
-  await page.goto(APP_URL, { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store), null, { timeout: 20000 });
-  await page.waitForFunction(() => !!(IR.App.state && IR.App.state.settings), null, { timeout: 20000 });
+  // 阶段 6：应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
+  await page.goto(APP_URL + '?ir-test=1', { waitUntil: 'load' });
+  await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store), null, { timeout: 20000 });
+  await page.waitForFunction(() => !!(__IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 20000 });
   await sleep(500);
 }
 
 async function forceTier(page, tier) {
   const got = await page.evaluate((t) => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.state.settings.ui = A.state.settings.ui || {};
     A.state.settings.ui.motion = t;
     if (A.applyMotion) A.applyMotion();
@@ -225,7 +227,7 @@ async function ensureGame(page) {
     return !!el && !el.classList.contains('hidden');
   });
   if (inGame) return;
-  await page.evaluate(() => window.IR.App.enterGame(true, { deferOpening: true }));
+  await page.evaluate(() => window.__IR_TEST__.App.enterGame(true, { deferOpening: true }));
   await page.waitForSelector('#screen-game:not(.hidden)', { timeout: 8000 });
   await sleep(400);
 }
@@ -235,7 +237,7 @@ async function ensureGame(page) {
 async function seedStory(page) {
   return page.evaluate(async () => {
     try {
-      const { Store, Tree, Context, App, genId } = window.IR;
+      const { Store, Tree, Context, App, genId } = window.__IR_TEST__;
       const S = App.state;
 
       const makeThumb = (i) => {
@@ -372,7 +374,7 @@ async function seedStory(page) {
 
 const ACTION_RUNNERS = {
   async screen({ page, step, shot }) {
-    await page.evaluate(() => window.IR.App.showStart());
+    await page.evaluate(() => window.__IR_TEST__.App.showStart());
     await sleep(300);
 
     await step('start→shelf');
@@ -394,13 +396,13 @@ const ACTION_RUNNERS = {
 
   async stage({ page, step, shot }) {
     await ensureGame(page);
-    const scenes = await page.evaluate(() => ((IR.App.state.story && IR.App.state.story.scenes) || [])
+    const scenes = await page.evaluate(() => ((__IR_TEST__.App.state.story && __IR_TEST__.App.state.story.scenes) || [])
       .filter(s => s.type !== 'video' && s.kind !== 'video')
       .map(s => s.id));
     if (scenes.length < 2) throw new Error('场景不足 2 张，换画测不了');
     // 先把舞台停在第二张，下面点第一张才是真换图
     await page.evaluate((id) => {
-      const A = window.IR.App;
+      const A = window.__IR_TEST__.App;
       A.state.story.lastBg = id;
       A.renderStage();
       A.renderThumbs();
@@ -568,7 +570,7 @@ async function runTier(browser, args, outDir) {
     tier,
     viewport: { width, height },
     dataMotion: '',
-    how: "context(reducedMotion:'no-preference') + settings.ui.motion=tier + IR.App.applyMotion()，跑前校验 html[data-motion]",
+    how: "context(reducedMotion:'no-preference') + settings.ui.motion=tier + __IR_TEST__.App.applyMotion()，跑前校验 html[data-motion]",
     actions: [],
     console: { errors: consoleErrors, failedRequests },
   };
@@ -583,8 +585,8 @@ async function runTier(browser, args, outDir) {
     await page.evaluate(installRecorder);
 
     const policy = await page.evaluate(() => ({
-      tiers: JSON.parse(JSON.stringify(IR.Motion.TIERS)),
-      loopBudget: IR.Motion.LOOP_BUDGET,
+      tiers: JSON.parse(JSON.stringify(__IR_TEST__.Motion.TIERS)),
+      loopBudget: __IR_TEST__.Motion.LOOP_BUDGET,
     }));
     result.policy = policy;
 
@@ -592,7 +594,7 @@ async function runTier(browser, args, outDir) {
     const order = ACTIONS.filter(a => wanted.indexOf(a) >= 0);
 
     if (order.indexOf('screen') >= 0) {
-      await page.evaluate(() => window.IR.App.showStart());
+      await page.evaluate(() => window.__IR_TEST__.App.showStart());
       await sleep(320);
     }
 
@@ -691,8 +693,8 @@ async function main() {
 
   const manifest = {
     project: 'infinite-reading',
-    version: '0.12.1',
-    stage: '阶段 5 · 第 1 步 · 动效测量（测量工具，不改产品代码）',
+    version: VERSION,
+    stage: '阶段 6 · 收尾发布 · 动效三档复测',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/motion-probe.mjs',
     entry: APP_URL,
@@ -701,7 +703,7 @@ async function main() {
     how: {
       actions: ACTION_NOTES,
       capture: '动作窗口内 requestAnimationFrame 逐帧 document.getAnimations() + 收尾补采；记时长 / 迭代次数 / 动的属性 / 目标 / 伪元素 / 触发步',
-      assert: '按页面真源 IR.Motion.TIERS 与 LOOP_BUDGET 判上限：off 无位移无循环 ≤80ms 透明度；standard 位移 ≤160ms、透明度 ≤160ms、颜色 ≤220ms、无循环；rich 位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）',
+      assert: '按页面真源 __IR_TEST__.Motion.TIERS 与 LOOP_BUDGET 判上限：off 无位移无循环 ≤80ms 透明度；standard 位移 ≤160ms、透明度 ≤160ms、颜色 ≤220ms、无循环；rich 位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）',
       note: '断言只查上限，不要求动画存在。当前多数动作还没有过渡（切屏 / 弹窗关闭 / 舞台换画之外的多数路径），属正常；violations 是后续步骤的待办清单。',
       strict: '--strict 时违规也算失败；默认只把「动作没跑完 / console error」当失败。',
     },

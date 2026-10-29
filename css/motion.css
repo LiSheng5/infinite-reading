@@ -13,8 +13,8 @@
    · auto：跟随系统「减少动态效果」（系统开了则 off）；用户显式选择优先于系统偏好。
 
    循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例，
-   如首页符号逐字符波按 1 组计）。超出预算的循环挂 data-loop="wait" 暂停，
-   登记与释放走 src/ui/motion.js 的 registerLoop()。 */
+   如首页符号逐字符波按 1 组计）。上限由设计固定，`acceptance/tools/motion-probe.mjs`
+   逐档测量；阶段 6 已删运行时登记（registerLoop 随自查页退役）。 */
 
 /* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
    小面积装饰元素允许用 @property 注册的自定义属性做动画（任务书 §6.2 放宽项），
@@ -144,7 +144,7 @@ html[data-motion="off"] {
    时长一律走 --m-dur-vt-*（再由上面三个档位块映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
    过渡名单与三档 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：
    这三条规则的 animation-duration 只准 var(--m-dur-vt-*)。
-   注意：::view-transition-* 匹配不到 html[data-paused] * / [data-loop="wait"] 这类选择器，
+   注意：::view-transition-* 匹配不到 html[data-paused] * / [data-loops-paused] * 这类选择器，
    过渡期的循环暂停与预算复位要单独处理（任务书「坑」）。 */
 ::view-transition-old(*) {
   animation-duration: var(--m-dur-vt-out);
@@ -224,23 +224,19 @@ html[data-paused] *::before,
 html[data-paused] *::after {
   animation-play-state: paused !important;
 }
-/* 子树挂起：分支页打开时暂停底下阅读页的循环（src/ui/motion.js 的 suspendLoops） */
+/* 子树挂起：分支页打开 / 舞台换画时暂停底下阅读页的循环（src/ui/motion.js 的 suspendLoops；
+   同时由该函数显式 pause 现有 Animation，防止 WAAPI play() 盖掉这里的 CSS 暂停） */
 [data-loops-paused] *,
 [data-loops-paused] *::before,
 [data-loops-paused] *::after {
   animation-play-state: paused !important;
 }
-/* 循环预算排队：超出同屏 ≤3 组的循环先停住（src/ui/motion.js 的 registerLoop） */
+/* 循环预算兜底：运行时登记（registerLoop）已随自查页删除，预算由设计固定、motion-probe 测量；
+   这条选择器保留给以后确实需要「排队让位」的循环（挂 data-loop="wait" 即可停住）。 */
 [data-loop="wait"],
 [data-loop="wait"]::before,
 [data-loop="wait"]::after {
   animation-play-state: paused !important;
-}
-/* 分支页打开时暂停底下聊天页的循环动画（旧屏口径，随旧屏一起退役） */
-html[data-branch="open"] #screen-game *,
-html[data-branch="open"] #screen-game *::before,
-html[data-branch="open"] #screen-game *::after {
-  animation-play-state: paused;
 }
 
 /* 无 JS 兜底：系统「减少动态效果」时把一切动画/过渡压到接近 0（与 data-motion 规则不冲突） */

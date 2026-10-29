@@ -18,13 +18,10 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.sleep 在 tree.js（providers 轮询依赖，三·5）
-require(path.join(__dirname, '..', 'src', 'core', 'providers.ts'));
-
-const V = (global.IR || {}).VideoProviders;
+const V = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts')).VideoProviders;
 const mm = V && V['minimax-video'];
 if (!mm) {
-  console.error('加载失败：IR.VideoProviders["minimax-video"] 缺失');
+  console.error('加载失败：VideoProviders["minimax-video"] 缺失');
   process.exit(1);
 }
 

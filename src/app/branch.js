@@ -1,5 +1,5 @@
 /*
- * js/app/branch.js —— 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉
+ * src/app/branch.js —— 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉
  *
  * 结构（§4.2）：整页覆盖层。顶栏「← 返回对话」｜标题｜缩小 / 放大｜「回到当前」｜「展开全部折叠」；
  * 画布是 SVG（createElementNS 构造，绝不用 innerHTML 拼 SVG / 节点文字）；右侧（窄屏底部）节点面板。
@@ -15,10 +15,14 @@
  *              + head 呼吸 / 选中脉冲；standard = 整体淡入；off = 无。
  *   新出现的节点（从聊天页返回后）单独「长出来」——seen 集合只存视图态，不进存档。
  */
-(function () {
-  'use strict';
+import { TreeLayout } from '../core/treeLayout.ts';
+import { Tree } from '../core/tree.ts';
+import { Nav } from '../ui/navigation.js';
+import { setBranchPanelOpen, setBranchPanel } from '../screens/branch/branch.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, toast, motionLevel, motionMs, fmtTime, saveAll } = A;
 
   const NS = 'http://www.w3.org/2000/svg';
@@ -79,8 +83,8 @@
     return out;
   }
 
-  // codeSlice 的唯一口径在 IR.TreeLayout.codeSlice（treeLayout.js，审查 可维护性 三·5）
-  const codeSlice = IR.TreeLayout.codeSlice;
+  // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.js，审查 可维护性 三·5）
+  const codeSlice = TreeLayout.codeSlice;
 
   // 面板预览文本（textContent 用）：玩家行动原话；AI 回复取旁白（坏 JSON 当纯文本）
   function replyPreview(node) {
@@ -103,13 +107,13 @@
 
   /* ================= 打开 / 关闭 ================= */
 
-  /* 阶段 5 第 6 步：开合走 IR.Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
+  /* 阶段 5 第 6 步：开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
    * 时序要点（任务书「坑」）：
    *   · 渲染整块放进 mutate —— 视图过渡在 update 回调之后才拍新快照，先渲染，快照里才有树；
    *   · rich 的入场动画（边描边 / 节点弹出）不在 mutate 里开跑：快照会把它拍成空白首帧，
    *     留到 finished 之后由 replayEntry 补；
    *   · centerOn 必须留在 mutate 里（新快照要用已经居中的 transform），finished 后不再重算；
-   *   · html[data-branch] 与底下循环的挂起/复位都由 IR.Nav 管，这里不再直接写。 */
+   *   · html[data-branch] 与底下循环的挂起/复位都由 Nav 管，这里不再直接写。 */
   function openBranch(opts) {
     opts = opts || {};
     const st = S.story;
@@ -121,7 +125,7 @@
     V.panelOpen = !!opts.selectId;
     V.entry = null;
     bindCanvas();
-    const r = IR.Nav.branchPage(true, () => {
+    const r = Nav.branchPage(true, () => {
       const page = $('#branch-page');
       if (!page) return;
       page.classList.remove('hidden');
@@ -143,7 +147,7 @@
   function closeBranch() {
     V.open = false;
     V.dragging = null;
-    IR.Nav.branchPage(false, () => {
+    Nav.branchPage(false, () => {
       const page = $('#branch-page');
       if (page) page.classList.add('hidden');
     });
@@ -154,7 +158,7 @@
   function relayout() {
     const t = tree();
     if (!t) return;
-    V.layout = IR.TreeLayout.compute(t, {
+    V.layout = TreeLayout.compute(t, {
       collapseRun: 8,
       laneW: isNarrow() ? 28 : 36,
       rowH: ROW_H,
@@ -224,7 +228,7 @@
       if (!visIds.has(e.from) || !visIds.has(e.to)) continue;
       const p = svgEl('path', {
         class: 'branch-edge' + (e.onPath ? ' on-path' : ''),
-        d: IR.TreeLayout.pointsToD(e.path, 18),
+        d: TreeLayout.pointsToD(e.path, 18),
       });
       gEdges.appendChild(p);
       if (!V.seen.has(e.to)) newEdges.push({ el: p, row: depth.get(e.to) || 0 });
@@ -248,7 +252,7 @@
     V.entry = { edges: newEdges, nodes: newNodes };
     // 快照期不跑入场：rich 的节点从 scale(.4)/opacity 0 弹出，被拍进新快照就是一张空白页。
     // 过渡结束（或被顶掉）后由 replayEntry 补这一段。
-    if (!(IR.Nav.isTransitioning && IR.Nav.isTransitioning())) playEntry(newEdges, newNodes);
+    if (!(Nav.isTransitioning && Nav.isTransitioning())) playEntry(newEdges, newNodes);
     for (const n of vis) V.seen.add(n.id);
     updateActiveDescendant();
   }
@@ -543,7 +547,7 @@
       }
     } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
       e.preventDefault();
-      const sibs = IR.Tree.siblings(S.story, V.selectId);
+      const sibs = Tree.siblings(S.story, V.selectId);
       const idx = sibs.indexOf(V.selectId);
       const to = idx + (k === 'ArrowLeft' ? -1 : 1);
       if (idx >= 0 && to >= 0 && to < sibs.length) selectNode(sibs[to]);
@@ -556,27 +560,19 @@
 
   /* ================= 节点面板（§4.4） ================= */
 
-  /* 阶段 4 屏 5：面板已换 Svelte 实现（src/screens/branch，容器打 data-impl="svelte"）。
-   * 文本与 disabled 由 IR.BranchScreen 状态桥推视图模型；下面的旧 DOM 写法原样留给 ?ui=legacy。
+  /* 面板由 Svelte 组件渲染：文本与 disabled 走 branch.svelte.js 的视图模型。
    * 视图模型口径与 0.12.1 逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
-  function panelBridge() {
-    return (window.IR && IR.BranchScreen) || null;
-  }
-
   function setPanelOpen(open) {
     V.panelOpen = !!open;
-    const b = panelBridge();
-    if (b) { b.panelOpen(V.panelOpen); return; }
-    const panel = $('#branch-panel');
-    if (panel) panel.classList.toggle('hidden', !V.panelOpen);
+    setBranchPanelOpen(V.panelOpen);
   }
 
   function panelModel(node, t) {
     const parent = node.parent ? t.nodes[node.parent] : null;
-    const can1 = IR.Tree.canResume(S.story, node.id);          // 回到这里并从此继续 → 落到本节点
+    const can1 = Tree.canResume(S.story, node.id);          // 回到这里并从此继续 → 落到本节点
     const can2 = can1                                          // 改我说的 → 落到 parent
       && !!parent
-      && IR.Tree.canResume(S.story, parent.id)
+      && Tree.canResume(S.story, parent.id)
       && !(node.action && node.action.type === 'opening');
     const busy = isBusy();
 
@@ -585,7 +581,7 @@
     else if (!can1) warn = '旧存档早期回合没有状态快照，只能查看：「回到这里并从此继续」「改我说的」已停用；「切到这条分支的最新处」仍可用。';
     else if (node.action && node.action.type === 'opening') warn = '开局回合不能改说的：想重开走向，用「回到这里并从此继续」。';
     else if (!parent) warn = '这是故事起点：可以「回到这里并从此继续」，但没有「这之前」可分叉。';
-    else if (!IR.Tree.canResume(S.story, parent.id)) warn = '上一回合没有状态快照，「改我说的」会弄错世界状态，已停用。';
+    else if (!Tree.canResume(S.story, parent.id)) warn = '上一回合没有状态快照，「改我说的」会弄错世界状态，已停用。';
 
     return {
       turn: node.kind === 'root' ? '开局' : ('第 ' + (node.turn || 0) + ' 回合'),
@@ -603,38 +599,8 @@
   function renderPanel() {
     const t = tree();
     const node = t && t.nodes[V.selectId];
-    const b = panelBridge();
-    if (!node) {
-      if (b) b.panelOpen(false);
-      else { const p = $('#branch-panel'); if (p) p.classList.add('hidden'); }
-      return;
-    }
-    const model = panelModel(node, t);
-    if (b) { b.panel(model); return; }
-
-    // —— 旧 DOM 路径（?ui=legacy）——
-    const panel = $('#branch-panel');
-    if (!panel) return;
-    panel.classList.remove('hidden');
-
-    $('#bp-turn').textContent = model.turn;
-    $('#bp-action').textContent = model.action;
-    $('#bp-reply').textContent = model.reply;
-    $('#bp-time').textContent = model.time;
-    $('#bp-model').textContent = model.model;
-
-    $('#btn-bp-resume').disabled = model.resumeDisabled;
-    $('#btn-bp-fork').disabled = model.forkDisabled;
-    $('#btn-bp-latest').disabled = model.latestDisabled;
-
-    const warn = $('#bp-warn');
-    if (model.warn) {
-      warn.textContent = model.warn;
-      warn.classList.remove('hidden');
-    } else {
-      warn.textContent = '';
-      warn.classList.add('hidden');
-    }
+    if (!node) { setBranchPanelOpen(false); return; }
+    setBranchPanel(panelModel(node, t));
   }
 
   // 切换后的统一收尾：投影已由 Tree.* 做完，这里只重绘 + 落盘
@@ -653,11 +619,11 @@
     if (!gateSwitch()) return;
     const node = nodeOf(V.selectId);
     if (!node) return;
-    if (!IR.Tree.canResume(S.story, node.id)) {
+    if (!Tree.canResume(S.story, node.id)) {
       toast('旧存档早期回合没有状态快照，只能查看', true);
       return;
     }
-    if (!IR.Tree.switchTo(S.story, node.id)) return;
+    if (!Tree.switchTo(S.story, node.id)) return;
     // 阶段 5 第 6 步：先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
     // 快照会盖着旧内容跑 220ms，结算后才换成新内容（第 5 步「最终内容不闪回旧分支」的同款坑）。
     afterSwitch();
@@ -669,12 +635,12 @@
     const node = nodeOf(V.selectId);
     const t = tree();
     const parent = node && node.parent ? t.nodes[node.parent] : null;
-    if (!node || !IR.Tree.canResume(S.story, node.id)
-      || (parent && !IR.Tree.canResume(S.story, parent.id))) {
+    if (!node || !Tree.canResume(S.story, node.id)
+      || (parent && !Tree.canResume(S.story, parent.id))) {
       toast('旧存档早期回合没有状态快照，只能查看', true);
       return;
     }
-    const res = IR.Tree.forkBefore(S.story, node.id);
+    const res = Tree.forkBefore(S.story, node.id);
     if (!res.ok) { toast(res.reason || '这里不能分叉', true); return; }
     afterSwitch();
     A.setComposerText(res.action.text, res.action.kind);   // 预填原话 + 还原「做 / 说 / 导演」，不触发发送
@@ -684,9 +650,9 @@
   function opLatest() {
     if (!gateSwitch()) return;
     const node = nodeOf(V.selectId);
-    const leaf = node && IR.Tree.latestLeaf(S.story, node.id);
+    const leaf = node && Tree.latestLeaf(S.story, node.id);
     if (!leaf) return;
-    if (!IR.Tree.switchTo(S.story, leaf.id)) return;
+    if (!Tree.switchTo(S.story, leaf.id)) return;
     afterSwitch();
     closeBranch();
   }
@@ -711,9 +677,9 @@
     if (!gateSwitch()) return;
     const t = tree();
     const head = t && t.nodes[t.head];
-    const leaf = head && IR.Tree.latestLeaf(S.story, head.id);
+    const leaf = head && Tree.latestLeaf(S.story, head.id);
     if (!leaf || leaf.id === t.head) return;
-    if (!IR.Tree.switchTo(S.story, leaf.id)) return;
+    if (!Tree.switchTo(S.story, leaf.id)) return;
     afterSwitch();
   }
 
@@ -769,4 +735,4 @@
     closeBranch,
     updateHistoryBar,
   });
-})();
+

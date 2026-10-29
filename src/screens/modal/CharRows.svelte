@@ -1,7 +1,7 @@
 <script>
   /* CharRows.svelte —— 人物设定行编辑器（屏 6b：接管 0.12.1 的 A.charEditor 的两个用例）
    * 开局向导（姓名 / 性格 / 说话方式）与文本导入确认页（多一列「在场 / 离场」）。
-   * 行存在 state.svelte.js 的 charRows 里，legacy 经 IR.ModalScreens.chars(kind) 读写，
+   * 行存在 state.svelte.js 的 charRows 里，legacy 经 ModalScreens.chars(kind) 读写，
    * 因此 startFromWizard / startFromImport 取到的是同一份数据（不再从 DOM 里捞输入框）。
    * 容器 id（#wz-characters / #it-characters）与添加按钮 id（#btn-wz-char-add / #btn-it-char-add）
    * 都按 legacy 的绑定表保留。 */

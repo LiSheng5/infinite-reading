@@ -16,12 +16,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // IR.genId 在 tree.js（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'src', 'core', 'proposals.ts'));
-
-const P = (global.IR || {}).Proposals;
+const P = require(path.join(__dirname, '..', 'src', 'core', 'proposals.ts')).Proposals;
 if (!P) {
-  console.error('加载失败：IR.Proposals 缺失（js/proposals.js 没被 require 进来？）');
+  console.error('加载失败：Proposals 导出缺失');
   process.exit(1);
 }
 

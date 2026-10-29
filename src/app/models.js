@@ -1,11 +1,14 @@
 /*
- * js/app/models.js —— 模型能力（T-M-1 / §4.13）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/models.js —— 模型能力（T-M-1 / §4.13）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Motion } from '../core/motion.ts';
+import { Prefs } from '../core/prefs.ts';
+import { Nav } from '../ui/navigation.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Cap, IMAGE_ASPECTS } = A;
 
 
@@ -19,7 +22,7 @@
 
   /* ================= 动效基座（UI-1） ================= */
 
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ IR.Motion.resolve
+  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
 
   // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
 
@@ -71,7 +74,7 @@
   // 所有发给主模型的请求与派生量（contextWindow / thinking / extraParams / noTools 键）都走它，
   // 不再直接读 S.settings.chat。
   function chatCfg() {
-    const P = IR.Prefs;
+    const P = Prefs;
     if (P && typeof P.resolveChatCfg === 'function') return P.resolveChatCfg(S.settings, S.story).cfg;
     return S.settings.chat;
   }
@@ -215,7 +218,7 @@
 
   // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
   // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
-  // 阶段 5 第 4 步：换画走 IR.Nav.stageArt —— 新旧图同名 stage-art，rich 档是共享元素过渡
+  // 阶段 5 第 4 步：换画走 Nav.stageArt —— 新旧图同名 stage-art，rich 档是共享元素过渡
   //（同一元素的旧 / 新快照做补间，过渡期暂停 Ken Burns，结束按档位恢复）。
   // 换画的两条路都汇到这里：AI 出图后 stagePlaySwap 的 animationend、点缩略图（renderStage → 同一条链）、
   // 视频场景取封面；同图重复调用（renderStage 反复跑）不再开新的一段。
@@ -226,7 +229,7 @@
     const next = src || '';
     if (next === stageArtSrc) return;
     stageArtSrc = next;
-    IR.Nav.stageArt(() => {
+    Nav.stageArt(() => {
       if (!next) {
         bd.classList.remove('show');
         bd.style.backgroundImage = '';
@@ -255,4 +258,4 @@
   }
 
   A.reg({ chatCfg, chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
-})();
+

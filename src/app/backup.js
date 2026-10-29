@@ -1,11 +1,14 @@
 /*
- * js/app/backup.js —— 本地存储与备份（P0 数据安全）
- * 从 js/app.js 拆出（只搬家，不改行为）。
+ * src/app/backup.js —— 本地存储与备份（P0 数据安全）
+ * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-(function () {
-  'use strict';
+import { Storage } from '../core/storage.ts';
+import { BackupPack } from '../core/backupPack.ts';
+import { Zip } from '../core/zip.ts';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, toast, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
 
 
@@ -68,7 +71,7 @@
     if (!el) return;
     el.textContent = '正在统计占用…';
     let est = null;
-    try { est = IR.Storage ? await IR.Storage.estimate() : null; } catch (_) {}
+    try { est = Storage ? await Storage.estimate() : null; } catch (_) {}
     let imgs = 0;
     try { imgs = (await Store.listImageKeys()).length; } catch (_) {}
     el.textContent = (est && est.usage != null)
@@ -115,7 +118,7 @@
   // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
   // 阶段 2：打包逻辑抽到 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
   function buildBackupPack(stripKeys) {
-    return IR.BackupPack.buildBackupPack(
+    return BackupPack.buildBackupPack(
       S.settings,
       Store.loadUserProfile(),
       Store.listStories().map(it => Store.loadStory(it.id)).filter(Boolean),
@@ -127,7 +130,7 @@
    *   ir-backup.json      与普通备份完全同款（schema 2 只多一份 images 清单）
    *   images/0001.png …   原图按二进制原样存放（不转 base64） */
   async function buildBackupZip(pack, onProgress) {
-    return IR.BackupPack.buildBackupZip(pack, onProgress);
+    return BackupPack.buildBackupZip(pack, onProgress);
   }
 
   async function doBackupAll() {
@@ -148,7 +151,7 @@
       toast('已导出全部备份：' + pack.stories.length + ' 个故事' + note, false, true);
       return;
     }
-    if (!(IR.Zip && IR.Zip.build)) { toast('打包模块没加载出来：请刷新页面重试', true, true); return; }
+    if (!(Zip && Zip.build)) { toast('打包模块没加载出来：请刷新页面重试', true, true); return; }
 
     if (btn) { btn.disabled = true; btn.textContent = '正在收集原图…'; }
     try {
@@ -177,7 +180,7 @@
 
   async function applyBackupImport(obj, zipEntries) {
     // 阶段 2：数据校验/清单过滤抽到 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
-    const { stories, pending, missing } = IR.BackupPack.parseBackup(obj, zipEntries);
+    const { stories, pending, missing } = BackupPack.parseBackup(obj, zipEntries);
     if (!stories.length && !obj.settings) { toast('备份文件里没有可还原的内容', true); return; }
     const ok = await irConfirm(
       '导入备份：还原 ' + stories.length + ' 个故事'
@@ -223,7 +226,7 @@
       + (imgs ? ' + ' + imgs + ' 张原图' : '')
       + (lost
         ? '；有 ' + lost + ' 张原图没还原'
-          + (IR.Storage && !IR.Storage.available ? '（这台浏览器用不了 IndexedDB，原图存不进本地）' : '（数据不完整）')
+          + (Storage && !Storage.available ? '（这台浏览器用不了 IndexedDB，原图存不进本地）' : '（数据不完整）')
         : '')
       + (missing ? '；清单里有 ' + missing + ' 张图不在包里（备份文件可能被改动过）' : ''),
       !!lost, true);
@@ -266,16 +269,16 @@
 
   // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况（纯逻辑在 src/core/backupPack.ts）
   function pickBackupJson(entries) {
-    return IR.BackupPack.pickBackupJson(entries);
+    return BackupPack.pickBackupJson(entries);
   }
 
   // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
   async function importZipFile(file) {
-    if (!(IR.Zip && IR.Zip.read)) { toast('这个版本没有 zip 支持：请刷新页面重试', true, true); return; }
+    if (!(Zip && Zip.read)) { toast('这个版本没有 zip 支持：请刷新页面重试', true, true); return; }
     toast('正在读取备份包…', false, true);
     let entries = null;
     try {
-      entries = await IR.Zip.read(file);
+      entries = await Zip.read(file);
     } catch (e) {
       toast('这个 .zip 打不开：' + ((e && e.message) ? e.message : e), true, true);
       return;
@@ -320,7 +323,7 @@
     // 完整档案：原样续玩
     // 阶段 2：story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack，与 0.12.1 逐字一致），
     // 这里只留落盘与界面跳转
-    const st = IR.BackupPack.storyFromPack(obj);
+    const st = BackupPack.storyFromPack(obj);
     Store.saveStory(st);
     A.showShelf();                       // 导入即进书架，能直接看到新卡片
     // 档案里带的原图（别人导出时勾了「附带原图」）：转成 Blob 存进 IndexedDB，之后照常显示原图
@@ -364,4 +367,4 @@
   }
 
   A.reg({ initStorageGuard, markBackedUp, renderStoragePanel, doBackupAll, remindBackupIfNeeded, openSettings, handleImportFile });
-})();
+

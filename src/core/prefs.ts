@@ -1,5 +1,5 @@
 /*
- * js/prefs.js —— 本对话偏好（UI-3 设置分层）· 纯逻辑层
+ * src/core/prefs.ts —— 本对话偏好（UI-3 设置分层）· 纯逻辑层
  *
  * 职责（任务书 §3.2）：
  *   - story.prefs 的清洗（sanitizePrefs）：丢未知键、剥凭证形字段、校验取值；
@@ -7,14 +7,11 @@
  *   - 主模型配置解析（resolveChatCfg）：profileId 只是引用，绝不携带 apiKey / baseUrl；
  *   - 各模式下「本对话设置」应显示哪些控件（visibleFor）。
  *
- * 硬约束：不碰 DOM、不碰存储、无依赖；Node 里 require 后挂到 global.IR.Prefs。
+ * 硬约束：不碰 DOM、不碰存储、无依赖；Node 里 require 后挂到 global.Prefs。
  */
-import { IR, registerIR } from './ir.ts';
 
-/* ↑ 阶段 2 搬迁自 js/prefs.js（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API，IR 只是给未迁移界面层的镜像。 */
-const global = globalThis as any;
+/* ↑ 阶段 2 搬迁自 src/core/prefs.ts（IIFE → ES module，函数体逐字未动）。
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   /* ---------------- 白名单 ---------------- */
 
@@ -314,5 +311,4 @@ const global = globalThis as any;
     visibleFor,
     exportPrefs,
   };
-  registerIR({ Prefs });
   export { Prefs };

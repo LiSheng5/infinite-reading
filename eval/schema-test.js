@@ -19,18 +19,15 @@ const path = require('path');
 const fs = require('fs');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'prefs.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'storage.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'zip.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'schema.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'backupPack.ts'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const { Store, Tree, Schema, BackupPack } = global.IR;
+const Store = core('store').Store;
+const Tree = core('tree').Tree;
+const Schema = core('schema').Schema;
+const BackupPack = core('backupPack').BackupPack;
+const Zip = core('zip').Zip;
 if (!Store || !Schema || !BackupPack) {
-  console.error('加载失败：IR.Store / IR.Schema / IR.BackupPack 缺失');
+  console.error('加载失败：Store / Schema / BackupPack 导出缺失');
   process.exit(1);
 }
 
@@ -98,7 +95,7 @@ console.log('[1] 真实夹具过 IR.Schema 校验（类型以档案为准）');
   // zip 带原图备份的正文（schema 2 + images 清单）同样过检
   const zipPath = path.join(FIX, 'backup-with-src.zip');
   if (fs.existsSync(zipPath)) {
-    const entries = global.IR.Zip.read(new Blob([fs.readFileSync(zipPath)]));
+    const entries = Zip.read(new Blob([fs.readFileSync(zipPath)]));
     return entries.then(en => {
       const main = BackupPack.pickBackupJson(en);
       return main.text().then(txt => {

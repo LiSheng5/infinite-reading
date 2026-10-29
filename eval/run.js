@@ -17,16 +17,14 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'context.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'tree.ts'));   // store.js 依赖 IR.Tree 的裁剪窗口/树遍历（加载顺序同 index.html）
-require(path.join(__dirname, '..', 'src', 'core', 'store.ts'));
-require(path.join(__dirname, '..', 'src', 'core', 'zip.ts'));     // RoleCard.parsePNG 的 CRC 走 IR.Zip.crc32（三·5）
-require(path.join(__dirname, '..', 'src', 'core', 'roleCard.ts'));
-require(path.join(__dirname, 'mock-story.js'));
+const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
-const { Context, MockStory, Store, RoleCard } = global.IR || {};
+const Context = core('context').Context;
+const Store = core('store').Store;
+const RoleCard = core('roleCard').RoleCard;
+const { MockStory } = require(path.join(__dirname, 'mock-story.js'));
 if (!Context || !MockStory) {
-  console.error('加载失败：IR.Context / IR.MockStory 缺失。');
+  console.error('加载失败：Context / MockStory 缺失。');
   process.exit(1);
 }
 

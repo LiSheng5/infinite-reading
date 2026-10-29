@@ -1,14 +1,14 @@
 # 无限阅读 · ∞ Reading
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![version](https://img.shields.io/badge/version-0.12.1-blue.svg)
-[![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#架构)
-[![no build](https://img.shields.io/badge/build-none-brightgreen.svg)](#快速开始)
+![version](https://img.shields.io/badge/version-0.13.0-blue.svg)
+[![runtime deps: 0](https://img.shields.io/badge/runtime%20deps-0-brightgreen.svg)](#架构)
+[![built with Vite + Svelte](https://img.shields.io/badge/build-Vite%20%2B%20Svelte%205-blue.svg)](#快速开始)
 [![English](https://img.shields.io/badge/README-English-lightgrey.svg)](README.en.md)
 
 **在这里你可以体验与创作各种优秀且令人难忘的剧情，无论是什么样剧情都尽情的在这体验吧，包括你心中所想的世界**
 
-**当前版本 v0.12.1** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
+**当前版本 v0.13.0** ｜ 文档：[架构](ARCHITECTURE.md) · [参与贡献](CONTRIBUTING.md) · [English](README.en.md)
 
 ## 特色
 
@@ -31,10 +31,18 @@ git clone git@github.com:LiSheng5/infinite-reading.git   # 或 https://github.co
 cd infinite-reading
 ```
 
-1. 启动（任选其一）：
-   - **Windows 一键**：双击 `启动.bat`——起本地服务并自动打开浏览器（优先用 Python，没有就退回内置的 PowerShell 服务器）
-   - 双击 `index.html`（纯前端，无构建、无依赖）
-   - 本地静态服务（更稳，推荐）：`npx serve .` 或 `python -m http.server 8000`
+1. 构建（需要 Node ≥ 22.5；源码是 ES module + Svelte，浏览器不能直接打开 `index.html`）：
+
+   ```bash
+   npm ci
+   npm run build        # 产出 dist/site（多文件）与 dist/single/index.html（单文件）
+   ```
+
+   然后任选一种方式启动：
+   - **Windows 一键**：双击 `启动.bat`——没有产物会先构建，再起本地服务并自动打开浏览器（优先用 Python，没有就退回内置的 PowerShell 服务器）
+   - **单文件双击**：直接双击 `dist/single/index.html`（全部内联，`file://` 可开；也可 `npm run bundle` 复制成 `dist/ir.html`）
+   - 本地静态服务（更稳，推荐）：`npx serve dist/site` 或 `python -m http.server 8000 --directory dist/site`
+   - 开发模式：`npm run dev`（Vite dev server，热更新；发布前请用构建产物验收）
 2. 点「⚙ 接入模型」，填 **Base URL**（下拉可选，也可手填）、**API Key**、**模型名**（生图模型同理）。
 3. **点一张模式卡就开局**：开始页上有三张模式卡——**剧情**（用下面的「故事设定」框开一局）、**智能体**（带工具的助手：能画图、记事、定时、写邮件、下单，后两样都要你确认）、**扮演**（先建 / 导入角色卡）。点哪张就直接按哪种模式开局，**没有单独的「开始」按钮**；「故事设定」框常驻，只给剧情模式用。
    - 「📄 文本导入」：把现成文本（设定文 / 小说片段 / 聊天记录）交给 AI 整理成开局材料，确认后再建新档。
@@ -99,8 +107,8 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 | 走法 | 命令 / 操作 | 适合 |
 |---|---|---|
-| 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve .` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
-| 单文件 | `npm run bundle` → `dist/ir.html`（约 530 KB） | 发给别人：一个 HTML 文件，双击即玩 |
+| 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve dist/site` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
+| 单文件 | `npm run bundle` → `dist/ir.html`（约 560 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
 | 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 22.5：内置 `node:sqlite`，见 `sidecar/README.md`） |
@@ -127,17 +135,19 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 | 文件 | 作用 |
 |---|---|
-| `js/providers.js` | 适配器层：`ChatProviders` / `ImageProviders`（`openai-images` 通用兼容 · `minimax-image` 官方 `/v1/image_generation`）/ `VideoProviders['minimax-video']`（MiniMax V2：`submit` / `poll` / `generate`） |
-| `js/context.js` | 上下文组装、压缩链、文本导入整理 |
-| `js/tree.js` | 分支树数据层：回合树是唯一真源（「↻ 重试」= 新增兄弟、‹ n/m › 切换），log / 世界卡等全是「根 → head」的投影 |
-| `js/storage.js` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
-| `js/store.js` | 存档层（内存优先 + 异步落盘；schema v3、旧档迁移、书架、存档点） |
-| `js/zip.js` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
-| `js/roleCard.js` | 角色卡（SillyTavern PNG 解析） |
-| `js/modelCapabilities.js` | 模型参数登记表（默认留空） |
-| `js/app.js` | 组合根：事件绑定 + 启动（业务在 `js/app/` 的 20 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
-| `js/sidecar.js` + `js/features.js` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
-| `js/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
+| `src/main.js` | **唯一入口**：按依赖顺序加载应用层 → 各屏 → 组合根 → PWA（旧 `src/legacy.js` 已删） |
+| `src/core/providers.ts` | 适配器层：`ChatProviders` / `ImageProviders`（`openai-images` 通用兼容 · `minimax-image` 官方 `/v1/image_generation`）/ `VideoProviders['minimax-video']`（MiniMax V2：`submit` / `poll` / `generate`） |
+| `src/core/context.ts` | 上下文组装、压缩链、文本导入整理 |
+| `src/core/tree.ts` | 分支树数据层：回合树是唯一真源（「↻ 重试」= 新增兄弟、‹ n/m › 切换），log / 世界卡等全是「根 → head」的投影 |
+| `src/core/storage.ts` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
+| `src/core/store.ts` | 存档层（内存优先 + 异步落盘；schema v3、旧档迁移、书架、存档点） |
+| `src/core/zip.ts` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
+| `src/core/roleCard.ts` | 角色卡（SillyTavern PNG 解析） |
+| `src/core/modelCapabilities.ts` | 模型参数登记表（默认留空） |
+| `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 21 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
+| `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗外壳 / 视图过渡） |
+| `src/core/sidecar.ts` + `src/core/features.ts` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
+| `src/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
 | `eval/tree-test.js` | 分支树数据层测试（Node 离线：投影 / 兄弟切换 / 旧档迁移 / store 集成） |
 | `eval/proposals-test.js` | 提案模块单测（假 sidecar：模型发起的邮件 / 下单只能产生提案、确认才执行、幂等 / 过期，Node 离线） |
@@ -155,9 +165,11 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 **可安装 + 可分发（2026-10-10）**：**PWA**（manifest + Service Worker，断网也能打开；缓存名跟着版本号走）、图标生成器（矢量 + 各尺寸 PNG，含 maskable / iOS 主屏）、Windows **一键启动 `启动.bat`**（Python 优先，退回零依赖 PowerShell 服务器）、**Dockerfile + compose**（自托管 / NAS）。
 
-**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `js/zip.js`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
+**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `src/core/zip.ts`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
 
 **v0.12 — 生视频（2026-10-22）**：**MiniMax V2 生视频**（图生 / 文生，画师写「动态提示词」）、独立视频队列（不堵出图）、提交前付费确认、刷新 / 切档自动续上任务、下载转存 IndexedDB + CORS / 空间不足降级限时链接、只存封面不进备份、全链路离线测试。
+
+**v0.13 — 构建迁移与前端重构（2026-10-28）**：Vite + Svelte 5 重写全部界面（组件库 / 设计令牌 / 三档动效 / View Transitions），核心逻辑迁入 `src/core/`（关键模块带 TypeScript 类型），数据层与导入导出格式零改动；`file://` 单文件产物保留；`?demo=1` 离线演示下线。收尾阶段删除 legacy 入口与全局 `IR` 兼容层、删掉 0.12.1 的旧 DOM 与新旧开关；版本号改为全构建注入。回归夹具：导入 → 还原 → 导出逐字段一致，25 张 390 / 1280 截图逐字节对照无回归。
 
 **Backlog**
 - [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）
@@ -177,7 +189,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 ## 参与与许可
 
-- **想改代码**：不用 `npm install`，改 `js/*.js` 刷新浏览器即可；动手前请先跑 `node eval/run.js`（离线、不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 24 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
 - **遇到问题**：安全相关请走私密渠道（见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「安全说明」），其余请提 Issue（有模板）。
 - **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「第三方资源与许可」。

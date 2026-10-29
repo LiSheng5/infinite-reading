@@ -1,10 +1,10 @@
 <script>
   /* CardModal.svelte —— #modal-card「角色卡」（屏 6c 重建）
    * 统一编辑器：自建空白表单 / 导入 SillyTavern V2/V3 PNG 后编辑。
-   * 表单一律由 js/app/cards.js 按 id 灌值（fillCardForm）与读取（readCardForm）；
+   * 表单一律由 src/app/cards.js 按 id 灌值（fillCardForm）与读取（readCardForm）；
    * 标题（#card-modal-title）、来源提示（#card-source-hint）、保存钮文案（#btn-rc-save）
    * 也会被 openCardEditor 改写——所以标题与按钮只放纯文本子节点。
-   * 取消 / 保存 / 关闭 / 导入的 handler 都在 js/app.js（cards.js），组件不挂。
+   * 取消 / 保存 / 关闭 / 导入的 handler 都在 src/app/main.js（cards.js），组件不挂。
    */
   import Card from './Card.svelte';
   import Field from '../../ui/Field.svelte';

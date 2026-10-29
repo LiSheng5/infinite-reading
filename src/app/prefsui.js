@@ -1,40 +1,31 @@
 /*
- * js/app/prefsui.js —— UI-3 设置分层的界面层
+ * src/app/prefsui.js —— UI-3 设置分层的界面层
  *   ① 全局设置：分组导航（桌面左导航 / 窄屏列表下钻）+ 模型库管理；
- *   ② 本对话设置：右侧停靠面板（窄屏底部弹层），内容由 IR.Prefs.visibleFor(mode) 决定。
- * 只做界面与读写；分层规则的真源在 js/prefs.js（IR.Prefs）。
+ *   ② 本对话设置：右侧停靠面板（窄屏底部弹层），内容由 Prefs.visibleFor(mode) 决定。
+ * 只做界面与读写；分层规则的真源在 src/core/prefs.ts（Prefs）。
  */
-(function () {
-  'use strict';
+import { Prefs } from '../core/prefs.ts';
+import { onOpen as storyPanelOpen } from '../screens/storyPrefs/panel.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, toast, irConfirm, saveAll, persistSettings, miniBtn, clone } = A;
 
-  const P = () => IR.Prefs;
+  const P = () => Prefs;
+
+  // 「本对话覆盖 / 跟随全局」状态标签：纯文本 + 勾选图标（图标用元素构造，不拼 innerHTML）
+  function setPrefBadge(badge, over) {
+    if (over) { badge.textContent = '本对话覆盖'; return; }
+    badge.replaceChildren(document.createTextNode('跟随全局'), A.iconEl('check', 'ic-r'));
+  }
 
   /* ================= 全局设置：分组导航（§4.1） ================= */
 
   // fieldset → 分组：按 legend 归类（控件 id 不动，只是搬进分组面板）
   // 阶段 4 屏 2：「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
   // 不再进全局设置分组（阶段 4 屏 2 迁移方案）。
-  const GROUP_BY_LEGEND = [
-    [/剧情对话模型|模型库/, 'g-models'],
-    [/画师子代理/, 'g-subs'],
-    [/书记员/, 'g-subs'],
-    [/起草模型/, 'g-subs'],
-    [/生图模型/, 'g-image'],
-    [/生视频模型/, 'g-image'],
-    [/画风/, 'g-image'],
-    [/出图时机/, 'g-image'],
-    [/生成过程/, 'g-tools'],
-    [/本地服务/, 'g-tools'],
-    [/邮件/, 'g-tools'],
-    [/定时主动/, 'g-tools'],
-    [/购物支付/, 'g-tools'],
-    [/用户画像/, 'g-data'],
-    [/本地存储/, 'g-data'],
-    [/界面/, 'g-look'],
-  ];
+  // 分组标题（导航标签由设置屏组件自己渲染；这里只给旧入口的兜底文案用）
   const GROUP_TITLES = {
     'g-models': '模型',
     'g-subs': '辅助模型',
@@ -44,22 +35,13 @@
     'g-look': '外观',
   };
 
-  function groupOfFs(fs) {
-    const legend = fs.querySelector('legend');
-    const text = legend ? legend.textContent : '';
-    for (const [re, g] of GROUP_BY_LEGEND) if (re.test(text)) return g;
-    return 'g-data';
-  }
-
   function narrowSettings() {
     return typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(max-width: 720px)').matches
       : false;
   }
 
-  // 把弹窗里的 fieldset / 危险行归进分组面板（幂等；只搬家，不改任何控件 id）
-  // 阶段 4 屏 2：Svelte 设置屏（src/screens/settings）按字段配置直接落好分组面板，
-  // #set-panels[data-impl="svelte"] 时跳过这步「按 legend 归类搬 DOM」，只做导航态绑定。
+  // 分组面板由设置屏组件按字段配置直接落好，这里只做导航态绑定
   function initSettingsNav() {
     const panels = $('#set-panels');
     const nav = $('#set-nav');
@@ -68,7 +50,6 @@
       return;
     }
     panels.dataset.ready = '1';
-    if (panels.dataset.impl !== 'svelte') regroupPanels(panels);
     nav.querySelectorAll('.set-nav-item').forEach(btn => {
       btn.onclick = () => openSettingsGroup(btn.dataset.group);
     });
@@ -84,29 +65,6 @@
     } else {
       openSettingsGroup('g-models');
     }
-  }
-
-  function regroupPanels(panels) {
-    const byGroup = Object.create(null);
-    const kids = Array.prototype.slice.call(panels.children);
-    kids.forEach((el) => {
-      if (el.id === 'set-back') return;
-      let g = 'g-data';
-      if (el.tagName === 'FIELDSET') g = groupOfFs(el);
-      else if (el.classList && el.classList.contains('danger-row')) g = 'g-data';
-      (byGroup[g] = byGroup[g] || []).push(el);
-    });
-    Object.keys(GROUP_TITLES).forEach((g) => {
-      const sec = document.createElement('section');
-      sec.className = 'set-panel';
-      sec.dataset.group = g;
-      const h = document.createElement('h3');
-      h.className = 'set-panel-title';
-      h.textContent = GROUP_TITLES[g];
-      sec.appendChild(h);
-      (byGroup[g] || []).forEach(el => sec.appendChild(el));
-      panels.appendChild(sec);
-    });
   }
 
   // 显示某分组；窄屏进「详情」态（列表 → 下钻），桌面始终左导航 + 右内容
@@ -205,7 +163,7 @@
   function renderModelProfiles() {
     const box = $('#mp-list');
     if (!box) return;
-    box.innerHTML = '';
+    box.replaceChildren();
     const list = S.settings.profiles || [];
     const st = $('#mp-state');
     if (st) st.textContent = list.length
@@ -420,7 +378,7 @@
     const badge = document.createElement('span');
     const over = prefHas(path);
     badge.className = 'prefs-badge' + (over ? ' over' : '');
-    badge.innerHTML = over ? '本对话覆盖' : '跟随全局' + A.icon('check', 'ic-r');
+    setPrefBadge(badge, over);
     head.appendChild(badge);
     if (over) {
       head.appendChild(miniBtn('重置', () => {
@@ -483,7 +441,6 @@
       (S.settings.profiles || []).forEach(p => {
         opts.push([p.id, (p.name || '（未命名）') + ' · ' + (p.model || p.id)]);
       });
-      const pid = P().effective(S.settings, S.story, 'profileId');
       const rawPid = (S.story.prefs && S.story.prefs.profileId) || '';
       const info = P().effectiveInfo(S.settings, S.story, 'profileId');
       let cur = rawPid && !info.missing ? rawPid : '';
@@ -573,7 +530,7 @@
     const over = prefHas('tools');
     const badge = document.createElement('span');
     badge.className = 'prefs-badge' + (over ? ' over' : '');
-    badge.innerHTML = over ? '本对话覆盖' : '跟随全局' + A.icon('check', 'ic-r');
+    setPrefBadge(badge, over);
     head.appendChild(badge);
     if (over) {
       head.appendChild(miniBtn('重置', () => {
@@ -669,7 +626,7 @@
   function renderStoryPrefs() {
     const body = $('#prefs-body');
     if (!body) return;
-    body.innerHTML = '';
+    body.replaceChildren();
     if (!S.story) {
       const p = document.createElement('p');
       p.className = 'hint';
@@ -700,7 +657,7 @@
 
   function openStoryPrefs() {
     if (!S.story) { toast('先打开一个对话'); return; }
-    if (IR.StoryPanel && IR.StoryPanel.onOpen) IR.StoryPanel.onOpen();   // 阶段 4 屏 2：回到一级视图 + 对账判变
+    storyPanelOpen();   // 回到一级视图 + 对账判变
     renderStoryPrefs();
     // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新——
     // 迁入面板后它不再等全局设置打开才画（阶段 4 屏 2 迁移方案）
@@ -745,4 +702,4 @@
     renderStoryPrefs, openStoryPrefs, closeStoryPrefs,
     bindPrefsUI,
   });
-})();
+

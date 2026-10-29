@@ -16,11 +16,9 @@
 const path = require('path');
 
 global.window = global;
-require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts'));
-
-const PaintQueue = (global.IR || {}).PaintQueue;
+const PaintQueue = require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts')).PaintQueue;
 if (!PaintQueue || !PaintQueue.create) {
-  console.error('加载失败：IR.PaintQueue.create 缺失');
+  console.error('加载失败：PaintQueue.create 缺失');
   process.exit(1);
 }
 

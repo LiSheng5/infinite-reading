@@ -76,7 +76,14 @@ function irShell({ single }) {
       if (!sw.includes(needle)) {
         throw new Error('sw.js 里找不到「' + needle + '」占位——模板被手改过，预缓存清单无法注入');
       }
-      writeFileSync(join(out, 'sw.js'), sw.replace(needle, 'const PRECACHE = ' + JSON.stringify(precache, null, 2) + ';'), 'utf8');
+      if (!sw.includes('__IR_VERSION__')) {
+        throw new Error('sw.js 里找不到版本占位 __IR_VERSION__——缓存名必须构建注入');
+      }
+      // 版本号与预缓存清单都在构建期注入：源码里不再有手写的 vX.Y.Z
+      const swOut = sw
+        .replaceAll('__IR_VERSION__', VERSION)
+        .replace(needle, 'const PRECACHE = ' + JSON.stringify(precache, null, 2) + ';');
+      writeFileSync(join(out, 'sw.js'), swOut, 'utf8');
 
       // —— 自检：注入没生效就地失败，别把坏产物放出去 ——
       const html2 = readFileSync(htmlPath, 'utf8');

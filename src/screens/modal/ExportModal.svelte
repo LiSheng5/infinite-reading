@@ -1,6 +1,6 @@
 <script>
   /* ExportModal.svelte —— #modal-export「导出故事」（屏 6b 重建）
-   * 文案由 js/app/library.js 的 openExport 写入 #export-story-name；
+   * 文案由 src/app/library.js 的 openExport 写入 #export-story-name；
    * 选项读取（input[name=export-kind]:checked / #export-src.checked）与导出动作
    * （#btn-do-export → A.doExport）都不变。导出按钮的文案会在打包原图时临时改成
    * 「打包原图中…」再还原，所以它只能有纯文本子节点（不能塞图标）。

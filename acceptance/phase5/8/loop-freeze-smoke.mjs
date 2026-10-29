@@ -11,11 +11,12 @@
  *   rich-fallback ?vt=0 降级：没有快照就不冻结（淡入路径循环继续跑）
  *   rich-interrupt 开 → 60ms 关 → 40ms 再开：收尾后没有卡在 paused 的循环、没有残留快照
  *   paused-probe 本来就停着（animation-play-state: paused）的循环不许被「复位」成播放
- *   budget      过渡中途注销 / 新登记循环：hold 期间不重排预算（data-loop 不抖），解冻后统一收敛
+ *   （阶段 6 删掉了 registerLoop 预算登记：budget 场景随之退役，改由 motion-probe 同一套
+ *     document.getAnimations() 预算断言覆盖）
  *
  * 手法：
  *   · 页面里插一个测速用循环元素（position:fixed 放到视口外，不动布局；animation: kenBurns 4s infinite），
- *     逐帧 document.getAnimations() 读它的 playState / currentTime，并同时记 IR.MotionDOM.loopsHeld()。
+ *     逐帧 document.getAnimations() 读它的 playState / currentTime，并同时记 __IR_TEST__.MotionDOM.loopsHeld()。
  *   · 另插一个 animation-play-state: paused 的同类元素，验「只恢复自己暂停的那些」。
  *   · 全程 file:// 打开 dist/single/index.html（双击的真实形态），不联网。
  *
@@ -59,7 +60,6 @@ const SCENARIOS = [
   { id: 'rich-fallback', tier: 'rich', query: '?vt=0', action: 'modal', expect: 'no-freeze', cap: 220 },
   { id: 'rich-interrupt', tier: 'rich', query: '', action: 'interrupt', expect: 'settle', cap: 220 },
   { id: 'paused-probe', tier: 'rich', query: '', action: 'modal', expect: 'keep-paused', cap: 220, probe: PAUSED_PROBE },
-  { id: 'budget-hold', tier: 'rich', query: '', action: 'budget', expect: 'settle', cap: 220 },
 ];
 
 /* ================= 页面内：测速循环 + 逐帧采样 ================= */
@@ -91,7 +91,7 @@ function installFixtures(ids) {
   };
 
   const held = () => {
-    try { return !!(window.IR && IR.MotionDOM && IR.MotionDOM.loopsHeld()); } catch (_) { return false; }
+    try { return !!(window.__IR_TEST__ && __IR_TEST__.MotionDOM && __IR_TEST__.MotionDOM.loopsHeld()); } catch (_) { return false; }
   };
 
   window.__lpApi = {
@@ -179,10 +179,10 @@ async function runAction(page, sc) {
   if (sc.action === 'modal') {
     const samples = await page.evaluate(async ({ id, probeId }) => {
       const list = await window.__lpApi.sample(probeId, 520, () => {
-        window.IR.App.openModal('modal-confirm');
+        window.__IR_TEST__.App.openModal('modal-confirm');
       });
       await new Promise(r => setTimeout(r, 380));
-      window.IR.App.closeModal('modal-confirm');
+      window.__IR_TEST__.App.closeModal('modal-confirm');
       await new Promise(r => setTimeout(r, 360));
       return list;
     }, { id: PROBE, probeId: probe });
@@ -191,31 +191,31 @@ async function runAction(page, sc) {
       loops: window.__lpApi.loops(),
       vt: window.__lpApi.vtPseudos(),
       modalOpen: !document.getElementById('modal-confirm').classList.contains('hidden'),
-      stack: (window.IR.App.modalStack || []).slice(),
+      stack: (window.__IR_TEST__.App.modalStack || []).slice(),
     })) };
   }
 
   if (sc.action === 'screen') {
     // 先确保在首页（showScreen 对「已经在目标屏」不跑过渡）
-    await page.evaluate(() => { if (window.IR.Nav.currentScreen() !== 'home') window.IR.Nav.showScreen('home'); });
+    await page.evaluate(() => { if (window.__IR_TEST__.Nav.currentScreen() !== 'home') window.__IR_TEST__.Nav.showScreen('home'); });
     await sleep(420);
     const samples = await page.evaluate(async ({ probeId }) => {
-      return window.__lpApi.sample(probeId, 520, () => { window.IR.Nav.showScreen('shelf'); });
+      return window.__lpApi.sample(probeId, 520, () => { window.__IR_TEST__.Nav.showScreen('shelf'); });
     }, { probeId: probe });
-    await page.evaluate(() => window.IR.Nav.showScreen('home'));
+    await page.evaluate(() => window.__IR_TEST__.Nav.showScreen('home'));
     await sleep(420);
     return { samples, tail: await page.evaluate(() => ({
       held: window.__lpApi.held(),
       loops: window.__lpApi.loops(),
       vt: window.__lpApi.vtPseudos(),
-      screen: window.IR.Nav.currentScreen(),
+      screen: window.__IR_TEST__.Nav.currentScreen(),
     })) };
   }
 
   if (sc.action === 'interrupt') {
     const samples = await page.evaluate(async ({ probeId }) => {
       return window.__lpApi.sample(probeId, 900, () => {
-        const A = window.IR.App;
+        const A = window.__IR_TEST__.App;
         A.openModal('modal-confirm');
         setTimeout(() => A.closeModal('modal-confirm'), 60);
         setTimeout(() => A.openModal('modal-confirm'), 100);
@@ -227,51 +227,11 @@ async function runAction(page, sc) {
       held: window.__lpApi.held(),
       loops: window.__lpApi.loops(),
       vt: window.__lpApi.vtPseudos(),
-      stack: (window.IR.App.modalStack || []).slice(),
+      stack: (window.__IR_TEST__.App.modalStack || []).slice(),
     }));
-    await page.evaluate(() => window.IR.App.closeModal('modal-confirm'));
+    await page.evaluate(() => window.__IR_TEST__.App.closeModal('modal-confirm'));
     await sleep(360);
     return { samples, tail: Object.assign(tail, { heldAfterClose: await page.evaluate(() => window.__lpApi.held()) }) };
-  }
-
-  if (sc.action === 'budget') {
-    const data = await page.evaluate(async () => {
-      const api = window.__lpApi;
-      const MD = window.IR.MotionDOM;
-      const ids = ['__lb1', '__lb2', '__lb3', '__lb4', '__lb5'];
-      for (const id of ids) api.make(id, false);
-      const offs = ids.map(id => MD.registerLoop(document.getElementById(id)));
-      const before = api.attrs(ids);
-      const beforeSlots = before.filter(x => !x.dataLoop).length;
-
-      window.IR.Nav.showScreen('shelf');
-      await new Promise(r => setTimeout(r, 90));   // 过渡已开：update 回调已跑（循环冻结中）
-      const mid = api.attrs(ids);
-      const heldMid = api.held();
-
-      // 过渡中途改登记：注销第 1 个 + 新登记两个（预算应收敛到 3，但 hold 期间不许重排）
-      offs[0]();
-      api.make('__lb6', false);
-      api.make('__lb7', false);
-      MD.registerLoop(document.getElementById('__lb6'));
-      MD.registerLoop(document.getElementById('__lb7'));
-      const midAfter = api.attrs(ids.concat(['__lb6', '__lb7']));
-      const heldMidAfter = api.held();
-
-      await new Promise(r => setTimeout(r, 420));
-      const after = api.attrs(ids.concat(['__lb6', '__lb7']));
-      // __lb1 已注销（属性应被移除），预算只看仍在登记的 6 组
-      const live = ['__lb2', '__lb3', '__lb4', '__lb5', '__lb6', '__lb7'];
-      const slotsAfter = after.filter(x => live.indexOf(x.id) >= 0 && !x.dataLoop).length;
-      const unregisteredClean = (after.find(x => x.id === '__lb1') || {}).dataLoop === '';
-      window.IR.Nav.showScreen('home');
-      await new Promise(r => setTimeout(r, 420));
-      return {
-        before, beforeSlots, mid, midAfter, after, slotsAfter, unregisteredClean,
-        heldMid, heldMidAfter, heldEnd: api.held(),
-      };
-    });
-    return { budget: data };
   }
 
   throw new Error('未知动作：' + sc.action);
@@ -378,31 +338,6 @@ function judge(sc, data) {
       'stack=' + (tail.stack || []).join(','));
   }
 
-  if (sc.action === 'budget') {
-    const b = data.budget || {};
-    const pick = (rows, ids) => (rows || []).filter(x => ids.indexOf(x.id) >= 0);
-    const sameAttrs = (rows, ids) => ids.every((id) => {
-      const x = (rows || []).find(r => r.id === id);
-      const y = (b.before || []).find(r => r.id === id);
-      return x && y && x.dataLoop === y.dataLoop;
-    });
-    add('登记 5 组 → 恰好 3 组在预算内（其余 data-loop="wait"）',
-      b.beforeSlots === 3 && (b.before || []).filter(x => x.dataLoop === 'wait').length === 2,
-      JSON.stringify(b.before));
-    add('过渡开始后（hold 在位）预算没有被重排：__lb1~__lb5 的属性与登记时一致',
-      b.heldMid === true && sameAttrs(b.mid, ['__lb1', '__lb2', '__lb3', '__lb4', '__lb5']),
-      'held=' + b.heldMid + ' mid=' + JSON.stringify(b.mid));
-    add('过渡中途注销 / 新登记也不重排：__lb2~__lb5 属性不变、新登记者不抢槽',
-      b.heldMidAfter === true && sameAttrs(b.midAfter, ['__lb2', '__lb3', '__lb4', '__lb5'])
-        && (b.midAfter || []).filter(x => x.id === '__lb6' || x.id === '__lb7').every(x => x.dataLoop === ''),
-      'held=' + b.heldMidAfter + ' midAfter=' + JSON.stringify(b.midAfter));
-    add('解冻后统一收敛：6 组登记里恰好 3 组在预算内',
-      b.slotsAfter === 3, 'slotsAfter=' + b.slotsAfter + ' after=' + JSON.stringify(b.after));
-    add('注销者的 data-loop 已清掉（不会带着排队标记留在 DOM 上）',
-      b.unregisteredClean === true, '__lb1=' + JSON.stringify((b.after || []).find(x => x.id === '__lb1') || null));
-    add('解冻后 hold 已释放', b.heldEnd === false, 'heldEnd=' + b.heldEnd);
-  }
-
   return checks;
 }
 
@@ -425,14 +360,16 @@ async function runScenario(browser, sc) {
   });
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + String((e && e.message) || e)));
 
-  await page.goto(APP_URL + (sc.query || ''), { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window.IR && IR.App && IR.Store && IR.MotionDOM), null, { timeout: 20000 });
-  await page.waitForFunction(() => !!(IR.App.state && IR.App.state.settings), null, { timeout: 20000 });
+  // 阶段 6：应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
+  const extra = sc.query ? '&' + String(sc.query).replace(/^[?&]/, '') : '';
+  await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
+  await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store && __IR_TEST__.MotionDOM), null, { timeout: 20000 });
+  await page.waitForFunction(() => !!(__IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 20000 });
   await sleep(420);
 
   const data = { id: sc.id, tier: sc.tier, query: sc.query || '', expect: sc.expect, cap: sc.cap || null };
   data.dataMotion = await page.evaluate((t) => {
-    const A = window.IR.App;
+    const A = window.__IR_TEST__.App;
     A.state.settings.ui = A.state.settings.ui || {};
     A.state.settings.ui.motion = t;
     if (A.applyMotion) A.applyMotion();
@@ -443,7 +380,6 @@ async function runScenario(browser, sc) {
   const result = await runAction(page, sc);
   data.samples = result.samples || [];
   if (result.tail) data.tail = result.tail;
-  if (result.budget) data.budget = result.budget;
 
   const checks = judge(sc, data);
   data.checks = checks;
@@ -480,9 +416,8 @@ async function main() {
     entry: APP_URL,
     how: {
       probe: '页面里插入 position:fixed 放到视口外的循环元素（kenBurns 4s infinite）+ 一个 animation-play-state:paused 的对照元素；'
-        + '逐帧读 document.getAnimations() 的 playState / currentTime，并同步记 IR.MotionDOM.loopsHeld()',
+        + '逐帧读 document.getAnimations() 的 playState / currentTime，并同步记 __IR_TEST__.MotionDOM.loopsHeld()',
       freeze: 'VT 的 update 回调里（新快照拍摄前）暂停所有正在跑的真实 DOM 循环；过渡收尾（含 skip / 被顶掉）计数式解冻',
-      budget: 'hold 期间 registerLoop / 注销只记账不重排（data-loop 不抖），解冻后统一收敛到 Motion.LOOP_BUDGET',
       note: 'off / ?vt=0 没有快照，不冻结也不干预；本来停着的循环（data-paused / 预算排队 / 刻意暂停）不会被解冻逻辑复活',
     },
     scenarios: [],

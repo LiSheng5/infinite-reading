@@ -1,16 +1,21 @@
 /*
- * js/app/shelf.js —— 书架页（UI-2）：会话列表 + 搜索 + 自动标题 + 新建弹层
+ * src/app/shelf.js —— 书架页（UI-2）：会话列表 + 搜索 + 自动标题 + 新建弹层
  *
  * - renderShelf：只读索引（不再对每个故事 loadStory），按 updatedAt 分组吸顶列表
  * - 「⋯」菜单：重命名 / 重新生成标题 / 导出 / 删除
- * - 自动标题：回合 seal 后异步触发（IR.Titles + resolveSub('scribe')），打字机式替换
+ * - 自动标题：回合 seal 后异步触发（Titles + resolveSub('scribe')），打字机式替换
  * - 搜索：首次聚焦惰性构建索引（分批让出主线程）；命中片段 createElement('mark') 高亮
  * - 键盘：/ 或 Ctrl/Cmd+K 聚焦搜索；↑↓ 选结果、Enter 打开、Esc 清空；行 Tab/Enter/Shift+F10
  */
-(function () {
-  'use strict';
+import { Titles } from '../core/titles.ts';
+import { Nav } from '../ui/navigation.js';
+import { ChatProviders } from '../core/providers.ts';
+import { Search } from '../core/search.ts';
+import { shelf } from '../screens/shelf/shelf.svelte.js';
+import { A } from './core.js';
 
-  const A = IR.App, S = A.state;
+
+  const S = A.state;
   const { $, Store, MODE_LABELS, toast, irConfirm, openModal, fmtTime, motionLevel, saveAll, resolveSub } = A;
 
   /* ================= 小工具 ================= */
@@ -58,9 +63,9 @@
     return 'older';
   }
 
-  // 阶段 5 第 3 步：屏幕显隐的判定收口到 IR.Nav（本文件不再直接读 .hidden）
+  // 阶段 5 第 3 步：屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
   function shelfVisible() {
-    return IR.Nav.screenVisible('shelf');
+    return Nav.screenVisible('shelf');
   }
 
   function titleElOf(storyId) {
@@ -74,112 +79,15 @@
     if (!list) return;
     // 旧索引条目一次性补齐（幂等；§3.1 迁移）
     try { Store.ensureIndexComplete(); } catch (_) { /* 迁移失败不拦渲染 */ }
-    // 阶段 4 屏 3：书架已换 Svelte 实现（src/screens/shelf，容器打 data-impl="svelte"）时，
-    // #shelf-list 的行 DOM 由组件管——这里只推视图模型（分组 / 行错峰 / 「更早」截断），不再拼 DOM；
-    // 旧拼装路径原样留给 ?ui=legacy 逃生口（阶段 6 随 legacy 入口一起删）。
-    if (IR.ShelfScreen) {
-      const index = Store.listStories();
-      $('#shelf-empty').classList.toggle('hidden', index.length > 0);
-      if (currentQuery) { runSearch(); return; }
-      IR.ShelfScreen.render(shelfModel(index));
-      return;
-    }
-    list.innerHTML = '';
+    // 行 DOM 由书架组件管：这里只推视图模型（分组 / 行错峰 / 「更早」截断），不再拼 DOM
     const index = Store.listStories();   // 已按 updatedAt 新 → 旧
     $('#shelf-empty').classList.toggle('hidden', index.length > 0);
     if (currentQuery) { runSearch(); return; }
-
-    const currentId = Store.getCurrentId();
-    const showAllEarlier = expandEarlier;
-    const grouped = { today: [], yesterday: [], week: [], older: [] };
-    for (const it of index) grouped[groupKeyOf(it.updatedAt || 0)].push(it);
-
-    let rowIndex = 0;
-    for (const g of GROUP_LABELS) {
-      let items = grouped[g.key];
-      if (!items.length) continue;
-      const capped = (g.key === 'older' && index.length > 300 && !showAllEarlier && items.length > EARLIER_CAP);
-      const shown = capped ? items.slice(0, EARLIER_CAP) : items;
-
-      const head = document.createElement('div');
-      head.className = 'shelf-group-head';
-      head.textContent = g.label + ' · ' + items.length;
-      list.appendChild(head);
-
-      for (const it of shown) {
-        list.appendChild(rowOf(it, currentId, rowIndex));
-        rowIndex += 1;
-      }
-      if (capped) {
-        const more = document.createElement('button');
-        more.className = 'btn ghost shelf-more';
-        more.textContent = '展开更多（还有 ' + (items.length - EARLIER_CAP) + ' 条）';
-        more.onclick = showAllEarlier;
-        list.appendChild(more);
-      }
-    }
+    shelf.seq += 1;
+    shelf.groups = shelfModel(index);
   }
 
-  function rowOf(it, currentId, rowIndex) {
-    const row = document.createElement('div');
-    row.className = 'shelf-row';
-    row.id = 'shelf-row-' + it.id;
-    row.dataset.storyId = it.id;
-    row.setAttribute('role', 'option');
-    row.setAttribute('aria-selected', it.id === currentId ? 'true' : 'false');
-    row.tabIndex = 0;
-    if (it.id === currentId) row.classList.add('current');
-    if (rowIndex < 14) {
-      row.classList.add('row-in');
-      row.style.animationDelay = Math.min(rowIndex * ROW_STAGGER_STEP, ROW_STAGGER_MAX) + 'ms';
-    }
-
-    const thumb = document.createElement('div');
-    // 导入档案的 thumb 不可信（审查 中危 #12）：白名单只放行 data:/blob:，并用 JSON.stringify
-    // 转义进 url()——引号破不出 CSS 值，与 models.js setStageArt 的转义口径一致
-    const thumbSrc = Store.safeThumb(it.thumb);
-    thumb.className = 'shelf-row-thumb' + (thumbSrc ? '' : ' empty');
-    if (thumbSrc) thumb.style.backgroundImage = 'url(' + JSON.stringify(thumbSrc) + ')';
-    else thumb.innerHTML = A.icon(MODE_ICONS[it.mode] || MODE_ICONS.choice);
-    row.appendChild(thumb);
-
-    const body = document.createElement('div');
-    body.className = 'shelf-row-body';
-    const title = document.createElement('div');
-    title.className = 'shelf-row-title';
-    // 空标题只显示兜底文案，绝不回写存档（§6）
-    title.textContent = it.title || '未命名故事';
-    body.appendChild(title);
-    const meta = document.createElement('div');
-    meta.className = 'shelf-row-meta';
-    meta.textContent = '[' + (MODE_LABELS[it.mode] || '剧情') + '] · 第 ' + (it.turn || 0) + ' 回合 · ' + relTime(it.updatedAt);
-    body.appendChild(meta);
-    const snip = document.createElement('div');
-    snip.className = 'shelf-row-snippet';
-    snip.textContent = it.snippet || '';
-    body.appendChild(snip);
-    row.appendChild(body);
-
-    const more = document.createElement('button');
-    more.className = 'shelf-row-more';
-    more.innerHTML = A.icon('more');
-    more.title = '更多操作';
-    more.setAttribute('aria-label', '更多操作');
-    more.onclick = e => { e.stopPropagation(); openRowMenu(row, it); };
-    row.appendChild(more);
-
-    row.addEventListener('click', () => openStory(it.id));
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); openStory(it.id); }
-      else if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
-        e.preventDefault();
-        openRowMenu(row, it);
-      }
-    });
-    return row;
-  }
-
-  /* ============ 视图模型（阶段 4 屏 3：IR.ShelfScreen 状态桥） ============
+  /* ============ 视图模型（阶段 4 屏 3：ShelfScreen 状态桥） ============
    * Svelte 组件按这些数据渲染出与 rowOf / resultRowOf 同结构的 DOM；
    * 切分 / 分组 / 截断口径与旧拼装路径共用上面的常量与工具函数，不另起一套。 */
 
@@ -309,7 +217,7 @@
     if (!sc.enabled) return false;
     const cfg = resolveSub('scribe');
     if (!cfg.provider || !cfg.model) return false;
-    const adapter = (IR.ChatProviders || {})[cfg.provider];
+    const adapter = (ChatProviders || {})[cfg.provider];
     if (!adapter || typeof adapter.chat !== 'function') return false;
     if (!cfg.apiKey) return false;
     return true;
@@ -343,7 +251,7 @@
   // 回合 seal 之后调用：异步触发，不占用 busy、不阻塞下一次发送
   function maybeAutoTitle() {
     const story = S.story;
-    if (!story || !IR.Titles || !IR.Titles.needsTitle(story)) return;
+    if (!story || !Titles || !Titles.needsTitle(story)) return;
     const id = story.id;
     if (titleBusy.has(id)) return;
     titleBusy.add(id);
@@ -361,7 +269,7 @@
       titleBusy.delete(id);
       const st = (S.story && S.story.id === id) ? S.story : Store.loadStory(id);
       if (!st) return;
-      if (!IR.Titles.applyTitle(st, id, title)) return;   // 护栏：id 一致 + titleAuto 仍为真
+      if (!Titles.applyTitle(st, id, title)) return;   // 护栏：id 一致 + titleAuto 仍为真
       if (S.story && S.story.id === id) saveAll();
       else Store.saveStory(st);
       if (shelfVisible()) {
@@ -371,20 +279,20 @@
     };
 
     if (!titleModelUsable()) {
-      writeBack(IR.Titles.fallback(story));
+      writeBack(Titles.fallback(story));
       return;
     }
     (async () => {
       let raw = '';
       try {
         const cfg = resolveSub('scribe');
-        const msgs = IR.Titles.buildPrompt(story.messages || [], story.mode);
-        raw = await IR.ChatProviders[cfg.provider].chat(cfg, msgs);
+        const msgs = Titles.buildPrompt(story.messages || [], story.mode);
+        raw = await ChatProviders[cfg.provider].chat(cfg, msgs);
       } catch (_) {
         titleBusy.delete(id);   // 失败：静默，保留现有标题（不 toast、不计次）
         return;
       }
-      writeBack(IR.Titles.sanitize(raw, '') || IR.Titles.fallback(story));
+      writeBack(Titles.sanitize(raw, '') || Titles.fallback(story));
     })();
   }
 
@@ -398,13 +306,13 @@
     try {
       if (titleModelUsable()) {
         const cfg = resolveSub('scribe');
-        const msgs = IR.Titles.buildPrompt(st.messages || [], st.mode);
+        const msgs = Titles.buildPrompt(st.messages || [], st.mode);
         let raw = '';
-        try { raw = await IR.ChatProviders[cfg.provider].chat(cfg, msgs); } catch (_) { raw = ''; }
-        title = IR.Titles.sanitize(raw, '');
+        try { raw = await ChatProviders[cfg.provider].chat(cfg, msgs); } catch (_) { raw = ''; }
+        title = Titles.sanitize(raw, '');
       }
-      if (!title) title = IR.Titles.fallback(st);
-      if (IR.Titles.applyTitle(st, id, title, { force: true })) {
+      if (!title) title = Titles.fallback(st);
+      if (Titles.applyTitle(st, id, title, { force: true })) {
         st.titleAuto = false;   // 手动触发的结果不再被自动覆盖
         Store.saveStory(st);
         renderShelf();
@@ -435,13 +343,13 @@
       const end = Math.min(items.length, i + BATCH);
       for (; i < end; i++) {
         const st = Store.loadStory(items[i].id);
-        if (st) IR.Search.index.upsert(st);
+        if (st) Search.index.upsert(st);
       }
       if (i < items.length) { setTimeout(step, 0); return; }
       searchBuilding = false;
       searchStats.built = true;
       searchStats.buildMs = Date.now() - t0;
-      searchStats.docs = IR.Search.index.size();
+      searchStats.docs = Search.index.size();
       if (currentQuery) runSearch();
     };
     setTimeout(step, 0);
@@ -463,16 +371,6 @@
     return segs;
   }
 
-  // 高亮：createElement('mark') + textContent，绝不 innerHTML 拼片段（§0）
-  function appendHighlighted(parent, text, ranges) {
-    for (const seg of segmentsOf(text, ranges)) {
-      if (!seg.mark) { parent.appendChild(document.createTextNode(seg.t)); continue; }
-      const mark = document.createElement('mark');
-      mark.textContent = seg.t;
-      parent.appendChild(mark);
-    }
-  }
-
   function runSearch() {
     const input = $('#shelf-search');
     const q = (input && input.value || '').trim();
@@ -483,8 +381,9 @@
     if (clearBtn) clearBtn.classList.toggle('hidden', !q);
     if (!q) {
       results.classList.add('hidden');
-      // 阶段 4 屏 3：结果行 DOM 由 Svelte 组件管时推空数组（等价于旧 innerHTML=''）
-      if (IR.ShelfScreen) IR.ShelfScreen.results([]); else results.innerHTML = '';
+      // 结果行 DOM 由组件管：推空数组（等价于旧 innerHTML=''）
+      shelf.resSeq += 1;
+      shelf.hits = [];
       input.setAttribute('aria-expanded', 'false');
       input.setAttribute('aria-activedescendant', '');
       activeIdx = -1;
@@ -496,7 +395,7 @@
     if (!searchStats.built) { ensureSearchIndex(); return; }   // 等索引建好再查
 
     const t0 = Date.now();
-    const hits = IR.Search.query(IR.Search.index.docs(), q);
+    const hits = Search.query(Search.index.docs(), q);
     searchStats.lastQueryMs = Date.now() - t0;
 
     // 交叉淡入：结果替换分组列表
@@ -511,69 +410,20 @@
     input.setAttribute('aria-activedescendant', '');
 
     const docs = new Map();
-    for (const d of IR.Search.index.docs()) docs.set(d.id, d);
+    for (const d of Search.index.docs()) docs.set(d.id, d);
 
     $('#shelf-search-empty').classList.toggle('hidden', hits.length > 0);
     const termEl = $('#shelf-search-term');
     if (termEl && !hits.length) termEl.textContent = q;
 
-    // 阶段 4 屏 3：命中行 DOM 由 Svelte 组件管（IR.ShelfScreen 推视图模型，高亮拆成 mark 段）；
-    // 旧拼装路径原样留给 ?ui=legacy 逃生口。
-    if (IR.ShelfScreen) {
-      const models = [];
-      for (const hit of hits) {
-        const doc = docs.get(hit.id);
-        if (doc) models.push(hitModel(hit, doc));
-      }
-      IR.ShelfScreen.results(models);
-      return;
-    }
-    results.innerHTML = '';
-    let i = 0;
+    // 命中行 DOM 由组件管：这里只推视图模型（高亮拆成 mark 段在组件里做）
+    const models = [];
     for (const hit of hits) {
       const doc = docs.get(hit.id);
-      if (!doc) continue;
-      results.appendChild(resultRowOf(hit, doc, i));
-      i += 1;
+      if (doc) models.push(hitModel(hit, doc));
     }
-  }
-
-  function resultRowOf(hit, doc, idx) {
-    const row = document.createElement('div');
-    row.className = 'shelf-hit';
-    row.id = 'shelf-hit-' + hit.id;
-    row.dataset.storyId = hit.id;
-    row.setAttribute('role', 'option');
-    row.setAttribute('aria-selected', 'false');
-    row.tabIndex = 0;
-
-    const title = document.createElement('div');
-    title.className = 'shelf-hit-title';
-    appendHighlighted(title, doc.title || '未命名故事', hit.titleRanges);
-    row.appendChild(title);
-
-    const meta = document.createElement('div');
-    meta.className = 'shelf-hit-meta';
-    meta.textContent = '[' + (MODE_LABELS[doc.mode] || '剧情') + '] · ' + relTime(doc.updatedAt);
-    row.appendChild(meta);
-
-    for (const h of (hit.hits || []).slice(0, 2)) {
-      const snip = document.createElement('div');
-      snip.className = 'shelf-hit-snippet';
-      appendHighlighted(snip, h.snippet, h.ranges);
-      row.appendChild(snip);
-    }
-
-    const openIt = () => openStory(hit.id, { focusNodeId: (hit.hits && hit.hits[0] && hit.hits[0].nid) || null });
-    row.addEventListener('click', openIt);
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); openIt(); }
-      else if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
-        e.preventDefault();
-        openRowMenu(row, { id: hit.id, title: doc.title });
-      }
-    });
-    return row;
+    shelf.resSeq += 1;
+    shelf.hits = models;
   }
 
   // 搜索框内 ↑ ↓ 在结果间移动（aria-activedescendant）
@@ -714,4 +564,4 @@
     openRowMenu,
     showAllEarlier,
   });
-})();
+
