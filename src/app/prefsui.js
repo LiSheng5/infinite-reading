@@ -1,16 +1,16 @@
 /*
- * src/app/prefsui.js —— UI-3 设置分层的界面层
+ * src/app/prefsui.js ——  设置分层的界面层
  *   ① 全局设置：分组导航（桌面左导航 / 窄屏列表下钻）+ 模型库管理；
  *   ② 本对话设置：右侧停靠面板（窄屏底部弹层），内容由 Prefs.visibleFor(mode) 决定。
  * 只做界面与读写；分层规则的真源在 src/core/prefs.ts（Prefs）。
  */
 import { Prefs } from '../core/prefs.ts';
 import { onOpen as storyPanelOpen } from '../screens/storyPrefs/panel.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, toast, irConfirm, saveAll, persistSettings, miniBtn, clone } = A;
+  const { $, Store, irConfirm, persistSettings, miniBtn, clone } = A;
 
   const P = () => Prefs;
 
@@ -20,7 +20,7 @@ import { A } from './core.js';
     badge.replaceChildren(document.createTextNode('跟随全局'), A.iconEl('check', 'ic-r'));
   }
 
-  /* ================= 全局设置：分组导航（§4.1） ================= */
+  /* ================= 全局设置：分组导航 ================= */
 
   // fieldset → 分组：按 legend 归类（控件 id 不动，只是搬进分组面板）
   // 阶段 4 屏 2：「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
@@ -140,7 +140,7 @@ import { A } from './core.js';
     });
   }
 
-  /* ================= 模型库管理（§3.1） ================= */
+  /* ================= 模型库管理 ================= */
 
   let mpEditingId = null;      // null = 新增；'copy:xxx' = 复制；其余 = 编辑
   let mpCopySource = null;
@@ -149,15 +149,23 @@ import { A } from './core.js';
     return (S.settings.profiles || []).find(p => p && p.id === id) || null;
   }
 
-  function usageOfProfile(id) {
-    const used = [];
+  // 模型库用量：索引条目现在带 profileId，遍历一次索引就够。
+  // 以前是「每个模型都把全部故事 loadStory 一遍」（O(模型数 × 故事数)），档一多打开设置面板就明显卡。
+  // 老索引没有 profileId 这一列时，由书架渲染时调用的 Store.ensureIndexComplete() 补齐一次。
+  function profileUsage() {
+    const m = new Map();
     try {
+      // 老索引没有 profileId：第一次打开模型库时补一次（幂等，之后再进来是空操作），
+      // 免得「刚升级、还没逛过书架」时用量一律显示 0
+      Store.ensureIndexComplete();
       Store.listIndex().forEach(it => {
-        const st = Store.loadStory(it.id);
-        if (st && st.prefs && st.prefs.profileId === id) used.push(st.title || it.title || it.id);
+        const pid = it && it.profileId;
+        if (!pid) return;
+        if (!m.has(pid)) m.set(pid, []);
+        m.get(pid).push(it.title || it.id);
       });
     } catch (_) { /* 索引读不到就不计数，确认文案仍然给出 */ }
-    return used;
+    return m;
   }
 
   function renderModelProfiles() {
@@ -175,6 +183,7 @@ import { A } from './core.js';
       d.textContent = '（空）每个对话都用默认主模型';
       box.appendChild(d);
     }
+    const usage = profileUsage();   // 一次扫描，所有模型共用
     list.forEach(p => {
       const row = document.createElement('div');
       row.className = 'mono-row';
@@ -183,7 +192,7 @@ import { A } from './core.js';
       text.textContent = (p.name || '（未命名）') + ' · ' + (p.model || '（未填模型）')
         + (p.apiKey ? ' · 已设置 Key' : ' · 无 Key（沿用默认）');
       row.appendChild(text);
-      const used = usageOfProfile(p.id);
+      const used = usage.get(p.id) || [];
       if (used.length) {
         const tag = document.createElement('span');
         tag.className = 'hint';
@@ -301,7 +310,7 @@ import { A } from './core.js';
   async function deleteProfile(id) {
     const p = profileById(id);
     if (!p) return;
-    const used = usageOfProfile(id);
+    const used = profileUsage().get(id) || [];
     const msg = used.length
       ? '删除「' + (p.name || p.model || id) + '」？这些对话会回退到默认模型：' + used.join('、')
       : '删除「' + (p.name || p.model || id) + '」？目前没有对话在用它。';
@@ -323,7 +332,7 @@ import { A } from './core.js';
     toast(used.length ? '已删除：' + used.length + ' 个对话回到默认模型' : '已删除');
   }
 
-  /* ================= 本对话设置面板（§4.2） ================= */
+  /* ================= 本对话设置面板 ================= */
 
   function ensurePrefs() {
     if (!S.story) return null;
@@ -430,7 +439,7 @@ import { A } from './core.js';
   // 写完 prefs 后的即时生效：布局 / 渲染 / 提示
   function applyPrefsSideEffects(path) {
     if (!path || path.indexOf('ui') === 0) A.applyLayout();
-    if (!path || path === 'choices' || path === 'showReasoning') A.renderChat();
+    if (!path || path === 'choices' || path === 'showReasoning') renderChat();
   }
 
   function modelRow() {
@@ -481,7 +490,7 @@ import { A } from './core.js';
       ['tray', '收在「灵感」里'],
       ['always', '始终内联在旁白下'],
     ], P().effective(S.settings, S.story, 'choices'), (v) => {
-      setPref('choices', v); saveAll(); renderStoryPrefs(); A.renderChat();
+      setPref('choices', v); saveAll(); renderStoryPrefs(); renderChat();
     }, 'p-choices'), '');
   }
 
@@ -489,7 +498,7 @@ import { A } from './core.js';
     return prefRow('showReasoning', '显示思考过程', () => chk(
       '展示深度思考链（模型返回 reasoning_content 时）',
       P().effective(S.settings, S.story, 'showReasoning'),
-      (v) => { setPref('showReasoning', v); saveAll(); renderStoryPrefs(); A.renderChat(); },
+      (v) => { setPref('showReasoning', v); saveAll(); renderStoryPrefs(); renderChat(); },
       'p-show-reasoning',
     ), '');
   }

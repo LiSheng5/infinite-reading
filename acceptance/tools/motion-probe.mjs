@@ -1,5 +1,5 @@
 /*
- * acceptance/tools/motion-probe.mjs —— 阶段 5 · 第 1 步 · 动效测量工具
+ * acceptance/tools/motion-probe.mjs —— 阶段 5 ·  · 动效测量工具
  *
  * 干什么：按 --tier=off|standard|rich 打开 file:// 的 dist/single/index.html（双击的真实形态），
  * 播种一局最小故事（含一次真分叉、两张图），然后跑一组固定动作：
@@ -29,7 +29,7 @@
  * 退出码：0 = 三档动作全部跑完且 console error / pageerror 为 0
  *         1 = 有动作没跑完、或出现 console error / pageerror
  *         2 = 用法错误（缺 --tier 等）
- * --strict：额外要求「零违规」（违规 = 超出该档上限）。第 1 步默认不 strict：
+ * --strict：额外要求「零违规」（违规 = 超出该档上限）。默认不 strict：
  *          当前多数动作还没有过渡（属正常），测量结果里的 violations 是后续步骤的待办清单。
  *
  * 约定：

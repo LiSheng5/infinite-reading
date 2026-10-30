@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 分支树布局（UI-4 §3，纯逻辑，Node 可测）
+ * 无限阅读 · 分支树布局（纯逻辑，Node 可测）
  *
  * 职责：把 story.tree 算成分支页画布要的几何数据。不碰 DOM、不联网、无副作用：
  *   TreeLayout.compute(tree, opts)
@@ -9,7 +9,7 @@
  *         edges:[{ from, to, path:[[x,y]…], onPath }],
  *         pathEdgeD, width, height }
  *
- * 布局规则（§3）：
+ * 布局规则：
  *   - 行 = 回合深度（根 = 0，时间向下），列 = 泳道（lane）；
  *   - 主干 = 当前路径（root → head）固定在 lane 0；
  *   - 路径上节点的非路径孩子、以及任意支线内部再分出来的支线：整棵子树贪心 + 区间打包
@@ -24,7 +24,9 @@
  */
 
 /* ↑ 阶段 2 搬迁自 src/core/treeLayout.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
+ * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。
+ * v0.13.0：分层拆成 buildKids / assignRows / tracePath / packLanes 四段
+ *   （只挪职责与闭包，几何公式与合并口径未动）。 */
 
   const DEFAULTS = {
     collapseRun: 8,
@@ -100,14 +102,17 @@
   }
 
   /* ---------------- 主入口 ----------------
-   * compute 编排三段纯逻辑（审查 可维护性 #1）：
-   *   layerTree  —— 分层：children 表 → BFS 行号 → 当前路径 → 泳道分配
-   *   foldChains —— 折叠：≥ collapseRun 的纯单链折成超级节点
-   *   geometryOf —— 几何：节点 / 边 / pathEdgeD / 画布尺寸
-   * 三段都是纯函数（同一入参 → 同一出参），compute 只做编排 + 空树兜底。
+   * compute 只做编排 + 空树兜底，每段职责一个纯函数：
+   *   buildKids   —— children 表：防环 / 剔除自引用 / 补 parent 指针
+   *   assignRows  —— 分层：BFS 行号 + 父指针 + 当前路径（tracePath）
+   *   packLanes   —— 泳道：主干固定 lane 0，支线整棵子树区间打包到更靠右的泳道
+   *   foldChains  —— 折叠：≥ collapseRun 的纯单链折成超级节点
+   *   geometryOf  —— 几何：节点 / 边 / pathEdgeD / 画布尺寸
+   * 每段都是纯函数（同一入参 → 同一出参、不改入参），各自在 eval/treelayout-test.js
+   * 第 10 节有独立单测；layerTree 只剩十来行装配。
    */
 
-  // 归一化视图参数（一次算好，三段共用；缺省回落 DEFAULTS）
+  // 归一化视图参数（一次算好；折叠 / 几何两段共用，缺省回落 DEFAULTS）
   function normalizeOpts(opts) {
     const o = Object.assign({}, DEFAULTS, opts || {});
     return {
@@ -123,16 +128,9 @@
     };
   }
 
-  /* —— 1. 分层：children 表（防环）→ BFS 行号 → 当前路径（root→head，主干 lane 0）→ 泳道 —— */
-  function layerTree(tree, cfg) {
-    const map = (tree && tree.nodes) || null;
-    if (!map || typeof map !== 'object') return null;
-    const rootId = tree.root;
-    if (!rootId || !map[rootId] || typeof map[rootId] !== 'object') return null;
-
-    /* children 表（防环 / 剔除自引用；缺 parent 的悬挂节点不可达，不渲染） */
+  /* —— 1a. children 表：保持 children 数组序，防环 / 剔除自引用，补 parent 指针 —— */
+  function buildKids(map) {
     const kids = new Map();          // id → [childId…]（保持 children 数组序，缺登记的补在后面）
-    const parentOf = new Map();
     for (const id of Object.keys(map)) {
       const n = map[id];
       if (!n || typeof n !== 'object') continue;
@@ -155,47 +153,54 @@
       if (list.indexOf(id) < 0) list.push(id);
       kids.set(p, list);
     }
+    return kids;
+  }
 
+  /* —— 1b. 分层：BFS 行号（防环）+ 唯一父指针 + 当前路径 —— */
+  function assignRows(kids, rootId, head) {
     /* 从根 BFS：行（深度）+ 可达集 */
     const row = new Map();
     const order = [];                // BFS 序（确定性遍历的基准）
-    {
-      const q = [rootId];
-      row.set(rootId, 0);
-      for (let qi = 0; qi < q.length; qi++) {
-        const id = q[qi];
-        order.push(id);
-        for (const c of (kids.get(id) || [])) {
-          if (row.has(c)) continue;   // 环：不二次入队
-          row.set(c, row.get(id) + 1);
-          q.push(c);
-        }
+    const q = [rootId];
+    row.set(rootId, 0);
+    for (let qi = 0; qi < q.length; qi++) {
+      const id = q[qi];
+      order.push(id);
+      for (const c of (kids.get(id) || [])) {
+        if (row.has(c)) continue;    // 环：不二次入队
+        row.set(c, row.get(id) + 1);
+        q.push(c);
       }
     }
     if (!row.size) return null;
+    const parentOf = new Map();
     parentOf.set(rootId, null);
     for (const id of order) {
       for (const c of (kids.get(id) || [])) {
         if (!parentOf.has(c)) parentOf.set(c, id);
       }
     }
+    const path = tracePath(head, row, parentOf);
+    return { row: row, order: order, parentOf: parentOf, path: path, onPath: new Set(path) };
+  }
 
-    /* 当前路径（root → head），主干固定 lane 0 */
+  // 当前路径（root → head）：只走可达节点；head 悬空 / 成环时自然截断
+  function tracePath(head, row, parentOf) {
     const path = [];
-    {
-      const seen = new Set();
-      let id = tree.head || null;
-      while (id && row.has(id) && !seen.has(id)) {
-        seen.add(id);
-        path.push(id);
-        const p = parentOf.get(id);
-        id = p == null ? null : p;
-      }
-      path.reverse();
+    const seen = new Set();
+    let id = head || null;
+    while (id && row.has(id) && !seen.has(id)) {
+      seen.add(id);
+      path.push(id);
+      const p = parentOf.get(id);
+      id = p == null ? null : p;
     }
-    const onPathSet = new Set(path);
+    path.reverse();
+    return path;
+  }
 
-    /* 泳道分配：主干 + 每条支线一条「脊」；支线整棵子树区间打包到更靠右的泳道 */
+  /* —— 1c. 泳道：主干 + 每条支线一条「脊」；支线整棵子树区间打包到更靠右的泳道 —— */
+  function packLanes(rootId, map, kids, row, order, path) {
     const laneOf = new Map();
     const occupied = [];             // occupied[lane] = [[rowStart, rowEnd]…]
 
@@ -267,8 +272,24 @@
     }
     // 防御：极少数损坏结构下没分到泳道的节点（不可达脊）——按行补到 0，保证可渲染
     for (const id of order) if (!laneOf.has(id)) laneOf.set(id, 0);
+    return laneOf;
+  }
 
-    return { map: map, head: tree.head, kids: kids, parentOf: parentOf, row: row, order: order, onPathSet: onPathSet, laneOf: laneOf };
+  /* —— 1d. 装配：tree → 分层结果 L（foldChains / geometryOf 的唯一入参） —— */
+  function layerTree(tree) {
+    const map = (tree && tree.nodes) || null;
+    if (!map || typeof map !== 'object') return null;
+    const rootId = tree.root;
+    if (!rootId || !map[rootId] || typeof map[rootId] !== 'object') return null;
+
+    const kids = buildKids(map);
+    const H = assignRows(kids, rootId, tree.head);
+    if (!H) return null;
+    const laneOf = packLanes(rootId, map, kids, H.row, H.order, H.path);
+    return {
+      map: map, head: tree.head, kids: kids, parentOf: H.parentOf,
+      row: H.row, order: H.order, onPathSet: H.onPath, laneOf: laneOf,
+    };
   }
 
   /* —— 2. 折叠：≥ collapseRun 的纯单链（不含 head / 书签 / 选中 / 展开态） —— */
@@ -416,11 +437,21 @@
   function compute(tree, opts) {
     const cfg = normalizeOpts(opts);
     const empty = { nodes: [], edges: [], pathEdgeD: '', width: cfg.padX * 2, height: cfg.padY * 2 };
-    const L = layerTree(tree, cfg);          // 分层
+    const L = layerTree(tree);               // 分层（buildKids → assignRows → packLanes）
     if (!L) return empty;
     const F = foldChains(L, cfg);            // 折叠
     return geometryOf(L, F, cfg);            // 几何
   }
 
-  const TreeLayout = { DEFAULTS: DEFAULTS, compute: compute, pointsToD: pointsToD, codeSlice: codeSlice };
+  // 分阶段纯函数也一并导出：评测逐段对账（不再只能整体对账），app 侧只用 compute
+  const TreeLayout = {
+    DEFAULTS: DEFAULTS,
+    compute: compute,
+    pointsToD: pointsToD,
+    codeSlice: codeSlice,
+    buildKids: buildKids,
+    assignRows: assignRows,
+    tracePath: tracePath,
+    packLanes: packLanes,
+  };
   export { TreeLayout };

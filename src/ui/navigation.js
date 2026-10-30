@@ -1,5 +1,5 @@
 /*
- * src/ui/navigation.js —— 切屏的唯一入口（阶段 5 · 第 3 步）
+ * src/ui/navigation.js —— 切屏的唯一入口（阶段 5 ·）
  *
  * 为什么要有这个文件：0.12.1 起「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
  * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），
@@ -26,7 +26,7 @@
  *
  * 铁律：
  *   · 目标屏已经可见时**不跑过渡**（连点同一入口不该产生快照），mutate 照常执行。
- *   · off 档与 instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动（任务书「坑」）。
+ *   · off 档与 instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动。
  *   · 屏幕名不认识时退化为「只跑 mutate」，不抛错。
  *   · rich 的「淡入 + 短位移」用 WAAPI 挂在 ::view-transition-new(root) 上（见 shiftNewSnapshot）：
  *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
@@ -113,11 +113,11 @@ export function showScreen(name, mutate) {
 
 /* ---------- rich 的短位移（切屏 / 分支页开合共用）----------
  * 为什么不在 css/motion.css 里写：位移需要 @keyframes，而 @keyframes 必须同步 src/core/motion.ts
- * 的 ANIMATIONS 与两份 eval 测试（任务书「坑」）；第 3 / 6 步的改动面不含那三处。这里改用 WAAPI
+ * 的 ANIMATIONS 与两份 eval 测试；的改动面不含那三处。这里改用 WAAPI
  * 直接给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
  * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩 css/motion.css 那三条
  * ::view-transition-* 规则给出的交叉淡入（不算失败，验收脚本也不把位移当硬要求）。
- * 按 key 分开存：切屏与分支页开合各自一段，互不 cancel（第 6 步实测：单例全局会把两段互相收掉）。 */
+ * 按 key 分开存：切屏与分支页开合各自一段，互不 cancel（实测：单例全局会把两段互相收掉）。 */
 const SHIFT_PX = 8;              // 与 rowIn / leafIn 的 8–10px 同一量级（短位移，不是滑屏）
 const shiftAnims = new Map();    // key → Animation
 
@@ -154,7 +154,7 @@ function shiftNewSnapshot(key, ms, fromY) {
   try { anim.finished.then(done, done); } catch (_) { done(); }
 }
 
-/* ---------- 舞台换画（阶段 5 第 4 步）----------
+/* ---------- 舞台换画（阶段 5）----------
  * 舞台的「图」有两层：上层 #stage-img（清晰图，换画时自己走 fade-swap / blur-up），
  * 下层 #stage-backdrop（同一张图的模糊放大副本，CSS 负责模糊与压暗）。换画的**共享元素**取下层：
  * 它是同一个元素、新旧图同名 stage-art，rich 档由 ::view-transition-group(stage-art) 补间。
@@ -232,7 +232,7 @@ export function isBranchOpen() {
   return document.documentElement.dataset.branch === 'open';
 }
 
-/* ---------- 分支页开合（阶段 5 第 6 步）----------
+/* ---------- 分支页开合（阶段 5）----------
  * 与 showScreen 同构：过渡形态 / 时长全由 TRANSITIONS.branchPage 决定
  *   off      → 同步切（焦点与滚动位置都不动）
  *   standard → root 交叉淡入（分支页不命名，整屏换页）
@@ -244,7 +244,7 @@ export function isBranchOpen() {
  *   过渡结束（或被下一段顶掉）后不再回调 —— 需要收尾的（centering / 入场动画 / 焦点还原）
  *   由调用方拿 finished 自己接。
  *
- * 循环暂停的时序（任务书「坑」）：开 → 标记在 mutate 里立刻写上（新快照里底下阅读页已是暂停相位）；
+ * 循环暂停的时序：开 → 标记在 mutate 里立刻写上（新快照里底下阅读页已是暂停相位）；
  * 关 → 标记等 finished 再撤（否则新快照拍的是暂停相位、结算后 live 已推进，Ken Burns 会跳一下）。
  */
 const BRANCH_SHIFT_PX = 8;
@@ -258,7 +258,7 @@ export function branchPage(open, mutate) {
   const instant = (mode) => ({ branch: want ? 'open' : 'close', tier: '', kind: 'instant', ms: 0, mode: mode || 'instant', finished: Promise.resolve() });
   const page = typeof document !== 'undefined' ? document.getElementById('branch-page') : null;
 
-  // 屏不在（?ui=legacy 半挂载 / 极早期）：只跑 mutate，不抛错也不动画
+  // 屏不在（骨架里没有 #branch-page，如单测或极早期）：只跑 mutate，不抛错也不动画
   if (!page) { run(); return instant(); }
 
   // 连点同一个入口：不跑过渡（不出第二对快照），mutate 照常跑

@@ -70,19 +70,23 @@ export function createPayment(deps) {
   }
 
   function insertTx(row) {
+    // 金额归一：amount_cents 是 INTEGER NOT NULL，NaN / Infinity / 超 int64
+    // 会变成绑定或约束异常 → 500 INTERNAL。台账宁可记 0，也不让拒绝路径把服务打崩。
+    const raw = Math.floor(Number(row.amountCents));
+    const amountCents = Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
     db.prepare(
       'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, provider_ref, mandate_id, created_at, approved_at, charged_at) '
       + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(
-      genId('tx'), row.intentId, row.agent, row.amountCents, row.currency, row.merchant, row.category,
+      genId('tx'), row.intentId, row.agent, amountCents, row.currency, row.merchant, row.category,
       JSON.stringify(row.items || []), row.status, row.code || '', row.providerRef || '', row.mandateId || '',
       row.createdAt, row.approvedAt == null ? null : row.approvedAt, row.chargedAt == null ? null : row.chargedAt
     );
   }
 
   // 已「占用额度」的金额（待确认的不算，避免空占额度；已确认 / 待人工付款 / 已扣款都算）。
-  // 金额字段一律 *Cents 后缀（审查 可维护性 #12）：单位就是「分」，别让人当元接。
-  // SQL 按时间范围 + SUM 聚合（审查 可维护性 #8），不再全表 SELECT 后 JS 过滤。
+  // 金额字段一律 *Cents 后缀：单位就是「分」，别让人当元接。
+  // SQL 按时间范围 + SUM 聚合，不再全表 SELECT 后 JS 过滤。
   function sums(agent, t0) {
     const [d0, d1] = dayRange(t0);
     const [m0, m1] = monthRange(t0);
@@ -116,8 +120,8 @@ export function createPayment(deps) {
   function createMandate(input) {
     const src = input || {};
     const agent = String(src.agent || '').trim();
-    // 发起方是授权范围的核心身份（agent 由 mandate 映射到每笔交易）：不允许空名（审查 中危 #13）
-    // 业务失败走结构化返回（审查 可维护性 #7），不 throw
+    // 发起方是授权范围的核心身份（agent 由 mandate 映射到每笔交易）：不允许空名
+    // 业务失败走结构化返回，不 throw
     if (!agent) return fail('AGENT_REQUIRED');
     const m = {
       id: genId('md'),
@@ -153,9 +157,10 @@ export function createPayment(deps) {
     }));
   }
 
-  // 授权范围内已用额度：按 mandate_id 关联统计（审查 中危 #13——此前按 agent+周期近似，
-  // 同一 agent 开两份授权会互相串额度，改名还能换池）
-  function mandateSpent(mandate, t0) {
+  // 授权范围内已用额度：按 mandate_id 关联统计（此前按 agent+周期近似，
+  // 同一 agent 开两份授权会互相串额度，改名还能换池）。
+  // 口径是「终身累计」：授权的 periodStart / periodEnd 不参与过滤，额度不做月度重置。
+  function mandateSpent(mandate) {
     const rows = db.prepare(
       'SELECT amount_cents, mandate_id FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND mandate_id = ?'
     ).all(String(mandate.id));
@@ -172,7 +177,7 @@ export function createPayment(deps) {
     const t0 = now();
     const s = sums(String(agent || '').trim(), t0);
     // 配置键（config.json）保持 perTx / daily / monthly / autoApprove 不动（用户面文件格式），
-    // 但 summary 的输出值一律 *Cents 后缀——单位就是「分」（审查 可维护性 #12）
+    // 但 summary 的输出值一律 *Cents 后缀——单位就是「分」
     const perTxCents = num(p.perTx);
     const dailyCents = num(p.daily);
     const monthlyCents = num(p.monthly);
@@ -218,11 +223,17 @@ export function createPayment(deps) {
     }
 
     const t0 = now();
-    const amountCents = Math.floor(Number(src.amountCents));
+    // 金额入口校验：NaN / 非安全整数 / ≤0 必须在落库前挡掉。
+    // 策略层虽然也判 BAD_AMOUNT，但走到那里时 deny 分支仍会 insertTx 写一个坏金额。
+    const amountNum = Math.floor(Number(src.amountCents));
+    if (!Number.isSafeInteger(amountNum) || amountNum <= 0) {
+      return { ok: false, code: 'BAD_AMOUNT', intentId: key || '', message: '金额必须大于 0（单位：分）。' };
+    }
+    const amountCents = amountNum;
     const merchant = String(src.merchant || '').slice(0, 200);
     const category = String(src.category || '').slice(0, 100);
     const items = Array.isArray(src.items) ? src.items.slice(0, 50) : [];
-    // 币种强制等于配置币种（审查 中危 #13）：金额单位就是配置币种的「分」，请求体自报的币种不接受
+    // 币种强制等于配置币种：金额单位就是配置币种的「分」，请求体自报的币种不接受
     const currency = (cfg.payment && cfg.payment.currency) || 'CNY';
     if (src.currency && String(src.currency).trim().toUpperCase() !== currency) {
       return { ok: false, code: 'CURRENCY_MISMATCH', message: '币种必须与本地配置一致（' + currency + '）。' };
@@ -242,7 +253,7 @@ export function createPayment(deps) {
       spentAgent: s.agentCents,
       lastChargeAt: lastChargeAt(),
       now: t0,
-      mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate, t0) }) : null,
+      mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate) }) : null,
     };
     const verdict = evaluatePolicy({ amountCents: amountCents, merchant: merchant, category: category, agent: agent }, ctx);
 
@@ -260,7 +271,7 @@ export function createPayment(deps) {
       };
     }
 
-    // 授权范围缺失：策略过了也不放行——「三层授权」的第一层不可省略（审查 中危 #13）
+    // 授权范围缺失：策略过了也不放行——「三层授权」的第一层不可省略
     if (!mandate) {
       const code = mandateId ? 'MANDATE_NOT_FOUND' : 'MANDATE_REQUIRED';
       insertTx(Object.assign({}, base, { status: TX.DENIED, code: code }));
@@ -346,7 +357,7 @@ export function createPayment(deps) {
         lastChargeAt: lastChargeAt(),
         now: t0,
         // 授权范围同样按当下累计复核（本单是 charging 状态、不在 COMMITTED 里，不会重复计自己）
-        mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate, t0) }) : null,
+        mandate: mandate ? Object.assign({}, mandate, { spent: mandateSpent(mandate) }) : null,
       }
     );
     if (verdict.decision === 'deny') {

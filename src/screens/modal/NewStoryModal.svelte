@@ -2,8 +2,8 @@
   /* NewStoryModal.svelte —— #modal-new「新故事 · 选模式」（屏 6b 重建）
    * 三张模式卡就是三个开局入口（无「开始」按钮），点击由 src/app/main.js 的统一绑定按
    * `#modal-new .mode-card` + data-mode 派发，所以这里只产标记、不挂 handler。
-   * 卡片保留 0.12.1 的 .mode-card 类（css/style.css 里是完整的卡面视觉）。 */
-  import Card from './Card.svelte';
+   * 卡片保留 0.12.1 的 .mode-card 类（css/overlays.css 里是完整的卡面视觉）。 */
+  import Card from '../../ui/ModalCard.svelte';
 
   const MODES = [
     { mode: 'choice', name: '剧情', desc: '给选项的故事。开头有一页设定向导，你把世界观与人物交代清楚，故事就从那里生长。' },

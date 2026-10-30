@@ -1,12 +1,12 @@
 /*
- * 无限阅读 · 角色卡（R13 / §4.12）
+ * 无限阅读 · 角色卡
  *
  * 职责：
  *  - SillyTavern V2 / V3 角色卡解析（PNG 内嵌 JSON：tEXt/iTXt 的 `chara` / `ccv3`）
  *  - 字段映射（description→外貌 / scenario→场景 / first_mes→开场白 / mes_example→示例对话 / system_prompt→系统提示）
  *  - 与世界卡对接：卡 → world.characters 一条人物条目（personality / speech 对接）
  *
- * 合规（§4.12）：只兼容**格式**，不复制任何代码与内容；解析的是用户自己的卡。
+ * 合规：只兼容**格式**，不复制任何代码与内容；解析的是用户自己的卡。
  * 纯逻辑、零依赖；IIFE 挂 应用层注册表，Node 亦可加载（评测用）。
  */
 
@@ -59,8 +59,8 @@ declare const Buffer: any;
     return s;
   }
 
-  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 Zip.crc32（zip.js，
-  // 审查 可维护性 三·5）。roleCard.js 在 zip.js 之前加载，取值放调用时，缺了直接抛不静默降级。
+  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 zip.ts 的 Zip.crc32。
+  // 取值放调用时而不是加载时，缺依赖就直接抛，不静默降级。
   function crc32(b) {
     const fn = Zip.crc32;
     return fn(b);
@@ -184,7 +184,7 @@ declare const Buffer: any;
     return '';
   }
 
-  // 导入卡 → 世界卡人物条目（personality / speech 天然对接，§4.12）
+  // 导入卡 → 世界卡人物条目（personality / speech 天然对接）
   function worldCharacter(card) {
     const c = normalize(card);
     if (!c.name) return null;

@@ -2,9 +2,9 @@
 'use strict';
 /* eval/schema-test.js —— schema 回归测试（阶段 2 验收门禁）
  *
- * 任务书 §5 阶段 2 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
+ *  阶段 2 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
  * 旧版本（0.11 及更早）的存档仍能迁移」。这里跑**数据层**的同一口径：
- *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture/）全部过 IR.Schema 校验
+ *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 IR.Schema 校验
  *      ——类型以真实档案形状为准的可执行证明，档案绝不反过来迁就类型；
  *   ② 导入 → 还原 → 导出逐字段一致：夹具 .irstory.json → storyFromPack（真实导入路径）
  *      → saveStory / loadStory（真实存盘往返）→ buildStoryPack（真实导出）→ 与原包逐字段比对
@@ -119,7 +119,7 @@ function part2() {
   console.log('[2] .irstory.json 导入 → 还原 → 导出逐字段一致');
   for (const f of ['story-choice-full.irstory.json', 'story-rp-full.irstory.json']) {
     const pack = load(f);
-    // 导入（真实路径：js/app/backup.js applyImport 的数据段，阶段 2 抽到 core）
+    // 导入（真实路径：src/app/backup.js 的应用入口，数据段在 src/core/backupPack.ts）
     const st = BackupPack.storyFromPack(pack);
     const saveOk = Store.saveStory(st);
     const reloaded = Store.loadStory(st.id);          // 还原：落盘再读回
@@ -168,9 +168,16 @@ function part3() {
   for (const s of (a.stories || [])) delete s.updatedAt;
   for (const s of (b.stories || [])) delete s.updatedAt;
   // stripKeys=true 会把设置里的 Key 清空：原夹具不含 Key（fixture 本身不带 Key），
-  // 比对前统一按「剥 Key 后」口径处理原侧，确保比的是数据而不是 Key 策略
+  // 比对前统一按「剥 Key 后」口径处理原侧，确保比的是数据而不是 Key 策略。
+  // sidecar.token 则是无条件剥：本机服务凭据不属于可备份数据。
+  const fixtureToken = (a.settings && a.settings.sidecar && a.settings.sidecar.token) || '';
+  if (a.settings && a.settings.sidecar) a.settings.sidecar.token = '';
   const repackDiff = diffFields(a, b, 'backup');
   check('backup 重打包逐字段一致（volatile 字段除外）', repackDiff.length === 0, repackDiff.slice(0, 8).join(' | '));
+  check('backup 重打包不含 sidecar token（无条件剥离）',
+    (!fixtureToken || JSON.stringify(b).indexOf(fixtureToken) < 0)
+      && !!b.settings && !!b.settings.sidecar && b.settings.sidecar.token === '',
+    'token=' + JSON.stringify(b.settings && b.settings.sidecar && b.settings.sidecar.token));
   part4();
 }
 
@@ -209,6 +216,10 @@ function part4() {
     m.prefs && !('apiKey' in m.prefs) && !('trigger' in m.prefs) && !('junk' in m.prefs)
     && m.prefs.profileId === 'pf-1', JSON.stringify(m.prefs));
   check('无 tree 的旧档不造 tree 字段', !('tree' in m) || m.tree == null, JSON.stringify(Object.keys(m)));
+  // 迁移表整体幂等：旧档迁一次后再迁一次，逐字段不变（某步的 when 写错会在这里爆）
+  const mAgain = Store.migrateStory(m);
+  const mIdem = diffFields(m, mAgain, 'story');
+  check('旧档迁移整表幂等（再迁一次逐字段不变）', mIdem.length === 0, mIdem.slice(0, 3).join(' || '));
 
   // —— 4.2 旧设置：provider 别名、video 控件折回、trigger 下线、旧 image.size ——
   const oldSettings = {
@@ -228,13 +239,18 @@ function part4() {
     ms.video.duration === 8 && ms.video.resolution === '1080P' && ms.video.ratio === '9:16'
     && !/duration/.test(ms.video.extraParams) && /bar/.test(ms.video.extraParams),
     JSON.stringify(ms.video));
-  // P-1（v0.11.0）：trigger（出图时机）停止读写——defaultSettings 不再写它，
+  // v0.11.0：trigger（出图时机）停止读写——defaultSettings 不再写它，
   // 旧档里的值**原样留在存档**（不读、不删）：迁移后仍可见，但默认包里永远没有
   check('trigger 不读不删（旧档值原样留存，默认包不再写）',
     ms.trigger === 'turn' && !('trigger' in Store.defaultSettings()),
     'ms.trigger=' + ms.trigger);
   check('profiles 幂等补 id', Array.isArray(ms.profiles) && ms.profiles.length === 2
     && ms.profiles.every(x => x && typeof x.id === 'string' && x.id), JSON.stringify(ms.profiles));
+  // 迁移表整体幂等：四类旧形状（provider / video / trigger / image.size）都迁过一遍后，
+  // 再迁一次必须逐字段不变——任何一步的 when 写得太宽，这里立刻爆
+  const msAgain = Store.migrateSettings(JSON.parse(JSON.stringify(ms)));
+  const msIdem = diffFields(ms, msAgain, 'settings');
+  check('设置迁移整表幂等（再迁一次逐字段不变）', msIdem.length === 0, msIdem.slice(0, 3).join(' || '));
 
   // —— 4.3 v0.1 旧键（infinite-reading-v1:*）→ migrateLegacy ——
   const mem = new Map();

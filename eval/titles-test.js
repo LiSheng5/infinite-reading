@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 自动标题纯逻辑测试（js/titles.js，UI-2 §5）
+ * 无限阅读 · 自动标题纯逻辑测试（src/core/titles.ts）
  *
  * 不开浏览器、不联网：
  *   1. sanitize：引号 / 书名号 / markdown / 换行 / 结尾标点 / 超长 / 空串 / 多行解释；

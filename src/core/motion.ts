@@ -1,4 +1,4 @@
-/* 统一 motion 模块 · 纯逻辑端（阶段 3，任务书 §6.2）
+/* 统一 motion 模块 · 纯逻辑端（阶段 3）
  *
  * 这里是动效档位的**语义真源**：
  *
@@ -32,7 +32,7 @@
     return prefersReduced ? 'off' : 'rich';
   }
 
-  /* 三档政策（§6.2 的可执行形态；off/standard 的收口值同时落在 css/motion.css 的 --m-* 上）：
+  /* 三档政策（的可执行形态；off/standard 的收口值同时落在 css/motion.css 的 --m-* 上）：
    *   maxOpacityMs  透明度变化的时长上限（off 最多 80ms）
    *   maxShiftMs    短位移的时长上限（standard ≤160ms；off 不许位移 = 0）
    *   maxColorMs    颜色类过渡的时长上限（off 不许 = 0）
@@ -45,7 +45,8 @@
   };
 
   /* 同屏同时运行的循环动画上限（rich 档）：#busy-line + Ken Burns + 环境光 / 分支页流光 + head 呼吸 + 选中脉冲。
-   * 一组 = 同名 keyframes 的错相多实例（如首页符号逐字符波按 1 组计）。登记见 src/ui/motion.js 的 registerLoop。 */
+   * 一组 = 同名 keyframes 的错相多实例（如首页符号逐字符波按 1 组计）。
+   * 没有运行时登记队列：预算由设计固定，由 acceptance/tools/motion-probe.mjs 逐档实测校验。 */
   var LOOP_BUDGET = 3;
 
   /* 逐动画三档行为声明表（与 css/motion.css 的 @keyframes、--an-* 名表一一对应）：

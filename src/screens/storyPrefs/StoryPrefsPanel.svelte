@@ -8,9 +8,11 @@
    * 本组件只产标记 + 视图切换（滚动位置 / 焦点 / Esc 见 panel.svelte.js）。 */
   import Icon from '../../ui/Icon.svelte';
   import WorldCardEditor from './WorldCardEditor.svelte';
-  import { panel, openWorld, backToList } from './panel.svelte.js';
+  import { panel, openWorld, backToList, listScrollTop } from './panel.svelte.js';
 
-  // 下钻 / 返回：进二级把焦点移到标题（tabindex=-1），返回还原一级滚动位置并把焦点交回「编辑」
+  // 下钻 / 返回：进二级把焦点移到标题（tabindex=-1），返回还原一级滚动位置并把焦点交回「编辑」。
+  // 滚动位置走 listScrollTop()（普通变量，不是 $state）：本 effect 的依赖只剩 panel.view，
+  // 不会在 openWorld() 写滚动位置时多跑一遍去抢标题的焦点。
   let mounted = false;
   $effect(() => {
     const view = panel.view;
@@ -21,7 +23,7 @@
       return;
     }
     const scroll = document.querySelector('#story-prefs .prefs-scroll');
-    if (scroll) scroll.scrollTop = panel.listScroll;
+    if (scroll) scroll.scrollTop = listScrollTop();
     const btn = document.getElementById('btn-world-edit');
     if (btn) btn.focus();
   });
@@ -30,12 +32,12 @@
 <div class="prefs-head">
   <h3 class:hidden={panel.view === 'world'}>本对话设置</h3>
   <div class="prefs-head-world" class:hidden={panel.view !== 'world'}>
-    <button id="prefs-world-back" class="btn ghost world-back" type="button" onclick={backToList}>
+    <button id="prefs-world-back" class="ui-btn ghost world-back" type="button" onclick={backToList}>
       <Icon name="back" class="ic-l" />返回
     </button>
     <h3 id="prefs-world-title" class="world-title" tabindex="-1">世界状态卡</h3>
   </div>
-  <button id="prefs-close" class="hud-btn" title="关闭" aria-label="关闭"><Icon name="x" /></button>
+  <button id="prefs-close" class="ui-btn hud" title="关闭" aria-label="关闭"><Icon name="x" /></button>
 </div>
 
 <div class="prefs-scroll" data-view={panel.view}>
@@ -61,7 +63,7 @@
         <div id="sp-panel" class="hidden">
           <p class="hint" id="sp-summary"></p>
           <div class="row-inline">
-            <button id="btn-add-savepoint" class="btn" type="button">打一个存档点</button>
+            <button id="btn-add-savepoint" class="ui-btn" type="button">打一个存档点</button>
             <span class="hint">退出故事时会自动存档；存档点保留最近 5 个</span>
           </div>
           <div id="sp-list" class="mono-list"></div>
@@ -73,17 +75,17 @@
         <p class="hint" id="memory-empty">开始一个故事后，这里显示它的世界状态卡、摘要栈与留痕。</p>
         <div id="memory-panels" class="hidden">
           <div class="row-inline">
-            <button id="btn-inject-memory" class="btn" type="button">注入记忆</button>
+            <button id="btn-inject-memory" class="ui-btn" type="button">注入记忆</button>
             <span class="hint" id="inject-state"></span>
           </div>
           <p class="hint" id="world-summary"></p>
           <div class="row-inline">
-            <button id="btn-world-edit" class="btn" type="button" onclick={openWorld}>编辑世界状态卡</button>
+            <button id="btn-world-edit" class="ui-btn" type="button" onclick={openWorld}>编辑世界状态卡</button>
           </div>
           <div class="panel-block">
             <p class="hint" id="rc-status"></p>
             <div class="row-inline">
-              <button id="btn-edit-card" class="btn" type="button">编辑角色卡 / 导入 PNG</button>
+              <button id="btn-edit-card" class="ui-btn" type="button">编辑角色卡 / 导入 PNG</button>
             </div>
           </div>
         </div>

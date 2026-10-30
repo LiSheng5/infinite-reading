@@ -58,7 +58,7 @@ const PLAN = [
   { key: 'story-world-edit', state: 'seeded', screen: 'story-world-edit', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（面板内下钻：人物行卡 + sticky 保存栏）' },
   { key: 'modal-new', state: 'empty', screen: 'modal-new', expect: '#modal-new:not(.hidden)', note: '新故事弹窗（三张模式卡）' },
   { key: 'modal-wizard', state: 'empty', screen: 'modal-wizard', expect: '#modal-wizard:not(.hidden)', note: '开局设定向导（剧情模式）' },
-  { key: 'modal-import-text', state: 'empty', screen: 'modal-import-text', expect: '#modal-import-text:not(.hidden)', note: '粘贴剧情文本导入弹窗（第 1 步）' },
+  { key: 'modal-import-text', state: 'empty', screen: 'modal-import-text', expect: '#modal-import-text:not(.hidden)', note: '粘贴剧情文本导入弹窗' },
   { key: 'modal-confirm', state: 'empty', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（设置→数据→清空本地存档与设置 触发，无输入框）' },
   // —— seeded：页面内播种一局之后 ——
   { key: 'start', state: 'seeded', screen: 'start', expect: '#btn-continue:not(.hidden)', note: '首页（有「继续上次」，带最近故事名）' },
@@ -712,7 +712,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await sleep(400);
   await snap('story-prefs');
 
-  // —— 世界状态卡二级视图（面板内下钻，§3.2 方案 A）：人物行卡 + sticky 保存栏 ——
+  // —— 世界状态卡二级视图（面板内下钻，方案 A）：人物行卡 + sticky 保存栏 ——
   await page.click('#btn-world-edit');
   await sleep(450);
   await snap('story-world-edit');

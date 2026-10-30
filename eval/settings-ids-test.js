@@ -1,4 +1,4 @@
-// 搬家回归护栏（UI-3 §6 + 阶段 4 屏 2）：设置控件 id 清单。
+// 搬家回归护栏（阶段 4 屏 2）：设置控件 id 清单。
 // 两份冻结清单（v0.8.0 冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
 //   GLOBAL_SETTINGS_IDS —— #modal-settings 里的全局设置控件；
 //   STORY_PANEL_IDS     —— 「本对话设置」面板 #prefs-story 里的当前故事控件
@@ -34,7 +34,7 @@ const GLOBAL_SETTINGS_IDS = [
   // v0.12.1：生图适配器（OpenAI 兼容 / MiniMax 原生）与参考图（subject_reference）开关
   's-image-provider', 's-image-ref',
   'btn-test-image', 'test-image-state',
-  // v0.12.0（§9.5）：生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
+  // v0.12.0：生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
   // 后补：时长 / 分辨率 / 比例的独立控件（用户要求加回；自定义参数改为高级覆盖）
   's-video-base', 's-video-model', 's-video-key', 's-video-params',
   's-video-duration', 's-video-resolution', 's-video-ratio',
@@ -71,7 +71,7 @@ const STORY_PANEL_IDS = [
 ];
 
 // radio 组用 name 标识（不是 id）；同样冻结。
-// P-1（v0.11.0）：出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除（任务书 §3.2），
+// v0.11.0：出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除，
 // 清单里不再有它——剧情模式作画只剩 🎨 按钮触发，这里同步冻结清单变化。
 const REQUIRED_NAMES = [];
 
@@ -83,7 +83,8 @@ for (const id of MOUNT_IDS) {
   if (html.indexOf('id="' + id + '"') < 0) throw new Error('index.html 缺挂载容器 #' + id);
 }
 
-// id 的形态：模板 id="…" / 字段配置 id: '…'、wrapId: '…'、stateId: '…' / data-testid="…"。
+// id 的形态：模板 id="…" / 字段配置 id: '…'、wrapId: '…'、stateId: '…' / data-testid="…"
+// / ModalCard 的 closeId="…"（组件里渲染成 id={closeId}，关闭钮走它）。
 function svelteIdsOf(dir) {
   const out = new Set();
   const stack = [dir];
@@ -94,7 +95,7 @@ function svelteIdsOf(dir) {
       if (e.isDirectory()) { stack.push(p); continue; }
       if (!/\.(svelte|js|ts)$/.test(e.name)) continue;
       const src = fs.readFileSync(p, 'utf8');
-      const re = /\b(?:wrapId|stateId|id)\s*[:=]\s*["']([^"']+)["']|\bdata-testid\s*[:=]\s*["']([^"']+)["']/g;
+      const re = /\b(?:closeId|wrapId|stateId|id)\s*[:=]\s*["']([^"']+)["']|\bdata-testid\s*[:=]\s*["']([^"']+)["']/g;
       let m;
       while ((m = re.exec(src))) out.add(m[1] || m[2]);
     }

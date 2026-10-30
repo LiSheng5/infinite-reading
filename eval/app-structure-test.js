@@ -1,12 +1,16 @@
 #!/usr/bin/env node
-// eval/app-structure-test.js —— 拆分结构门禁（任务书 §7；阶段 6 起入口 = src/main.js）
+// eval/app-structure-test.js —— 拆分结构门禁（阶段 6 起入口 = src/main.js）
 //   1. 唯一入口 src/main.js 中 src/app/*.js 的出现顺序：core.js 在所有其他 app 模块之前，
 //      main.js（组合根）在最后；磁盘上的每个 src/app/*.js 都被入口引用，反之亦然。
 //   2. 每个 src/app/*.js 行数 ≤ 800；main.js ≤ 600。
 //   3. 各模块 A.reg({ … }) 的键名在全局范围内不重复（静态扫描）。
 //   4. 除 core.js 外，任何模块的顶层解构 const { … } = A 只允许取 core.js 的导出
 //      （白名单 = core.js 的 A.reg 键集合；不得解构别的 app 模块函数）。
-//   5. 每个文件 node --check 语法通过。
+//   5. 每个 A.xxx 引用都必须已注册（防运行时 A.xxx is not a function）。
+//   6. 每个文件 node --check 语法通过。
+//   7. 高频入口（renderChat / saveAll / toast）必须是 core.js 的显式命名导出：
+//      调用方不再写 A.<入口>、不再从 A 解构；core.js 不许静态 import app 模块（否则成环）。
+//      showScreen 例外：它在 src/ui/navigation.js 本来就是真实命名导出。
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -123,6 +127,70 @@ for (const p of diskMods) {
     ok(true, 'src/' + p + ' 语法通过');
   } catch (e) {
     ok(false, 'src/' + p + ' 语法失败：' + String(e.stderr || e.message).slice(0, 300));
+  }
+}
+
+// ---------- 7. 高频入口的显式命名导出（IDE 可跳转） ----------
+console.log('[7] 高频入口显式导出（renderChat / saveAll / toast）');
+{
+  const ENTRIES = ['renderChat', 'saveAll', 'toast'];
+  const coreSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'core.js'), 'utf8');
+  const coreCode = coreSrc.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // core.js 的导出面：export { … } + export function …
+  const coreOut = new Set();
+  for (const m of coreCode.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const piece of m[1].split(',')) {
+      const name = (piece.trim().match(/^([A-Za-z_$][\w$]*)/) || [])[1];
+      if (name) coreOut.add(name);
+    }
+  }
+  for (const m of coreCode.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)) coreOut.add(m[1]);
+  for (const n of ENTRIES) ok(coreOut.has(n), 'core.js 显式导出 ' + n);
+
+  // 转接必须真的接到 A；core 不静态 import app 模块（反向 import 会成环 → TDZ）
+  ok(!/from\s*'\.\/[^']+\.js'/.test(coreCode), 'core.js 不静态 import 任何 src/app 模块（避免 ESM 环）');
+  ok(/return\s+A\.renderChat\s*\(\s*\)/.test(coreCode), 'core.js 的 renderChat 转接到 A.renderChat');
+  ok(coreSrc.includes('src/app/render.js'), 'core.js 的转接注释写明实现文件（Ctrl+Click 后的第二跳）');
+
+  // 实现仍在原模块：render.js 定义并注册 renderChat；toast / saveAll 在 core.js 定义
+  const renderSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'render.js'), 'utf8');
+  ok(/function\s+renderChat\s*\(/.test(renderSrc), 'src/app/render.js 仍是 renderChat 的定义处');
+  ok(regKeys.get('renderChat') === 'app/render.js', 'renderChat 仍由 src/app/render.js 注册进 A');
+  ok(/function\s+toast\s*\(/.test(coreCode) && /function\s+saveAll\s*\(/.test(coreCode), 'toast / saveAll 的定义仍在 core.js');
+
+  // 第四个高频入口 showScreen：本来就是真实命名导出，不需要 core 再开一个死别名
+  const navSrc = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'navigation.js'), 'utf8');
+  ok(/export\s+function\s+showScreen\s*\(/.test(navSrc),
+    'showScreen 在 src/ui/navigation.js 是真实命名导出（Nav.showScreen 可直接跳转）');
+
+  // 调用侧：不许再写 A.<入口> / 不许把入口放回 `= A` 解构；用它的模块必须从 core 命名 import
+  const importedBy = { renderChat: new Set(), saveAll: new Set(), toast: new Set() };
+  const violations = [];
+  for (const p of diskMods.filter(x => x !== 'app/core.js')) {
+    const text = fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
+    for (const n of ENTRIES) {
+      if (new RegExp('\\bA\\.' + n + '\\b').test(text)) violations.push('src/' + p + ' 仍写 A.' + n);
+    }
+    for (const m of text.matchAll(/^  const \{([^}]*)\} = A;/gm)) {
+      for (const piece of m[1].split(',')) {
+        const name = (piece.trim().match(/^([A-Za-z_$][\w$]*)/) || [])[1];
+        if (ENTRIES.includes(name)) violations.push('src/' + p + ' 仍从 A 解构 ' + name);
+      }
+    }
+    const imp = text.match(/import\s*\{([^}]*)\}\s*from\s*'\.\/core\.js'/);
+    if (imp) {
+      for (const piece of imp[1].split(',')) {
+        const name = (piece.trim().match(/(?:\bas\s+)?([A-Za-z_$][\w$]*)$/) || [])[1];
+        if (name && ENTRIES.includes(name)) importedBy[name].add(p);
+      }
+    }
+  }
+  ok(violations.length === 0, '没有模块再写 A.<入口> 或从 A 解构它们'
+    + (violations.length ? '：' + violations.join(' | ') : ''));
+  // 门槛：新增条目必须被 ≥10 个 app 模块当第一跳 import，否则它不够高频，别开死别名
+  for (const n of ENTRIES) {
+    ok(importedBy[n].size >= 10, n + ' 被 ' + importedBy[n].size + ' 个 app 模块命名 import（≥10）');
   }
 }
 

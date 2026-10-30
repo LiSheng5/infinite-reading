@@ -1,18 +1,18 @@
 /*
- * src/app/styleanchor.js —— 画风锚定（R3 / §5）
+ * src/app/styleanchor.js —— 画风锚定
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { ImageProviders, ChatProviders } from '../core/providers.ts';
 import { genId } from '../core/tree.ts';
 import { Context } from '../core/context.ts';
-import { A } from './core.js';
+import { A, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, toast, openModal, closeModal, offlineBlocked, saveAll, resolveSub, imageCfg } = A;
+  const { $, openModal, closeModal, offlineBlocked, resolveSub, imageCfg } = A;
 
 
-  /* ================= 画风锚定（R3 / §5，T-P4-1） =================
+  /* ================= 画风锚定 =================
    * 开局试画 4 张候选（按用户比例）→（可「再试一批」）→ 选定一张
    * → 画师起草视觉设定卡（可改字段 / 跟画师说着改）→ 锁定并记版本；
    * 跳过 = 无卡自由发挥（靠滚动风格摘要）；「锚定画风」按钮随时重走。 */

@@ -35,7 +35,7 @@
     border: 1px solid var(--line-strong);
     border-radius: var(--radius);
     padding: 8px 10px;
-    min-height: 40px;           /* 触屏可点目标 ≥ 40px（§7.2） */
+    min-height: 40px;           /* 触屏可点目标 ≥ 40px */
     outline: none;
     transition: border-color var(--m-t-color-base) var(--ease-out);
   }

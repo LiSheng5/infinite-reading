@@ -1,0 +1,133 @@
+/* ==================== 开始页 ====================
+ * 无限符号主视觉 + 继续上次 + 三张模式卡 + 底部文字入口。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 开始页 ====================
+   版式：无限符号（主视觉）→ 「继续上次」（有存档才出现）→ 三张模式卡 → 底部一排安静的文字入口。
+   不再套一层带框的卡片：符号直接浮在白底上。 */
+#screen-start {
+  display: flex; align-items: center; justify-content: center;
+  overflow-y: auto;
+}
+.start-card {
+  width: min(560px, 92vw);         /* 版心 */
+  margin: auto;
+  padding: 44px 0 30px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-align: center;
+}
+.start-mark { margin: 0 0 38px; font-weight: 400; line-height: 1; }
+
+/* ASCII 无限符号：深色在底，浅色在 ::after 叠层；只改叠层 opacity（动画白名单），
+   每个字符按所在列错开相位 → 深浅色带从左往右流过整个符号。
+   --t 是静态时的浅色占比（JS 按列算的一道「深 → 浅 → 深」渐变）。 */
+.inf {
+  display: inline-block;
+  margin: 0 auto;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(11px, calc((min(560px, 92vw) - 24px) / 21), 24px);
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: pre;
+  color: var(--inf-deep);
+  user-select: none;
+}
+.inf .c { position: relative; color: var(--inf-deep); }
+.inf .c::after {
+  content: attr(data-c);
+  position: absolute; left: 0; top: 0;
+  color: var(--inf-light);
+  opacity: var(--t, .5);
+}
+/* 只有「丰富」档循环；其余档停在静态渐变（infWave 的三档声明见 ANIMATIONS.infWave） */
+html[data-motion="rich"] .inf .c::after {
+  animation: var(--an-infWave) var(--loop-inf) var(--ease-inout) var(--m-iter);
+  animation-delay: calc(var(--x, 0) * var(--loop-inf-step) * -1);
+}
+
+/* 继续上次：主操作（黑底白字），带最近那个故事的名字 */
+.start-continue {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 13px 18px;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  letter-spacing: .06em;
+  color: var(--on-ink);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
+}
+.start-continue:hover { background: var(--ink-hover); transform: translateY(-1px); }
+.start-continue:active { transform: scale(.985); }
+.start-continue .sc-label { font-weight: 600; flex: none; }
+.start-continue .sc-title {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  opacity: .72;
+}
+.start-continue .ic { width: 18px; height: 18px; flex: none; }
+
+/* 三个模式：一行三张，图标 + 名字；每张卡本身就是一个开局入口 */
+.mode-cards.start-mode-cards { flex-direction: row; gap: 12px; margin: 0; }
+.start-mode-cards .mode-card {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 20px 8px 17px;
+  text-align: center;
+  background: var(--surface);
+  border-color: var(--line);
+}
+.start-mode-cards .mode-card .ic { width: 28px; height: 28px; color: var(--accent); }
+.start-mode-cards .mode-card b { margin: 0; padding-left: .2em; font-size: 15px; letter-spacing: .2em; }
+
+/* 底部入口：一排文字链接，不抢三张卡的戏 */
+.start-links {
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: 2px 4px;
+  margin-top: 22px;
+}
+.link-btn {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: .06em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.link-btn:hover { color: var(--accent); background: var(--accent-soft); }
+#screen-start .version {
+  font-family: var(--font-en);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  margin-top: 22px;
+  text-align: center;
+}
+.field-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+  letter-spacing: 0.08em;
+}
+.row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .start-card { padding: 30px 0 22px; }
+  .start-mode-cards .mode-card { padding: 17px 4px 14px; }
+}

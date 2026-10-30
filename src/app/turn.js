@@ -2,7 +2,7 @@
  * src/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-// 阶段 5 第 5 步：切兄弟的过渡收编进过渡内核（runTransition）。本文件仍是 legacy IIFE，
+// 阶段 5：切兄弟的过渡收编进过渡内核（runTransition）。本文件仍是 legacy IIFE，
 // 但经 src/main.js 以 ES module 装载（src/app/main.js 同款），顶层 import 合法；
 // 三档 kind / 时长的唯一声明处仍是 src/core/motion.ts 的 TRANSITIONS.sibling。
 // 命名空间导入 + VT.runTransition 点名调用：tools/check-free-calls.mjs 的裸调用启发式
@@ -12,11 +12,12 @@ import * as VT from '../../src/ui/viewTransition.js';
 import { Context } from '../core/context.ts';
 import { ChatProviders } from '../core/providers.ts';
 import { Tree } from '../core/tree.ts';
-import { A } from './core.js';
+import { WriteBack } from '../core/writeBack.ts';
+import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, isStopError, setSendButtonsBusy, motionLevel, motionMs, toast, netErrHint, saveAll, resolveSub } = A;
+  const { $, Store, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, isStopError, setSendButtonsBusy, motionLevel, motionMs, netErrHint, resolveSub, reportUserFailure, reportBackgroundFailure, errorText, shortError, failureEntry } = A;
 
   function parseAIReply(raw) {
     const text = String(raw || '').trim();
@@ -44,10 +45,10 @@ import { A } from './core.js';
     return { narration: text, choices: [], scene_change: false, scene_summary: '', parseFailed: true, looksJson: looksJson };
   }
 
-  // 归档形状 / 工具吸收的唯一口径在 Context（审查 可维护性 二·10）：
+  // 归档形状 / 工具吸收的唯一口径在 Context：
   // assistant 消息内容 = Context.slimReply 的 JSON；applyToolCall 只是转接，
   // 评测（eval/run.js）走同一实现，字段不会再漂移。
-  // 画像门控 = applyProfile 注入点（这里给 A.applyProfileEntries：关开关即停止收集，§4.12）。
+  // 画像门控 = applyProfile 注入点（这里给 A.applyProfileEntries：关开关即停止收集）。
   function applyToolCall(c) {
     Context.absorbToolCalls(S.story, [c], { applyProfile: A.applyProfileEntries });
   }
@@ -71,9 +72,13 @@ import { A } from './core.js';
     return !!ChatProviders[cfg.provider];
   }
 
-  // 书记员（C-B）：每 N 回合校对世界卡（压缩触发时由 runSmartCompress 顺带完成）；失败时用本地规则兜底
+  // 书记员：每 N 回合校对世界卡（压缩触发时由 runSmartCompress 顺带完成）；失败时用本地规则兜底。
+  // 异步写回契约：校对结果只写回发起时那本故事；错误可观测：未配置 / 网络失败 /
+  // 解析失败不再一起沉默——console 留警告、tool 留痕带 error，界面据此区分「未启用 / 失败」。
   async function runScribe() {
+    const sid = S.story && S.story.id;
     let result = null;
+    let err = '';   // 失败原因（'未配置书记员模型' / 网络错误文本 / '回包解析失败'）
     try {
       const cfg = resolveSub('scribe');
       if (cfg.provider && cfg.model) {
@@ -85,19 +90,34 @@ import { A } from './core.js';
             role: 'user',
             content: '[当前世界卡]\n' + Context.worldCardText(S.story.world)
               + '\n\n[最近剧情]\n' + (recent || '（无）')
-              + '\n\n[玩家最近说过的话]\n' + (said || '（无）')   // R13：画像提取的来源
+              + '\n\n[玩家最近说过的话]\n' + (said || '（无）')   // 画像提取的来源
               + '\n\n' + A.scribeProfileHint(),
           },
         ]);
         result = parseScribe(raw);
+        if (!result) err = '回包解析失败';
+      } else {
+        err = '未配置书记员模型';
       }
-    } catch (_) { result = null; }
-    if (!result) result = Context.localScribe(S.story.world);
-    // 书记员是整卡重写（最终仲裁）：允许空数组清空
-    if (result.world) Context.mergeWorld(S.story.world, result.world, { allowEmpty: true });
-    if (result.profile && result.profile.length) A.applyProfileEntries(result.profile);   // R13：顺手提取的画像
-    S.story.world.scribeAt = Date.now();
-    S.story.log.push({ type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() });
+    } catch (e) {
+      err = errorText(e);
+      result = null;
+    }
+    if (err) reportBackgroundFailure('scribe', err, { note: '世界卡校对失败（退回本地规则）' });
+    WriteBack.writeBackIfSameStory(S.story, sid, (story) => {
+      if (!result) result = Context.localScribe(story.world);
+      // 书记员是整卡重写（最终仲裁）：允许空数组清空
+      if (result.world) Context.mergeWorld(story.world, result.world, { allowEmpty: true });
+      if (result.profile && result.profile.length) A.applyProfileEntries(result.profile);   // 顺手提取的画像
+      story.world.scribeAt = Date.now();
+      story.log.push(!err
+        ? { type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() }
+        : failureEntry('scribe', err, {
+          summary: err === '未配置书记员模型'
+            ? '书记员未配置模型，世界卡由本地规则维护'
+            : '书记员校对失败（退回本地规则）：' + shortError(err),
+        }));
+    });
   }
 
   function parseScribe(raw) {
@@ -108,16 +128,16 @@ import { A } from './core.js';
         const o = JSON.parse(s.slice(i, j + 1));
         return {
           world: (o.world && typeof o.world === 'object') ? o.world : null,
-          profile: Array.isArray(o.profile) ? o.profile : [],   // R13：顺手提取的画像条目
+          profile: Array.isArray(o.profile) ? o.profile : [],   // 顺手提取的画像条目
           diff: Array.isArray(o.diff) ? o.diff.map(String) : [],
         };
-      } catch (_) {}
+      } catch (_) { /* 回包不是 JSON：按解析失败处理，由调用方留痕并降级 */ }
     }
     return null;
   }
 
   /* ---------------- 书记员模型任务（压缩 / 滚动风格摘要） ----------------
-   * 真实模式：书记员一次调用同时「压缩 + 校对」（§4.10 C-B）、出图后顺手更新滚动风格摘要（C-F）；
+   * 真实模式：书记员一次调用同时「压缩 + 校对」、出图后顺手更新滚动风格摘要；
    * 开关关闭、调用失败 → 一律退回本地确定性规则。 */
 
   // 待压缩原回合 → 书记员输入（按幕分组，越靠前越旧）
@@ -142,7 +162,7 @@ import { A } from './core.js';
         }
       }
     }
-    parts.push('', A.scribeProfileHint());   // R13：压缩顺手提取画像
+    parts.push('', A.scribeProfileHint());   // 压缩顺手提取画像
     return parts.join('\n');
   }
 
@@ -156,36 +176,58 @@ import { A } from './core.js';
     return {
       summaries: Array.isArray(o.summaries) ? o.summaries.filter(Boolean).map(String) : [],
       world: (o.world && typeof o.world === 'object') ? o.world : null,
-      profile: Array.isArray(o.profile) ? o.profile : [],   // R13
+      profile: Array.isArray(o.profile) ? o.profile : [],   //
       diff: Array.isArray(o.diff) ? o.diff.map(String) : [],
     };
   }
 
-  // 模型压缩（C-B 双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底
+  // 模型压缩（双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底。
+  // 异步写回契约：结果只写回发起时那本；错误可观测：失败留 {tool:'scribe', error}。
   async function runSmartCompress() {
     if (!S.story || !scribeUsable()) return null;
+    const sid = S.story.id;
     const plan = Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
     if (!plan) return null;
     const cfg = resolveSub('scribe');
-    const raw = await ChatProviders[cfg.provider].chat(cfg, [
-      { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
-      { role: 'user', content: buildCompressInput(plan.groups) },
-    ]);
-    const parsed = parseScribeCompress(raw);
-    if (!parsed || !parsed.summaries.length) return null;
-
-    S.story.summaries = (S.story.summaries || []).concat(parsed.summaries);
-    S.story.messages = S.story.messages.slice(plan.candidate.length);
-    Context.trimSummaries(S.story.summaries, Context.DEFAULT_MAX_SUMMARIES);
-    if (parsed.world) Context.mergeWorld(S.story.world, parsed.world, { allowEmpty: true });
-    if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   // R13
-    S.story.world.scribeAt = Date.now();
-    S.story.log.push({
-      type: 'tool', tool: 'scribe',
-      summary: '压缩 ' + parsed.summaries.length + ' 幕 + 校对：' + ((parsed.diff || []).join('；') || '无事实变更'),
-      ts: Date.now(),
+    let parsed = null;
+    let err = '';
+    try {
+      const raw = await ChatProviders[cfg.provider].chat(cfg, [
+        { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
+        { role: 'user', content: buildCompressInput(plan.groups) },
+      ]);
+      parsed = parseScribeCompress(raw);
+      if (!parsed || !parsed.summaries.length) { err = '回包解析失败或未给出摘要'; parsed = null; }
+    } catch (e) {
+      err = errorText(e);
+      parsed = null;
+    }
+    if (err) {
+      // 失败不再静默——留痕让「世界卡没更新」可归因；返回 null 让 postTurn 走本地摘要兜底
+      reportBackgroundFailure('scribe', err, { note: '压缩+校对失败（退回本地摘要）' });
+      WriteBack.writeBackIfSameStory(S.story, sid, (story) => {
+        story.log.push(failureEntry('scribe', err, {
+          summary: '书记员压缩校对失败（退回本地摘要）：' + shortError(err),
+        }));
+      });
+      return null;
+    }
+    let out = null;
+    WriteBack.writeBackIfSameStory(S.story, sid, (story) => {
+      story.summaries = (story.summaries || []).concat(parsed.summaries);
+      story.messages = story.messages.slice(plan.candidate.length);
+      Context.trimSummaries(story.summaries, Context.DEFAULT_MAX_SUMMARIES);
+      if (parsed.world) Context.mergeWorld(story.world, parsed.world, { allowEmpty: true });
+      if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   //
+      story.world.scribeAt = Date.now();
+      story.log.push({
+        type: 'tool', tool: 'scribe',
+        summary: '压缩 ' + parsed.summaries.length + ' 幕 + 校对：' + ((parsed.diff || []).join('；') || '无事实变更'),
+        ts: Date.now(),
+      });
+      out = { compressedTurns: parsed.summaries.length, messagesRemoved: plan.candidate.length };
     });
-    return { compressedTurns: parsed.summaries.length, messagesRemoved: plan.candidate.length };
+    return out;
   }
 
   function parseRollingStyle(raw) {
@@ -200,7 +242,8 @@ import { A } from './core.js';
     return Object.keys(out).length ? out : null;
   }
 
-  // 出图后：真实模式让书记员顺手更新滚动风格摘要（§4.10 C-F）；失败保留本地规则结果，不打断流程
+  // 出图后：真实模式让书记员顺手更新滚动风格摘要；失败保留本地规则结果，不打断流程。
+  // 异步写回契约：结果只写回发起时那本（换档 / 回档丢弃），不再手写 id 比对。
   async function refreshRollingStyleByModel(scene) {
     if (!S.story || !scene || !scribeUsable()) return;
     const sid = S.story.id;
@@ -218,33 +261,47 @@ import { A } from './core.js';
         },
       ]);
       const rs = parseRollingStyle(raw);
-      if (!rs || !S.story || S.story.id !== sid) return;    // 中途换档 / 回档：丢弃结果
-      const target = S.story.rollingStyle = Object.assign(Store.defaultRollingStyle(), S.story.rollingStyle || {});
-      if (rs.style) target.style = rs.style;
-      if (rs.scenes) target.scenes = rs.scenes;
-      if (rs.wardrobe) target.wardrobe = rs.wardrobe;
-      target.updatedAt = Date.now();
+      if (!rs) return;
+      const applied = WriteBack.writeBackIfSameStory(S.story, sid, (story) => {
+        const target = story.rollingStyle = Object.assign(Store.defaultRollingStyle(), story.rollingStyle || {});
+        if (rs.style) target.style = rs.style;
+        if (rs.scenes) target.scenes = rs.scenes;
+        if (rs.wardrobe) target.wardrobe = rs.wardrobe;
+        target.updatedAt = Date.now();
+      });
+      if (!applied) return;    // 中途换档 / 回档：丢弃结果
       saveAll();
       if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
-    } catch (_) { /* 保留本地规则结果 */ }
+    } catch (e) {
+      reportBackgroundFailure('scribe', e, { note: '滚动风格摘要刷新失败（保留本地规则结果）' });
+    }
   }
 
-  // 每回合收尾：压缩链（C-A/C-C）+ 书记员（C-B）
+  // 每回合收尾：压缩链（-C）+ 书记员
   async function postTurn() {
     if (!S.story) return;
+    const sid = S.story.id;
     let comp = null;
-    // 真实模式：书记员一次调用做「压缩 + 校对」（C-B 双职）
+    // 真实模式：书记员一次调用做「压缩 + 校对」（双职）
     if (scribeUsable()) {
-      try { comp = await runSmartCompress(); } catch (_) { comp = null; }
+      try { comp = await runSmartCompress(); } catch (e) {
+        reportBackgroundFailure('scribe', e, { note: '压缩任务异常（退回本地摘要）' });   // 错误可观测
+        comp = null;
+      }
     }
+    // 异步写回契约：等书记员期间换了故事 → 后续压缩 / 校对 / 落盘都不再动当前故事
+    if (!WriteBack.assertStory(S.story, sid, '回合收尾（压缩/校对）')) return;
     if (!comp) {
       // 未触发 / 失败：本地确定性摘要器兜底（不花 API）
       try {
         comp = Context.compressStory(S.story, {
           summarize: Context.localSummarize,
-          contextWindow: A.chatContextWindow(),   // T-M-1：登记表 / 手填容量 → 70% 阈值
+          contextWindow: A.chatContextWindow(),   // 登记表 / 手填容量 → 70% 阈值
         });
-      } catch (_) { comp = null; }
+      } catch (e) {
+        reportBackgroundFailure('compress', e, { note: '本地压缩失败（按原样发送）' });
+        comp = null;
+      }
       if (comp) S.story.log.push({ type: 'tool', tool: 'compress', summary: comp.compressedTurns + ' 幕压入摘要栈', ts: Date.now() });
       // 本地压缩没有重写世界卡：按每 N 回合单独校对
       const every = Math.max(1, +S.settings.scribe.every || 10);
@@ -252,15 +309,17 @@ import { A } from './core.js';
         await runScribe();
       }
     }
-    // R13 用户画像：真实模式由书记员顺手提取（上面两条路径）；失败退回本地规则
+    // 异步写回契约：runScribe 期间也可能换档——画像收集 / 落盘只动发起时那本
+    if (!WriteBack.assertStory(S.story, sid, '回合收尾（画像/落盘）')) return;
+    // 用户画像：真实模式由书记员顺手提取（上面两条路径）；失败退回本地规则
     if (A.profileOn() && !scribeUsable()) A.collectProfileLocal();
     saveAll();
-    A.renderChat();
+    renderChat();
     if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
   }
 
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
-  // 旁白条目 / assistant 条目：唯一口径在 Context.narrationEntry / assistantEntry（二·10）
+  // 旁白条目 / assistant 条目：唯一口径在 Context.narrationEntry / assistantEntry
   function pushNarrationEntry(text, reasoning) {
     S.story.log.push(Context.narrationEntry(text, reasoning));
   }
@@ -278,7 +337,7 @@ import { A } from './core.js';
       .replace(/",\s*"(?:人物|地点|时间|伏笔|画面|场景切换|选项|choices|scene_change|scene_summary|world)"[\s\S]*$/, '');
   }
 
-  /* ---------- 流式文字逐段淡入（UI-1 §4.2） ----------
+  /* ---------- 流式文字逐段淡入 ----------
    * 只对「可见文字的增量」动（cleanStream 之后），不给原始 JSON 碎片做动画：
    * 新增文字包进 span.delta（createElement + textContent）套 fadeIn；
    * 存活 span 超过 DELTA_MAX_SPANS 时把更早的合并进一个前缀文本节点；
@@ -357,14 +416,14 @@ import { A } from './core.js';
   function updateLiveReasoning() {
     if (!S.live) return;
     const el = $('#chat-scroll').querySelector('.reason-live-text');
-    if (!el) { A.renderChat(); return; }
+    if (!el) { renderChat(); return; }
     el.textContent = S.live.reasoning || '';
     const panel = el.parentElement;
     if (panel) panel.scrollTop = panel.scrollHeight;
     A.scrollChatBottom();
   }
 
-  /* ---------- P5-1 工具护栏：显式 400 拒绝 tools 的模型记住后不再下发（§4.5） ---------- */
+  /* ----------  工具护栏：显式 400 拒绝 tools 的模型记住后不再下发 ---------- */
 
   function noToolsKey(cfg) {
     return String((cfg && cfg.baseUrl) || '').replace(/\/+$/, '') + '|' + String((cfg && cfg.model) || '');
@@ -422,7 +481,7 @@ import { A } from './core.js';
           if (!S.live) S.live = { text: '', reasoning: '' };
           S.live.text = cleanStream(preview);
           if (!S.liveEl) S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
-          if (S.liveEl) appendLiveDelta(S.liveEl, S.live.text);   // UI-1 §4.2：只给可见增量做逐段淡入
+          if (S.liveEl) appendLiveDelta(S.liveEl, S.live.text);   // 只给可见增量做逐段淡入
           // 正文已开始流式 → 思考窗卷成一行（方案 B：不推走正文，也不骤折）
           if (S.liveReasonEl && !S.liveReasonCollapsed) {
             S.liveReasonCollapsed = true;
@@ -432,10 +491,10 @@ import { A } from './core.js';
         },
         onReasoning(piece) { if (hooks && hooks.onReasoning) hooks.onReasoning(piece); },
         onToolCalls(calls) { if (hooks && hooks.onToolCalls) hooks.onToolCalls(calls); },
-        onAborter(ctrl) { S.chatAbortCtrl = ctrl; },   // P0-1：「停止」按钮中断当前请求
+        onAborter(ctrl) { S.chatAbortCtrl = ctrl; },   // 「停止」按钮中断当前请求
       });
     } catch (e) {
-      if (isStopError(e)) throw e;   // P0-1：用户主动停止——不再降级重试，直接上抛
+      if (isStopError(e)) throw e;   // 用户主动停止——不再降级重试，直接上抛
       if (cfg.tools && /HTTP 400/.test((e && e.message) || '')) {
         if (isToolsRejection(e)) {
           rememberNoTools(cfg);
@@ -455,13 +514,8 @@ import { A } from './core.js';
     return { text, streamed };
   }
 
-  /* ================= 重试与分支（R1 / §4.2、§4.3） ================= */
+  /* ================= 重试与分支 ================= */
 
-  function lastNarration() {
-    if (!S.story) return null;
-    for (let i = S.story.log.length - 1; i >= 0; i--) if (S.story.log[i].type === 'narration') return S.story.log[i];
-    return null;
-  }
   function lastNarrationIndex() {
     if (!S.story) return -1;
     for (let i = S.story.log.length - 1; i >= 0; i--) if (S.story.log[i].type === 'narration') return i;
@@ -475,7 +529,7 @@ import { A } from './core.js';
     }
     return null;
   }
-  // 选项只随 assistantMsg 存档（slimReply 的 JSON）：切分支 / 载入后从 head 的 assistantMsg 恢复（§4.3）
+  // 选项只随 assistantMsg 存档（slimReply 的 JSON）：切分支 / 载入后从 head 的 assistantMsg 恢复
   function choicesFromMsg(msg) {
     if (!msg || typeof msg.content !== 'string') return [];
     try {
@@ -490,7 +544,7 @@ import { A } from './core.js';
   function treeHeadNodeId() {
     return (S.story && S.story.tree && S.story.tree.head) || null;
   }
-  // 这个 log 条目属于哪个节点（§4.4 锚点）：node.entries 与 story.log 是同一批对象（project 按引用共享）
+  // 这个 log 条目属于哪个节点（锚点）：node.entries 与 story.log 是同一批对象（project 按引用共享）
   function nodeIdOwningEntry(entry) {
     const t = S.story && S.story.tree;
     if (!t || !t.nodes || !entry) return null;
@@ -509,92 +563,97 @@ import { A } from './core.js';
     return null;
   }
 
-  /* ================= 重试 = 新增兄弟（§4.2） / 兄弟切换（§4.3） ================= */
+  /* ================= 重试 = 新增兄弟 / 兄弟切换 ================= */
 
   async function retryLast() {
     if (S.busy || !S.story) return;
     const tree = S.story.tree;
     const old = tree && tree.nodes && tree.nodes[tree.head];
-    // §4.2：重试是在父节点下新增兄弟；当前 head 必须是已结算的回合节点
+    // 重试是在父节点下新增兄弟；当前 head 必须是已结算的回合节点
     if (!old || old.kind !== 'turn' || !old.sealed || !old.action) { toast('还没有可以重试的回合'); return; }
     const act = old.action;
     const isRetryOpening = act.type === 'opening';
     const sent = act.sent || A.withKindMarker(act.text, act.kind);
     const userMsg = old.userMsg || { role: 'user', content: Context.playerContent(S.story.premise, sent) };
 
-    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正（§10）：
+    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正：
     // 以前重试是在已被上一版改写过的世界卡上重来
     Tree.switchTo(S.story, old.parent);
     S.story.turn += 1;            // 与正常回合同口径：turn 在提交前 +1
     S.currentChoices = [];
 
     S.busy = true;
-    S.stopRequested = false; S.chatAbortCtrl = null;   // P0-1
+    S.stopRequested = false; S.chatAbortCtrl = null;   //
     setSendButtonsBusy(true);
-    A.renderChat();
-    const mark = Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前（§4.1）
+    renderChat();
+    const sid = S.story.id;   // 异步写回契约：本次重试属于哪本故事，回包前核 id
+    const mark = Tree.begin(S.story);             // 记 logMark：必须在 pushLog 之前
     if (!isRetryOpening) {
-      // 重新 pushLog 同一条玩家行动（§4.2）：project 到父节点后旧回合的条目已不在窗口里
+      // 重新 pushLog 同一条玩家行动：project 到父节点后旧回合的条目已不在窗口里
       A.pushLog(act.type === 'agent'
         ? { type: 'agent', text: act.text, trigger: '', reason: '', fireId: '' }
         : { type: act.type === 'choice' ? 'choice' : 'player', text: act.text, kind: act.kind || 'do' });
     }
     try {
-      // 重试后缀只出现在请求里，不进存档（§4.2）
+      // 重试后缀只出现在请求里，不进存档
       const res = await A.callAI1(sent + '\n（请换一种不同的发展，给出不同的走向）', isRetryOpening ? { includePremise: true } : undefined);
+      if (!WriteBack.assertStory(S.story, sid, '重试回包')) return;
       const reply = res.reply;
       S.story.lastSceneSummary = reply.scene_summary || S.story.lastSceneSummary;
       const asst = assistantMessage(reply, res.reasoning);
-      S.story.messages.push(userMsg, asst);          // userMsg 复用原文（不带重试后缀，§4.2）
+      S.story.messages.push(userMsg, asst);          // userMsg 复用原文（不带重试后缀）
       pushNarrationEntry(reply.narration, res.reasoning);
       await A.finishNarration(res.streamed);
+      if (!WriteBack.assertStory(S.story, sid, '重试收尾')) return;
       absorbReply(reply);
       S.currentChoices = reply.choices;
-      A.renderChat();
+      renderChat();
       // 成功：parent = 原 head 的父节点（投影已停在那），落一个新兄弟
       const node = Tree.commit(S.story, {
         action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
-        meta: { model: S.turnModel || '' },   // UI-3 §3.3：重试同样记模型名
+        meta: { model: S.turnModel || '' },   // 重试同样记模型名
       });
-      S.turnAnchor.nodeId = node.id;   // §3.A.4：锚点补 nodeId
+      S.turnAnchor.nodeId = node.id;   // 锚点补 nodeId
       await postTurn();
+      if (!WriteBack.assertStory(S.story, sid, '重试封节点')) return;
       Tree.seal(S.story, node.id);
-      A.maybeAutoTitle();   // UI-2 §3.3：重试回合 seal 后同样触发自动标题
+      A.maybeAutoTitle();   // 重试回合 seal 后同样触发自动标题
       saveAll();
     } catch (e) {
-      // 失败 / 主动停止：回原 head，旧一对完整放回（§4.2）
-      S.turnAnchor.dead = true;        // §3.A.4：失败分支置位，本次重试排队中的工具出图丢弃
+      // 失败 / 主动停止：回原 head，旧一对完整放回
+      S.turnAnchor.dead = true;        // 失败分支置位，本次重试排队中的工具出图丢弃
+      if (isStopError(e)) toast('已停止');
+      else reportUserFailure('重试', e, { message: netErrHint(e) });   // 重试按钮仍在气泡上，可再点一次
+      if (!WriteBack.assertStory(S.story, sid, '重试失败回写')) return;
       Tree.switchTo(S.story, old.id);
       S.currentChoices = choicesFromHead();
-      if (isStopError(e)) toast('已停止');
-      else toast(netErrHint(e), true, true);
     } finally {
       S.busy = false;
       S.stopRequested = false; S.chatAbortCtrl = null;
       S.live = null; S.liveEl = null;
       setSendButtonsBusy(false);
-      A.renderChat();
+      renderChat();
     }
   }
 
-  // §4.3 兄弟切换：切到相邻兄弟，沿 active 下探到叶子（续写过的支线会回到它的末端）；不发任何请求
+  // 兄弟切换：切到相邻兄弟，沿 active 下探到叶子（续写过的支线会回到它的末端）；不发任何请求
   function switchSiblingFromBubble(nid, dir) {
     if (!S.story || !nid) return;
-    if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法（§4.1）
-    // 阶段 5 第 5 步：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
+    if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法
+    // 阶段 5：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
     // 顺带保住 0.12.1「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
     // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
     const head = Tree.switchSibling(S.story, nid, dir);
     if (!head) return;
-    S.currentChoices = choicesFromHead();   // §4.3：选项跟着新 head 的 assistantMsg 走
+    S.currentChoices = choicesFromHead();   // 选项跟着新 head 的 assistantMsg 走
     saveAll();
     animateSwap(dir, () => {
-      A.renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); A.renderSavepoints();
+      renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); A.renderSavepoints();
     });
   }
 
-  /* 切兄弟过渡（阶段 5 第 5 步收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
+  /* 切兄弟过渡（阶段 5 收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
    *   off      即时（runTransition 同步换 DOM：焦点与滚动位置都不动）
    *   standard 交叉淡入、无横向位移（VT 的 ::view-transition-*，或降级整块淡入）
    *   rich     方向性短位移（±24px 新快照滑入 ≈220ms；降级把旧 WAAPI 的位移段叠回淡入上）
@@ -629,7 +688,7 @@ import { A } from './core.js';
   }
 
   /* rich 的方向性位移段（WAAPI 只动 transform，不新增 @keyframes——加一条要同步
-   * src/core/motion.ts 与两份 eval 测试，任务书「坑」）：VT 路径挂在新快照伪元素上
+   * src/core/motion.ts 与两份 eval 测试）：VT 路径挂在新快照伪元素上
    * （与切屏 shiftNewSnapshot 同款）；降级路径直接动聊天盒（旧 WAAPI 的位移段）。 */
   function playSwapShift(dir, ms, target, pseudo) {
     if (!(ms > 0) || !target || typeof target.animate !== 'function') return;

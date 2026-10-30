@@ -6,7 +6,7 @@
    * 也会被 openCardEditor 改写——所以标题与按钮只放纯文本子节点。
    * 取消 / 保存 / 关闭 / 导入的 handler 都在 src/app/main.js（cards.js），组件不挂。
    */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Checkbox from '../../ui/Checkbox.svelte';

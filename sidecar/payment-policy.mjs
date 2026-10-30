@@ -46,7 +46,7 @@ function approval(message, extra) {
 function allow(message, extra) {
   return Object.assign({ decision: 'allow', code: '', message: message }, extra || {});
 }
-/* 注：裁决结果的金额字段一律 *Cents 后缀（单位=分，审查 可维护性 #12）；
+/* 注：裁决结果的金额字段一律 *Cents 后缀（单位=分）；
  * ctx 输入键（spentDaily / spentMonthly / spentAgent）同样以「分」计，见 evaluatePolicy 注释。 */
 
 function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }

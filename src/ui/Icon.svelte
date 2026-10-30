@@ -1,5 +1,5 @@
 <script>
-  /* Icon.svelte —— 0.12.1 手绘图标 sprite 的组件化（任务书 §6.3，阶段 3）
+  /* Icon.svelte —— 0.12.1 手绘图标 sprite 的组件化（阶段 3）
    * 图标本身保持不变：24 网格、1.6 描边、圆头圆角、currentColor；
    * 实心圆点保留元素上的 fill="currentColor"（历史坑：<use> 内部元素吃不到外部 CSS 选择器）。
    * 每个分支的图形与 index.html 的 <symbol id="i-名字"> 逐字一致，由 eval/ui-lib-test.js 对账。
@@ -48,7 +48,7 @@
 </svg>
 
 <style>
-  /* 与 css/style.css 的 .ic 同参数：描边随文字色（currentColor），尺寸由使用方用 class / style 调 */
+  /* 与 css/icons.css 的 .ic 同参数：描边随文字色（currentColor），尺寸由使用方用 class / style 调 */
   svg {
     width: 1.15em;
     height: 1.15em;

@@ -1,0 +1,762 @@
+/* ==================== 阅读界面（顶栏 · 两栏骨架 · 阅读面 · 输入区 · 舞台 · 布局状态） ====================
+ * 阅读屏的全部结构样式；布局切换只由 #screen-game 的 data-layout 属性决定。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 阅读界面 ==================== */
+/*：祖先链每一层都要能收缩，聊天区才能拿到「剩余高度」并滚动 */
+#screen-game {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--bg);
+  --split-ratio: .5;
+}
+
+/* ---------- 顶栏：一条 44px 的细线，次要功能收进「⋯」 ---------- */
+.hud {
+  position: relative;   /* #busy-line（顶栏内绝对定位）的基准 */
+  display: flex; justify-content: space-between; align-items: center;
+  height: 44px; padding: 0 14px; gap: 10px; z-index: 20;
+  flex-wrap: nowrap;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+.hud-left { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.hud-actions { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
+.hud-left > .ui-btn:where(.hud), .hud-left > .mode-chip { flex: 0 0 auto; }
+.mode-chip {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* 「⋯」与「＋」的下拉菜单（hud / composer 共用） */
+.hud-more, .menu-wrap { position: relative; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 178px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  z-index: 40;
+  animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both;
+}
+.menu.menu-up { top: auto; bottom: calc(100% + 6px); }
+.menu-item {
+  display: block; width: 100%;
+  min-height: 40px;   /*：可点区域 ≥ 40px（含「为当前场景作画」入口；触屏仍放大到 44px） */
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover { background: var(--menu-hover); color: var(--accent); }
+.menu-item:disabled { color: var(--ink-faint); cursor: not-allowed; }
+.menu-item:disabled:hover { background: transparent; color: var(--ink-faint); }
+.menu-note {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 4px;
+  white-space: normal;
+}
+
+/* ---------- 两栏骨架 ---------- */
+.game-layout { flex: 1; display: flex; min-height: 0; background: var(--bg); }
+.chat-pane {
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  width: 50%;
+  background: var(--bg);
+}
+.chat-scroll {
+  flex: 1; overflow-y: auto; min-height: 0;
+  padding: 30px max(20px, calc((100% - 40em) / 2)) 20px;
+  display: flex; flex-direction: column; gap: 22px;
+  scroll-behavior: smooth;
+}
+/*：纵向 flex 容器里的气泡不许被压扁（旁白 overflow:hidden 时自动最小高度为 0）。 */
+.chat-scroll > * { flex-shrink: 0; }
+
+/* ---------- 左栏：安静的阅读面（只有文字，没有卡片） ---------- */
+.bubble {
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 0;
+  font-family: var(--font-body);
+  font-size: 17.5px;
+  line-height: 1.95;
+  letter-spacing: .01em;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* 旁白就是正文本身：无卡片、无纹理、无背景透图 */
+.bubble-narration { align-self: stretch; text-indent: 0; }
+
+/* 玩家发言：弱化成一侧细线 + 次要色，并标注「做 / 说 / 导演」 */
+.bubble-player, .bubble-choice {
+  align-self: stretch;
+  border-left: 2px solid var(--line);
+  padding: 1px 0 1px 13px;
+  color: var(--ink-dim);
+  font-size: 16px;
+  line-height: 1.85;
+}
+.bubble-player .kind-tag, .bubble-agent .kind-tag {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: .18em;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+.bubble-choice { border-left-color: var(--accent-line); color: var(--accent); }
+
+/* 场景标记行：小缩略图 + 一行 alt（替代聊天里的大图） */
+.bubble-image {
+  align-self: stretch;
+  display: flex; align-items: center; gap: 12px;
+  padding: 2px 0;
+}
+.bubble-image img {
+  width: 96px; height: 56px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color var(--m-t-color-fast) var(--ease-out), opacity var(--m-dur-fast) var(--ease-out);
+}
+.bubble-image img:hover { border-color: var(--accent-line); opacity: .9; }
+.img-alt-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0; }
+.img-alt {
+  flex: 1; min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  text-indent: 0;
+  cursor: pointer;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.img-alt-row .ui-btn:where(.mini) { opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); flex: 0 0 auto; }
+.bubble-image:hover .ui-btn:where(.mini), .bubble-image:focus-within .ui-btn:where(.mini) { opacity: 1; }
+.img-superseded {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  padding: 0;
+}
+
+/* 内联图气泡（chat / rp：舞台没了，图直接排在聊天流里；点图开灯箱） */
+.bubble-image-inline {
+  display: block;
+  padding: 6px 0;
+}
+.bubble-image-inline img {
+  width: auto; height: auto;
+  max-width: min(100%, 420px);
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+  display: block;
+}
+.bubble-image-inline img:hover { border-color: var(--accent-line); }
+.bubble-image-inline .img-alt {
+  margin-top: 4px;
+  cursor: zoom-in;
+  -webkit-line-clamp: 3;
+}
+
+/* 灯箱：固定遮罩 + 大图，点遮罩 / Esc 关闭 */
+.lightbox {
+  position: fixed; inset: 0;
+  z-index: 60;
+  background: var(--lightbox-bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: min(92vw, 1100px);
+  max-height: 76vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--stage);
+}
+.lightbox-alt {
+  margin: 0;
+  max-width: min(92vw, 900px);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+/* 提案卡（✉ 邮件提案 / 🛒 下单提案）：参数原值 + 确认 / 拒绝 */
+.proposal-card {
+  display: block;
+  border: 1px solid var(--accent-line);
+  border-left: 2px solid var(--accent);
+  background: var(--bubble-accent-soft);
+  padding: 12px 14px;
+}
+.proposal-title {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--ink);   /* accent-soft 底上的文字用 ink */
+  margin-bottom: 8px;
+}
+.proposal-args { display: grid; gap: 4px; }
+.proposal-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.proposal-key {
+  flex: 0 0 3.6em;
+  color: var(--ink-faint);
+  letter-spacing: .08em;
+}
+.proposal-val {
+  flex: 1; min-width: 0;
+  color: var(--bubble-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.proposal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.proposal-status {
+  flex: 1; min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.proposal-ok { color: var(--accent); border-color: var(--accent-line); }
+
+/* 工具 / 系统提示：一行居中的细字，不做成卡片 */
+.chat-note {
+  align-self: center;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.7;
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: 90%;
+  text-align: center;
+}
+.bubble-tools { display: flex; align-items: center; gap: 9px; margin-top: 10px; flex-wrap: wrap; }
+
+/* 思考链：弱对比引用块（点击展开/收起） */
+.reason-block {
+  align-self: stretch;
+  max-width: 100%;
+  margin-bottom: 10px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.reason-toggle {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 1px 0;
+  font-size: 12px; line-height: 1.6;
+  color: var(--ink-faint);
+  letter-spacing: .04em;
+  text-align: left;
+  background: none; border: none;
+  cursor: pointer; user-select: none;
+}
+.reason-toggle:hover { color: var(--accent); }
+.reason-caret { display: inline-block; font-size: 10px; transition: transform var(--m-t-shift-base) var(--ease-out); }
+.reason-block.open .reason-caret { transform: rotate(90deg); }
+/* max-height 不做动画（触发布局）：展开是瞬时撑开 + 透明度过渡 */
+.reason-panel { max-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); }
+.reason-block.open .reason-panel { max-height: 60vh; overflow-y: auto; opacity: 1; }
+.reason-text {
+  margin-top: 6px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--ink-faint);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 流式思考窗：固定小窗，正文开始后卷成一行 */
+.reason-block.reason-live { max-width: 100%; border-left-color: var(--accent-line); margin-bottom: 12px; }
+.reason-live .reason-panel { max-height: 104px; overflow-y: auto; overscroll-behavior: contain; opacity: 1; }
+.reason-live.collapsed .reason-panel { max-height: 28px; }
+.reason-live.collapsed .reason-text { margin-top: 2px; }
+.reason-live.open .reason-panel { max-height: 42vh; }
+
+/* 剧情模式空档：开场引导（进入故事不自动生成第一幕，点按钮才开始） */
+.opening-hint {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.opening-hint-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.opening-hint .hint { margin: 0; }
+
+/* 选项：默认走「💡 灵感」托盘；always 模式才内联在旁白下 */
+.choices-inline { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.choice-btn {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.7;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.choice-btn:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+
+.gen-pill {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  padding: 3px 14px;
+  background: transparent;
+}
+.version-nav { display: inline-flex; align-items: center; gap: 6px; }
+.version-label { font-family: var(--font-ui); font-size: 12px; color: var(--ink-dim); min-width: 30px; text-align: center; }
+.h-versions { color: var(--ink-faint); font-size: 11.5px; margin-left: 6px; }
+
+/* ---------- 输入区外壳 ---------- */
+.composer {
+  position: relative;
+  padding: 10px max(16px, calc((100% - 44em) / 2)) 14px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+.composer-tools {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 26px;
+  margin-bottom: 6px;
+}
+.composer-spacer { flex: 1; }
+.tool-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.tool-btn:hover { color: var(--ink); background: var(--accent-soft); }
+.badge {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  line-height: 15px;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  text-align: center;
+}
+.input-row { display: flex; gap: 8px; align-items: center; }
+#player-input {
+  flex: 1; min-width: 0;
+  height: 44px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  letter-spacing: .01em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 14px;
+  outline: none;
+  transition: border-color var(--m-t-color-base) var(--ease-out);
+}
+#player-input::placeholder { color: var(--ink-faint); }
+#player-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input-row .ui-btn:where(:not(.hud, .mini, .icon-only)) { height: 44px; padding: 0 18px; }
+
+/* 做 / 说 / 导演：三段切换 */
+.seg {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.active { background: var(--accent); color: var(--on-accent); }
+
+/* 灵感托盘：一排选项，点一下就发出去 */
+.choice-tray {
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 10px;
+}
+.tray-btn {
+  flex: 0 0 auto;
+  max-width: 22em;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tray-btn:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+
+/* 分割条：一条极细的线，拖动改变比例，双击恢复 1:1 */
+.splitter {
+  flex: 0 0 9px;
+  width: 9px;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+}
+.splitter::after {
+  content: "";
+  position: absolute; left: 50%; top: 14px; bottom: 14px;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--line);
+  transition: background-color var(--m-t-color-base) var(--ease-out);
+}
+.splitter:hover::after, .splitter.dragging::after { background: var(--accent-line); }
+
+/* ---------- 右栏：舞台 ---------- */
+.image-pane {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: var(--stage);
+}
+.stage-wrap {
+  position: relative;
+  flex: 1; min-height: 0;
+  margin: 12px 14px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--stage);
+  display: flex; align-items: center; justify-content: center;
+  isolation: isolate;
+}
+/* 底层：当前图的模糊放大副本 */
+.stage-backdrop {
+  position: absolute; inset: -48px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(36px) brightness(.45);
+  transform: scale(1.06);
+  opacity: 0;
+  transition: opacity var(--m-dur-slow) var(--ease-out);
+  pointer-events: none;
+  z-index: 0;
+}
+.stage-backdrop.show { opacity: .95; }
+/* 轻微暗角 */
+.stage-wrap::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: var(--stage-vignette);
+}
+.stage-img {
+  position: relative;
+  z-index: 1;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.stage-empty {
+  position: relative; z-index: 1;
+  color: var(--ink-faint);
+  font-size: 13px;
+  letter-spacing: .24em;
+}
+/* 舞台空状态引导：出现时淡入（走动效等级：off 不动，standard / rich 同一档淡入）；
+   有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
+html[data-motion="standard"] .stage-empty,
+html[data-motion="rich"] .stage-empty {
+  animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both;
+}
+.stage-pill { position: absolute; top: 12px; left: 12px; z-index: 4; }
+/* 视频生成进度：与作画胶囊错开一行，两个任务可以同时在跑 */
+.stage-pill-video { top: 48px; }
+.stage-video {
+  position: relative;
+  z-index: 1;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  display: block;
+  background: var(--ink);
+  border-radius: var(--radius);
+}
+.stage-actions {
+  position: absolute; right: 10px; top: 10px;
+  z-index: 4;
+  display: flex; gap: 6px;
+  opacity: 0;
+  transition: opacity var(--m-dur-fast) var(--ease-out);
+}
+.stage-wrap:hover .stage-actions,
+.stage-wrap:focus-within .stage-actions { opacity: 1; }
+.stage-btn {
+  width: 40px; height: 40px;   /*：可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  color: var(--on-ink);   /* 底是深色半透明遮罩，线稿图标要用浅色 */
+  background: var(--stage-btn-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.stage-btn:hover { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
+.stage-exit {
+  position: absolute; left: 10px; top: 10px; z-index: 5;
+  width: 40px; height: 40px;
+  display: none;
+  color: var(--on-ink);
+  background: var(--stage-btn-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.stage-caption {
+  padding: 9px 16px 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  min-height: 21px;
+  max-height: 3.2em;
+  overflow: hidden;
+}
+.thumb-strip { display: flex; gap: 8px; padding: 10px 14px 12px; overflow-x: auto; min-height: 58px; }
+.thumb {
+  width: 84px; height: 48px;
+  object-fit: cover; flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  opacity: .55;
+  transition: opacity var(--m-dur-base) var(--ease-out), border-color var(--m-t-color-base) var(--ease-out);
+}
+.thumb:hover { opacity: 1; }
+.thumb.active { border-color: var(--accent); opacity: 1; }
+/* 视频缩略图：更实的描边 + 右下角播放角标（img 上没法画 ::after，包一层 .thumb-wrap）。
+   角标自己画三角（border 技法），不用「▶」字符——部分系统会把符号渲染成彩色 emoji。 */
+.thumb.is-video { border-color: var(--line-strong); }
+.thumb.is-video.active { border-color: var(--accent); }
+.thumb-wrap { position: relative; flex: 0 0 auto; display: inline-flex; }
+.thumb-wrap.is-video::after {
+  content: '';
+  position: absolute; right: 3px; bottom: 3px;
+  width: 13px; height: 11px;
+  background: var(--stage-btn-bg);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.thumb-wrap.is-video::before {
+  content: '';
+  position: absolute; right: 7px; bottom: 5.5px;
+  width: 0; height: 0;
+  border-left: 5px solid var(--on-accent);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+/* 视频进度胶囊旁的「取消等待」（只停本地等待，云端可能已计费） */
+.video-cancel {
+  position: absolute; top: 48px; right: 12px; z-index: 5;
+  min-height: 28px;
+}
+/* 🎬 忙态：正在生成视频 */
+.stage-btn.busy { color: var(--accent); border-color: var(--accent-line); background: var(--stage-btn-hover); }
+/* 画师工作台「视频」区 */
+.pw-video-list { display: flex; flex-direction: column; gap: 8px; }
+.pw-video-row { display: flex; align-items: center; gap: 10px; }
+.pw-video-thumb {
+  width: 96px; height: 54px; flex: 0 0 auto;
+  object-fit: cover; border-radius: 6px; border: 1px solid var(--line);
+  cursor: pointer;
+}
+.pw-video-thumb:hover { border-color: var(--accent-line); }
+
+/* 人物设定行编辑器（可增删行）：两套 DOM 共用这一套几何，改这里就是改两边——
+   Svelte 的 src/screens/modal/CharRows.svelte（向导 / 文本导入：.cell 包输入框、.del-cell 放删除钮）
+   与 A.charEditor（设置页世界卡，variant: card：input 与 .char-del 直接挂在行上）。
+   组件只留它独占的 .cell / .del-cell / .del-gap / .add-row 与窄屏断点。 */
+.char-rows { display: flex; flex-direction: column; gap: 6px; }
+.char-head { display: flex; gap: 6px; margin-bottom: 6px; }
+.char-head span {
+  flex: 1 1 0; min-width: 0;
+  font-family: var(--font-ui); font-size: 12px; letter-spacing: .08em;
+  color: var(--ink-dim);
+}
+.char-head span.char-del { flex: 0 0 auto; padding: 0 8px; }
+.char-row { display: flex; gap: 6px; align-items: center; }
+.char-row input { flex: 1 1 0; min-width: 0; }
+.char-row .char-del { flex: 0 0 auto; padding: 0 8px; }
+.char-add { align-self: flex-start; }
+.thumb-empty { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); align-self: center; letter-spacing: .08em; }
+
+/* ==================== 布局状态：只由 data-layout 决定 ==================== */
+/* split：桌面双栏，可拖动；比例来自 settings.ui.splitRatio（--split-ratio） */
+#screen-game[data-layout="split"] .game-layout { flex-direction: row; }
+#screen-game[data-layout="split"] .chat-pane { width: calc(var(--split-ratio, .5) * 100%); flex: 0 0 auto; }
+
+/* stack：窄屏堆叠，图在上、文在下 */
+#screen-game[data-layout="stack"] .game-layout { flex-direction: column; }
+#screen-game[data-layout="stack"] .splitter { display: none; }
+#screen-game[data-layout="stack"] .image-pane {
+  order: 0;
+  flex: 0 0 auto;
+}
+#screen-game[data-layout="stack"] .chat-pane { order: 1; width: 100%; flex: 1 1 auto; }
+#screen-game[data-layout="stack"] .stage-wrap {
+  flex: 0 0 clamp(180px, 38vh, 420px);
+  margin: 8px 10px 0;
+}
+#screen-game[data-layout="stack"] .stage-caption { padding: 6px 12px 0; }
+#screen-game[data-layout="stack"] .thumb-strip { padding: 6px 10px 8px; min-height: 50px; }
+#screen-game[data-layout="stack"] .thumb { width: 72px; height: 42px; }
+#screen-game[data-layout="stack"] .chat-scroll { padding: 18px 18px 14px; gap: 18px; }
+
+/* 堆叠态可收成 44px 细条（点舞台切换；键盘弹出时由 JS 自动加 .kb-open） */
+#screen-game[data-layout="stack"].stage-strip .stage-wrap,
+#screen-game[data-layout="stack"].kb-open .stage-wrap { flex-basis: 44px; margin: 4px 10px; }
+#screen-game[data-layout="stack"].stage-strip .stage-caption,
+#screen-game[data-layout="stack"].kb-open .stage-caption,
+#screen-game[data-layout="stack"].stage-strip .thumb-strip,
+#screen-game[data-layout="stack"].kb-open .thumb-strip,
+#screen-game[data-layout="stack"].stage-strip .stage-actions,
+#screen-game[data-layout="stack"].kb-open .stage-actions { display: none; }
+
+/* immersive：画面铺满，文字叠在下半屏（仍是同一个输入框） */
+#screen-game[data-layout="immersive"] .game-layout { position: relative; }
+#screen-game[data-layout="immersive"] .splitter { display: none; }
+#screen-game[data-layout="immersive"] .image-pane {
+  position: absolute; inset: 0;
+  z-index: 1;
+}
+#screen-game[data-layout="immersive"] .stage-wrap {
+  margin: 0; height: 100%; border-radius: 0;
+}
+#screen-game[data-layout="immersive"] .stage-caption,
+#screen-game[data-layout="immersive"] .thumb-strip { display: none; }
+#screen-game[data-layout="immersive"] .stage-actions { opacity: 1; }
+#screen-game[data-layout="immersive"] .stage-exit { display: block; }
+#screen-game[data-layout="immersive"] .chat-pane {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  z-index: 3;
+  width: auto;
+  max-height: 45vh;
+  padding-top: 34px;
+  background: var(--immersive-scrim);
+  transition: opacity var(--m-dur-base) var(--ease-out);
+}
+#screen-game[data-layout="immersive"] .chat-scroll {
+  padding: 0 max(18px, calc((100% - 40em) / 2)) 6px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+#screen-game[data-layout="immersive"] .composer {
+  border-top: none;
+  background: transparent;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+#screen-game[data-layout="immersive"].text-hidden .chat-pane { opacity: 0; pointer-events: none; }
+
+/* 舞台收起（聊天占满） */
+#screen-game.no-image .image-pane, #screen-game.no-image .splitter { display: none; }
+#screen-game.no-image .chat-pane { width: 100% !important; flex: 1 1 auto; }
+
+/* chat（智能体 / 扮演）：纯聊天布局——没有画面区，聊天列占满宽度 */
+#screen-game[data-layout="chat"] .image-pane,
+#screen-game[data-layout="chat"] .splitter { display: none; }
+#screen-game[data-layout="chat"] .chat-pane { width: 100% !important; flex: 1 1 auto; }
+#screen-game[data-layout="chat"] #btn-toggle-image { display: none; }
+/* 舞台里的 ✎ / 🎨 / ⛶ 与沉浸出口跟着画面区一起消失（舞台区本身已隐藏，这里兜底） */
+#screen-game[data-layout="chat"] .stage-actions,
+#screen-game[data-layout="chat"] .stage-exit { display: none; }
+
+/* 触屏：没有 hover，舞台按钮常显，触控目标不小于 44px */
+@media (hover: none) {
+  .stage-actions { opacity: 1; }
+  .bubble-image .ui-btn:where(.mini) { opacity: 1; }
+}
+@media (max-width: 900px) {
+  .stage-btn, .stage-exit { width: 44px; height: 44px; font-size: 17px; }
+}

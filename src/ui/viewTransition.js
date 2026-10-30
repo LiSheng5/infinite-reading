@@ -1,5 +1,5 @@
 /*
- * src/ui/viewTransition.js —— 过渡内核（阶段 5，任务书 §5 / §6.2）
+ * src/ui/viewTransition.js —— 过渡内核（阶段 5）
  *
  * 分工：
  *   · src/core/motion.ts 的 TRANSITIONS = 每个过渡动作（切屏 / 舞台换画 / 分支切换 / 分支页开合 /
@@ -18,7 +18,7 @@
  *   skipActiveTransition()  收掉正在跑的过渡（连续触发前先收，避免快照残留）
  *
  * 铁律：
- *   · off 档同步执行 mutate（绝不 await 后再改 DOM：焦点与滚动位置会跳；任务书「坑」）。
+ *   · off 档同步执行 mutate（绝不 await 后再改 DOM：焦点与滚动位置会跳）。
  *   · 连续触发必须先 skipTransition() 收掉上一段，否则旧快照残留。
  *   · 降级（?vt=0 / 浏览器不支持）只做「整块淡入」：位移属 rich/standard 的上限，不能外溢到降级路径。
  *   · 快照会冻结循环动画：新快照拍摄前由 holdLoops() 把 live DOM 的循环停在同一相位，
@@ -49,7 +49,7 @@ export function vtDisabled() {
   }
 }
 
-/** 视图过渡是否正在跑（阶段 5 第 6 步：rich 的分支页入场动画要等它结束再开） */
+/** 视图过渡是否正在跑（阶段 5：rich 的分支页入场动画要等它结束再开） */
 export function vtActive() {
   return !!activeVT;
 }
@@ -169,9 +169,9 @@ export function runTransition(name, mutate, opts) {
       }
       if (activeVT === vt) activeVT = null;
     };
-    /* ready 也必须接住：skipTransition()（连点被后一段顶掉 / 第 3 步的快速切屏）会让它以
+    /* ready 也必须接住：skipTransition()（连点被后一段顶掉 / 的快速切屏）会让它以
      * AbortError 拒绝，没人处理就是一条 unhandledrejection（Chromium 记为 pageerror）。
-     * 第 3 步接真实切屏时实测到，补这一行；finished 那条下面已经有拒绝分支。 */
+     * 接真实切屏时实测到，补这一行；finished 那条下面已经有拒绝分支。 */
     try { vt.ready.then(() => {}, () => {}); } catch (_) {}
     const finished = vt.finished.then(finish, finish);   // skip / 被后一段顶掉属正常，也要解冻
     return { name, tier, kind: spec.kind, ms: spec.ms, mode: 'vt', finished };

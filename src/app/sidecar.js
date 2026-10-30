@@ -4,11 +4,11 @@
  */
 import { Sidecar } from '../core/sidecar.ts';
 import { Features } from '../core/features.ts';
-import { A } from './core.js';
+import { A, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, toast } = A;
+  const { $, reportBackgroundFailure } = A;
 
 
   /* ---- 侧车连接状态与主动消息投递 ---- */
@@ -132,13 +132,14 @@ import { A } from './core.js';
         if (p.channel && S.story && p.channel !== S.story.id) continue;   // 指定了别的会话就跳过
         F.accept({ fireId: p.id, prompt: p.prompt, name: p.name, reason: p.reason });
       }
-    } catch (_) { /* 拉不到就等下一次 */ }
+    } catch (e) { reportBackgroundFailure('主动消息', e, { note: '拉取失败，等下一次上线再补' }); }
   }
 
   async function ackProactive(fireId) {
     const SC = Sidecar;
     if (!SC || !fireId) return;
-    try { await SC.ackPending(fireId); } catch (_) {}
+    try { await SC.ackPending(fireId); }
+    catch (e) { reportBackgroundFailure('主动消息确认', e, { note: '确认失败，下次下发会重复提醒' }); }
   }
 
   function initFeatures() {
@@ -169,7 +170,7 @@ import { A } from './core.js';
       if (SC.isOnline() && SC.status().hasToken) { pullProactive(); A.loadFeatureConfig(); }
     });
     SC.on('fire', payload => { if (Features) Features.accept(payload); });
-    SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { A.renderTriggerList(); } catch (_) {} } });
+    SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { A.renderTriggerList(); } catch (_) { /* 列表刷新失败不影响推送本身，下次变更再刷 */ } } });
     SC.start();
     renderSidecarStatus();
     pullProactive();

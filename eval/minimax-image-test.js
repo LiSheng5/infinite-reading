@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * eval/minimax-image-test.js —— MiniMax 生图适配器单测（js/providers.js 的 ImageProviders['minimax-image']）
+ * eval/minimax-image-test.js —— MiniMax 生图适配器单测（src/core/providers.ts 的 ImageProviders['minimax-image']）
  *
  * 不开浏览器、不联网：用「假 fetch」验请求形状与回包解析（按 2026-10-22 官方文档）：
  *   - 接口地址：Base URL 带不带 /v1 都拼成 {base}/v1/image_generation；

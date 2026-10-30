@@ -5,7 +5,7 @@
    * 状态行（#email-status）与待确认草稿（#email-drafts，legacy 逐条 append 并带「确认发送 / 丢弃」）
    * 都由 features.js 维护；组件只给容器。发送钮 handler 在 src/app/main.js（A.doEmailSend），不重复挂。
    */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Button from '../../ui/Button.svelte';

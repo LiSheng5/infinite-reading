@@ -1,0 +1,178 @@
+/* ==================== 分支页（整页分支树） ====================
+ * 整页分支树：泳道布局、节点、面板与流光。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ====================  分支页（整页分支树） ====================
+   节点 / 边全部 SVG（createElementNS 构造）；颜色只取令牌；
+   循环动画只留三条（流光 / head 呼吸 / 选中脉冲），rich 档才开，data-paused 全局暂停。 */
+.branch-page {
+  position: fixed; inset: 0; z-index: 40;   /* 在内容之上、弹窗（.modal 30+）之下 */
+  display: flex; flex-direction: column;
+  background: var(--bg);
+}
+.branch-page.enter { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
+.branch-top {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  background: var(--bg-glass);
+}
+.branch-title {
+  font-family: var(--font-title); font-size: 16px; font-weight: 400;
+  letter-spacing: .08em; color: var(--ink);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.branch-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 带文字的工具按钮（缩放两个是 .hud，不要跟着放大） */
+.branch-tools .ui-btn:where(:not(.hud, .mini, .icon-only)) { padding: 6px 12px; font-size: 13px; }
+.branch-tools .ui-btn:where(:not(.hud, .mini, .icon-only))[aria-pressed="true"] {
+  border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-deep);
+}
+
+.branch-body { flex: 1; min-height: 0; display: flex; }
+.branch-canvas {
+  flex: 1; min-width: 0; position: relative; overflow: hidden;
+  background: var(--bg);
+  cursor: grab; touch-action: none;
+}
+.branch-canvas.dragging { cursor: grabbing; }
+#branch-svg { display: block; width: 100%; height: 100%; outline: none; }
+#branch-svg:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-line); }
+
+/* —— 边 —— */
+.branch-edge {
+  fill: none; stroke: var(--line-strong); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.branch-edge.on-path { stroke: var(--accent); stroke-width: 2.4; }
+/* 当前路径上的流光：只挂 pathEdgeD 这一条（循环动画 1/3） */
+.branch-flow {
+  fill: none; stroke: var(--accent-line); stroke-width: 2.4;
+  stroke-linecap: round; stroke-dasharray: 2 16; opacity: 0;
+}
+html[data-motion="rich"] .branch-flow { opacity: 1; animation: var(--an-flowLight) var(--loop-flow) var(--ease-linear) var(--m-iter); }
+
+/* —— 节点 —— */
+.branch-node { cursor: pointer; }
+.branch-node .node-inner { transform-box: fill-box; transform-origin: center; }
+.branch-node .hit { fill: transparent; stroke: none; }
+.branch-node .halo { fill: var(--accent-soft); opacity: 0; }
+.branch-node.on-path .halo { opacity: 1; }
+.branch-node .dot { fill: var(--bg); stroke: var(--line-strong); stroke-width: 2; }
+.branch-node.on-path .dot { fill: var(--accent); stroke: var(--accent); }
+.branch-node .head-ring {
+  fill: none; stroke: var(--accent-line); stroke-width: 2; opacity: 0;
+  transform-box: fill-box; transform-origin: center;
+}
+.branch-node.is-head .head-ring { opacity: 1; }
+html[data-motion="rich"] .branch-node.is-head .head-ring {
+  animation: var(--an-breathe) var(--loop-busy) var(--ease-io) var(--m-iter);   /* 循环 2/3 */
+}
+.branch-node .sel-ring { fill: none; stroke: var(--ink); stroke-width: 2.2; opacity: 0; }
+.branch-node.is-selected .sel-ring { opacity: 1; }
+.branch-node .pulse-ring {
+  fill: none; stroke: var(--accent-line); stroke-width: 2; opacity: 0;
+  transform-box: fill-box; transform-origin: center;
+}
+html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
+  animation: var(--an-nodePulse) var(--loop-busy) var(--ease-out) var(--m-iter);   /* 循环 3/3 */
+}
+.branch-node .branch-label {
+  font-family: var(--font-ui); font-size: 12px; fill: var(--ink-dim);
+  dominant-baseline: middle; pointer-events: none;
+}
+.branch-node.on-path .branch-label { fill: var(--ink); }
+.branch-node.is-selected .branch-label { fill: var(--ink); font-weight: 600; }
+.branch-node .fork-badge { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1; }
+.branch-node .fork-badge-text {
+  font-family: var(--font-ui); font-size: 10px; fill: var(--ink-dim);
+  text-anchor: middle; dominant-baseline: middle; pointer-events: none;
+}
+.branch-node .bm-mark { fill: var(--accent); stroke: none; }
+.branch-node .approx-mark {
+  font-family: var(--font-ui); font-size: 11px; fill: var(--ink-faint);
+  text-anchor: middle; pointer-events: none;
+}
+.branch-node.is-collapse .dot { fill: var(--surface-2); stroke: var(--line-strong); stroke-dasharray: 3 2.5; }
+.branch-node.is-collapse .branch-label { fill: var(--ink-faint); }
+/* 同排多泳道：非主干标签先藏（避免叠字），悬停 / 选中再显 */
+.branch-node.collide .branch-label { display: none; }
+.branch-node.collide:hover .branch-label,
+.branch-node.collide.is-selected .branch-label { display: block; }
+
+/* —— 节点面板（桌面右侧停靠 360px；窄屏底部弹层） —— */
+.branch-panel {
+  width: 360px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  animation: var(--an-prefsIn) var(--m-dur-base) var(--ease-spring) both;
+}
+.branch-panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.bp-turn { font-family: var(--font-note); font-size: 15px; letter-spacing: .1em; color: var(--ink); }
+.branch-panel-body {
+  flex: 1; overflow-y: auto; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.bp-field { min-width: 0; }
+.bp-label {
+  font-family: var(--font-ui); font-size: 11.5px; letter-spacing: .12em;
+  color: var(--ink-faint); margin-bottom: 4px;
+}
+.bp-text {
+  font-family: var(--font-body); font-size: 14px; line-height: 1.8; color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.bp-warn {
+  font-size: 12.5px; line-height: 1.7; color: var(--danger-deep);
+  background: var(--danger-soft); border: 1px solid var(--danger-line);
+  border-radius: var(--radius); padding: 8px 10px;
+}
+.branch-panel-actions {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px 16px; border-top: 1px solid var(--line-soft);
+}
+.branch-panel-actions .ui-btn:where(:not(.hud, .mini, .icon-only)) { width: 100%; min-height: 40px; }
+
+/* —— 历史位置提示条 —— */
+.history-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; margin-bottom: 6px;
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  font-size: 12.5px; line-height: 1.6; color: var(--accent-deep);
+}
+.history-bar #history-bar-text {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-jump {
+  flex-shrink: 0; min-height: 32px; padding: 0 12px;
+  font-family: var(--font-ui); font-size: 12.5px; letter-spacing: .04em;
+  color: var(--accent-deep); background: var(--bg);
+  border: 1px solid var(--accent-line); border-radius: var(--radius); cursor: pointer;
+}
+.history-jump:hover { background: var(--hover-tint); }
+
+/* —— 窄屏（≤720px）：面板改底部弹层、默认藏标签、触控目标 ≥40px —— */
+@media (max-width: 720px) {
+  .branch-top { padding: 8px 10px; gap: 6px; }
+  .branch-tools .ui-btn:where(:not(.hud, .mini, .icon-only)),
+  .branch-top > .ui-btn:where(:not(.hud, .mini, .icon-only)) { min-height: 40px; padding: 0 10px; font-size: 12.5px; }
+  .branch-tools .ui-btn:where(.hud) { min-width: 40px; min-height: 40px; }
+  .branch-title { font-size: 14px; flex-basis: 100%; order: -1; }
+  .branch-body { flex-direction: column; }
+  .branch-node .branch-label { display: none; }   /* 窄屏默认隐藏标签，全文在面板里看 */
+  .branch-panel {
+    width: auto; max-height: 62vh; border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius) var(--radius) 0 0;
+    animation: var(--an-prefsUp) var(--m-dur-base) var(--ease-spring) both;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .history-bar { flex-wrap: wrap; }
+  .history-bar #history-bar-text { white-space: normal; }
+}
+html[data-motion="off"] .branch-page.enter,
+html[data-motion="off"] .branch-panel { animation: none; }

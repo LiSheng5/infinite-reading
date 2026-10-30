@@ -5,6 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>无限阅读 · ∞ Reading</title>
 
+<!-- 版本戳：构建期由 vite.config.mjs 的 transformIndexHtml 从根目录 VERSION 注入。
+     占位符不许手写成具体版本号——版本号的唯一真源是根目录 VERSION 文件。 -->
+<meta name="ir-version" content="__IR_VERSION__">
+
+<!-- 首帧动效档位：css/motion.css 的 :root 默认是 rich，JS 要等 Store.boot() 之后才写
+     html[data-motion]——「减少动态效果」的用户会先看到一帧完整动效。
+     这里在 <head> 里先按同一套规则（Motion.resolve：显式选择优先，其次系统偏好）写一遍：
+     档位真源仍是 settings.ui.motion，落盘时顺带写 ir:motion 镜像（src/core/store.ts），
+     启动后 src/app/main.js 的 applyMotion() 会再对一次（含系统偏好变化的跟随）。 -->
+<script>
+(function () {
+  try {
+    var pref = '';
+    try { pref = localStorage.getItem('ir:motion') || ''; } catch (e) {}
+    if (pref !== 'off' && pref !== 'standard' && pref !== 'rich') {
+      var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+      pref = (mq && mq.matches) ? 'off' : 'rich';
+    }
+    document.documentElement.setAttribute('data-motion', pref);
+  } catch (e) {}
+})();
+</script>
+
 <!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#FFFFFF">
@@ -14,17 +37,19 @@
 <meta name="apple-mobile-web-app-title" content="无限阅读">
 
 <!-- 字体：不加载任何远程字体（断网也能用，且不依赖第三方 CDN）。
-     旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/style.css 的字体令牌。 -->
+     旁白走衬线系统栈，界面走无衬线系统栈，提示词走等宽——见 css/tokens.css 的字体令牌。 -->
 
-<!-- 样式三层：令牌（css/tokens.css）→ 屏幕样式（css/style.css）→ 动效模块（css/motion.css，最后加载：档位政策与暂停规则优先） -->
+<!-- 样式三层：令牌（css/tokens.css）→ 屏幕样式（css/style.css，只有 @import；
+     规则按屏分成 base / home / shelf / read / overlays / responsive / settings / branch / icons）
+     → 动效模块（css/motion.css，最后加载：档位政策与暂停规则优先） -->
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/motion.css">
 </head>
 <body>
 <!-- ========== 图标库（手绘 SVG sprite）：24×24 网格 · 1.6 描边 · currentColor。
-     用法：<svg class="ic" aria-hidden="true"><use href="#i-名字"/></svg>；JS 里用 IR.App.icon('名字')。
-     描边 / 圆角样式写在 css/style.css 的 .ic 上，颜色跟随文字色。 ========== -->
+     用法：<svg class="ic" aria-hidden="true"><use href="#i-名字"/></svg>；JS 里用 IR.App.iconEl('名字')。
+     描边 / 圆角样式写在 css/icons.css 的 .ic 上，颜色跟随文字色。 ========== -->
 <svg id="ir-icons" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <defs>
     <!-- 关闭 -->
@@ -80,31 +105,42 @@
 <div id="app">
 
   <!-- ========== 开始页（应用入口） ==========
-       顶部是 ASCII 无限符号（js/app.js 的 buildInfinity 把每个字符包成 span，做深蓝 → 浅蓝的循环；
-       没有 JS 时就是一块静态深蓝字符画）；三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
+       顶部是 ASCII 无限符号（src/screens/home 把每个字符包成 span，做深蓝 → 浅蓝的循环；
+       没有 JS 时就是下面这块静态深蓝字符画，「静态深蓝版本」兜底）；
+       三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
-    <!-- 内容由 src/screens/home 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
+    <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）；
+         以下是无 JS 兜底：静态深蓝字符画（「没有 JS 或动画关闭时也要有静态深蓝版本」）。 -->
+    <div class="start-card">
+      <h1 class="start-mark" aria-label="无限阅读"><pre class="inf" aria-hidden="true">    .-~~~~-.       .-~~~~-.
+  .'        '.   .'        '.
+ /            \ /            \
+|              X              |
+ \            / \            /
+  '.        .'   '.        .'
+    '-~~~~-'       '-~~~~-'</pre></h1>
+    </div>
   </section>
 
-  <!-- ========== 书架（UI-2）：会话列表 + 搜索 + 新建弹层 ========== -->
+  <!-- ========== 书架：会话列表 + 搜索 + 新建弹层 ========== -->
   <section id="screen-shelf" class="screen hidden">
     <!-- 内容由 src/screens/shelf 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </section>
 
-  <!-- ========== 阅读界面：左文右图，各管各的（§4.6）
+  <!-- ========== 阅读界面：左文右图，各管各的
        布局只由 #screen-game 的 data-layout 决定：split | stack | immersive。
        输入区只有一个（沉浸态也不另起一套输入）。 ========== -->
   <section id="screen-game" class="screen hidden" data-layout="split">
     <header class="hud">
       <div class="hud-left">
-        <button id="btn-back-home" class="hud-btn hud-icon" title="返回首页（自动存档）" aria-label="返回首页"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
-        <button id="btn-hud-shelf" class="hud-btn hud-text" title="我的书架">书架</button>
+        <button id="btn-back-home" class="ui-btn hud hud-icon" title="返回首页（自动存档）" aria-label="返回首页"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+        <button id="btn-hud-shelf" class="ui-btn hud hud-text" title="我的书架">书架</button>
         <span id="hud-mode" class="mode-chip"></span>
       </div>
       <div class="hud-actions">
-        <button id="btn-toggle-image" class="hud-btn" title="收起 / 展开画面">画面</button>
+        <button id="btn-toggle-image" class="ui-btn hud" title="收起 / 展开画面">画面</button>
         <div class="hud-more">
-          <button id="btn-hud-more" class="hud-btn hud-icon" title="更多" aria-label="更多" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg></button>
+          <button id="btn-hud-more" class="ui-btn hud hud-icon" title="更多" aria-label="更多" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg></button>
           <div id="hud-more-menu" class="menu hidden" role="menu">
             <button id="btn-savepoint" class="menu-item" type="button" role="menuitem">打一个存档点</button>
             <button id="btn-branch" class="menu-item" type="button" role="menuitem">分支</button>
@@ -116,7 +152,7 @@
           </div>
         </div>
       </div>
-      <!-- 顶栏忙碌进度线（UI-1）：busy 时由 app.js 显隐；样式与三档动效见 style.css -->
+      <!-- 顶栏忙碌进度线：busy 时由 app.js 显隐；样式见 css/base.css，三档动效见 css/motion.css -->
       <div id="busy-line" class="hidden" aria-hidden="true"></div>
     </header>
 
@@ -125,42 +161,42 @@
   </div>
   </section>
 
-  <!-- ========== 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉 ========== -->
+  <!-- ========== 分支页：整页分支树 + 从任意节点继续 / 改我说的分叉 ========== -->
   <div id="branch-page" class="branch-page hidden" role="dialog" aria-modal="true" aria-label="分支视图">
     <!-- 内容由 src/screens/branch 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 新故事 · 选模式（§4.8） ========== -->
+  <!-- ========== 新故事 · 选模式 ========== -->
   <div id="modal-new" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 开局设定向导（剧情模式，§4.8 / T-P2-3） ========== -->
+  <!-- ========== 开局设定向导（剧情模式） ========== -->
   <div id="modal-wizard" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 剧情文本导入（R12 路径② / §4.11 / T-P6-1） ========== -->
+  <!-- ========== 剧情文本导入（路径②） ========== -->
   <div id="modal-import-text" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 导出（§4.11 / T-P2-4） ========== -->
+  <!-- ========== 导出 ========== -->
   <div id="modal-export" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 画师工作台（§4.3 / T-P3-1） ========== -->
+  <!-- ========== 画师工作台 ========== -->
   <div id="modal-painter" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 画风锚定（R3 / §5 / T-P4-1） ========== -->
+  <!-- ========== 画风锚定 ========== -->
   <div id="modal-anchor" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-  <!-- ========== 角色卡（R13 / §4.12 / T-P7-1）：统一编辑器 = 自建空白表单 / 导入后可编辑 ========== -->
+  <!-- ========== 角色卡：统一编辑器 = 自建空白表单 / 导入后可编辑 ========== -->
   <div id="modal-card" class="modal modal-top hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
@@ -172,7 +208,7 @@
     <!-- 内容由 src/screens/settings 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
-<!-- ========== 本对话设置（UI-3 §4.2）：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ==========
+<!-- ========== 本对话设置：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ==========
      阶段 4 屏 2 起：「当前故事」组（推进模式 / 存档点 / 世界状态卡）自全局设置迁入本面板——
      它们依赖当前打开的故事，全局设置不再保留入口。 -->
   <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">

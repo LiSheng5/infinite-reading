@@ -1,5 +1,5 @@
 /*
- * src/screens/settings/settingsForm.js —— 设置屏的字段配置真源（任务书 §7.2）
+ * src/screens/settings/settingsForm.js —— 设置屏的字段配置真源
  *
  * 一份字段配置（id / 标签 / 类型 / 所属分组 / 是否高级 / 自动展开规则）生成整块设置界面，
  * 取代 0.12.1 靠 legend 文字正则归类（src/app/prefsui.js 的 GROUP_BY_LEGEND）的做法。
@@ -21,7 +21,7 @@
  * 文案里允许 <b> <code> <br> 三种行内标记（Inline.svelte 解析）；用户 / 模型内容永不进这里。
  */
 
-// —— Base URL 下拉（dl-base-url）：常见服务商速选；不内置模型名（§7.2：省得跟着厂商变动维护）——
+// —— Base URL 下拉（dl-base-url）：常见服务商速选；不内置模型名（省得跟着厂商变动维护）——
 export const BASE_URL_OPTIONS = [
   ['https://open.bigmodel.cn/api/paas/v4', '国内 · 智谱 GLM（BigModel，对话 + CogView 生图）'],
   ['https://dashscope.aliyuncs.com/compatible-mode/v1', '国内 · 阿里云百炼 · 通义千问（OpenAI 兼容）'],
@@ -55,7 +55,7 @@ export const VIDEO_BASE_OPTIONS = [
   ['https://api.minimax.io', '国外 · MiniMax（生视频 · V2）'],
 ];
 
-// —— 「测试连接」一行：按钮在左、结果文字在右（§7.2）。
+// —— 「测试连接」一行：按钮在左、结果文字在右。
 // id 以 id: '…' 字面量键值出现（不拼接）：eval/settings-ids-test.js 静态扫描这份配置的 id 真源，任一侧缺 id 即红。
 const testRow = (ids, hint) => ({
   k: 'test', ...ids, text: '测试连接', icon: 'bolt', hint,
@@ -102,7 +102,7 @@ export const GROUPS = [
         nodes: [
           { k: 'box', id: 'mp-list', cls: 'mono-list' },
           { k: 'row', items: [
-            { k: 'btn', id: 'mp-add', text: '新增模型', icon: 'plus', cls: 'btn' },
+            { k: 'btn', id: 'mp-add', text: '新增模型', icon: 'plus', cls: 'ui-btn' },
             { k: 'text', id: 'mp-state', cls: 'hint' },
           ] },
           { k: 'box', id: 'mp-editor', cls: 'panel-block hidden', nodes: [
@@ -126,8 +126,8 @@ export const GROUPS = [
               ],
             },
             { k: 'row', items: [
-              { k: 'btn', id: 'mp-save', text: '保存这个模型', cls: 'btn primary' },
-              { k: 'btn', id: 'mp-cancel', text: '取消', cls: 'btn ghost' },
+              { k: 'btn', id: 'mp-save', text: '保存这个模型', cls: 'ui-btn primary' },
+              { k: 'btn', id: 'mp-cancel', text: '取消', cls: 'ui-btn ghost' },
             ] },
           ] },
         ],
@@ -286,12 +286,12 @@ export const GROUPS = [
               { k: 'box', id: 'style-card-text', cls: 'mono-line' },
               { k: 'row', items: [
                 { k: 'field', id: 's-card-note', type: 'text', placeholder: '画风备注（只写画风偏好，别写时间 / 天气 / 地点）' },
-                { k: 'btn', id: 'btn-save-card-note', text: '保存备注', cls: 'mini-btn' },
+                { k: 'btn', id: 'btn-save-card-note', text: '保存备注', cls: 'ui-btn mini' },
               ] },
               { k: 'text', cls: 'hint', text: '备注只管画面气质：时间、天气、地点、在场者由剧情与世界状态卡决定，玩家说放晴，就该画晴。' },
             ] },
             { k: 'row', items: [
-              { k: 'btn', id: 'btn-anchor-rerun', text: '锚定画风（试画 4 张候选）', cls: 'btn' },
+              { k: 'btn', id: 'btn-anchor-rerun', text: '锚定画风（试画 4 张候选）', cls: 'ui-btn' },
             ] },
             { k: 'text', id: 'rolling-style-text', cls: 'hint' },
           ] },
@@ -310,7 +310,7 @@ export const GROUPS = [
           { k: 'check', id: 's-tools-enabled', checked: true, text: '向模型下发工具', sub: '召回世界卡 / 视觉设定卡、请求作画、写入记忆；模型不支持 function calling 时可关' },
           { k: 'row', items: [
             { k: 'text', id: 's-notools-hint', cls: 'hint' },
-            { k: 'btn', id: 'btn-clear-notools', text: '清除降级记录', cls: 'mini-btn' },
+            { k: 'btn', id: 'btn-clear-notools', text: '清除降级记录', cls: 'ui-btn mini' },
           ] },
         ],
       },
@@ -324,7 +324,7 @@ export const GROUPS = [
             { k: 'field', id: 's-sidecar-token', label: 'token', type: 'text', spellcheck: false, placeholder: '启动本地服务时终端会打印' },
           ] },
           { k: 'row', items: [
-            { k: 'btn', id: 'btn-sidecar-probe', text: '重新探测', cls: 'btn' },
+            { k: 'btn', id: 'btn-sidecar-probe', text: '重新探测', cls: 'ui-btn' },
             { k: 'text', cls: 'hint', text: '在项目目录运行 <code>node sidecar/server.mjs</code> 启动；token 防止本机其它程序乱调。' },
           ] },
         ],
@@ -368,7 +368,7 @@ export const GROUPS = [
               ] },
               { k: 'field', id: 's-sched-quiet', label: '免打扰时段（每行一段，格式 22:00-08:00）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '23:00-08:00' },
               { k: 'row', items: [
-                { k: 'btn', id: 'btn-trigger-refresh', text: '刷新安排', cls: 'mini-btn' },
+                { k: 'btn', id: 'btn-trigger-refresh', text: '刷新安排', cls: 'ui-btn mini' },
                 { k: 'text', id: 'trigger-summary', cls: 'hint' },
               ] },
               { k: 'box', id: 'trigger-list', cls: 'mono-list' },
@@ -403,7 +403,7 @@ export const GROUPS = [
               ] },
               { k: 'field', id: 's-pay-categories', label: '品类黑名单（每行一个）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '虚拟币' },
               { k: 'row', items: [
-                { k: 'btn', id: 'btn-pay-refresh', text: '刷新台账', cls: 'mini-btn' },
+                { k: 'btn', id: 'btn-pay-refresh', text: '刷新台账', cls: 'ui-btn mini' },
                 { k: 'text', id: 'pay-summary', cls: 'hint' },
               ] },
               { k: 'box', id: 'pay-ledger', cls: 'mono-list' },
@@ -425,8 +425,8 @@ export const GROUPS = [
             { k: 'check', id: 's-profile-choice', text: '剧情' },
             { k: 'check', id: 's-profile-chat', text: '智能体' },
             { k: 'check', id: 's-profile-rp', text: '扮演' },
-            { k: 'btn', id: 'btn-profile-all', text: '全部开启', cls: 'mini-btn' },
-            { k: 'btn', id: 'btn-profile-none', text: '全部关闭', cls: 'mini-btn' },
+            { k: 'btn', id: 'btn-profile-all', text: '全部开启', cls: 'ui-btn mini' },
+            { k: 'btn', id: 'btn-profile-none', text: '全部关闭', cls: 'ui-btn mini' },
           ] },
           { k: 'select', id: 's-profile-scope', label: '存储范围', options: [
             ['global', '全局（跨故事共享）'], ['per-story', '仅当前故事'],
@@ -435,7 +435,7 @@ export const GROUPS = [
             { k: 'text', id: 'profile-state', cls: 'hint' },
             { k: 'box', id: 'profile-list', cls: 'mono-list' },
             { k: 'row', items: [
-              { k: 'btn', id: 'btn-profile-clear', text: '清空画像', cls: 'mini-btn' },
+              { k: 'btn', id: 'btn-profile-clear', text: '清空画像', cls: 'ui-btn mini' },
             ] },
           ] },
         ],
@@ -446,8 +446,8 @@ export const GROUPS = [
           { k: 'text', id: 'storage-state', cls: 'hint' },
           { k: 'text', id: 'storage-usage', cls: 'hint' },
           { k: 'row', items: [
-            { k: 'btn', id: 'btn-backup-all', text: '导出全部备份', icon: 'down', cls: 'btn primary' },
-            { k: 'btn', id: 'btn-clean-images', text: '清理孤儿原图', cls: 'mini-btn', title: '删掉没有任何故事引用的原图；剧情、缩略图、提示词都不动' },
+            { k: 'btn', id: 'btn-backup-all', text: '导出全部备份', icon: 'down', cls: 'ui-btn primary' },
+            { k: 'btn', id: 'btn-clean-images', text: '清理孤儿原图', cls: 'ui-btn mini', title: '删掉没有任何故事引用的原图；剧情、缩略图、提示词都不动' },
             { k: 'text', id: 'backup-at', cls: 'hint' },
           ] },
           { k: 'check', id: 'backup-with-keys', text: '备份里带上 API Key', sub: '方便换设备直接可用；文件泄露有被盗刷风险，默认不带' },
@@ -464,7 +464,7 @@ export const GROUPS = [
       },
       {
         danger: true, nodes: [
-          { k: 'btn', id: 'btn-clear-save', text: '清空本地存档与设置', cls: 'btn danger' },
+          { k: 'btn', id: 'btn-clear-save', text: '清空本地存档与设置', cls: 'ui-btn danger' },
         ],
       },
     ],

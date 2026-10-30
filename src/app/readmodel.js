@@ -5,8 +5,11 @@
  * 纯数据模型推给组件；切分 / 分派口径与旧拼装路径（bubbleFor / renderOpeningHint /
  * renderChoices / renderThumbs）共用同一套 helper（imageSceneById / sceneSrc / safeImgSrc /
  * KIND_LABELS / Tree.siblings …），不另起一套。
- * 用户 / 模型产出的文字只以字符串进模型（组件文本插值渲染 ≡ textContent，红线 §8）；
+ * 用户 / 模型产出的文字只以字符串进模型（组件文本插值渲染 ≡ textContent，红线）；
  * 条目附原条目引用（entry），点击动作（选场景 / 灯箱 / 工作台 / 提案确认拒绝）原样走 App。
+ * 每个条目模型带稳定 key：按 log 条目对象身份发号（project 按引用共享 → 同一条目
+ * 跨 renderChat / 切分支共享前缀拿到同一个号），ReadScreen 的 each 据此做 keyed 更新——
+ * 旧气泡与内联图不销毁、不重新解码、入场动画不重放。
  * 视图模型口径与 0.12.1 的 DOM 拼装逐字段一致（截图逐像素对齐）。
  */
 import { Tree } from '../core/tree.ts';
@@ -26,7 +29,7 @@ import { A } from './core.js';
       : '';
     const reasoning = (e.type === 'narration' && showReasoning() && String(e.reasoning || '').trim())
       ? String(e.reasoning) : '';
-    // 分支导航（§4.3/§5⑤）：凡是有兄弟的旁白都显示 ‹ n/m ›；「↻ 重试」仍只在最后一条（§5⑤）
+    // 分支导航：凡是有兄弟的旁白都显示 ‹ n/m ›；「↻ 重试」仍只在最后一条
     const sibs = (e.type === 'narration' && e.nid && S.story && S.story.tree)
       ? Tree.siblings(S.story, e.nid) : [];
     const showRetry = e.type === 'narration' && index === A.lastNarrationIndex() && !S.busy && !!A.lastActionEntry();
@@ -73,7 +76,7 @@ import { A } from './core.js';
     };
   }
 
-  // 视频（§8）：聊天流里 56px 封面 + alt + ▶，点一下在舞台选中（同图片行）
+  // 视频：聊天流里 56px 封面 + alt + ▶，点一下在舞台选中（同图片行）
   function videoModel(e) {
     return {
       kind: 'video',
@@ -99,12 +102,13 @@ import { A } from './core.js';
   }
 
   // 提案卡（✉ 邮件 / 🛒 下单）：参数原值进模型（红线 4，组件文本插值渲染），
-  // 状态 / 剩余分钟与旧 proposalBubble 同口径；过期就地收敛也同点位（只改内存，saveAll 落盘）
+  // 状态 / 剩余分钟由 features 的 proposalStatusLabel 统一给出；状态收敛同点位
+  //（Proposals.reconcile：旧档迁移 / 中断的 executing / TTL 过期，只改内存，saveAll 落盘）
   function proposalModel(e) {
     const p = e && e.proposal;
     const now = Date.now();
     if (!p) return { kind: 'proposal', empty: true };
-    if (p.status === 'pending' && now >= p.expiresAt) Proposals.markExpired(p);
+    Proposals.reconcile(p, now);
     const rows = [];
     const row = (k, v) => { rows.push({ k: k, v: String(v == null ? '' : v) }); };
     if (p.kind === 'email') {
@@ -118,8 +122,10 @@ import { A } from './core.js';
       row('商品', (p.args.items || []).map(i => i && i.name).filter(Boolean).join('、') || '（未填）');
     }
     if (p.args.reason) row('理由', p.args.reason);
+    const ST = Proposals.STATUS;
+    const live = Proposals.isActionable(p, now);     // pending / awaiting_confirm 且没过 TTL
     let statusText = A.proposalStatusLabel(p, now);
-    if (p.status === 'pending' && now < p.expiresAt) {
+    if ((p.status === ST.PENDING || p.status === ST.AWAITING) && now < p.expiresAt) {
       const mins = Math.max(1, Math.ceil((p.expiresAt - now) / 60000));
       statusText += ' · 有效剩 ' + mins + ' 分钟';
     }
@@ -131,7 +137,11 @@ import { A } from './core.js';
       title: (p.kind === 'email' ? '邮件提案' : '下单提案') + '（要你确认才执行）',
       rows: rows,
       statusText: statusText,
-      actionable: p.status === 'pending' && now < p.expiresAt && !S.busy,
+      actionable: p.status === ST.PENDING && live && !S.busy,
+      // 二次确认被中断（关弹窗 / 刷新）：卡片给「继续确认」，不必等 TTL 过完
+      second: p.status === ST.AWAITING && live && !S.busy,
+      // 发信失败后 sidecar 草稿没清掉：给一个「清理草稿」入口（自动清理成功时不会出现）
+      cleanup: p.status === ST.FAILED && !!(p.result && p.result.draftId && p.result.draftDiscarded === false) && !S.busy,
     };
   }
 
@@ -144,9 +154,25 @@ import { A } from './core.js';
     agent: agentModel,
   };
 
+  // 条目 key：WeakMap 按 log 条目对象身份发递增号。
+  // 树上同一对象被 project 原样共享（node.entries ↔ story.log 引用共享，不 clone），
+  // 所以同一逻辑条目跨 renderChat / 切分支都拿到同一个 key；条目随分支切换 / 窗口滑出
+  // 离开 log 后组件按 key 销毁，新条目拿新号。key 是原始 number（$state 代理不包装基本类型），
+  // 不落进存档（WeakMap 不可枚举、模型本身也不序列化）。
+  const entryKeys = new WeakMap();
+  let entryKeySeq = 0;
+  function entryKey(e) {
+    if (!e || typeof e !== 'object') return 'x' + (++entryKeySeq);   // 坏档兜底：当次唯一即可
+    let k = entryKeys.get(e);
+    if (k === undefined) { k = ++entryKeySeq; entryKeys.set(e, k); }
+    return k;
+  }
+
   function entryModel(e, index) {
     const build = ENTRY_MODELS[e && e.type];
-    return build ? build(e) : textModel(e, index);
+    const m = build ? build(e) : textModel(e, index);
+    m.key = entryKey(e);
+    return m;
   }
 
   /* ================= renderChat 整模型（旧 renderChat 的同步语义） ================= */
@@ -200,7 +226,7 @@ import { A } from './core.js';
     const items = [];
     for (const sc of scenes) {
       // 缩略条优先用小图（快）；小图缺失但原图在 IndexedDB 里时，等它异步取回来再重推一次
-      // 视频场景用封面（thumb）；▶ 角标画在 .thumb-wrap 上（img 的 ::after 不渲染，§8）
+      // 视频场景用封面（thumb）；▶ 角标画在 .thumb-wrap 上（img 的 ::after 不渲染）
       const src = sc.kind === 'video' ? (sc.thumb || sc.poster || '') : (sc.thumb || A.sceneSrc(sc));
       if (!src) continue;
       items.push({

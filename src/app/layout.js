@@ -1,19 +1,19 @@
 /*
- * src/app/layout.js —— 布局状态（P2 的统一入口 · UI-3 §3.5 分层）
- * 从 src/app/render.js 拆出（只搬家，不改行为）：render.js 在 800 行红线（app-structure-test §2）。
+ * src/app/layout.js —— 布局状态（全局设置与本对话设置共用同一入口）
+ * 从 src/app/render.js 拆出（只搬家，不改行为）：render.js 在 800 行红线（app-structure-test）。
  *
  * 所有排版只由 #screen-game 的 data-layout 决定：
  *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
  * 有效值 = story.prefs.ui 覆盖 → settings.ui 全局默认；story.ui 只记输入类型。 */
 import { Prefs } from '../core/prefs.ts';
-import { A } from './core.js';
+import { A, saveAll } from './core.js';
 
 
   const S = A.state;
   const { $, Store, persistSettings } = A;
 
   const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
-  // 字号 / 宽度 / 密度（§3.5）：三档映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
+  // 字号 / 宽度 / 密度：三档映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
   const FONT_SCALE = { sm: 0.92, md: 1, lg: 1.12 };
   const CONTENT_W = { narrow: '620px', standard: '760px', wide: '920px' };
   const DENSITY = { compact: 0.82, standard: 1 };
@@ -23,7 +23,7 @@ import { A } from './core.js';
     return S.settings.ui;
   }
 
-  // 有效 UI（只读合并快照）：本对话覆盖 → 全局默认（UI-3 §3.5）
+  // 有效 UI（只读合并快照）：本对话覆盖 → 全局默认
   function effectiveUi() {
     return Prefs.effective(S.settings, S.story, 'ui');
   }
@@ -36,6 +36,20 @@ import { A } from './core.js';
       else uiState()[k] = patch[k];
     }
   }
+
+  // UI 写回后的落盘：writeUi 可能写进 **story.prefs.ui**，此时只 persistSettings()
+  // （只存全局 settings）等于没存 —— 刷新后本对话的 layout / splitRatio / imageCollapsed 全丢。
+  // 有当前故事时走 saveAll（= 全局设置 + 这个故事）；没有故事（首页 / 书架）只有全局可存。
+  function commitUi() {
+    if (S.story) saveAll();
+    else persistSettings();
+  }
+
+  // 最近一次的「非沉浸布局配置」：退出沉浸回到它，而不是一律回落 auto。
+  // 在这里记而不是在 setLayout 里记：本对话设置面板是直接写 prefs.ui.layout 再 applyLayout 的
+  // （不走 setLayout），只有 applyLayout 能看到两条入口的最终状态。只在进程内记 ——
+  // 刷新时沉浸态本身就写在 prefs 里，没有可回退的历史值，照旧回落 auto。
+  let lastUiLayout = 'auto';
 
   function autoLayout() {
     return (typeof window !== 'undefined' && window.innerWidth >= 900) ? 'split' : 'stack';
@@ -64,10 +78,10 @@ import { A } from './core.js';
 
   function setLayout(next) {
     const layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
-    writeUi({ layout: layout });
     if (layout !== 'immersive') S.immersiveTextHidden = false;
+    writeUi({ layout: layout });
     applyLayout();
-    persistSettings();
+    commitUi();
   }
 
   function applyLayout() {
@@ -75,9 +89,12 @@ import { A } from './core.js';
     if (!el) return;
     const ui = effectiveUi();
     const layout = effectiveLayout();
+    // 记「上一次的非沉浸配置」：退出沉浸回到它；原来是 auto 的仍回 auto，
+    // 不把 auto 钉死成某个具体布局（那样宽屏切换 / 旋转就再也不自适应了）。
+    if (ui.layout !== 'immersive') lastUiLayout = LAYOUTS.indexOf(ui.layout) >= 0 ? ui.layout : 'auto';
     el.dataset.layout = layout;
     el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
-    // UI-3 §3.5：字号 / 宽度 / 密度 → CSS 变量（令牌驱动；chat / rp 的内容区吃这三个变量）
+    // 字号 / 宽度 / 密度 → CSS 变量（令牌驱动；chat / rp 的内容区吃这三个变量）
     el.style.setProperty('--font-scale', String(FONT_SCALE[ui.fontScale] != null ? FONT_SCALE[ui.fontScale] : 1));
     el.style.setProperty('--content-w', CONTENT_W[ui.width] || CONTENT_W.standard);
     el.style.setProperty('--density', String(DENSITY[ui.density] != null ? DENSITY[ui.density] : 1));
@@ -94,27 +111,26 @@ import { A } from './core.js';
     if (imm) imm.title = layout === 'immersive' ? '退出沉浸（Esc）' : '沉浸（画面铺满）';
   }
 
-  // 画面（收起 / 展开舞台）：沉浸态下等同于退出沉浸
+  // 画面（收起 / 展开舞台）：沉浸态下等同于退出沉浸（回到进入前的布局）
   function toggleStagePanel() {
     if (!S.story) return;
-    if (isImmersive()) { setLayout('auto'); return; }
+    if (isImmersive()) { exitImmersive(); return; }
     writeUi({ imageCollapsed: !effectiveUi().imageCollapsed });
     applyLayout();
-    persistSettings();
+    commitUi();
   }
 
   function enterImmersive() {
     if (!S.story) return;
-    setLayout('immersive');
     S.immersiveTextHidden = false;
-    applyLayout();
+    setLayout('immersive');
   }
 
-  // Esc / ✕ 退出沉浸态：回到「自动」布局
+  // Esc / ✕ 退出沉浸态：回到进入前的布局（没有记录时回落 auto）
   function exitImmersive() {
     if (!isImmersive()) return false;
     S.immersiveTextHidden = false;
-    setLayout('auto');
+    setLayout(lastUiLayout || 'auto');
     return true;
   }
 
@@ -135,7 +151,8 @@ import { A } from './core.js';
       if (!dragging) return;
       dragging = false;
       sp.classList.remove('dragging');
-      if (S.story) persistSettings();
+      // 拖动过程只改内存（每帧写盘太贵），松手落一次盘；命中 story prefs 的键要随故事存
+      commitUi();
     };
     sp.addEventListener('mousedown', e => { dragging = true; sp.classList.add('dragging'); e.preventDefault(); });
     window.addEventListener('mousemove', e => { if (dragging) onMove(e.clientX); });
@@ -149,7 +166,7 @@ import { A } from './core.js';
     sp.addEventListener('dblclick', () => {
       writeUi({ splitRatio: 0.5 });
       applyLayout();
-      persistSettings();
+      commitUi();
     });
     // 窗口尺寸变化：auto 需要在 split / stack 之间切换
     let rzTimer = null;

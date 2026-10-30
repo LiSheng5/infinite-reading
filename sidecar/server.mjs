@@ -69,7 +69,13 @@ function log(level, msg, extra) {
   else console.log(line);
 }
 
-/* ---------------- 单进程：锁文件 + 端口占用双重防线 ---------------- */
+/* ---------------- 单进程：锁文件 + 端口占用双重防线 ----------------
+ * 锁内容是 JSON（pid + 启动时间 + 随机数），不再只写 pid：
+ *   1. `open('wx')` 与 `write` 之间被杀会留下**空锁文件**。旧实现把空内容 parseInt 成 0 →
+ *      判「陈旧」→ unlink → 第二个实例照常启动，定时触发就跑两遍。
+ *      现在空 / 不可解析一律按「正在启动」处理，只有超过 LOCK_GRACE_MS 还没写出内容才判陈旧。
+ *   2. at / nonce 让「这行锁是谁写的、什么时候写的」在排错时可见（旧格式纯 pid 仍可读，升级不炸）。
+ */
 
 function pidAlive(pid) {
   if (!pid) return false;
@@ -77,10 +83,51 @@ function pidAlive(pid) {
   catch (e) { return e && e.code === 'EPERM'; }   // 存在但无权限 → 仍算活着
 }
 
+const LOCK_GRACE_MS = 5000;
+const LOCK_NONCE = crypto.randomBytes(8).toString('hex');   // 本次启动的身份：释放锁时据此确认「这把锁是我写的」
+
+function lockBody() {
+  return JSON.stringify({
+    pid: process.pid,
+    at: START_AT,
+    nonce: LOCK_NONCE,
+  });
+}
+
 function tryCreateLock() {
-  const fd = fs.openSync(LOCK_PATH, 'wx');
-  fs.writeSync(fd, String(process.pid));
-  fs.closeSync(fd);
+  const fd = fs.openSync(LOCK_PATH, 'wx');   // 原子创建：并发下只有一个进程拿到 EEXIST 之外的路径
+  try {
+    fs.writeSync(fd, lockBody());            // 一次写完，避免「建了文件还没内容」的中间态
+    fs.closeSync(fd);
+  } catch (e) {
+    // 写失败：我们并没有真正拿到锁，把自己刚建的空文件删掉，别把它留成别人的障碍
+    try { fs.closeSync(fd); } catch (_) {}
+    try { fs.unlinkSync(LOCK_PATH); } catch (_) {}
+    throw e;
+  }
+}
+
+/* 锁状态：gone（没有锁）/ busy（活着的实例）/ starting（刚建、内容还没落盘）/ stale（持有者已死） */
+function readLock() {
+  let raw = '';
+  try { raw = fs.readFileSync(LOCK_PATH, 'utf8').trim(); }
+  catch (_) { return { state: 'gone', pid: 0 }; }
+
+  let pid = 0;
+  if (raw) {
+    if (raw.charAt(0) === '{') {
+      try { pid = Math.floor(Number(JSON.parse(raw).pid)) || 0; } catch (_) { pid = 0; }
+    } else {
+      pid = parseInt(raw, 10) || 0;    // 旧版锁文件（纯 pid 数字）：过渡期照旧识别
+    }
+  }
+  if (pid > 0) return { state: pidAlive(pid) ? 'busy' : 'stale', pid: pid };
+
+  // 空 / 不可解析：可能是另一个实例刚 open、还没 write —— 给一个短暂宽限，别把它当成陈旧锁抢过来
+  let age = 0;
+  try { age = Date.now() - fs.statSync(LOCK_PATH).mtimeMs; }
+  catch (_) { return { state: 'gone', pid: 0 }; }
+  return { state: age < LOCK_GRACE_MS ? 'starting' : 'stale', pid: 0 };
 }
 
 function acquireLock() {
@@ -91,16 +138,25 @@ function acquireLock() {
   } catch (e) {
     if (e.code !== 'EEXIST') throw e;
   }
-  // 已有锁：判断持有者是否还活着；陈旧锁（进程已死 / 干脆没写 pid）清掉重试一次
-  let pid = 0;
-  try { pid = parseInt(fs.readFileSync(LOCK_PATH, 'utf8').trim(), 10) || 0; } catch (_) {}
-  if (pidAlive(pid)) return false;
+  const held = readLock();
+  if (held.state === 'busy' || held.state === 'starting') return false;
+  // 陈旧锁：清掉重抢一次。unlink 与重建之间还有极窄的窗口，但走到这里的进程都已经确认原持有者已死，
+  // 唯一性最终由 `wx` 的原子创建决定（输的一方拿到 EEXIST → false）。
   try { fs.unlinkSync(LOCK_PATH); } catch (_) {}
   try { tryCreateLock(); return true; }
   catch (_) { return false; }
 }
 
+/* 只删自己写的锁（按 nonce 认领）：手删锁文件后再起一个新实例时，旧进程退出不能把新实例的锁删掉，
+ * 否则第三个实例就能同时跑起来 —— 那正是锁要防的事。旧格式（纯 pid）只能按 pid 认。 */
 function releaseLock() {
+  let raw = '';
+  try { raw = fs.readFileSync(LOCK_PATH, 'utf8').trim(); }
+  catch (_) { return; }
+  let mine = false;
+  try { mine = JSON.parse(raw).nonce === LOCK_NONCE; }
+  catch (_) { mine = raw === String(process.pid); }
+  if (!mine) return;
   try { fs.unlinkSync(LOCK_PATH); } catch (_) {}
 }
 
@@ -124,43 +180,59 @@ function applyCors(req, res) {
   res.setHeader('Access-Control-Max-Age', '600');
 }
 
-function sendJSON(res, code, obj) {
+function sendJSON(res, code, obj, onSent) {
   const body = JSON.stringify(obj);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Content-Length': Buffer.byteLength(body),
   });
-  res.end(body);
+  res.end(body, onSent);
 }
 
 function readBody(req, limit) {
   const max = limit || 128 * 1024;
   return new Promise((resolve, reject) => {
     let size = 0;
+    let over = false;
     const chunks = [];
+
+    /* 超限：这里**不能** req.destroy() —— socket 一断，dispatch 随后写的 413/400
+     * 根本发不出去，客户端只会看到 ECONNRESET，误以为是「服务挂了」而不是「body 太大」。
+     * 正确顺序：先暂停读取（不再往内存里堆 chunk，TCP 窗口自然收紧让对方停写）→ reject →
+     * dispatch 把 413 + Connection: close 写回去 → 响应发完再 destroy（见 handle 的 catch）。 */
+    const tooLarge = () => {
+      if (over) return;
+      over = true;
+      chunks.length = 0;
+      try { req.pause(); } catch (_) {}
+      reject(new Error('BODY_TOO_LARGE'));
+    };
+
     req.on('data', c => {
+      if (over) return;
       size += c.length;
-      if (size > max) { reject(new Error('BODY_TOO_LARGE')); req.destroy(); return; }
+      if (size > max) { tooLarge(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
+      if (over) return;
       const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve({});
       try { resolve(JSON.parse(raw)); } catch (_) { reject(new Error('BAD_JSON')); }
     });
-    req.on('error', reject);
+    req.on('error', e => { if (!over) reject(e); });
   });
 }
 
 /* ---------------- 鉴权：只认 Authorization: Bearer ----------------
- * 查询参数里的 ?token= 已移除（审查 低危 #18）：URL 会进代理 / 访问日志 / Referer，
+ * 查询参数里的 ?token= 已移除：URL 会进代理 / 访问日志 / Referer，
  * token 不能出现在 URL 里。EventSource 不能设请求头 → SSE 走短时效一次性 ticket
  * （POST /api/events/ticket 用 Bearer 换，再以 ?ticket= 连接）。
  */
 
 function timingEqual(a, b) {
-  // 定长哈希再比（审查 低危 #18）：直接比较原始串时，长度不等会提前返回，泄漏长度侧信道
+  // 定长哈希再比：直接比较原始串时，长度不等会提前返回，泄漏长度侧信道
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
@@ -178,7 +250,7 @@ function authorized(req, cfg) {
 }
 
 /* ---------------- 错误映射：业务码白名单，其余 500 ----------------
- * catch 里不能把 e.message 原文回给客户端（审查 低危 #17）：SQLite 约束名、系统错误等
+ * catch 里不能把 e.message 原文回给客户端：SQLite 约束名、系统错误等
  * 属于内部实现细节。只有白名单里的业务码按 400/503 + 可读文案返回，其余一律
  * 500 + 通用文案，细节只进服务端日志。
  */
@@ -187,6 +259,7 @@ const BIZ_MESSAGES = {
   BODY_TOO_LARGE: '请求体太大了。',
   NAME_REQUIRED: '触发器名字不能为空。',
   TRIGGER_NOT_FOUND: '找不到这个触发器。',
+  TRIGGER_LOCKED: '这个安排已经被用户确认生效，模型不能改写它：请换个名字新建，或请用户先取消旧的。',
   ONCE_NEEDS_AT: '一次性触发器需要一个触发时间。',
   INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE: '心跳间隔至少 1 分钟。',
   BAD_TIMEZONE: '时区不合法。',
@@ -197,7 +270,7 @@ const BIZ_MESSAGES = {
 };
 const BIZ_CODES = new Set([
   'BAD_JSON', 'BODY_TOO_LARGE',
-  'NAME_REQUIRED', 'TRIGGER_NOT_FOUND',
+  'NAME_REQUIRED', 'TRIGGER_NOT_FOUND', 'TRIGGER_LOCKED',
   'ONCE_NEEDS_AT', 'INTERVAL_NEEDS_EVERYMS_MIN_1_MINUTE', 'BAD_TIMEZONE', 'BAD_TRIGGER_TYPE',
   'CRON_EMPTY', 'CRON_EMPTY_FIELD', 'CRON_BAD_STEP', 'CRON_BAD_NUMBER', 'CRON_NEEDS_5_FIELDS', 'CRON_OUT_OF_RANGE',
   'AGENT_REQUIRED',
@@ -210,7 +283,7 @@ function bizMessage(code) {
 }
 
 /* ---------------- 路由表 ----------------
- * 审查 可维护性 #3：handle() 手写正则顺序路由 → [{method, re, body, run}] 路由表，
+ * handle() 手写正则顺序路由 → [{method, re, body, run}] 路由表，
  * 鉴权 / 解码 / 错误映射收口到 dispatch 一处。新增接口只需在表里加一行，
  * 不会漏鉴权、漏解码、漏错误映射。
  *   run(ctx) → { status, body }；ctx = { req, res, url, cfg, params, body, query }
@@ -220,7 +293,7 @@ function bizMessage(code) {
 // 常见「业务结果 → HTTP」映射：r.ok ? 200 : 400
 const okOr400 = (r) => ({ status: r.ok ? 200 : 400, body: r });
 
-// 模块层返回 fail(code)（审查 可维护性 #7：业务失败返回结构、不 throw）→ 400 + 可读文案
+// 模块层返回 fail(code)（业务失败返回结构、不 throw）→ 400 + 可读文案
 const failTo400 = (r) => ({
   status: 400,
   body: { ok: false, code: r.code, message: r.message || bizMessage(r.code) },
@@ -325,8 +398,10 @@ const ROUTES = [
     run: (c) => ({ status: 200, body: { ok: true, discarded: requireEmail().discardDraft(c.params[0]) } }),
   },
   {
+    // inbox 是 async（要等 provider.list）：必须 await 后再喂给 okOr400，
+    // 否则拿到的是一个 Promise —— 恒 400 + 空对象。
     method: 'GET', re: /^\/api\/email\/inbox$/, body: false,
-    run: (c) => okOr400(requireEmail().inbox({ limit: c.query.get('limit') })),
+    run: async (c) => okOr400(await requireEmail().inbox({ limit: c.query.get('limit') })),
   },
   {
     method: 'GET', re: /^\/api\/email\/audit$/, body: false,
@@ -433,7 +508,7 @@ async function handle(req, res) {
   }
 
   /* ---- SSE 连接：ticket 就是这张长连接的凭据（EventSource 带不了 Authorization 头），
-   * 必须先于通用 Bearer 鉴权处理；ticket 本身短时效、一次性（审查 低危 #18） ---- */
+   * 必须先于通用 Bearer 鉴权处理；ticket 本身短时效、一次性 ---- */
   if (req.method === 'GET' && url.pathname === '/api/events') {
     if (!consumeTicket(url.searchParams.get('ticket'))) {
       return sendJSON(res, 401, {
@@ -468,15 +543,23 @@ async function handle(req, res) {
     });
     return sendJSON(res, out.status, out.body);
   } catch (e) {
-    // 统一错误映射：业务码白名单按 400/503，其余 500 + 通用文案（审查 低危 #17）
+    // 统一错误映射：业务码白名单按 400/503，其余 500 + 通用文案
     const code = String((e && e.message) || e);
+    /* body 超限：readBody 只暂停读取、不断连接，这里必须先把 413 完整写回去，
+     * 再关连接 —— 顺序反了客户端只会看到 ECONNRESET，拿不到「请求体太大了」这句提示。 */
+    if (code === 'BODY_TOO_LARGE') {
+      res.setHeader('Connection', 'close');
+      return sendJSON(res, 413, { ok: false, code: code, message: bizMessage(code) }, () => {
+        try { req.destroy(); } catch (_) {}
+      });
+    }
     if (NOT_READY_CODES.has(code)) {
       return sendJSON(res, 503, { ok: false, code: code, message: '本地服务模块还没就绪，请稍后重试或重启本地服务。' });
     }
     if (BIZ_CODES.has(code) || /^CRON_OUT_OF_RANGE:/.test(code)) {
       return sendJSON(res, 400, { ok: false, code: code, message: bizMessage(code) });
     }
-    // 其余（SQLite 约束名、系统错误…）：内部细节不外泄，统一 500 + 通用文案（审查 低危 #17）
+    // 其余（SQLite 约束名、系统错误…）：内部细节不外泄，统一 500 + 通用文案
     log('error', 'unhandled', code);
     return sendJSON(res, 500, { ok: false, code: 'INTERNAL', message: '服务内部错误' });
   }
@@ -523,6 +606,7 @@ function main() {
   if (!acquireLock()) {
     console.error('✖ 已有另一个 sidecar 实例在运行（锁文件：' + LOCK_PATH + '）。');
     console.error('  本项目按「单进程」设计，请先关闭它再启动，避免重复触发。');
+    console.error('  若确认没有实例在跑（上次异常退出留下的陈旧锁），删除该文件后重试。');
     process.exit(1);
   }
 
@@ -569,7 +653,7 @@ function main() {
     log('info', 'shutting down');
     try { scheduler && scheduler.stop(); } catch (_) {}
     try { closeAll(); } catch (_) {}
-    // in-flight 响应要收完再退出（审查 中危 #15）：close 后立刻 exit 会把正在写的响应截断；
+    // in-flight 响应要收完再退出：close 后立刻 exit 会把正在写的响应截断；
     // keep-alive 连接可能拖住 close，3 秒还没关完就强退，避免挂死
     let exited = false;
     const done = () => {
@@ -587,10 +671,21 @@ function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   process.on('exit', releaseLock);
-  // 兜底（审查 中危 #15）：一次未捕获异常不该让进程退出、触发器停摆到人工重启——记日志、继续跑
-  process.on('uncaughtException', e => {
-    log('error', 'uncaughtException', String((e && e.stack) || e));
-  });
+
+  /* 兜底：未捕获异常之后，DB 连接与定时器状态都不可信——继续跑等于「触发可能跑两遍 +
+   * 之后的日志都在说谎」。按不可恢复处理：记栈 → 停调度 → 关 SSE → 关库 → 放锁 → 退出（码 1），
+   * 由启动脚本 / 用户决定是否重启。日志只记栈，绝不记 token 与邮件正文。 */
+  const fatal = (kind, e) => {
+    log('error', kind, String((e && e.stack) || e));
+    try { scheduler && scheduler.stop(); } catch (_) {}
+    try { closeAll(); } catch (_) {}
+    try { closeDb(); } catch (_) {}
+    releaseLock();
+    process.exit(1);
+  };
+  process.on('uncaughtException', e => fatal('uncaughtException', e));
+  // 未处理的 Promise 拒绝只记日志：它通常来自一个已经失败的后台任务，进程状态未必损坏；
+  // 真坏到无法继续时，会在后续同步路径上以 uncaughtException 暴露出来（那时才走 fatal）。
   process.on('unhandledRejection', e => {
     log('error', 'unhandledRejection', String((e && e.message) || e));
   });

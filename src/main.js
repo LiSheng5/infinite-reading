@@ -5,7 +5,7 @@
  *   1. 应用层内核 core.js（建立注册表 A / 共享状态；静态 import 全部 core 模块）
  *   2. 其余 app 模块（只声明函数并入 A.reg；顶层不执行 DOM 操作）
  *   3. 各屏挂载（把 index.html 里的容器内容换成组件输出）
- *   4. 弹窗外壳（把 11 个弹窗整块搬进 Modal.svelte 的 display:contents 壳层）
+ *   4. 弹窗外壳（installShell() 把 11 个弹窗整块搬进 display:contents 壳层）
  *   5. 组合根 main.js → 事件绑定 + boot
  *   6. PWA 注册（不依赖应用层，装个帽子）
  *

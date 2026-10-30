@@ -1,5 +1,5 @@
 /*
- * src/app/shelf.js —— 书架页（UI-2）：会话列表 + 搜索 + 自动标题 + 新建弹层
+ * src/app/shelf.js —— 书架页：会话列表 + 搜索 + 自动标题 + 新建弹层
  *
  * - renderShelf：只读索引（不再对每个故事 loadStory），按 updatedAt 分组吸顶列表
  * - 「⋯」菜单：重命名 / 重新生成标题 / 导出 / 删除
@@ -12,11 +12,11 @@ import { Nav } from '../ui/navigation.js';
 import { ChatProviders } from '../core/providers.ts';
 import { Search } from '../core/search.ts';
 import { shelf } from '../screens/shelf/shelf.svelte.js';
-import { A } from './core.js';
+import { A, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, toast, irConfirm, openModal, fmtTime, motionLevel, saveAll, resolveSub } = A;
+  const { $, Store, MODE_LABELS, irConfirm, openModal, fmtTime, motionLevel, resolveSub, reportBackgroundFailure, reportUserFailure } = A;
 
   /* ================= 小工具 ================= */
 
@@ -41,7 +41,7 @@ import { A } from './core.js';
 
   function relTime(ts) {
     if (!ts) return '';
-    // 时钟回拨 / 未来时间戳会给出负差值（显示「-3 分钟前」）：负值与非法值一律归「刚刚」（审查 低危 #20）
+    // 时钟回拨 / 未来时间戳会给出负差值（显示「-3 分钟前」）：负值与非法值一律归「刚刚」
     let diff = Date.now() - ts;
     if (!Number.isFinite(diff) || diff < 0) diff = 0;
     if (diff < 60000) return '刚刚';
@@ -63,7 +63,7 @@ import { A } from './core.js';
     return 'older';
   }
 
-  // 阶段 5 第 3 步：屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
+  // 阶段 5：屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
   function shelfVisible() {
     return Nav.screenVisible('shelf');
   }
@@ -72,12 +72,12 @@ import { A } from './core.js';
     return document.querySelector('.shelf-row[data-story-id="' + escAttr(storyId) + '"] .shelf-row-title');
   }
 
-  /* ================= 列表渲染（只读索引，§3.1） ================= */
+  /* ================= 列表渲染（只读索引） ================= */
 
   function renderShelf() {
     const list = $('#shelf-list');
     if (!list) return;
-    // 旧索引条目一次性补齐（幂等；§3.1 迁移）
+    // 旧索引条目一次性补齐（幂等；迁移）
     try { Store.ensureIndexComplete(); } catch (_) { /* 迁移失败不拦渲染 */ }
     // 行 DOM 由书架组件管：这里只推视图模型（分组 / 行错峰 / 「更早」截断），不再拼 DOM
     const index = Store.listStories();   // 已按 updatedAt 新 → 旧
@@ -120,7 +120,7 @@ import { A } from './core.js';
       current: it.id === currentId,
       rowIn: rowIndex < 14,
       delay: rowIndex < 14 ? Math.min(rowIndex * ROW_STAGGER_STEP, ROW_STAGGER_MAX) + 'ms' : '',
-      // 导入档案的 thumb 不可信（审查 中危 #12）：白名单只放行 data:/blob:（safeThumb），
+      // 导入档案的 thumb 不可信：白名单只放行 data:/blob:（safeThumb），
       // 组件拼 url() 时再经 JSON.stringify 转义——与旧 rowOf / models.js setStageArt 同口径
       thumb: Store.safeThumb(it.thumb),
       icon: MODE_ICONS[it.mode] || MODE_ICONS.choice,
@@ -147,7 +147,7 @@ import { A } from './core.js';
     renderShelf();
   }
 
-  /* ================= 「⋯」菜单（§2.2） ================= */
+  /* ================= 「⋯」菜单 ================= */
 
   function closeRowMenus() {
     document.querySelectorAll('.row-menu').forEach(el => el.remove());
@@ -171,7 +171,7 @@ import { A } from './core.js';
     };
     add('重命名', () => renameStory(it.id));
     add('重新生成标题', () => regenTitle(it.id));
-    // UI-4 §4.1：书架行「⋯」→「分支」：先打开该对话再叠分支页
+    // 书架行「⋯」→「分支」：先打开该对话再叠分支页
     add('分支', () => {
       if (S.story && S.story.id === it.id) { A.openBranch({}); return; }
       openStory(it.id);
@@ -192,7 +192,7 @@ import { A } from './core.js';
     const st2 = Store.loadStory(id);
     if (!st2) return;
     st2.title = String(t).trim() || st2.title;
-    st2.titleAuto = false;   // 手动改名 → 不再被自动覆盖（§3.2）
+    st2.titleAuto = false;   // 手动改名 → 不再被自动覆盖
     Store.saveStory(st2);
     renderShelf();
     toast('已重命名');
@@ -207,7 +207,7 @@ import { A } from './core.js';
     toast('已删除');
   }
 
-  /* ================= 自动标题（§3.3） ================= */
+  /* ================= 自动标题 ================= */
 
   const titleBusy = new Set();   // 每个故事同时只允许一个标题任务
 
@@ -259,7 +259,7 @@ import { A } from './core.js';
 
     const writeBack = (title) => {
       if (!title) { titleBusy.delete(id); return; }
-      // 竞态守卫（审查 中危 #14）：回合正在写盘（S.busy）时不能 saveAll——会把半截回合的
+      // 竞态守卫：回合正在写盘（S.busy）时不能 saveAll——会把半截回合的
       // 中间态一起落盘。稍后重试；60 秒仍未收工就放弃这次（保留现有标题，titleAuto 仍为真）。
       if (S.busy && S.story && S.story.id === id) {
         if (Date.now() - startedAt > 60000) { titleBusy.delete(id); return; }
@@ -288,8 +288,10 @@ import { A } from './core.js';
         const cfg = resolveSub('scribe');
         const msgs = Titles.buildPrompt(story.messages || [], story.mode);
         raw = await ChatProviders[cfg.provider].chat(cfg, msgs);
-      } catch (_) {
-        titleBusy.delete(id);   // 失败：静默，保留现有标题（不 toast、不计次）
+      } catch (e) {
+        // 纯后台降级：不弹 toast、不计次（保留现有标题），但不再静默——console 留原因
+        reportBackgroundFailure('scribe', e, { note: '自动标题生成失败（保留现有标题）' });
+        titleBusy.delete(id);
         return;
       }
       writeBack(Titles.sanitize(raw, '') || Titles.fallback(story));
@@ -304,11 +306,13 @@ import { A } from './core.js';
     titleBusy.add(id);
     let title = '';
     try {
+      let modelErr = null;
       if (titleModelUsable()) {
         const cfg = resolveSub('scribe');
         const msgs = Titles.buildPrompt(st.messages || [], st.mode);
         let raw = '';
-        try { raw = await ChatProviders[cfg.provider].chat(cfg, msgs); } catch (_) { raw = ''; }
+        try { raw = await ChatProviders[cfg.provider].chat(cfg, msgs); }
+        catch (e) { modelErr = e; raw = ''; }
         title = Titles.sanitize(raw, '');
       }
       if (!title) title = Titles.fallback(st);
@@ -317,28 +321,36 @@ import { A } from './core.js';
         Store.saveStory(st);
         renderShelf();
         typewriteTitle(id, title);
-        toast('标题已更新');
+        // 用户可行动的失败（这里是用户点「重新生成」触发的）：错误样式 + 下一步；
+        // 重试入口就是书架行菜单里同一个「重新生成标题」，不另弹按钮
+        if (modelErr) {
+          reportUserFailure('生成标题', modelErr, {
+            message: '标题模型请求失败，已用本地规则生成；可再点「重新生成标题」重试',
+          });
+        } else {
+          toast('标题已更新');
+        }
       }
     } finally {
       titleBusy.delete(id);
     }
   }
 
-  /* ================= 搜索（§3.4 / §3.5） ================= */
+  /* ================= 搜索 ================= */
 
   const searchStats = { buildMs: 0, lastQueryMs: 0, docs: 0, built: false };
   let searchBuilding = false;
   let searchTimer = null;
   let activeIdx = -1;
 
-  // 首次聚焦搜索框才惰性构建（§3.4）：分批让出主线程，建完才允许查询
+  // 首次聚焦搜索框才惰性构建：分批让出主线程，建完才允许查询
   function ensureSearchIndex() {
     if (searchStats.built || searchBuilding) return;
     searchBuilding = true;
     const items = Store.listStories();
     const t0 = Date.now();
     let i = 0;
-    const BATCH = 5;   // 每批 ~5 个故事，setTimeout 0 让出主线程（§6）
+    const BATCH = 5;   // 每批 ~5 个故事，setTimeout 0 让出主线程
     const step = () => {
       const end = Math.min(items.length, i + BATCH);
       for (; i < end; i++) {
@@ -451,10 +463,10 @@ import { A } from './core.js';
     if (focus) input.focus();
   }
 
-  /* ================= 打开对话（§3.7） ================= */
+  /* ================= 打开对话 ================= */
 
   function openStory(id, opts) {
-    if (S.story && S.story.id !== id) A.stopVideoWaiting();   // §7：切故事停本地轮询（pending 留在原档）
+    if (S.story && S.story.id !== id) A.stopVideoWaiting();   // 切故事停本地轮询（pending 留在原档）
     const s = Store.loadStory(id);
     if (!s) { toast('没有找到这个存档', true); return; }
     S.story = s;
@@ -462,14 +474,14 @@ import { A } from './core.js';
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     Store.setCurrentId(S.story.id);
     A.enterGame(false);
-    A.resumePendingVideos();   // §7：回到该故事，续上未出结果的生视频任务（不重复提交）
-    // UI-4 §6：focusNodeId（兼容 UI-2 的 opts.nid）——搜索结果直接跳到命中的节点
+    A.resumePendingVideos();   // 回到该故事，续上未出结果的生视频任务（不重复提交）
+    // focusNodeId（兼容的 opts.nid）——搜索结果直接跳到命中的节点
     const focus = (opts && (opts.focusNodeId || opts.nid)) || null;
     if (focus) scrollToHit(focus);
   }
 
-  // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮（UI-2 已做）；
-  // 否则 → 打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续，§6）
+  // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮（已做）；
+  // 否则 → 打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续）
   function scrollToHit(nid) {
     setTimeout(() => {
       const sel = '#chat-scroll [data-nid="' + escAttr(nid) + '"]';
@@ -485,7 +497,7 @@ import { A } from './core.js';
     }, 80);   // 等 enterGame 把聊天区渲染出来
   }
 
-  /* ================= 键盘（§2.4） ================= */
+  /* ================= 键盘 ================= */
 
   function isTypingTarget(t) {
     if (!t) return false;
@@ -558,7 +570,6 @@ import { A } from './core.js';
     maybeAutoTitle,
     regenTitle,
     initShelf,
-    searchStats,
     // 阶段 4 屏 3：Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断——
     // 两个入口登记给 A（函数体零改动 / 与旧按钮同语义），组件经 A() 调用
     openRowMenu,

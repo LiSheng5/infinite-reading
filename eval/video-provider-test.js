@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * eval/video-provider-test.js —— 生视频适配器单测（js/providers.js 的 VideoProviders['minimax-video']）
+ * eval/video-provider-test.js —— 生视频适配器单测（src/core/providers.ts 的 VideoProviders['minimax-video']）
  *
- * 不开浏览器、不联网：用「假 fetch」验 MiniMax V2 的请求形状与状态机（任务书 v0.12.0 §4/§12）：
+ * 不开浏览器、不联网：用「假 fetch」验 MiniMax V2 的请求形状与状态机：
  *   - t2v / i2v 的 body 组装：ratio 规则（文生必填非 adaptive；图生一律 adaptive）、
- *     first_frame 角色、duration 以整数下发；时长 / 分辨率 / 比例以面板控件为唯一源（审查 三·2），
+ *     first_frame 角色、duration 以整数下发；时长 / 分辨率 / 比例以面板控件为唯一源，
  *     extraParams 只补其它键、同名这三键被控件覆盖；
  *   - generate：queued → running → succeeded；hooks.onTaskId / onStatus；
  *   - failed / cancelled / expired 直接抛（带 task.error 原文）；
  *   - 超时（VIDEO_TOTAL_TIMEOUT_MS）；提交阶段 TypeError（CORS 提示、不重试）；
  *   - 轮询连续 3 次网络错误才判失败（单次容忍）；
+ *   - ：单次请求的 fetchWithTimeout（挂死 → TimeoutError、外部取消 → AbortError）与
+ *     「本地取消能切断在途轮询」；提交 / 轮询都带 signal；
  *   - test()：只读列任务探测，绝不提交生成任务。
  *
  * 用法：node eval/video-provider-test.js
@@ -18,7 +20,9 @@
 const path = require('path');
 
 global.window = global;
-const V = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts')).VideoProviders;
+const P = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts'));
+const V = P.VideoProviders;
+const fetchWithTimeout = P.fetchWithTimeout;
 const mm = V && V['minimax-video'];
 if (!mm) {
   console.error('加载失败：VideoProviders["minimax-video"] 缺失');
@@ -47,10 +51,26 @@ function installFetch(handler) {
       method: (init && init.method) || 'GET',
       headers: (init && init.headers) || {},
       body: init && init.body ? JSON.parse(init.body) : null,
+      signal: (init && init.signal) || null,
     };
     calls.push(req);
     return Promise.resolve(handler(req));
   };
+}
+
+// 假 fetch 的「被 abort」：按浏览器口径 reject 一个 name=AbortError 的错误
+function abortError() {
+  const e = new Error('The operation was aborted');
+  e.name = 'AbortError';
+  return e;
+}
+
+// 用例守卫：真挂住（不该挂的 await 没返回）就直接失败，别让整轮静默退出码 0
+function guard(p, ms) {
+  return Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('用例超时：' + ms + 'ms 内没有返回')), ms)),
+  ]);
 }
 
 const cfg = {
@@ -74,8 +94,9 @@ const cfg = {
   check('t2v：默认 duration=5 / resolution=768P，duration 为整数',
     req.body.duration === 5 && typeof req.body.duration === 'number' && req.body.resolution === '768P',
     req.body.duration + '/' + typeof req.body.duration + '/' + req.body.resolution);
+  check('t2v：提交请求带 signal（可超时 / 可取消）', !!req.signal, String(req.signal));
 
-  /* ---------- extraParams 补其它键；时长 / 分辨率 / 比例以面板控件为唯一源（审查 三·2） ---------- */
+  /* ---------- extraParams 补其它键；时长 / 分辨率 / 比例以面板控件为唯一源 ---------- */
   installFetch(() => jsonRes(200, { task_id: 't-2' }));
   await mm.submit(Object.assign({}, cfg, { extraParams: 'duration=7, resolution=2K, ratio=9:16, watermark=false' }),
     { prompt: 'x', mode: 't2v' });
@@ -97,7 +118,7 @@ const cfg = {
   installFetch(() => jsonRes(200, { task_id: 't-2c' }));
   await mm.submit(Object.assign({}, cfg, { duration: 10, extraParams: 'duration=6' }),
     { prompt: 'x', mode: 't2v' });
-  check('同名时以独立控件为准（改下拉框必然生效，审查 三·2）', calls[0].body.duration === 10, calls[0].body.duration);
+  check('同名时以独立控件为准（改下拉框必然生效）', calls[0].body.duration === 10, calls[0].body.duration);
 
   installFetch(() => jsonRes(200, { task_id: 't-2d' }));
   await mm.submit(Object.assign({}, cfg, { duration: 3, ratio: '9:16' }),
@@ -212,6 +233,60 @@ const cfg = {
     try { await mm.generate(cfg, { prompt: 'x', mode: 't2v' }, { pollMs: 1, totalTimeoutMs: 5000 }); }
     catch (e) { threw = e.message; }
     check('轮询连续 3 次失败才判失败', n === 3 && !!threw, '轮询次数 ' + n + ' / ' + threw);
+  }
+
+  /* ---------- ：单次请求超时（fetchWithTimeout）与外部取消 ---------- */
+  {
+    // 假 fetch 永远不「自发」返回，只服从 abort（与浏览器 fetch 一致）：
+    // 超时由 fetchWithTimeout 的计时器 abort 触发，再按 timedOut 转成 TimeoutError
+    global.fetch = (url, init) => new Promise((_, reject) => {
+      const s = init && init.signal;
+      if (!s) return;                                  // 没信号就永远挂着
+      if (s.aborted) { reject(abortError()); return; }
+      s.addEventListener('abort', () => reject(abortError()), { once: true });
+    });
+    let err = null;
+    try { await guard(fetchWithTimeout('https://api.minimax.io/slow', {}, 20), 2000); } catch (e) { err = e; }
+    check('超时：挂死请求按传入的 ms 抛 TimeoutError（带 timeoutMs）',
+      !!err && err.name === 'TimeoutError' && err.timeoutMs === 20,
+      err ? err.name + ' / ' + err.message : '没有抛错');
+
+    // 外部取消：立刻抛 AbortError（上层据此静默收尾），不会被误判成超时
+    global.fetch = (url, init) => new Promise((_, reject) => {
+      const s = init && init.signal;
+      if (!s) return;                                  // 没信号就永远挂着（本用例必须带信号）
+      if (s.aborted) { reject(abortError()); return; }
+      s.addEventListener('abort', () => reject(abortError()), { once: true });
+    });
+    const ctrl = new AbortController();
+    const p = fetchWithTimeout('https://api.minimax.io/cancel', { signal: ctrl.signal }, 5000);
+    ctrl.abort();
+    let err2 = null;
+    try { await guard(p, 2000); } catch (e) { err2 = e; }
+    check('取消：外部 signal abort → 抛 AbortError（不误判为超时）',
+      !!err2 && err2.name === 'AbortError', err2 && err2.name);
+  }
+
+  /* ---------- ：本地取消能切断在途轮询（不必等一次往返） ---------- */
+  {
+    const ctrl = new AbortController();
+    let polls = 0;
+    global.fetch = (url, init) => {
+      if (((init && init.method) || 'GET') === 'POST') return Promise.resolve(jsonRes(200, { task_id: 'tg-6' }));
+      polls += 1;
+      return new Promise((_, reject) => {
+        const s = init && init.signal;
+        if (!s) return;                                // 没信号就永远挂着：正好验证「取消能立刻收尾」
+        s.addEventListener('abort', () => reject(abortError()), { once: true });
+      });
+    };
+    const p = mm.generate(cfg, { prompt: 'x', mode: 't2v' }, { pollMs: 1, totalTimeoutMs: 60000, signal: ctrl.signal });
+    await new Promise(r => setTimeout(r, 10));
+    ctrl.abort();
+    let name = '', msg = '';
+    try { await guard(p, 2000); } catch (e) { name = e.name; msg = e.message; }
+    check('generate：本地取消切断在途轮询 → AbortError（不按网络错重试）',
+      name === 'AbortError' && polls === 1, name + ' / 轮询 ' + polls + ' 次 / ' + msg);
   }
 
   /* ---------- test()：只读列任务，不提交生成 ---------- */

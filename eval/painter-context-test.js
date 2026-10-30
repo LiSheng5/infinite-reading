@@ -1,7 +1,7 @@
 /*
- * eval/painter-context-test.js —— 画师上下文规则（P-1 §4，Node、不联网）
+ * eval/painter-context-test.js —— 画师上下文规则（Node、不联网）
  *
- * 画师每次调用都隔离、用完即弃；scene 模式的输入只能包含（§4）：
+ * 画师每次调用都隔离、用完即弃；scene 模式的输入只能包含：
  *   [system]  PAINTER_SYSTEM
  *   [system]  [画风锚]（设定卡优先，未锚定走降级文案）
  *   [system]  [最近两张图]（alt + prompt）
@@ -11,7 +11,7 @@
  *   [user]    [画面参考] + [画风要求]
  * 不得出现：更早的对话、世界卡全文、摘要栈、剧情规则提示词、用户画像、记忆条目。
  *
- * 另含静态断言（§6）：turn.js / round.js 源码里不再出现对 enqueueImage 的调用。
+ * 另含静态断言：turn.js / round.js 源码里不再出现对 enqueueImage 的调用。
  *
  * 用法：node eval/painter-context-test.js
  */
@@ -197,7 +197,7 @@ console.log('[5] chat（工作台）模式保持不动：[最近剧情] 仍是�
     'chat 模式 [最近剧情] 保持旁白口径（不带玩家行动标记）');
 }
 
-console.log('[6] video 模式（§6）：隔离清单同 scene；图生带源画面、文生带画风要求');
+console.log('[6] video 模式：隔离清单同 scene；图生带源画面、文生带画风要求');
 {
   const story = buildStory();
   // 图生（i2v）：只写动起来的部分——输入带源图 alt + promptRaw
@@ -216,7 +216,7 @@ console.log('[6] video 模式（§6）：隔离清单同 scene；图生带源画
   const i2vPlot = blockOf(i2v, '[最近剧情]');
   ok(i2vPlot.indexOf('T4ACTION') >= 0 && !/T[123](ACTION|NARR)/.test(i2vPlot),
     'i2v [最近剧情] 只含最近 3 回合');
-  // 隔离清单与 scene 相同：世界卡 / 摘要栈 / 画像一律不进（§6 上下文隔离规则不变）
+  // 隔离清单与 scene 相同：世界卡 / 摘要栈 / 画像一律不进（上下文隔离规则不变）
   ok(i2vAll.indexOf('WORLDPLACE特征串') < 0 && i2vAll.indexOf('SUMMARYSTACK特征串') < 0
     && i2vAll.indexOf('PROFILE特征串') < 0 && i2vAll.indexOf('每次回复必须且只能输出一个 JSON 对象') < 0,
     'i2v 不含世界卡 / 摘要栈 / 画像 / 剧情规则');
@@ -233,6 +233,49 @@ console.log('[6] video 模式（§6）：隔离清单同 scene；图生带源画
   ok(t2vAll.indexOf('SRCALT特征串') < 0, 't2v 不带源画面块');
   ok(t2vAll.indexOf('WORLDPLACE特征串') < 0 && t2vAll.indexOf('SUMMARYSTACK特征串') < 0,
     't2v 同样遵守隔离清单');
+}
+
+console.log('[6b] 锚定三种任务（各自独立 builder）：styles / card / cardchat 的系统提示与块不串档');
+{
+  const story = buildStory();
+  // styles：出候选——带批次 + 已试方向，末条是固定的候选生成话术
+  const st = C.assemblePainter(story, { mode: 'styles', batch: 2, tried: ['TRIED-A特征串', 'TRIED-B特征串'] });
+  ok(st[0].content === C.PAINTER_STYLES_SYSTEM, 'styles 首条 = PAINTER_STYLES_SYSTEM');
+  ok(blockOf(st, '[锚定任务]') === '[锚定任务]\nstyles', '[锚定任务] = styles');
+  ok(blockOf(st, '[锚定批次]') === '[锚定批次]\n2', '[锚定批次] 取 opts.batch（实得 ' + JSON.stringify(blockOf(st, '[锚定批次]')) + '）');
+  ok(blockOf(st, '[已试过的方向]').indexOf('TRIED-A特征串') >= 0, '[已试过的方向] 带 tried');
+  ok(st[st.length - 1].role === 'user' && st[st.length - 1].content.indexOf('4 组画风关键词') >= 0,
+    '末条 = 固定的候选生成话术');
+  ok(st.map(m => m.content).join('\n').indexOf('[人物]') < 0, 'styles 不带 [人物] 块');
+
+  // card：按选定画风起草设定卡——带 [选定画风]，不带 [当前设定卡]
+  const card = C.assemblePainter(story, {
+    mode: 'card',
+    picked: { keywords: ['PICKED-KW特征串', 'ink'], alt: 'PICKED-ALT特征串', promptEn: 'PICKED-EN特征串' },
+  });
+  const cardAll = card.map(m => m.content).join('\n');
+  ok(card[0].content === C.PAINTER_CARD_SYSTEM, 'card 首条 = PAINTER_CARD_SYSTEM');
+  ok(blockOf(card, '[锚定任务]') === '[锚定任务]\ncard', '[锚定任务] = card');
+  ok(blockOf(card, '[人物]').indexOf('WORLDCHAR特征串') >= 0, 'card 带 [人物]（取世界卡 characters）');
+  const picked = blockOf(card, '[选定画风]');
+  ok(picked.indexOf('PICKED-KW特征串') >= 0 && picked.indexOf('PICKED-ALT特征串') >= 0
+    && picked.indexOf('PICKED-EN特征串') >= 0, '[选定画风] 带关键词 / 感觉 / 试画提示词');
+  ok(card[card.length - 1].content.indexOf('请按选定画风写视觉设定卡') >= 0, '末条 = 起草设定卡话术');
+  ok(cardAll.indexOf('[当前设定卡]') < 0, 'card 不带 [当前设定卡]');
+
+  // cardchat：在现有卡上说着改——带 [当前设定卡] 与用户原话，不带 [选定画风]
+  const chat = C.assemblePainter(story, {
+    mode: 'cardchat', currentCard: { styleKeywords: ['CURRENTCARD特征串'] }, userText: 'USERSAY特征串',
+  });
+  ok(blockOf(chat, '[锚定任务]') === '[锚定任务]\ncardchat', '[锚定任务] = cardchat');
+  ok(blockOf(chat, '[当前设定卡]').indexOf('CURRENTCARD特征串') >= 0, 'cardchat 带 [当前设定卡]');
+  ok(chat[chat.length - 1].content === 'USERSAY特征串', '末条 = 用户原话');
+  ok(chat.map(m => m.content).join('\n').indexOf('[选定画风]') < 0, 'cardchat 不带 [选定画风]');
+
+  // 分发默认：未知 mode 仍按 scene 处理（与拆分前一致），不抛错
+  const fallback = C.assemblePainter(story, { mode: 'no-such-mode', sceneRef: 'FALLBACKSCENE特征串' });
+  ok(fallback[0].content === C.PAINTER_SYSTEM
+    && blockOf(fallback, '[画面参考]').indexOf('FALLBACKSCENE特征串') >= 0, '未知 mode 回退 scene 口径');
 }
 
 console.log('[7] 静态断言：turn.js / round.js 不再调用 enqueueImage（含 maybeEnqueueImage）');

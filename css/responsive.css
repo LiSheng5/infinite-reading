@@ -1,0 +1,78 @@
+/* ==================== 窄屏 / 触屏（全局断点兜底） ====================
+ * 跨屏的断点兜底与安全区。断点标尺见 style.css 文件头；各屏自己的断点留在本屏分片里（就地可读，且不动层叠顺序）。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 窄屏 / 触屏 ==================== */
+@media (max-width: 900px) {
+  .hud { padding: 0 8px; gap: 4px; }
+  .ui-btn:where(.hud) { padding: 0 8px; }
+  .chat-scroll { padding: 20px 16px 14px; gap: 18px; }
+  .bubble { font-size: 17px; line-height: 1.95; }
+  .composer { padding: 8px 12px 12px; }
+  .seg-btn { padding: 0 8px; font-size: 12px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .modal-body { padding: 16px; }
+  .modal-head, .modal-foot { padding-left: 16px; padding-right: 16px; }
+  .shelf-row { gap: 12px; padding: 12px 6px 12px 9px; }
+  .shelf-head { gap: 10px; }
+  .shelf-search { flex-basis: 100%; max-width: none; }   /* 窄屏搜索框独占一行 */
+  .shelf-actions { margin-left: 0; }
+  .title { font-size: 30px; }
+  #screen-shelf { padding: 28px 14px 20px; }
+  .tray-btn { max-width: 70vw; }
+}
+@media (max-width: 480px) {
+  .hud-text { font-size: 12px; padding: 0 5px; }
+  .mode-chip { font-size: 10px; padding: 0 6px; }
+  .bubble { font-size: 16.5px; }
+  .input-row .ui-btn:where(:not(.hud, .mini, .icon-only)) { padding: 0 12px; }
+  .seg-btn { padding: 0 7px; }
+}
+/* 触屏：所有可点目标不小于 44px，舞台按钮常显 */
+@media (hover: none) {
+  .ui-btn, .tool-btn, .seg-btn, .menu-item, .choice-btn, .tray-btn { min-height: 44px; }
+  .seg-btn { min-width: 44px; }
+  /* 纯图标按钮跟着变成 44×44 方块（只抬 min-height 会变成 40×44 的竖条） */
+  .ui-btn.icon-only { width: 44px; height: 44px; }
+  .stage-btn, .stage-exit { width: 44px; height: 44px; }
+  .composer-tools { min-height: 44px; }
+}
+/* 掐掉 iOS 上输入框聚焦时的自动放大 */
+@media (max-width: 720px) {
+  input, select, textarea { font-size: 16px; }
+}
+
+/* 「＋ 新建」弹层：≤720px 底部弹层，其余居中弹窗（Esc / 点遮罩关闭走弹窗栈） */
+@media (max-width: 720px) {
+  #modal-new {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  #modal-new .modal-card {
+    width: 100%;
+    max-width: none;
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+    max-height: 86vh;
+  }
+  #modal-new .modal-body {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+  /* 触屏可点目标不小于 40px（A.6 布局验收） */
+  .shelf-row-more, #shelf-search-clear { min-width: 40px; min-height: 40px; }
+}
+
+/* 刘海屏 / 手势条：viewport-fit=cover 之后，把内容从安全区里让出来 */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .hud {
+    min-height: calc(44px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+  .composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .modal-foot { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .shelf-wrap { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+}

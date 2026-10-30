@@ -14,20 +14,12 @@
  * 不联网、不落盘（内存 SQLite；支付渠道用 mock / 计数桩）。
  * 用法：node eval/payment-test.js
  */
-const path = require('path');
-const { pathToFileURL } = require('url');
-
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
-function localMs(y, mo, d, h, mi) { return new Date(y, mo - 1, d, h, mi, 0, 0).getTime(); }
+const { check, run, loadEsm, localMs } = require('./_harness.js');
 
 async function main() {
-  const mod = f => pathToFileURL(path.join(__dirname, '..', 'sidecar', f)).href;
-  const { evaluatePolicy, PAYMENT_CODES } = await import(mod('payment-policy.mjs'));
-  const { createPayment, createPaymentProviders } = await import(mod('payment.mjs'));
-  const { openDbAt } = await import(mod('db.mjs'));
+  const { evaluatePolicy, PAYMENT_CODES } = await loadEsm('payment-policy.mjs');
+  const { createPayment, createPaymentProviders } = await loadEsm('payment.mjs');
+  const { openDbAt } = await loadEsm('db.mjs');
 
   let VNOW = localMs(2026, 1, 5, 12, 0);
 
@@ -129,7 +121,7 @@ async function main() {
     return { db: db, cfg: cfg, pay: createPayment({ db: db, getConfig: () => cfg, now: () => VNOW, providers: providers }) };
   }
 
-  // 统一造一份长期授权（三层授权第一层，审查 中危 #13 起 mandate 强制）；
+  // 统一造一份长期授权（三层授权第一层，起 mandate 强制）；
   // totalLimitCents=0 = 不限总额，由单笔 / 日 / 月限额管
   function mkMandate(pay, over) {
     return pay.createMandate(Object.assign({
@@ -272,7 +264,7 @@ async function main() {
     check('授权范围：不存在 → MANDATE_NOT_FOUND', noSuch.ok === false && noSuch.code === 'MANDATE_NOT_FOUND');
   }
 
-  /* 三层授权第一层不可省略 + agent/币种服务端定（审查 中危 #13） */
+  /* 三层授权第一层不可省略 + agent/币种服务端定 */
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
     const miss = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', agent: 'a' });
@@ -293,13 +285,13 @@ async function main() {
     check('currency 与配置一致时放行，台账币种 = 配置币种',
       native.ok === true && native.transaction.currency === 'CNY', JSON.stringify(native).slice(0, 160));
 
-    // 业务失败返回 fail(code)、不 throw（审查 可维护性 #7）
+    // 业务失败返回 fail(code)、不 throw
     const bad = pay.createMandate({ totalLimitCents: 100 });
     check('授权范围：缺 agent 拒绝创建（AGENT_REQUIRED）',
       !!bad && bad.ok === false && bad.code === 'AGENT_REQUIRED', JSON.stringify(bad));
   }
 
-  /* mandateSpent 按授权关联：两份授权不串额度（审查 中危 #13） */
+  /* mandateSpent 按授权关联：两份授权不串额度 */
   {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
     const md1 = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [] });
@@ -326,15 +318,26 @@ async function main() {
     check('台账：可按 agent 过滤', pay.listTransactions({ agent: 'scribe' }).length === 1 && pay.listTransactions({ agent: 'other' }).length === 0);
   }
 
-  const pass = results.filter(r => r.hit).length;
-  for (const r of results) {
-    console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
+  /* 金额入口校验：缺 / 非法金额必须在落库前挡掉。
+   * 旧行为：策略层判 BAD_AMOUNT，但 deny 分支仍 insertTx 写 NaN → INTEGER NOT NULL
+   * 绑定/约束异常 → 500 INTERNAL（本应 400）。 */
+  {
+    const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 10000 });
+    const md = mkMandate(pay);
+    let threw = null;
+    let miss = null;
+    try {
+      miss = await pay.purchase({ merchant: 'M', category: 'C', mandateId: md.id });
+      await pay.purchase({ amountCents: 'abc', merchant: 'M', category: 'C', mandateId: md.id });
+      await pay.purchase({ amountCents: -100, merchant: 'M', category: 'C', mandateId: md.id });
+      await pay.purchase({ amountCents: 1e30, merchant: 'M', category: 'C', mandateId: md.id });
+    } catch (e) { threw = e; }
+    check('D21：缺 / 非法金额 → BAD_AMOUNT 且不抛异常（HTTP 层能拿到 400）',
+      !threw && !!miss && miss.ok === false && miss.code === 'BAD_AMOUNT', threw ? String(threw) : JSON.stringify(miss));
+    check('D21：非法金额不落台账（坏值不进 INTEGER 列）',
+      pay.listTransactions().length === 0, JSON.stringify(pay.listTransactions()));
   }
-  console.log('\n支付网关单测：' + pass + '/' + results.length + ' 通过');
-  if (pass !== results.length) process.exitCode = 1;
+
 }
 
-main().catch(e => {
-  console.error('测试异常：', e);
-  process.exitCode = 1;
-});
+run('支付网关单测', main);

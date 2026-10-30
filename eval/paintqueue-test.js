@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 作画队列单测（js/paintQueue.js，不联网、不落盘、不依赖真实定时器）
+ * 无限阅读 · 作画队列单测（src/core/paintQueue.ts，不联网、不落盘）
  *
- * 背景（任务书 §3.B）：时机出图 / 工具出图 / 手动 / 重画全走同一条严格串行的队列，
- * 画师构思也在队列里。队列是生图异步化（§3.A）的地基，正确性全在「串行推进 +
- * 锚点丢弃 + 计数可见」上——用可控的 promise 覆盖边界，不靠 sleep。
+ * 背景：时机出图 / 工具出图 / 手动 / 重画全走同一条严格串行的队列，
+ * 画师构思也在队列里。队列是生图异步化的地基，正确性全在「串行推进 +
+ * 锚点丢弃 + 计数可见」上——用可控的 promise 覆盖边界，不靠 sleep；
+ * 只有超时用例不得不等一个毫秒级的真实定时器（timeoutMs 本来就是定时器语义）。
  *
  * 覆盖：
  *   1. 严格串行：三个异步任务按入队顺序开始 / 结束
@@ -15,6 +16,10 @@
  *   5. anchor.dead 在 run 进行中置位 → run 照常跑完，返回值带 dead: true
  *   6. has(key) / size() 的变化与 onChange 回调次数 / 数值
  *   7. 同 key 重复入队由调用方用 has 拦截（队列本身不去重的约定）
+ *   8. timeoutMs：run 永不 resolve → 超时收尾 + abort 信号 + key 释放 + 队列前进；
+ *      迟到的回包被丢弃（不重复计数）
+ *   9. cancel(key)：排队中的直接摘掉（不调用 run）、进行中的 abort + 立刻收尾；
+ *      key 为空 = 取消进行中的那个；不存在的 key 返回 false
  *
  * 用法：node eval/paintqueue-test.js
  */
@@ -184,6 +189,84 @@ async function main() {
     await pb;
     check('同 key：队列本身不去重，重复入队都会执行', runs === 2 && q.size() === 0, 'runs=' + runs);
     check('同 key：重复入队后 has 语义不变（任一未结即为真）', q.has('same') === false);
+  }
+
+  /* ---------------- 8. 超时兜底：run 永不 resolve 也要放行 ---------------- */
+  {
+    const q = PQ.create({ timeoutMs: 10 });
+    let sig = null;
+    let afterRan = false;
+    const stuck = q.enqueue({ key: 'stuck', run: (s) => { sig = s; return new Promise(() => {}); } });
+    const after = q.enqueue({ key: 'after', run: () => { afterRan = true; return 'next'; } });
+    const r1 = await stuck;
+    check('超时：run 永不 resolve → 按失败收尾（timeout: true）',
+      r1.ok === false && r1.timeout === true && !!r1.error && r1.error.name === 'TimeoutError',
+      JSON.stringify({ ok: r1.ok, timeout: r1.timeout, err: r1.error && r1.error.name }));
+    check('超时：先 abort 在途请求的 signal（任务体能真的掐断 fetch）', !!sig && sig.aborted === true);
+    check('超时：key 立刻释放（同幕重画不再被永久拦截）', q.has('stuck') === false);
+    const r2 = await after;
+    check('超时：队列继续推进到下一个任务', afterRan === true && r2.ok === true && r2.value === 'next', JSON.stringify(r2));
+    check('超时：计数归零', q.size() === 0, 'size=' + q.size());
+
+    // 超时后任务体迟到 resolve：不能再改计数 / 二次 notify
+    let release = null;
+    const changes = [];
+    const q2 = PQ.create({ timeoutMs: 5, onChange: n => changes.push(n) });
+    const p2 = q2.enqueue({ run: () => new Promise(res => { release = res; }) });
+    await p2;
+    release('late');
+    await flush();
+    check('超时：迟到的回包被丢弃（不重复计数 / 不二次 notify）',
+      q2.size() === 0 && changes.join(',') === '1,0', changes.join(','));
+
+    // 单任务显式 timeoutMs: 0 = 这个任务不设超时（覆盖队列默认值）
+    const q3 = PQ.create({ timeoutMs: 1 });
+    const r3 = await q3.enqueue({ timeoutMs: 0, run: () => new Promise(res => setTimeout(() => res('slow-but-ok'), 15)) });
+    check('超时：单任务 timeoutMs: 0 覆盖队列默认值（不设闹钟）', r3.ok === true && r3.value === 'slow-but-ok', JSON.stringify(r3));
+  }
+
+  /* ---------------- 9. cancel(key)：排队中 / 进行中 ---------------- */
+  {
+    const q = PQ.create();
+    const hold = deferred();
+    let queuedRan = false;
+    const p1 = q.enqueue({ key: 'a', run: () => hold.promise });
+    const p2 = q.enqueue({ key: 'b', run: () => { queuedRan = true; return 'b'; } });
+    await flush();
+    check('cancel：排队中的任务可取消（返回 true）', q.cancel('b') === true);
+    const r2 = await p2;
+    check('cancel：排队中被取消 → 不调用 run，cancelled: true',
+      queuedRan === false && r2.cancelled === true && r2.ok === false, JSON.stringify({ ran: queuedRan, cancelled: r2.cancelled }));
+    check('cancel：取消排队任务后 key 立即释放', q.has('b') === false);
+    hold.resolve('a');
+    const r1 = await p1;
+    check('cancel：取消排队任务不影响在跑的那个', r1.ok === true && r1.value === 'a', JSON.stringify(r1));
+    check('cancel：不存在的 key → false', q.cancel('nope') === false && q.cancel('a') === false);
+  }
+
+  {
+    const q = PQ.create();
+    let sig = null;
+    let nextRan = false;
+    const p1 = q.enqueue({ key: 'run', run: (s) => { sig = s; return new Promise(() => {}); } });
+    const p2 = q.enqueue({ key: 'after', run: () => { nextRan = true; return 'x'; } });
+    await flush();
+    check('cancel：进行中的 key 命中（返回 true）', q.cancel('run') === true);
+    const r1 = await p1;
+    check('cancel：进行中被取消 → 立刻收尾，cancelled: true', r1.cancelled === true && r1.ok === false, JSON.stringify({ cancelled: r1.cancelled }));
+    check('cancel：进行中被取消 → run 的 signal 被 abort', !!sig && sig.aborted === true);
+    const r2 = await p2;
+    check('cancel：进行中取消后队列立刻推进', nextRan === true && r2.ok === true && r2.value === 'x', JSON.stringify(r2));
+    check('cancel：进行中取消后 key 释放、计数归零', q.has('run') === false && q.size() === 0, 'size=' + q.size());
+
+    // key 为空 = 取消进行中的那个
+    const q2 = PQ.create();
+    const p3 = q2.enqueue({ run: () => new Promise(() => {}) });
+    await flush();
+    check('cancel()：不传 key = 取消进行中的任务', q2.cancel() === true);
+    const r3 = await p3;
+    check('cancel()：不传 key 时同样立刻收尾并释放计数',
+      r3.cancelled === true && q2.size() === 0, JSON.stringify({ cancelled: r3.cancelled, size: q2.size() }));
   }
 }
 

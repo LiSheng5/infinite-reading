@@ -1,5 +1,5 @@
 /*
- * eval/prefs-test.js —— 设置分层纯逻辑测试（UI-3 §6，Node、不联网）
+ * eval/prefs-test.js —— 设置分层纯逻辑测试（Node、不联网）
  * 覆盖：effective / resolveChatCfg / visibleFor / sanitizePrefs / 导出剥凭证 /
  *       migrateStory 透传清洗 / migrateSettings 补 profiles / 压缩阈值随有效配置走。
  */
@@ -37,7 +37,7 @@ function baseSettings() {
 console.log('[1] effective：覆盖 / 跟随 / 各键独立');
 {
   const s = baseSettings();
-  // 缺省跟随全局（P-1 v0.11.0：trigger（出图时机）已下线，effective 不再有该键）
+  // 缺省跟随全局（v0.11.0：trigger（出图时机）已下线，effective 不再有该键）
   eq(P.effective(s, { prefs: {} }, 'choices'), 'tray', '无 prefs 时 choices 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'showReasoning'), true, '无 prefs 时 showReasoning 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'ui.fontScale'), 'md', '无 prefs 时字号跟随全局默认');
@@ -98,7 +98,7 @@ console.log('[3] visibleFor：三种模式的可见控件集合');
   ok(choice.has('model') && choice.has('choices') && choice.has('layout') && choice.has('showReasoning'),
     '剧情：模型 / 选项显示 / 布局 / 思考过程');
   ok(choice.has('style') && choice.has('mode'), '剧情：画风入口 + 推进模式');
-  ok(!choice.has('trigger'), '剧情：不含出图时机（P-1 下线）');
+  ok(!choice.has('trigger'), '剧情：不含出图时机（下线）');
   ok(!choice.has('tools') && !choice.has('schedule'), '剧情：不含工具开关 / 定时主动开关');
   ok(chat.has('model') && chat.has('tools') && chat.has('layout') && chat.has('showReasoning'), '智能体：模型 / 工具开关 / 布局 / 思考过程');
   ok(!chat.has('trigger') && !chat.has('choices'), '智能体：不含出图时机 / 选项显示');
@@ -132,7 +132,7 @@ console.log('[4] sanitizePrefs：丢未知键 / 剥凭证 / profileId 校验');
   ok(!('evil' in clean.ui), 'ui 深层未知键丢弃（连同其中的 baseUrl / key）');
   ok(!('fontScale' in clean.ui) || clean.ui.fontScale !== 'huge', 'ui.fontScale 非法值丢弃');
   eq(clean.ui.splitRatio, 0.72, 'ui.splitRatio 夹到 0.72');
-  // P-1（v0.11.0）：trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
+  // v0.11.0：trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
   ok(!('trigger' in clean), 'trigger 不在白名单 → 被丢弃（旧包导入不报错）');
   {
     let threw = false;
@@ -251,7 +251,7 @@ console.log('[8] 压缩阈值：不同 profile 的 contextWindow → 不同 70% 
   eq(C.compressThreshold(1000), 700, 'compressThreshold(1000) = 700');
 }
 
-console.log('[9] 生视频三参数唯一源 = 面板控件（审查 三·2 双数据源）');
+console.log('[9] 生视频三参数唯一源 = 面板控件（双数据源）');
 {
   const s = Store.migrateSettings({
     video: { duration: 8, resolution: '1080P', ratio: '9:16', extraParams: 'duration=10, resolution=2K, watermark=false' },

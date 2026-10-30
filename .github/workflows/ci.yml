@@ -25,7 +25,7 @@ jobs:
             node --check "$f"
           done
 
-      # 拆分结构门禁（任务书 §7）：脚本顺序 / 行数上限 / A.reg 唯一 / 顶层解构白名单
+      # 拆分结构门禁：脚本顺序 / 行数上限 / A.reg 唯一 / 顶层解构白名单
       - name: 拆分结构门禁（node eval/app-structure-test.js）
         run: node eval/app-structure-test.js
 
@@ -36,7 +36,7 @@ jobs:
       - name: 版本号一致性（VERSION 为真源；运行时版本全部构建注入）
         run: node tools/sync-version.mjs --check
 
-      # UI-1 护栏：对比度（WCAG）/ 令牌回归 / 动效强度解析
+      # 视觉护栏：对比度（WCAG）/ 令牌回归 / 动效强度解析
       - name: 配色与动效护栏（contrast / tokens / motion）
         run: |
           node tools/contrast-check.mjs
@@ -54,7 +54,7 @@ jobs:
       - name: 核心类型检查（tsc --noEmit）
         run: npx tsc --noEmit
 
-      # 构建产物自检（任务书 §4 的坑）：sw.js 预缓存清单是构建期生成的，
+      # 构建产物自检（踩过的坑）：sw.js 预缓存清单是构建期生成的，
       # 必须与 dist/site 磁盘真实文件名逐一对上——正则时代「清单与产物脱节」不允许重演。
       - name: 构建 + sw 预缓存清单自检
         run: |
@@ -102,11 +102,11 @@ jobs:
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
-      # 分支树布局（src/core/treeLayout.ts，UI-4）：泳道打包 / 折叠 / 标签 / 确定性 / 2000 节点耗时
+      # 分支树布局（src/core/treeLayout.ts）：泳道打包 / 折叠 / 标签 / 确定性 / 2000 节点耗时
       - name: 分支树布局（node eval/treelayout-test.js）
         run: node eval/treelayout-test.js
 
-      # UI-3 设置分层纯逻辑（src/core/prefs.ts + store 迁移 / 导出剥凭证）+ 设置控件 id 护栏
+      # 设置分层纯逻辑（src/core/prefs.ts + store 迁移 / 导出剥凭证）+ 设置控件 id 护栏
       - name: 设置分层（node eval/prefs-test.js + settings-ids-test.js）
         run: |
           node eval/prefs-test.js
@@ -116,7 +116,7 @@ jobs:
       - name: schema 回归（node eval/schema-test.js）
         run: node eval/schema-test.js
 
-      # P-1 画师上下文规则（assemblePainter scene 模式隔离 / 最近 3 回合 / 静态断言），不联网
+      # 画师上下文规则（assemblePainter scene 模式隔离 / 最近 3 回合 / 静态断言），不联网
       - name: 画师上下文（node eval/painter-context-test.js）
         run: node eval/painter-context-test.js
 
@@ -126,7 +126,7 @@ jobs:
           node eval/video-provider-test.js
           node eval/videoqueue-test.js
 
-      # UI-2：自动标题 / 全文搜索 / 书架索引（纯逻辑单测，不联网）
+      # 书架三件套：自动标题 / 全文搜索 / 书架索引（纯逻辑单测，不联网）
       - name: 书架三件套（node eval/titles-test.js + search-test.js + shelf-index-test.js）
         run: npm run test:shelf
 

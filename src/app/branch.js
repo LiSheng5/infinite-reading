@@ -1,29 +1,31 @@
 /*
- * src/app/branch.js —— 分支页（UI-4）：整页分支树 + 从任意节点继续 / 改我说的分叉
+ * src/app/branch.js —— 分支页：整页分支树 + 从任意节点继续 / 改我说的分叉
  *
- * 结构（§4.2）：整页覆盖层。顶栏「← 返回对话」｜标题｜缩小 / 放大｜「回到当前」｜「展开全部折叠」；
+ * 结构：整页覆盖层。顶栏「← 返回对话」｜标题｜缩小 / 放大｜「回到当前」｜「展开全部折叠」；
  * 画布是 SVG（createElementNS 构造，绝不用 innerHTML 拼 SVG / 节点文字）；右侧（窄屏底部）节点面板。
  *
- * 硬约束（§9）：
+ * 硬约束：
  *   - 分支页渲染只读 story.tree：**打开分支页不得修改树**（不 ensure 写盘 / 不改 active），
  *     只有面板操作才通过 Tree.* 改树；
  *   - 忙碌（busy 或有未 sealed 的 head）时所有切换类操作拒绝，沿用现有 busy 提示；
  *   - canResume === false（sid === null 的迁移旧节点）只许查看；
  *   - 文本一律 textContent；键盘导航（role=tree / treeitem + aria-activedescendant）。
  *
- * 动效（§4.5）：rich = 边按深度描边生长 + 节点弹簧弹出 + 流光（只挂 pathEdgeD 一条）
+ * 动效：rich = 边按深度描边生长 + 节点弹簧弹出 + 流光（只挂 pathEdgeD 一条）
  *              + head 呼吸 / 选中脉冲；standard = 整体淡入；off = 无。
  *   新出现的节点（从聊天页返回后）单独「长出来」——seen 集合只存视图态，不进存档。
  */
 import { TreeLayout } from '../core/treeLayout.ts';
 import { Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
+import { trapFocus } from '../ui/focusTrap.js';
+import { setBranchBackdrop } from '../ui/backdrop.js';
 import { setBranchPanelOpen, setBranchPanel } from '../screens/branch/branch.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, toast, motionLevel, motionMs, fmtTime, saveAll } = A;
+  const { $, motionLevel, motionMs, fmtTime } = A;
 
   const NS = 'http://www.w3.org/2000/svg';
   const ROW_H = 44;
@@ -65,7 +67,7 @@ import { A } from './core.js';
     return typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(max-width: 720px)').matches : false;
   }
-  // §2.5：忙碌期间所有切换类操作被拒绝（busy 或有未 sealed 的 head）
+  // 忙碌期间所有切换类操作被拒绝（busy 或有未 sealed 的 head）
   function isBusy() {
     const head = nodeOf(tree() ? tree().head : null);
     return !!S.busy || !!(head && !head.sealed);
@@ -83,7 +85,7 @@ import { A } from './core.js';
     return out;
   }
 
-  // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.js，审查 可维护性 三·5）
+  // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.js）
   const codeSlice = TreeLayout.codeSlice;
 
   // 面板预览文本（textContent 用）：玩家行动原话；AI 回复取旁白（坏 JSON 当纯文本）
@@ -107,19 +109,22 @@ import { A } from './core.js';
 
   /* ================= 打开 / 关闭 ================= */
 
-  /* 阶段 5 第 6 步：开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
-   * 时序要点（任务书「坑」）：
+  /* 阶段 5：开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
+   * 时序要点：
    *   · 渲染整块放进 mutate —— 视图过渡在 update 回调之后才拍新快照，先渲染，快照里才有树；
    *   · rich 的入场动画（边描边 / 节点弹出）不在 mutate 里开跑：快照会把它拍成空白首帧，
    *     留到 finished 之后由 replayEntry 补；
    *   · centerOn 必须留在 mutate 里（新快照要用已经居中的 transform），finished 后不再重算；
    *   · html[data-branch] 与底下循环的挂起/复位都由 Nav 管，这里不再直接写。 */
+  // 分支页是整页 dialog（aria-modal）：Tab 必须留在页内
+  let branchTrapRelease = null;
+
   function openBranch(opts) {
     opts = opts || {};
     const st = S.story;
     const t = tree();
     if (!st || !t || !t.nodes) { toast('先打开一个对话再看分支'); return; }
-    // §9：只读打开——不 ensure、不 project、不改 active
+    // 只读打开——不 ensure、不 project、不改 active
     V.open = true;
     V.selectId = (opts.selectId && t.nodes[opts.selectId]) ? opts.selectId : t.head;
     V.panelOpen = !!opts.selectId;
@@ -129,7 +134,7 @@ import { A } from './core.js';
       const page = $('#branch-page');
       if (!page) return;
       page.classList.remove('hidden');
-      // .enter（旧的整页淡入）退役：入场由视图过渡负责；css/style.css 里那条规则留待收尾清理
+      // .enter（旧的整页淡入）退役：入场由视图过渡负责；css/branch.css 里那条规则只剩兜底用途
       page.classList.remove('enter');
       $('#branch-title').textContent = (st.title || '未命名') + ' · 分支';
       relayout();
@@ -137,8 +142,13 @@ import { A } from './core.js';
       centerOn(V.selectId);
       if (V.panelOpen) renderPanel(); else setPanelOpen(false);
       updateActiveDescendant();
+      // 先装陷阱（此刻焦点还在入口按钮上，关页时能收回），再把焦点交给画布
+      if (branchTrapRelease) branchTrapRelease();
+      branchTrapRelease = trapFocus(page, { initial: false });
       const svg = $('#branch-svg');
       if (svg && svg.focus) svg.focus({ preventScroll: true });
+      // 焦点已经在分支页里，才把底下的阅读页惰性化（读屏不再能浏览被盖住的内容）
+      setBranchBackdrop(true);
     });
     if (r.mode === 'instant') replayEntry();
     else r.finished.then(replayEntry, replayEntry);
@@ -147,6 +157,9 @@ import { A } from './core.js';
   function closeBranch() {
     V.open = false;
     V.dragging = null;
+    // 先撤背景惰性化：inert 子树里的元素不能聚焦，陷阱释放时还焦点会落空
+    setBranchBackdrop(false);
+    if (branchTrapRelease) { branchTrapRelease(); branchTrapRelease = null; }
     Nav.branchPage(false, () => {
       const page = $('#branch-page');
       if (page) page.classList.add('hidden');
@@ -184,7 +197,7 @@ import { A } from './core.js';
     }, 200);
   }
 
-  // 视口裁剪：> 400 个节点时只创建可见行附近的元素（§3），选中 / head 恒创建
+  // 视口裁剪：> 400 个节点时只创建可见行附近的元素，选中 / head 恒创建
   function visibleNodes() {
     const nodes = (V.layout && V.layout.nodes) || [];
     if (nodes.length <= 400) return nodes;
@@ -234,7 +247,7 @@ import { A } from './core.js';
       if (!V.seen.has(e.to)) newEdges.push({ el: p, row: depth.get(e.to) || 0 });
     }
 
-    // 流光：只挂当前路径合成的这一条（§4.5）
+    // 流光：只挂当前路径合成的这一条
     if (lay.pathEdgeD) {
       gFlow.appendChild(svgEl('path', { class: 'branch-flow', d: lay.pathEdgeD }));
     }
@@ -376,7 +389,7 @@ import { A } from './core.js';
     scheduleRender();
   }
 
-  // 键盘移动到屏幕外：先把该节点滚进视野（§9）
+  // 键盘移动到屏幕外：先把该节点滚进视野
   function ensureVisible(id) {
     const lay = V.layout;
     const canvas = $('#branch-canvas');
@@ -558,7 +571,7 @@ import { A } from './core.js';
     }
   }
 
-  /* ================= 节点面板（§4.4） ================= */
+  /* ================= 节点面板 ================= */
 
   /* 面板由 Svelte 组件渲染：文本与 disabled 走 branch.svelte.js 的视图模型。
    * 视图模型口径与 0.12.1 逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
@@ -607,7 +620,7 @@ import { A } from './core.js';
   function afterSwitch() {
     S.currentChoices = A.choicesFromHead();
     saveAll();
-    A.renderChat();
+    renderChat();
     A.renderStage();
     A.renderThumbs();
     A.renderStoryPanels();
@@ -624,8 +637,8 @@ import { A } from './core.js';
       return;
     }
     if (!Tree.switchTo(S.story, node.id)) return;
-    // 阶段 5 第 6 步：先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
-    // 快照会盖着旧内容跑 220ms，结算后才换成新内容（第 5 步「最终内容不闪回旧分支」的同款坑）。
+    // 阶段 5：先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
+    // 快照会盖着旧内容跑 220ms，结算后才换成新内容（「最终内容不闪回旧分支」的同款坑）。
     afterSwitch();
     closeBranch();
   }
@@ -657,7 +670,7 @@ import { A } from './core.js';
     closeBranch();
   }
 
-  /* ================= 历史位置提示条（§5） ================= */
+  /* ================= 历史位置提示条 ================= */
 
   function updateHistoryBar() {
     const bar = $('#history-bar');

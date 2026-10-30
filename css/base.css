@@ -1,0 +1,273 @@
+/* ==================== 基础 · 链接 · 按钮 · 动效基座 ====================
+ * 全局基座：复位与排版、链接下划线、按钮的唯一基座（.ui-btn）与修饰类、动效挂点（档位真源在 motion.css）。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 基础 ==================== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.9;
+  letter-spacing: .01em;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+}
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+.hidden { display: none !important; }
+#app { position: relative; height: 100vh; height: 100dvh; width: 100vw; }
+
+/* 浅色细滚动条 */
+* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-line); background-clip: content-box; }
+
+/* 全站唯一可见的焦点环（键盘可达性） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 鼠标点击不画焦点环，但保留键盘焦点环 */
+:focus:not(:focus-visible) { outline: none; }
+
+/* ==================== 分隔用的小符号 ==================== */
+/* 线装书里的花饰：❦ / ◆ 代替普通 hr */
+.ornament {
+  text-align: center;
+  color: var(--accent);
+  letter-spacing: 0.6em;
+  font-size: 12px;
+  opacity: 0.75;
+  user-select: none;
+}
+
+/* ==================== 链接：蓝强调 + 手写下划线 ==================== */
+a {
+  color: var(--accent);
+  text-decoration: none;
+  position: relative;
+  transition: color var(--m-t-color-base) var(--ease-out);
+}
+a::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -0.18em;
+  height: 2px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* 极简：一条直线下划线 */
+  border-radius: 999px;
+  transition: opacity var(--m-dur-base) var(--ease-out), transform var(--m-t-shift-base) var(--ease-out);
+}
+a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
+
+/* ==================== 通用按钮 ====================
+  词汇：唯一基座 .ui-btn，其余都是修饰类（primary / ghost / danger / slim / hud / mini / icon-only）。
+  扁平细边，只有主按钮是实心黑（蓝不填主按钮）；圆角统一 --radius。
+  .choice-btn / .reason-toggle / .tool-btn / .seg-btn / .menu-item 是各自组件的形状，只与基座共用字体。
+
+  两处写法约定（都是为了「特异性与迁移前完全一致」，别随手改）：
+  - 尺寸类修饰用 .ui-btn:where(.hud) / :where(.mini)：:where() 不贡献特异性，仍是 0,1,0，
+    这样 .hud-text / .hud-icon 这类同特异性的补充类还能靠先后顺序覆盖它们。
+  - 「这一片区域里的普通按钮」用 .ui-btn:where(:not(.hud, .mini, .icon-only))：
+    同样是 0,1,0，只筛掉小号变体，不会顺手把顶栏图标按钮也放大。 */
+.ui-btn, .choice-btn, .reason-toggle, .tool-btn, .seg-btn, .menu-item {
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+
+/* ---- 基座：默认外观 = 扁平细边按钮（旧的 .btn，也是新代码唯一该写的类） ---- */
+.ui-btn {
+  font-size: 14px;
+  letter-spacing: .04em;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius);
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
+}
+.ui-btn:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+.ui-btn:active { transform: scale(.97); }
+/* 唯一实心：发送 / 主操作——黑底白字（--ink / --on-ink） */
+.ui-btn.primary {
+  background: var(--ink);
+  color: var(--on-ink);
+  border-color: var(--ink);
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+.ui-btn.primary:hover {
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+  color: var(--on-ink);
+}
+/* busy 期间发送按钮变身「停止」 */
+.ui-btn.primary.stop {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--on-danger);
+}
+.ui-btn.primary.stop:hover { background: var(--danger-deep); border-color: var(--danger-deep); color: var(--on-danger); }
+.ui-btn.ghost { background: transparent; border-color: var(--line); color: var(--ink-dim); }
+.ui-btn.ghost:hover { background: transparent; color: var(--accent); border-color: var(--accent-line); }
+.ui-btn.danger { color: var(--danger); border-color: var(--danger-line); background: transparent; }
+.ui-btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+.ui-btn.slim { padding: 6px 14px; font-size: 13px; }
+.ui-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- 修饰类 .hud：顶栏按钮，安静到几乎只有文字，悬停才亮 ----
+   :where() 包一层：特异性仍是 0,1,0（等于旧的 .hud-btn），
+   这样 .hud-text / .hud-icon 这类「同特异性的补充类」还能按先后顺序覆盖它。 */
+.ui-btn:where(.hud) {
+  font-size: 13px;
+  letter-spacing: inherit;
+  color: var(--ink-dim);
+  background: transparent;
+  border-color: transparent;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.ui-btn:where(.hud):hover { color: var(--ink); border-color: var(--line); background: var(--hover-tint); }
+.hud-icon { font-size: 16px; }
+.hud-text { font-size: 13px; }
+
+/* ---- 修饰类 .mini：行内小按钮（列表 / 卡片里） ---- */
+.ui-btn:where(.mini) {
+  font-size: 12px;
+  letter-spacing: inherit;
+  color: var(--ink-dim);
+  background: transparent;
+  border-color: var(--line-strong);
+  padding: 4px 10px;
+}
+.ui-btn:where(.mini):hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); transform: translateY(-1px); }
+.ui-btn:where(.mini):active { transform: scale(.97); }
+.ui-btn:where(.mini):disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- 修饰类 .icon-only：纯图标方形（40×40 触屏下限；图标尺寸见 icons.css） ---- */
+.ui-btn.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--ink-dim);
+  border-color: transparent;
+}
+.ui-btn.icon-only:hover { color: var(--ink); border-color: var(--line); background: var(--hover-tint); transform: none; }
+.ui-btn.icon-only.bordered { border-color: var(--line-strong); }
+.ui-btn.icon-only.bordered:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+.ui-btn.icon-only.danger { color: var(--danger); }
+.ui-btn.icon-only.danger:hover { background: var(--danger-soft); border-color: var(--danger-line); }
+.ui-btn.icon-only:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- 禁用态收尾：悬停不亮、主按钮保持实心（原 Button.svelte 的作用域规则搬到这里） ---- */
+.ui-btn:disabled:hover { transform: none; background: transparent; border-color: var(--btn-line); color: var(--ink); }
+.ui-btn.primary:disabled:hover { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+
+/* 生成中提示（作画胶囊）：静态胶囊——循环动画配额留给 #busy-line / Ken Burns / 环境光（同屏 ≤ 3） */
+.pill {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--paper-2);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  box-shadow: var(--shadow-1);
+}
+
+/* 批注：次要文字 */
+.hint {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.9;
+  margin-top: 8px;
+}
+
+/* ==================== 动效基座（阶段 3 起走统一 motion 模块） ====================
+   @keyframes、档位政策（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
+   三档行为的真源声明在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。
+   这里只写「哪个元素用哪个动画」：
+   animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环加 var(--m-iter)）；
+   transition 的时长走 var(--m-t-*)（位移 / 颜色）或 var(--m-dur-*)（透明度），
+   off 档自动收成 80ms 透明度变化、0ms 其余——不再需要全局 !important 改写。 */
+
+.start-card, .shelf-wrap, .story-card, .anchor-card,
+.chat-note, .reason-block, .thumb {
+  animation: var(--an-leafIn) var(--m-dur-slow) var(--ease-out) both;
+}
+
+/* 流式增量：新到的文字包在 span.delta 里逐段淡入（仅 rich；standard/off 由 JS 不建 span） */
+.delta { animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both; }
+/* standard 档：不对逐段做动画，只对整个流式气泡做一次淡入 */
+html[data-motion="standard"] .bubble-live { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
+
+/* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐）：三档行为见 ANIMATIONS.busyFlow ---- */
+#busy-line {
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 21;
+}
+#busy-line::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 36%;
+  background: var(--accent);
+}
+/* rich：横向流动循环；standard：单次淡入（无循环）；off：静态线，无动画 */
+html[data-motion="rich"] #busy-line::after {
+  animation: var(--an-busyFlow) var(--loop-busy) var(--ease-inout) var(--m-iter);
+}
+html[data-motion="standard"] #busy-line::after {
+  width: 100%;
+  animation: var(--an-busyFlow) var(--m-dur-base) var(--ease-out) both;
+}
+html[data-motion="off"] #busy-line::after {
+  width: 100%;
+}
+
+/* ---- 舞台图片：blur-up（原图就绪） / 交叉淡入（换画） / Ken Burns（仅 rich） ---- */
+html[data-motion="rich"] .stage-img.has-art {
+  animation: var(--an-kenBurns) var(--loop-kb) var(--ease-inout) var(--m-iter) alternate;
+}
+html[data-motion="rich"] .stage-img.has-art.is-offscreen { animation-play-state: paused; }
+/* blur-up / 交叉淡入进行中压过 Ken Burns（同级靠后生效；同时最多 1 张在动 = 舞台当前图） */
+html[data-motion] .stage-img.blur-up { animation: var(--an-blurUp) var(--m-dur-slow) var(--ease-out) both; }
+html[data-motion] .stage-img.fade-swap { animation: var(--an-fadeIn) var(--m-dur-slow) var(--ease-out) both; }
+
+/* ---- 环境光（仅 rich）：舞台背后与空状态下的一层极淡蓝（装饰层，不吃事件） ---- */
+html[data-motion="rich"] .stage-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background: var(--ambient-glow);
+  animation: var(--an-ambientDrift) var(--loop-ambient) var(--ease-inout) var(--m-iter);
+  pointer-events: none;
+  z-index: 0;
+}

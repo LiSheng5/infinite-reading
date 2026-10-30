@@ -1,7 +1,7 @@
 /*
- * src/core/prefs.ts —— 本对话偏好（UI-3 设置分层）· 纯逻辑层
+ * src/core/prefs.ts —— 本对话偏好（设置分层）· 纯逻辑层
  *
- * 职责（任务书 §3.2）：
+ * 职责：
  *   - story.prefs 的清洗（sanitizePrefs）：丢未知键、剥凭证形字段、校验取值；
  *   - 「本对话覆盖 → 全局默认」的解析（effective / effectiveInfo）；
  *   - 主模型配置解析（resolveChatCfg）：profileId 只是引用，绝不携带 apiKey / baseUrl；
@@ -16,11 +16,11 @@
   /* ---------------- 白名单 ---------------- */
 
   // story.prefs 的顶层键（未知键一律丢弃）
-  // P-1（v0.11.0）：trigger（出图时机）整体下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错
+  // v0.11.0：trigger（出图时机）整体下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错
   const PREF_KEYS = ['profileId', 'profileLabel', 'choices', 'showReasoning', 'tools', 'ui'];
   // 工具开关键（仅智能体用；true = 跟随全局可用性，false = 本对话关掉）
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
-  // 页面布局键（§3.5）
+  // 页面布局键
   const UI_KEYS = ['layout', 'splitRatio', 'imageCollapsed', 'fontScale', 'width', 'density'];
 
   const CHOICES_VALUES = ['tray', 'always'];
@@ -29,7 +29,7 @@
   const WIDTH_VALUES = ['narrow', 'standard', 'wide'];
   const DENSITY_VALUES = ['compact', 'standard'];
 
-  // 凭证形字段名（大小写不敏感，任意嵌套层级一律剥掉）：安全红线 §3.4
+  // 凭证形字段名（大小写不敏感，任意嵌套层级一律剥掉）：安全红线
   const SECRET_KEY_RE = /^(api[-_]?key|key|token|base[-_]?url|password|secret|authorization|access[-_]?token|refresh[-_]?token)$/i;
 
   /* ---------------- 工具分类（prefs.tools 的五个开关 ↔ 工具名） ---------------- */
@@ -86,7 +86,7 @@
   }
 
   // 迁移 / 导入时清洗本对话偏好：
-  //   ① 丢弃未知键；② 任何形似凭证的字段（任意嵌套）剥掉；③ profileId 非字符串丢弃。
+  // ① 丢弃未知键；② 任何形似凭证的字段（任意嵌套）剥掉；③ profileId 非字符串丢弃。
   function sanitizePrefs(raw) {
     if (!isPlainObject(raw)) return {};
     const src = stripSecrets(raw);          // 先剥凭证，再按白名单收窄
@@ -206,7 +206,7 @@
     return effectiveInfo(settings, story, key).value;
   }
 
-  /* ---------------- 主模型配置（§3.1/§3.3） ---------------- */
+  /* ---------------- 主模型配置 ---------------- */
 
   const CHAT_FIELDS = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'thinking', 'contextWindow', 'extraParams'];
 
@@ -262,7 +262,7 @@
     return (p.name || p.model || p.id) + (p.model ? ' · ' + p.model : '');
   }
 
-  /* ---------------- 本对话设置：各模式可见控件（§4.2） ---------------- */
+  /* ---------------- 本对话设置：各模式可见控件 ---------------- */
 
   // 控件 id 集合（面板按集合渲染）：
   //   model         模型（下拉：跟随默认 + 模型库）
@@ -274,7 +274,7 @@
   //   schedule      定时主动开关（仅扮演：单开关，不是工具组）
   //   characterCard 角色卡入口（仅扮演）
   //   layout        页面布局（剧情：四布局 + 比例 + 舞台收起；扮演 / 智能体：字号 / 宽度 / 密度）
-  // P-1（v0.11.0）：trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
+  // v0.11.0：trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
   const VISIBLE_FOR = {
     choice: ['model', 'style', 'mode', 'choices', 'showReasoning', 'layout'],
     rp: ['model', 'characterCard', 'showReasoning', 'schedule', 'layout'],
@@ -286,7 +286,7 @@
     return new Set(list);
   }
 
-  /* ---------------- 导出安全（§3.4） ---------------- */
+  /* ---------------- 导出安全 ---------------- */
 
   // 导出包里允许出现的 prefs 形状：只有不透明 id 与显示用标签，绝不带凭证。
   function exportPrefs(story, settings) {

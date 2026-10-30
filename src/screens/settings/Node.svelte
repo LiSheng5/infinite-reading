@@ -60,10 +60,10 @@
     {#each node.nodes || [] as item}<Self node={item} />{/each}
   </div>
 {:else if node.k === 'btn'}
-  <button id={node.id} class={node.cls || 'btn'} type="button" title={node.title || null}>{#if node.icon}<Icon name={node.icon} class="ic-l" />{/if}{node.text}</button>
+  <button id={node.id} class={node.cls || 'ui-btn'} type="button" title={node.title || null}>{#if node.icon}<Icon name={node.icon} class="ic-l" />{/if}{node.text}</button>
 {:else if node.k === 'test'}
   <div class="test-row">
-    <button id={node.id} class="mini-btn" type="button"><Icon name={node.icon || 'bolt'} class="ic-l" />{node.text}</button>
+    <button id={node.id} class="ui-btn mini" type="button"><Icon name={node.icon || 'bolt'} class="ic-l" />{node.text}</button>
     <span class="hint test-state" id={node.stateId}>{node.hint}</span>
   </div>
 {:else if node.k === 'adv'}

@@ -4,14 +4,15 @@
  * 为什么要有这个文件：0.12.1 起「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
  *   · src/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
  *   · src/app/main.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
- * 屏 6 要把 11 个弹窗换成 Svelte 重写、第 7 步还要给开合接视图过渡，必须先有**一个地方**
+ * 屏 6 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
  * 分工：
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
- *   · src/ui/Modal.svelte = 外壳（shell 模式只出一个 display:contents 的层容器，不画任何像素）
+ *   · 外壳 = installShell() 就地建的一个 display:contents 层容器（只做「层」，不画任何像素）
+ *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；11 个弹窗共用同一份）
  *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
- *   · 第 7 步（弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
+ *   · （弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *
  * 6a 的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
  *   #app > #app-modals(display:contents) > #modal-shell-host(display:contents) > #modal-*
@@ -28,12 +29,14 @@
  *     它读的 modalStack 就是本文件导出的同一个数组实例。
  *   · 焦点还原：0.12.1 没有（关窗后焦点留在已隐藏的元素上）。6a 补上「开第一个弹窗前的那一帧」
  *     的还原，且 focus({ preventScroll:true })——不抢脚本新放的焦点、不触发滚动。
+ *   · 背景惰性化：0.12.1 没有，补上——弹窗开着时各屏 / 灯箱加 inert + aria-hidden
+ *     （只在焦点已经进弹窗之后加，关窗时先撤再还焦点，见 src/ui/backdrop.js 文件头）。
  *   · 滚动锁：0.12.1 没有，也不需要——body 已 overflow:hidden、#app 定高，
  *     滚动都在屏幕 / 弹窗内部的滚动容器里；6a 不新增（新增会改动 iOS Safari 的手势链）。
  */
 
-import { mount } from 'svelte';
-import Modal from './Modal.svelte';
+import { trapFocus } from './focusTrap.js';
+import { setModalBackdrop } from './backdrop.js';
 import { runTransition, transitionSpec, supportsVT, vtDisabled } from './viewTransition.js';
 // 应用层注册表（循环依赖是安全的：只在 dismissModal 被调用时读，eval 期不取值）
 import { A as appApi } from '../app/core.js';
@@ -52,13 +55,14 @@ export const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings']
 export const modalStack = [];
 
 const HIDDEN = 'hidden';
-const BASE_Z = 30;          // css/style.css 的 .modal z-index；栈深往上叠
+const BASE_Z = 30;          // css/overlays.css 的 .modal z-index；栈深往上叠
 const ANCHOR_ID = 'app-modals';        // 插在第一个弹窗原位置上的壳锚点（display:contents）
-const SHELL_HOST_ID = 'modal-shell-host';   // Modal.svelte shell 模式的根（display:contents）
+const SHELL_HOST_ID = 'modal-shell-host';   // installShell() 建的壳层根（display:contents）
 
 let shellReady = false;
 let openDepth = 0;          // >0 = 正在执行 openModal（互斥关窗不得顺手还原焦点）
 let focusReturn = null;     // 开第一个弹窗前聚焦的元素（关闭最后一层时收回去）
+const modalTraps = new Map();   // id → trapFocus 的卸载函数（Tab 不得穿透遮罩）
 
 /* ---------- 外壳 ---------- */
 
@@ -73,7 +77,7 @@ export function shellInstalled() {
 }
 
 /**
- * 安装外壳：把 index.html 里的 11 个弹窗整块搬进 Modal.svelte 的壳层。
+ * 安装外壳：把 index.html 里的 11 个弹窗整块搬进壳层。
  * 幂等；DOM 不在（极早期 / 单测环境）时什么都不做，弹窗照原样留在 #app 下。
  * @returns {HTMLElement|null} 壳层根
  */
@@ -89,13 +93,15 @@ export function installShell() {
   anchor.style.display = 'contents';   // 不生成盒子：包含块 / 层叠上下文 / 布局全不变
   nodes[0].parentNode.insertBefore(anchor, nodes[0]);
 
-  mount(Modal, { target: anchor, props: { shell: true } });
+  /* 壳层根：外壳这件事就是一个 display:contents 的 div。
+   * 之前这里 mount 的是 src/ui/Modal.svelte —— 同一份组件里除了外壳还藏着一份
+   * 「画卡片的」分支（唯一使用点永远 shell:true，那份分支 + 120 行 scoped CSS 从未生效）；
+   * 卡片分支已删（卡片只剩 src/ui/ModalCard.svelte），外壳也就没有理由再包一层组件。 */
+  const host = document.createElement('div');
+  host.id = SHELL_HOST_ID;
+  host.style.display = 'contents';
+  anchor.appendChild(host);
 
-  const host = shellHostEl();
-  if (!host) {   // 理论上不会发生（壳层根由 Modal.svelte 同步渲染）；兜底不留半截锚点
-    anchor.remove();
-    return null;
-  }
   // 整块搬：移动的是节点本身（事件监听、Svelte 挂载的子组件、输入值都跟着走），内部 DOM 一行不改
   for (const el of nodes) host.appendChild(el);
   shellReady = true;
@@ -143,6 +149,22 @@ function restoreFocus() {
   try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} }
 }
 
+/* ---------- 焦点陷阱----------
+ * 每个弹窗根节点一个：Tab / Shift+Tab 在弹窗内循环，关闭时焦点收回原处。
+ * moveFocus=false 用于「已经开着的弹窗又被点到」——只补装陷阱，不打断用户当前焦点。 */
+function armTrap(id, el, moveFocus) {
+  disarmTrap(id);
+  if (!el) return;
+  modalTraps.set(id, trapFocus(el, moveFocus === false ? { initial: false } : undefined));
+}
+
+function disarmTrap(id) {
+  const fn = modalTraps.get(id);
+  if (!fn) return;
+  modalTraps.delete(id);
+  try { fn(); } catch (_) {}
+}
+
 /* ---------- 栈 ---------- */
 
 /** 是否开着 */
@@ -162,7 +184,7 @@ function restack() {
   });
 }
 
-/* ---------- 开合过渡（阶段 5 · 第 7 步）----------
+/* ---------- 开合过渡（阶段 5 ·）----------
  * 形态（三档验收矩阵「弹窗开合」一行，声明表 = src/core/motion.ts 的 TRANSITIONS.modal）：
  *   off       即时：改 DOM 同步做，焦点与滚动位置都不动；不挂名字、不开快照
  *   standard  遮罩层整体交叉淡入 / 淡出（≤160ms）：背景随遮罩一起渐隐，卡片不位移
@@ -170,17 +192,17 @@ function restack() {
  *             translateY(-4px)）；时长取 TRANSITIONS.modal.rich.ms
  *   降级      ?vt=0 / 浏览器没有 startViewTransition：开窗对弹窗容器整块淡入；关窗即时（理由见下）
  *
- * 命名范围（任务书「坑」：根快照会曝光 fixed 层与内部滚动）：
+ * 命名范围（根快照会曝光 fixed 层与内部滚动）：
  *   · 过渡期间给根节点挂 `view-transition-name: none` —— 根不参与快照，弹窗只要自己那一层。
  *     这是**临时**改（计数式 holdRootOutOfSnapshot），不写进 css：切屏 / 分支页的过渡仍要用
  *     ::view-transition-new(root) 做位移，常驻 none 会把那两步弄坏。
  *   · 容器名 = 弹窗 id（modal-settings…），卡片名 = id + '-card'（rich 才挂：standard 不许位移）。
  *     一次只给「这一个弹窗」的两个节点命名，嵌套弹窗各用各的名字，同屏不重名。
- *   · 名字只在过渡期存在：开窗过渡一结束就撤（与第 4 步 stage-art 同一口径），
+ *   · 名字只在过渡期存在：开窗过渡一结束就撤（与 stage-art 同一口径），
  *     免得开着弹窗去切屏时，弹窗被拖进那一层快照里做无意义的自交叉淡入。
  *
  * 为什么关窗在降级路径不做淡出：隐藏必须同步——焦点还原、栈、以及 20 多处调用点「关完立刻判
- * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按任务书「off 档不许 await 后再改 DOM」
+ * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按「off 档不许 await 后再改 DOM」
  * 的同一条理由选同步，只在真有 View Transition 时才演出退场。
  *
  * 开窗那一侧（0.12.1 的同步语义不能破）：
@@ -324,7 +346,7 @@ function animateCardOut(id, ms) {
   ], ms);
 }
 
-/* 卡片自己的入场动画（css/style.css 的 .modal-card → --an-leafIn）在过渡期间让位给快照：
+/* 卡片自己的入场动画（css/overlays.css 的 .modal-card → --an-leafIn）在过渡期间让位给快照：
  * 它会在 update 回调那一帧从 opacity:0 / translateY(10px) 起跑，被新快照原样拍下来 ——
  * 结果是「遮罩淡入、卡片却定格在半透明」两段叠在一起。过渡期挂 animation-name:none，
  * 新快照拍到的就是终态；关窗那一刻再撤（元素正被隐藏，重挂动画不会被看见）。
@@ -359,7 +381,7 @@ function instantResult(id) {
 }
 
 /**
- * 开弹窗（语义与 0.12.1 的 core.js 完全一致；第 7 步只把「改 DOM 那一帧」交给过渡内核）。
+ * 开弹窗（语义与 0.12.1 的 core.js 完全一致；只把「改 DOM 那一帧」交给过渡内核）。
  * @param {string} id MODAL_IDS 里的 id
  * @returns {{modal: string, tier: string, kind: string, ms: number, mode: string, finished: Promise<any>}}
  */
@@ -395,12 +417,16 @@ export function openModal(id) {
 
   if (alreadyOpen) {
     show();
+    if (!modalTraps.has(id)) armTrap(id, el, false);   // 只补陷阱，不打断当前焦点
+    setModalBackdrop(true);                            // 背景退出无障碍树（顺序见 backdrop.js 文件头）
     return instantResult(id);
   }
 
   const plan = planModal();
   if (!plan.willVT) {                       // off 档 / 降级：内核负责同步换（或整块淡入）
     const r = runTransition('modal', show, { scope: el });
+    armTrap(id, el);                        // runTransition 的所有分支都先同步改 DOM，故此处元素已可见
+    setModalBackdrop(true);                 // 焦点已在对话框里，才给背景加 inert / aria-hidden
     const done = () => endModalTransition(id, seq, null);
     if (r.mode === 'instant') done();
     else r.finished.then(done, done);
@@ -413,6 +439,8 @@ export function openModal(id) {
    * 「定时主动」入口的 scrollIntoView 都依赖当帧可见）。
    * 旧态是一张全透明快照 → ::view-transition-old 淡出等于什么都不发生，新态照常淡入。 */
   show();
+  armTrap(id, el);            // 焦点先进弹窗，后续调用方的 focus / scrollIntoView 仍能覆盖
+  setModalBackdrop(true);     // 同上：焦点就位后再惰性化背景
   el.style.opacity = '0';
   const release = holdRootOutOfSnapshot();
   applyNames(id, plan.rich);   // 名字要在开快照之前挂上（旧态全透明 → 只有入场）
@@ -448,6 +476,8 @@ export function closeModal(id) {
   const last = !modalStack.length && !openDepth;
 
   const hideNow = () => {
+    if (last) setModalBackdrop(false);    // 先撤背景 inert：trap 释放与 restoreFocus 要能把焦点还回背景元素
+    disarmTrap(id);                       // 先拆陷阱：release 会在元素仍可见时把焦点收回原处
     resumeCard(id);                       // 撤掉「动画让位」：此刻元素正要被隐藏，重挂动画不会被看见
     if (el) el.style.opacity = '';        // 同理：清掉入场用的 opacity:0，下一次开门才不会有残留
     if (el) {

@@ -27,7 +27,7 @@ import { sleep } from './tree.ts';
 
   const PROBE_TIMEOUT_MS = 15000;
 
-  /* P0-1（2026-10-14 评审）：正式对话请求的超时参数。
+  /* （2026-10-14 评审）：正式对话请求的超时参数。
    * 此前只有「测试连接」有 15s 超时，正式请求无 signal——SSE 挂起（服务端僵死、
    * 代理断流不关连接）会把上游的 busy 标志永久卡死，玩家只能刷新丢回合。
    * ① 流式：空闲超时，两个 chunk 之间最多 CHAT_IDLE_TIMEOUT_MS；
@@ -58,18 +58,52 @@ import { sleep } from './tree.ts';
 
   function friendlyNetwork(e) {
     const msg = (e && e.message) ? e.message : String(e || '');
+    if (e && e.name === 'TimeoutError') {
+      return '请求超时（' + Math.round((Number(e.timeoutMs) || PROBE_TIMEOUT_MS) / 1000) + ' 秒）：接口一直没有响应，稍后再试一次。';
+    }
     if (e && (e.name === 'AbortError' || /abort/i.test(msg))) return '连接超时（' + Math.round(PROBE_TIMEOUT_MS / 1000) + ' 秒）：地址不可达，或被网络 / 代理挡住了。';
     if (e instanceof TypeError) return '连不上这个地址：可能是 Base URL 写错、断网，或该接口不允许浏览器直连（CORS）。';
     return '请求失败：' + (msg || '未知错误');
   }
 
-  async function fetchWithTimeout(url, init) {
-    if (typeof AbortController === 'undefined') return fetch(url, init);
+  /* 统一超时请求：AbortController + 定时器，生图 / 视频 / 探测共用一处。
+   *  - ms 缺省 = 探测口径 15 秒；正式请求按接口性质传自己的上限
+   *  - init.signal：外部（「停止」/ 切故事 / 队列取消）abort 时一并联断在途请求
+   *  - 超时抛 TimeoutError（带 timeoutMs）；外部取消原样抛 AbortError —— 调用方好区分
+   *  - 返回 / 抛错都清掉定时器与监听，不留悬挂回调 */
+  function timeoutError(ms) {
+    const e: any = new Error('请求超时：等了 ' + Math.round(ms / 1000) + ' 秒还没有响应');
+    e.name = 'TimeoutError';
+    e.code = 'ETIMEDOUT';
+    e.timeoutMs = ms;
+    return e;
+  }
+
+  async function fetchWithTimeout(url, init, ms?) {
+    const o = init || {};
+    const timeout = Number(ms) > 0 ? Number(ms) : PROBE_TIMEOUT_MS;
+    if (typeof AbortController === 'undefined') return fetch(url, o);
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { ctrl.abort(); } catch (_) { /* 环境不支持 abort(reason)：忽略 */ }
+    }, timeout);
+    const outer = o.signal;
+    const onOuterAbort = () => { try { ctrl.abort(); } catch (_) {} };
+    if (outer) {
+      if (outer.aborted) onOuterAbort();
+      else if (typeof outer.addEventListener === 'function') outer.addEventListener('abort', onOuterAbort);
+    }
     try {
-      return await fetch(url, Object.assign({}, init, { signal: ctrl.signal }));
-    } finally { clearTimeout(timer); }
+      return await fetch(url, Object.assign({}, o, { signal: ctrl.signal }));
+    } catch (e) {
+      if (timedOut) throw timeoutError(timeout);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+      if (outer && typeof outer.removeEventListener === 'function') outer.removeEventListener('abort', onOuterAbort);
+    }
   }
 
   // GET /models：只读、免费。返回 { ok, status, detail, noEndpoint, models }
@@ -110,7 +144,7 @@ import { sleep } from './tree.ts';
 
   /* ---------------- 对话适配器 ---------------- */
 
-  // 思考链（R9 / §4.5）：DeepSeek 等厂商经 reasoning_content 下发；兼容个别只叫 reasoning 的实现
+  // 思考链：DeepSeek 等厂商经 reasoning_content 下发；兼容个别只叫 reasoning 的实现
   function reasoningOf(obj) {
     if (!obj) return '';
     const r = obj.reasoning_content != null ? obj.reasoning_content : obj.reasoning;
@@ -178,15 +212,16 @@ import { sleep } from './tree.ts';
 
   export interface ImageProvider {
     label: string;
-    generate(cfg: any, prompt: any): Promise<any>;
+    // opts.signal：队列 / 「停止」中断在途出图
+    generate(cfg: any, prompt: any, opts?: any): Promise<any>;
     test?(cfg: any): Promise<any>;
     supportsReference?: boolean;
   }
 
   export interface VideoProvider {
     label: string;
-    submit?(cfg: any, opts: any): Promise<any>;
-    poll?(cfg: any, taskId: any): Promise<any>;
+    submit?(cfg: any, opts: any, signal?: any): Promise<any>;
+    poll?(cfg: any, taskId: any, signal?: any): Promise<any>;
     generate?(cfg: any, req: any, hooks?: any): Promise<any>;
     test?(cfg: any): Promise<any>;
     params?(cfg: any, mode: any): any;
@@ -260,7 +295,7 @@ import { sleep } from './tree.ts';
             }
           }
         }
-        // 工具：结构化下发（OpenAI 格式，§4.5）；调用时机写在系统提示词里
+        // 工具：结构化下发（OpenAI 格式）；调用时机写在系统提示词里
         if (Array.isArray(cfg.tools) && cfg.tools.length) {
           body.tools = cfg.tools;
           if (cfg.toolChoice) body.tool_choice = cfg.toolChoice;
@@ -270,7 +305,7 @@ import { sleep } from './tree.ts';
         const wantStream = !!(hooks && hooks.onDelta);
         if (wantStream) body.stream = true;
 
-        // P0-1（2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
+        // （2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
         // AbortController 经 hooks.onAborter 交给调用方（app.js 的「停止」按钮）；
         // 流式每收到一个 chunk 重置空闲计时；两种形态都有总上限兜底。
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -295,7 +330,7 @@ import { sleep } from './tree.ts';
           });
           if (!res.ok) throw new Error(await readError(res));
 
-          // 流式请求却没响应体（空 200）：显式报「未返回流式响应」（审查 低危 #20）——
+          // 流式请求却没响应体（空 200）：显式报「未返回流式响应」——
           // 别落进 res.json() 抛出费解的解析错误，被上层误报成网络故障
           if (wantStream && !res.body) {
             throw new Error('未返回流式响应：接口返回了空响应体（检查「接口地址」是不是 API 域名，中间代理是否吞掉了流式）。');
@@ -315,7 +350,7 @@ import { sleep } from './tree.ts';
             return text;
           }
 
-          // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示（§4.5）
+          // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示
           let full = '';
           let gotAny = false;   // 流里是否解析出过任何 SSE 事件（空流要显式报错，见收尾）
           const callBuf = [];
@@ -352,7 +387,7 @@ import { sleep } from './tree.ts';
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
-            bumpIdle();   // P0-1：收到 chunk，重置空闲计时
+            bumpIdle();   // 收到 chunk，重置空闲计时
             buf += decoder.decode(value, { stream: true });
             const lines = buf.split('\n');
             buf = lines.pop() || '';
@@ -363,7 +398,7 @@ import { sleep } from './tree.ts';
           if (buf.trim()) handleLine(buf);
           const done_calls = callBuf.filter(Boolean);
           if (done_calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(done_calls);
-          // 连接通了但流里一个事件都没有（代理把 SSE 吞成空体的典型症状）：显式报错（审查 低危 #20），
+          // 连接通了但流里一个事件都没有（代理把 SSE 吞成空体的典型症状）：显式报错，
           // 不把「空回复」冒充成功返回给调用方
           if (!full && !done_calls.length && !gotAny) {
             throw new Error('未返回流式响应：连接成功但流里没有任何内容（代理 / 网关可能吞掉了流式响应，可改用非流式重试）。');
@@ -392,7 +427,10 @@ import { sleep } from './tree.ts';
     '21:9': [1344, 576],     // 官方注明：仅 image-01
   };
   const MINIMAX_IMAGE_PROMPT_MAX = 1500;        // 官方上限（字符）
-  const MINIMAX_IMAGE_TIMEOUT_MS = 180000;      // 出图单次上限 3 分钟（接口是同步的，慢的时候会排队）
+  /* 出图单次上限 3 分钟（接口是同步的，慢的时候会排队）。
+   * 此前只有 MiniMax 有超时、OpenAI 兼容分支裸 fetch——队列严格串行，
+   * 一次挂死请求会把后续作画与画师构思全部堵死。现在两个适配器共用这一个上限。 */
+  const IMAGE_GEN_TIMEOUT_MS = 180000;
 
   // 官方 base_resp.status_code 常见错误 → 人话
   const MINIMAX_IMAGE_ERRORS = {
@@ -487,7 +525,7 @@ import { sleep } from './tree.ts';
         return { level: 'warn', message: '地址可达，但探测请求没通过：' + friendlyStatus(r.status, r.detail) };
       },
 
-      async generate(cfg, prompt) {
+      async generate(cfg, prompt, opts) {
         const url = cfg.baseUrl.replace(/\/+$/, '') + '/images/generations';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
@@ -502,7 +540,19 @@ import { sleep } from './tree.ts';
         // 手填参数最后合并（如 steps=30、negative_prompt=…）
         mergeExtraParams(body, cfg.extraParams);
 
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        // 出图必须自带超时与中断（队列串行，一次挂死就堵住后面所有人）
+        let res;
+        try {
+          res = await fetchWithTimeout(url, {
+            method: 'POST', headers, body: JSON.stringify(body),
+            signal: opts && opts.signal ? opts.signal : undefined,
+          }, IMAGE_GEN_TIMEOUT_MS);
+        } catch (e) {
+          if (e && e.name === 'TimeoutError') {
+            throw new Error('等了 ' + Math.round(IMAGE_GEN_TIMEOUT_MS / 1000) + ' 秒还没出图：接口可能正在排队或已经挂起，稍后再试一次。');
+          }
+          throw e;
+        }
         if (!res.ok) throw new Error(await readError(res));
         const data = await res.json();
         const item = data.data && data.data[0];
@@ -568,7 +618,7 @@ import { sleep } from './tree.ts';
         return { level: 'ok', message: '连接成功：接口可达。' + tail };
       },
 
-      async generate(cfg, prompt) {
+      async generate(cfg, prompt, opts) {
         const bad = cfgProblem(cfg, true);
         if (bad) throw new Error(bad.replace('Base URL', '生图接口地址').replace('模型名', '生图模型名'));
         if (!String(cfg.apiKey || '').trim()) throw new Error('还没填生图 API Key。');
@@ -603,25 +653,24 @@ import { sleep } from './tree.ts';
         if (live) { delete body.width; delete body.height; }
         body.n = 1;
 
-        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        const timer = ctrl ? setTimeout(() => ctrl.abort(), MINIMAX_IMAGE_TIMEOUT_MS) : null;
+        // 超时与中断统一走 fetchWithTimeout（opts.signal = 队列 / 「停止」的取消信号）
         let res;
         try {
-          res = await fetch(minimaxImageEndpoint(cfg), {
+          res = await fetchWithTimeout(minimaxImageEndpoint(cfg), {
             method: 'POST',
             headers: videoHeaders(cfg, true),
             body: JSON.stringify(body),
-            signal: ctrl ? ctrl.signal : undefined,
-          });
+            signal: opts && opts.signal ? opts.signal : undefined,
+          }, IMAGE_GEN_TIMEOUT_MS);
         } catch (e) {
           if (e instanceof TypeError) {
             throw new Error('该接口不允许浏览器直连（CORS）：请求被浏览器拦下了，这次没有产生费用。可起本地转发 node tools/video-proxy.mjs（接口地址改填 http://127.0.0.1:4320）后重试。');
           }
-          if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')))) {
-            throw new Error('等了 ' + Math.round(MINIMAX_IMAGE_TIMEOUT_MS / 1000) + ' 秒还没出图：接口可能正在排队，稍后再试一次。');
+          if (e && e.name === 'TimeoutError') {
+            throw new Error('等了 ' + Math.round(IMAGE_GEN_TIMEOUT_MS / 1000) + ' 秒还没出图：接口可能正在排队，稍后再试一次。');
           }
           throw e;
-        } finally { if (timer) clearTimeout(timer); }
+        }
 
         if (!res.ok) throw new Error(await readError(res));
         let data;
@@ -646,10 +695,10 @@ import { sleep } from './tree.ts';
     },
   };
 
-  /* ---------------- 生视频适配器（MiniMax V2，任务书 v0.12.0 §2/§4） ----------------
+  /* ---------------- 生视频适配器（MiniMax V2） ----------------
    * 异步任务型，分步接口（恢复轮询要用）：
-   *   submit(cfg, { prompt, image?, mode }) → { taskId }
-   *   poll(cfg, taskId)                      → { status, url?, error? }
+   *   submit(cfg, { prompt, image?, mode }, signal?) → { taskId }
+   *   poll(cfg, taskId, signal?)             → { status, url?, error? }
    *     status ∈ queued | running | succeeded | failed | cancelled | expired
    *   generate(cfg, req, hooks)              → { url, taskId, params }
    *     = submit + 每 10 秒 poll；hooks.onTaskId(id)（提交成功立刻回调，用于落盘）、
@@ -660,6 +709,10 @@ import { sleep } from './tree.ts';
   const VIDEO_TOTAL_TIMEOUT_MS = 15 * 60 * 1000; // 总超时（一处可调）：默认 15 分钟
   const VIDEO_POLL_MAX_NETFAIL = 3;             // 轮询连续网络错误上限（单次容忍）
   const VIDEO_PROMPT_MAX = 7000;                // 提示词长度上限（字符）
+  /*：单次请求也要有上限，否则「总超时」的检查（在两个 await 之间）永远轮不到——
+   * 提交挂住就整段卡死。提交是短请求给 60 秒；轮询更短（30 秒），超了按网络错误容忍重试。 */
+  const VIDEO_SUBMIT_TIMEOUT_MS = 60000;
+  const VIDEO_POLL_TIMEOUT_MS = 30000;
 
   function clampInt(v, min, max, dflt) {
     const n = parseInt(v, 10);
@@ -667,8 +720,8 @@ import { sleep } from './tree.ts';
     return Math.max(min, Math.min(max, n));
   }
 
-  // sleep 的唯一口径在 sleep（tree.js，审查 可维护性 三·5）；providers 加载早于 tree.js，
-  // 这里不取值、只在调用时经 global.sleep 走（缺了会直接抛，不静默降级）
+  // sleep 的唯一口径在 tree.ts（见文件顶部的静态 import）：轮询间隔只从这里取，
+  // 不再有第二份实现，也不经任何全局对象转手。
 
   /* 图片入参：先缩到长边 ≤ 1280、JPEG 0.9，再转 data URL（控制体积，避开 64 MB 上限）。
    * Node（单测）里没有 document / Image：原样返回，不影响请求形状断言。 */
@@ -703,7 +756,7 @@ import { sleep } from './tree.ts';
     return headers;
   }
 
-  /* 时长 / 分辨率 / 比例的唯一来源 = 面板控件（cfg.duration / resolution / ratio，审查 三·2 双数据源）：
+  /* 时长 / 分辨率 / 比例的唯一来源 = 面板控件（cfg.duration / resolution / ratio，双数据源）：
    * extraParams 只补充其它键（style / seed / watermark…），同名这三键一律以控件为准——
    * 此前 extraParams 后合并优先，旧迁移折进 extraParams 的同名键会一直盖住下拉框（「改了没生效」）。
    * 协议硬规则一并收口：duration 夹 4~15；图生 ratio 一律 adaptive；文生 ratio 必填且非 adaptive。 */
@@ -731,7 +784,7 @@ import { sleep } from './tree.ts';
     // 总超时暴露一份（一处可调的常量；generate 另收 hooks.totalTimeoutMs 供测试收紧）
     VIDEO_TOTAL_TIMEOUT_MS,
 
-    /* 「测试连接」（§2 只读探测）：GET /v2/query/video_generation?page_num=1&page_size=1 列任务，
+    /* 「测试连接」（只读探测）：GET /v2/query/video_generation?page_num=1&page_size=1 列任务，
      * 绝不提交生成任务——所以不花钱。 */
     async test(cfg) {
       const bad = cfgProblem(cfg, true);
@@ -767,7 +820,7 @@ import { sleep } from './tree.ts';
     // 生效参数（确认弹窗写明「模型 / 时长 / 分辨率」用；与 submit 的合并规则同源）
     params(cfg, mode) { return videoEffectiveParams(cfg, mode); },
 
-    async submit(cfg, opts) {
+    async submit(cfg, opts, signal?) {
       const bad = cfgProblem(cfg, true);
       if (bad) throw new Error(bad.replace('Base URL', '生视频接口地址').replace('模型名', '生视频模型名'));
       if (!String(cfg.apiKey || '').trim()) throw new Error('还没填生视频 API Key。');
@@ -793,13 +846,18 @@ import { sleep } from './tree.ts';
 
       let res;
       try {
-        res = await fetch(trimBase(cfg) + '/v2/video_generation', {
+        // 提交本身要有上限（否则挂住就永远走不到 totalMs 的检查），并接受外部取消
+        res = await fetchWithTimeout(trimBase(cfg) + '/v2/video_generation', {
           method: 'POST', headers: videoHeaders(cfg, true), body: JSON.stringify(body),
-        });
+          signal: signal || undefined,
+        }, VIDEO_SUBMIT_TIMEOUT_MS);
       } catch (e) {
-        // 提交阶段 TypeError → 大概率是 CORS 预检被拦：明确提示，不重试（§4）
+        // 提交阶段 TypeError → 大概率是 CORS 预检被拦：明确提示，不重试
         if (e instanceof TypeError) {
           throw new Error('该接口不允许浏览器直连（CORS）：提交请求被浏览器拦下了，这次没有产生费用。可起本地转发 node tools/video-proxy.mjs（接口地址改填 http://127.0.0.1:4320）后重试。');
+        }
+        if (e && e.name === 'TimeoutError') {
+          throw new Error('提交请求 ' + Math.round(VIDEO_SUBMIT_TIMEOUT_MS / 1000) + ' 秒没有响应：任务可能没提交上去（这次没拿到 task_id），稍后再试一次。');
         }
         throw e;
       }
@@ -814,11 +872,13 @@ import { sleep } from './tree.ts';
       return { taskId: String(taskId) };
     },
 
-    async poll(cfg, taskId) {
+    async poll(cfg, taskId, signal?) {
       const headers = videoHeaders(cfg, false);
-      const res = await fetch(
+      // 轮询也带上限 + 可中断（外部取消要能立刻切断在途请求）
+      const res = await fetchWithTimeout(
         trimBase(cfg) + '/v2/query/video_generation/' + encodeURIComponent(String(taskId)),
-        { method: 'GET', headers }
+        { method: 'GET', headers, signal: signal || undefined },
+        VIDEO_POLL_TIMEOUT_MS
       );
       if (!res.ok) throw new Error(await readError(res));
       const data = await res.json();
@@ -853,7 +913,9 @@ import { sleep } from './tree.ts';
       const started = Date.now();
       const aborted = () => !!(hooks.signal && hooks.signal.aborted);
 
-      const { taskId } = await this.submit(cfg, req);   // 提交失败不重试（TypeError 已带 CORS 提示）
+      /*：submit / poll 都带 signal 与单次上限——
+       * 提交或某一次轮询挂住时，totalMs 的检查才有机会轮到；本地取消也能立刻切断在途请求。 */
+      const { taskId } = await this.submit(cfg, req, hooks.signal);   // 提交失败不重试（TypeError 已带 CORS 提示）
       if (hooks.onTaskId) { try { hooks.onTaskId(taskId); } catch (_) {} }
 
       let netFails = 0;
@@ -868,10 +930,16 @@ import { sleep } from './tree.ts';
         }
         let q;
         try {
-          q = await this.poll(cfg, taskId);
+          q = await this.poll(cfg, taskId, hooks.signal);
           netFails = 0;
         } catch (e) {
-          // 轮询阶段：单次网络错误容忍，连续 3 次才判失败（§4）
+          // 本地取消不是网络错误：立刻抛出（上层据此静默收尾，不当成失败留痕）
+          if (aborted()) {
+            const a: any = new Error('已停止本地等待（云端任务可能仍在计费）');
+            a.name = 'AbortError';
+            throw a;
+          }
+          // 轮询阶段：单次网络错误容忍，连续 3 次才判失败
           netFails += 1;
           if (netFails >= VIDEO_POLL_MAX_NETFAIL) throw e;
           await sleep(pollMs);
@@ -895,4 +963,6 @@ import { sleep } from './tree.ts';
     'openai-videos': MiniMaxVideo,  // 旧值别名（同上）
   };
 
-  export { ChatProviders, ImageProviders, VideoProviders };
+  /* fetchWithTimeout 一并导出：app 层（视频下载转存）也需要同一条「超时 + 可中断」口径，
+   * 不要在别处再写第二份 AbortController 模板。 */
+  export { ChatProviders, ImageProviders, VideoProviders, fetchWithTimeout };

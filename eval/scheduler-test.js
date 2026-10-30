@@ -16,15 +16,8 @@
  *
  * 用法：node eval/scheduler-test.js
  */
-const path = require('path');
-const { pathToFileURL } = require('url');
+const { check, run, loadEsm, localMs } = require('./_harness.js');
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
-
-function localMs(y, mo, d, h, mi) { return new Date(y, mo - 1, d, h, mi, 0, 0).getTime(); }
 function localHHMM(ms) {
   const d = new Date(ms);
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -32,16 +25,15 @@ function localHHMM(ms) {
 const M = 60000;
 
 async function main() {
-  const mod = f => pathToFileURL(path.join(__dirname, '..', 'sidecar', f)).href;
-  const cron = await import(mod('cron.mjs'));
-  const { createScheduler, inQuietHours } = await import(mod('scheduler.mjs'));
-  const { openDbAt } = await import(mod('db.mjs'));
+  const cron = await loadEsm('cron.mjs');
+  const { createScheduler, inQuietHours } = await loadEsm('scheduler.mjs');
+  const { openDbAt } = await loadEsm('db.mjs');
 
   const { parseCron, nextRun } = cron;
 
   /* ---------------- 1. cron 解析与匹配 ---------------- */
 
-  // 业务失败 = 结构化返回 { ok:false, code }、不 throw（审查 可维护性 #7）；code 前缀命中即算
+  // 业务失败 = 结构化返回 { ok:false, code }、不 throw；code 前缀命中即算
   const fails = (fn, code) => {
     let r = null;
     try { r = fn(); } catch (_) { return false; }   // 业务失败不该抛
@@ -261,18 +253,69 @@ async function main() {
     check('规格：失败的 upsert 不落库', s.listTriggers().length === 0, s.listTriggers().length + ' 条');
   }
 
-  /* ---------------- 汇总 ---------------- */
+  // 3.11 安全：模型不能借同名 upsert 改写用户已确认的触发器
+  {
+    VNOW = Date.UTC(2026, 0, 1, 0, 0, 0);
+    const { s, events } = fresh({});
+    const made = mk(s, 'guarded', 'interval', { everyMs: M }, { prompt: '原来的话' });
+    check('upsert 安全：用户创建的同名触发器是 active', made.status === 'active', made.status);
 
-  const pass = results.filter(r => r.hit).length;
-  const total = results.length;
-  for (const r of results) {
-    console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
+    // 模型重报完全一样的内容：保留 active，也不推迟 next_at（否则每轮重报 = 永远不触发）
+    const nextBefore = made.nextAt;
+    const same = s.upsertTrigger({
+      name: 'guarded', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '原来的话', reason: 'r',
+    });
+    check('upsert 安全：模型重报同内容仍是 active', same.status === 'active', same.status);
+    check('upsert 安全：模型重报同内容不推迟 next_at', same.nextAt === nextBefore, same.nextAt + ' vs ' + nextBefore);
+
+    // 模型改 prompt：直接拒绝，且库里那行一个字段都不动
+    //（不采用「先覆盖内容再退回 pending_confirm」：那样用户点取消也拿不回批准过的 prompt）
+    const changed = s.upsertTrigger({
+      name: 'guarded', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '被改写的话', reason: 'r',
+    });
+    check('upsert 安全：模型改 prompt → 拒绝（TRIGGER_LOCKED）',
+      changed && changed.ok === false && changed.code === 'TRIGGER_LOCKED', JSON.stringify(changed));
+    const after = s.getTrigger(made.id);
+    check('upsert 安全：拒绝后 prompt / 状态 / 排期原样保留',
+      after.prompt === '原来的话' && after.status === 'active' && after.nextAt === nextBefore,
+      JSON.stringify({ prompt: after.prompt, status: after.status, nextAt: after.nextAt }));
+
+    // 被拒绝的改写不该动排程：原安排到点照常触发，并且用的是原来批准过的 prompt
+    VNOW += M;
+    s.tick();
+    check('upsert 安全：拒绝改写后原安排照常触发（prompt 未被换掉）',
+      events.some(x => x.e === 'trigger.fire' && x.d.triggerId === made.id && x.d.prompt === '原来的话'),
+      JSON.stringify(events.filter(x => x.e === 'trigger.fire').map(x => x.d.prompt)));
+
+    // 模型改排期：同样拒绝
+    const resched = s.upsertTrigger({
+      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, source: 'model', prompt: '原来的话', reason: 'r',
+    });
+    check('upsert 安全：模型改排期 → 同样拒绝',
+      resched && resched.ok === false && resched.code === 'TRIGGER_LOCKED', JSON.stringify(resched));
+
+    // 还没确认过的行不受闸门限制：模型在用户点确认前修正属正常修改
+    const pend = s.upsertTrigger({
+      name: 'pending-one', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '初稿', reason: 'r',
+    });
+    const edited = s.upsertTrigger({
+      name: 'pending-one', type: 'interval', spec: { everyMs: 2 * M }, source: 'model', prompt: '改过的初稿', reason: 'r',
+    });
+    check('upsert 安全：pending_confirm 允许模型修正（仍是待确认）',
+      pend.status === 'pending_confirm' && edited.status === 'pending_confirm' && edited.prompt === '改过的初稿',
+      JSON.stringify({ status: edited.status, prompt: edited.prompt }));
+
+    // 用户自己改（source='user'）：不受闸门限制，状态也不会被 upsert 顺手改掉
+    const byUser = s.upsertTrigger({
+      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, source: 'user', prompt: '用户自己改', reason: 'r',
+    });
+    check('upsert 安全：用户自己 upsert 可以改，状态保持 active',
+      byUser.status === 'active' && byUser.prompt === '用户自己改',
+      JSON.stringify({ status: byUser.status, prompt: byUser.prompt }));
   }
-  console.log('\n调度器单测：' + pass + '/' + total + ' 通过');
-  if (pass !== total) process.exitCode = 1;
+
 }
 
-main().catch(e => {
-  console.error('测试异常：', e);
-  process.exitCode = 1;
-});
+/* ---------------- 汇总 ---------------- */
+
+run('调度器单测', main);

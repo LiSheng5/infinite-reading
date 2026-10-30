@@ -2,79 +2,18 @@
  * src/app/library.js —— 原图（Blob）/ 存档点 / 书架 / 导入导出
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-import { Motion } from '../core/motion.ts';
 import { genId, Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
 import { home } from '../screens/home/home.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, toast, irConfirm, openModal, closeModal, clone, fmtTime, saveAll, miniBtn } = A;
+  const { $, Store, MODE_LABELS, irConfirm, openModal, closeModal, clone, fmtTime, miniBtn } = A;
 
   let startMode = 'choice';      // 开始页选中的模式（choice | chat | rp）
   let typeTimer = null;
   let exportTargetId = null;
-
-  /* ---------- P0-1（2026-10-14 评审）：请求中断 ----------
-   * providers.chat 经 hooks.onAborter 回填当前请求的 AbortController；
-   * 发送按钮在 busy 期间变成「停止」，点了就 abort 当前请求并跳过所有自动重试。 */
-
-  // 用户主动停止导致的请求失败：跳过「流式失败转非流式」「tools 400 降级」等自动重试
-  // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
-  // 顶栏忙碌进度线 #busy-line 跟着同一状态显隐（UI-1 §4.3）
-
-  /* ================= 动效基座（UI-1） ================= */
-
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
-
-  // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
-
-  // 动效令牌里的时长（毫秒）：JS 侧的 WAAPI 与 CSS 共用同一个真源
-
-  /* ================= 小工具 ================= */
-
-  // 同一时刻只保留一条提示（后来者替换前者）：文本写进 #toast-text，
-  // 错误提示额外给一个关闭按钮，其余情况不吃鼠标事件（pointer-events: none）。
-
-  /* 自建 confirm / prompt（内嵌预览是沙箱 iframe，原生弹窗被静默忽略 →
-     直接返回 false / null，表现为「点了没反应」，故不使用原生 confirm / prompt）。
-     irConfirm(msg, { title, okText, input, value, placeholder }) → Promise
-       无输入：确定 resolve(true)，取消 / 关闭 resolve(null)
-       有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null) */
-
-  /* ---------- 弹窗栈（P0-3） ----------
-   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起。
-   * 这里做一个最小的统一入口：
-   *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
-   *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
-   *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
-   *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
-   * 现有 id 与 DOM 全部保持不变。 */
-
-  // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
-
-  /* 断网守卫：离线时【不发请求、也不排队】，直接告诉用户「这次点了不算」。
-   * 不排队是刻意的：出图时机有「每轮 / 选择后」的自动触发，若排队等联网后补发，
-   * 用户会在毫不知情的情况下被扣一笔额度。 */
-
-  // 体积显示：1 MB 以下按 KB 显示 —— 否则「68 KB 的备份」会显示成 0.0 MB，看着像没内容
-
-  // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型
-
-  // 生图配置：预填档位优先；'__custom__' 或未登记时按比例 + 宽高算 size（R8）
-  // override 供画师工作台传入本图的出图参数（比例 / 宽高）
-
-  /* ---------------- 模型能力（T-M-1 / §4.13） ---------------- */
-
-  // 有效上下文窗口：用户手填优先，其次登记表；0 = 未知（压缩退回条数兜底）
-
-  // 手填尺寸时显示宽/高输入（预填档位模式下由档位决定，隐藏）
-
-  // 设置面板：按模型能力显隐参数（思考档位 / 尺寸 / 质量 / 上下文窗口提示）
-
-  // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
-  // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
 
   /* ---------------- 原图（Blob）：存 IndexedDB，取显示地址 ---------------- */
 
@@ -212,7 +151,7 @@ import { A } from './core.js';
     });
   }
 
-  /* ================= 存档点（T-P2-1 / §7） ================= */
+  /* ================= 存档点 ================= */
 
   function snapshotStory(s, name) {
     return {
@@ -234,7 +173,7 @@ import { A } from './core.js';
       scenes: clone((s.scenes || []).slice(-8).map(sc => Object.assign({}, sc, { src: undefined }))),
       lastBg: s.lastBg || null,
       lastSceneSummary: s.lastSceneSummary || '',
-      // 分支树（§4.6）：nodeId 用于「回到这个存档点 = 回到树上这个节点」；
+      // 分支树：nodeId 用于「回到这个存档点 = 回到树上这个节点」；
       // tree 整棵随存档点备份——老存档点回档会把树重置成直线，得先能整棵接回来
       nodeId: (s.tree && s.tree.head) || null,
       tree: clone(s.tree || null),
@@ -274,7 +213,7 @@ import { A } from './core.js';
     if (S.busy) { toast('正在生成中，等这一步结束再回档'); return; }
     const sp = (S.story.savepoints || []).find(x => x.id === id);
     if (!sp) return;
-    // §4.6 分流：存档点带着 nodeId 且节点还在（当前树或存档点自带的树里）→ 回到树上那个节点；
+    // 分流：存档点带着 nodeId 且节点还在（当前树或存档点自带的树里）→ 回到树上那个节点；
     // 老存档点（迁移前）没有节点可回 → 旧的整档快照，树随之重置成一条直线
     const hasNode = !!(sp.nodeId && ((S.story.tree && S.story.tree.nodes[sp.nodeId]) || (sp.tree && sp.tree.nodes && sp.tree.nodes[sp.nodeId])));
     const msg = '回到「' + sp.name + '」？当前进度会先自动存为一个新存档点。'
@@ -286,13 +225,13 @@ import { A } from './core.js';
       Tree.switchTo(S.story, sp.nodeId);   // 含 project：head 落到该节点，世界卡 / 窗口跟着走
     } else {
       restoreSnapshot(S.story, sp);
-      S.story.tree = null;                    // 没有分支可回：整棵树重置为线性链（§4.6）
+      S.story.tree = null;                    // 没有分支可回：整棵树重置为线性链
       Tree.ensure(S.story);
       Tree.project(S.story);
     }
     S.currentChoices = A.choicesFromHead();
     saveAll();
-    A.renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); renderSavepoints();
+    renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); renderSavepoints();
     toast('已回到：' + sp.name);
   }
 
@@ -320,7 +259,7 @@ import { A } from './core.js';
       txt.className = 'mono-line';
       txt.textContent = sp.name + ' · 第 ' + (sp.turn || 0) + ' 回合 · ' + fmtTime(sp.ts);
       const btn = document.createElement('button');
-      btn.className = 'mini-btn';
+      btn.className = 'ui-btn mini';
       btn.textContent = '回到';
       btn.onclick = () => restoreSavepoint(sp.id);
       row.appendChild(txt); row.appendChild(btn);
@@ -328,7 +267,7 @@ import { A } from './core.js';
     }
   }
 
-  /* ================= 书架（T-P2-1 / §7） ================= */
+  /* ================= 书架 ================= */
 
   function showShelf() {
     if (S.busy) { toast('正在生成中，等这一步结束再离开'); return; }   // 回合进行中切走会让异步续体写空/串档
@@ -336,12 +275,12 @@ import { A } from './core.js';
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 Nav（阶段 5 第 3 步）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
+    // 切屏收口到 Nav（阶段 5）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
     // 这样视图过渡的新快照里书架已经是渲染好的（本步之前等价于旧的三行 classList 写入）。
     Nav.showScreen('shelf', () => {
       A.closeMenus();
-      A.closeStoryPrefs();   // UI-3：离开对话就收起本对话设置面板（不残留上一个对话的值）
-      A.renderShelf();   // UI-2：会话列表（src/app/shelf.js）
+      A.closeStoryPrefs();   // 离开对话就收起本对话设置面板（不残留上一个对话的值）
+      A.renderShelf();   // 会话列表（src/app/shelf.js）
     });
   }
 
@@ -352,12 +291,12 @@ import { A } from './core.js';
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 Nav（阶段 5 第 3 步）：同 showShelf，「继续上次」的状态推进进 mutate，
+    // 切屏收口到 Nav（阶段 5）：同 showShelf，「继续上次」的状态推进进 mutate，
     // 保证过渡的新快照里首页已经是最终形态。
     Nav.showScreen('home', () => {
       A.closeMenus();
       A.closeWorkbench();
-      A.closeStoryPrefs();   // UI-3
+      A.closeStoryPrefs();   //
       // 有存档才出现「继续上次」，并带上最近那个故事的名字
       const recent = Store.listStories()[0];
       const label = recent && recent.title ? '《' + recent.title + '》' : '';
@@ -372,7 +311,7 @@ import { A } from './core.js';
     openModal('modal-new');
   }
 
-  // 开始页三模式（§4.8）：三张卡即三个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
+  // 开始页三模式：三张卡即三个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
   //   剧情 = 开局设定向导（与书架「新建」同一入口，不再有预设剧情）；对话 = 直接开聊；扮演 = 先建角色卡
   function startFromStart(mode) {
     startMode = (mode === 'chat' || mode === 'rp') ? mode : 'choice';
@@ -384,19 +323,19 @@ import { A } from './core.js';
   function continueLast() {
     const s = Store.loadCurrent() || (Store.listStories()[0] && Store.loadStory(Store.listStories()[0].id));
     if (!s) { toast('没有找到存档'); showShelf(); return; }
-    if (S.story && S.story.id !== s.id) A.stopVideoWaiting();   // §7：切故事停本地轮询
+    if (S.story && S.story.id !== s.id) A.stopVideoWaiting();   // 切故事停本地轮询
     S.story = s;
     S.story.savepoints = S.story.savepoints || [];
     S.story.ui = Object.assign(Store.defaultUi(), S.story.ui || {});
     Store.setCurrentId(S.story.id);
     A.enterGame(false);
-    A.resumePendingVideos();   // §7：刷新 / 重开后续上生视频轮询
+    A.resumePendingVideos();   // 刷新 / 重开后续上生视频轮询
   }
 
-  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 src/app/shelf.js（UI-2）：
-     renderShelf 只读索引；openStory(id, opts) 支持滚动到命中消息（§3.7）。 */
+  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 src/app/shelf.js：
+     renderShelf 只读索引；openStory(id, opts) 支持滚动到命中消息。 */
 
-  /* ================= 导入 / 导出（T-P2-4 / §4.11） ================= */
+  /* ================= 导入 / 导出 ================= */
 
   function openExport(id) {
     exportTargetId = id;
@@ -408,7 +347,7 @@ import { A } from './core.js';
   async function buildExportPack(st, kind, withSrc) {
     const images = [];
     for (const s of (st.scenes || []).slice(-Tree.SCENE_WINDOW)) {
-      // §0/§10：视频不随备份导出（体积）——只留封面，条目标 videoOmitted:true，导入后显示「视频未随备份导出」
+      // 视频不随备份导出（体积）——只留封面，条目标 videoOmitted:true，导入后显示「视频未随备份导出」
       if (s.kind === 'video') {
         images.push({
           id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '',
@@ -433,7 +372,7 @@ import { A } from './core.js';
       }
       images.push(im);
     }
-    // UI-3 §3.4：组装走 Store.buildStoryPack——整包剥凭证（apiKey / baseUrl 等），
+    // 组装走 Store.buildStoryPack——整包剥凭证（apiKey / baseUrl 等），
     // prefs 只带 profileId（不透明 id）+ profileLabel（仅显示）；settings 永不进导出包。
     return Store.buildStoryPack(st, kind, images, S.settings);
   }

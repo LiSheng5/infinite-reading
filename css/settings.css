@@ -1,0 +1,418 @@
+/* ==================== 设置（本地服务条 · 分组导航 · 本对话设置 · 下钻 · 字号密度 · 设置页） ====================
+ * 设置相关的全部版式；设置页一律限定在 #modal-settings 内，不影响其它弹窗。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+
+/* ==================== 本地服务（sidecar）：状态 / 入口条 / 主动消息标注 ==================== */
+.sidecar-state { font-family: var(--font-body); font-size: 13.5px; letter-spacing: 0.02em; }
+.sidecar-state.on { color: var(--accent); }
+.sidecar-state.off { color: var(--ink-dim); }
+
+/* 本地服务没启动 / 没填 token 时，三个功能分区整体灰显（只是视觉降级，不禁用输入） */
+fieldset.feature-off { opacity: .55; }
+fieldset.feature-off legend { color: var(--ink-dim); }
+
+/* 主动消息：沿用玩家发言的弱化样式，左侧强调线 + 一行轻量标注 */
+.bubble-agent {
+  align-self: stretch;
+  border-left: 2px solid var(--accent-line);
+  padding: 1px 0 1px 13px;
+  color: var(--ink-dim);
+  font-size: 16px;
+  line-height: 1.85;
+}
+.bubble-agent .agent-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  letter-spacing: .06em;
+  margin-bottom: 3px;
+}
+
+/* 触发安排 / 台账：一行一条，右侧放操作 */
+.trigger-row, .ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.trigger-row .t-main, .ledger-row .t-main { min-width: 0; }
+.trigger-row .t-name { font-weight: 600; color: var(--ink); }
+.trigger-row .t-meta, .ledger-row .t-meta { font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+.trigger-row .t-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.status-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  margin-left: 6px;
+}
+.status-pill.pending { border-color: var(--accent-line); color: var(--accent); }
+.status-pill.denied { border-color: var(--danger); color: var(--danger); }
+
+.pay-result { font-size: 13.5px; line-height: 1.8; color: var(--ink); }
+.pay-result .ok { color: var(--accent); }
+.pay-result .warn { color: var(--danger); }
+
+/* ====================  设置分层：全局设置分组导航 ==================== */
+#modal-settings .modal-card { width: min(880px, 96vw); }
+.set-shell { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 18px; align-items: start; }
+.set-nav { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
+.set-nav-item {
+  text-align: left; padding: 10px 12px; min-height: 40px;
+  border: 1px solid var(--line-soft); background: var(--field-bg);
+  color: var(--ink-dim); border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em;
+  transition: background var(--m-t-color-fast) var(--ease-out), color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
+}
+.set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: translateX(2px); }
+.set-nav-item.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-deep); }
+.set-panels { min-width: 0; }
+.set-panel { animation: var(--an-fadeIn) var(--m-dur-slow) var(--ease-out) both; }
+.set-panel-title {
+  font-family: var(--font-note); font-size: 15px; font-weight: 400;
+  letter-spacing: .14em; color: var(--ink-dim); margin: 2px 0 12px;
+}
+.set-back { margin-bottom: 12px; }
+html[data-motion="off"] .set-nav-item:hover { transform: none; }
+html[data-motion="off"] .set-panel { animation: none; }
+
+/* 模型库：列表行 + 编辑块 */
+#fs-profiles .mono-row { gap: 8px; flex-wrap: wrap; }
+#mp-editor { border: 1px dashed var(--line); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; }
+#mp-editor .row-inline { margin-top: 10px; }
+
+/* ====================  本对话设置面板 ==================== */
+.story-prefs {
+  position: fixed; top: calc(44px + env(safe-area-inset-top)); right: 0; bottom: 0;
+  width: min(360px, 92vw);
+  background: var(--surface); border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-2); z-index: 25;   /* 在内容之上、弹窗（.modal z-index 30）之下 */
+  display: flex; flex-direction: column;
+  animation: var(--an-prefsIn) var(--m-dur-base) var(--ease-spring) both;
+}
+.prefs-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+.prefs-head h3 {
+  font-family: var(--font-note); font-size: 16px; font-weight: 400;
+  letter-spacing: .12em; color: var(--ink);
+}
+.prefs-scroll {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.prefs-body {
+  display: flex; flex-direction: column; gap: 12px;
+}
+/* 「当前故事」组自全局设置迁入（阶段 4 屏 2）：沿用设置弹层的「平铺 + 小节标题」处理，
+   作用域只限 #prefs-story（全局 fieldset / legend 样式不动）。 */
+#prefs-story {
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--line-soft); padding-top: 4px;
+}
+#prefs-story fieldset {
+  min-width: 0; margin: 0 0 22px; padding: 0; border: 0; background: none;
+}
+#prefs-story fieldset:last-child { margin-bottom: 4px; }
+#prefs-story fieldset + fieldset { padding-top: 20px; border-top: 1px solid var(--line-soft); }
+#prefs-story legend {
+  /* 这里的 fieldset 无边框，legend 不骑边框，直接当小节标题用（不用 #modal-settings 的 float 技法，
+     顺带避开「legend + * 的 clear 落在 display:none 的空态提示上、正文被挤成竖条」的坑） */
+  display: block; width: 100%;
+  padding: 0 0 6px;
+  font-family: var(--font-ui); font-size: 14px; font-weight: 600; letter-spacing: .06em;
+  color: var(--ink);
+}
+#prefs-story .set-sub {
+  margin: 0 0 12px;
+  font-family: var(--font-ui); font-size: 12px; line-height: 1.7;
+  color: var(--ink-dim);
+}
+#prefs-story label { margin-bottom: 12px; }
+#prefs-story .hint { font-size: 12px; line-height: 1.7; margin-top: 6px; }
+#prefs-story .row-inline { margin-top: 8px; }
+#prefs-story .panel-block { margin-top: 14px; padding-top: 12px; }
+#prefs-story .mono-list { max-height: 180px; }
+.prefs-foot { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); }
+.prefs-row {
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  background: var(--fieldset-tint); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.prefs-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prefs-label { font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; color: var(--ink); }
+.prefs-badge { margin-left: auto; font-family: var(--font-ui); font-size: 11px; letter-spacing: .06em; color: var(--ink-faint); }
+.prefs-badge.over { color: var(--accent-deep); }
+.prefs-row select, .prefs-row input[type="text"], .prefs-row input[type="number"] {
+  width: 100%; min-height: 40px; box-sizing: border-box;
+}
+.prefs-row input[type="range"] { width: 100%; }
+.prefs-row .check { min-height: 40px; display: flex; align-items: center; }
+.prefs-row .hint.warn { color: var(--danger-deep); }
+.prefs-row .ui-btn:where(.mini) { min-height: 32px; }
+
+/* ==================== 阶段 4 屏 2：面板内下钻（方案 A） ====================
+   一级 = 对话覆盖行 + 故事数据；二级 = 世界状态卡编辑器（#prefs-world，正文内滚 + 底部 sticky 保存栏）。
+   切换由 .prefs-scroll[data-view] 收口；窄屏 76vh 底部弹层与桌面停靠面板同一套交互（不做桌面特例）。
+   下钻 / 返回的进场用 leafIn（off 档收成纯透明度、standard 档 ≤160ms 短位移、rich 档全量，见 css/motion.css）。 */
+.prefs-head-world { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.prefs-head .world-back { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.prefs-head .world-title {
+  font-family: var(--font-note); font-size: 16px; font-weight: 400;
+  letter-spacing: .12em; color: var(--ink); margin: 0; outline: none;
+}
+#story-prefs .prefs-scroll[data-view="world"] {
+  overflow: hidden; padding: 0; gap: 0;
+}
+#story-prefs .prefs-scroll[data-view="world"] #prefs-body,
+#story-prefs .prefs-scroll[data-view="world"] .prefs-story-list { display: none; }
+#story-prefs .prefs-scroll[data-view="world"] #prefs-story {
+  flex: 1; min-height: 0; border-top: 0; padding-top: 0;
+}
+#story-prefs .prefs-scroll[data-view="list"] #prefs-world { display: none; }
+#story-prefs .prefs-scroll[data-view="world"] #prefs-world {
+  animation: var(--an-leafIn) var(--m-dur-base) var(--ease-out) both;
+}
+#story-prefs .prefs-scroll[data-view="list"] .prefs-story-list {
+  animation: var(--an-leafIn) var(--m-dur-base) var(--ease-out) both;
+}
+#prefs-world { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#prefs-world .world-edit-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px;
+}
+#prefs-world .world-save-bar {
+  position: sticky; bottom: 0;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line); background: var(--surface);
+}
+#prefs-world .world-save-bar .hint { margin-top: 0; }
+#prefs-world .mono-list { max-height: 180px; }
+
+/* 人物行「行卡」形态（charEditor variant: card）：首行名字 + 在场/离场各半，
+   下方三个全宽输入，右上角 40px 删除钮，不出表头 */
+#prefs-world .char-rows { gap: 10px; }
+#prefs-world .char-row.card {
+  display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px 6px;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  padding: 10px; background: var(--fieldset-tint); align-items: center;
+}
+#prefs-world .char-row.card input { margin: 0; min-width: 0; }
+#prefs-world .char-row.card input.char-wide { grid-column: 1 / -1; }
+#prefs-world .char-row.card .char-del {
+  grid-column: 3; grid-row: 1;
+  width: 40px; min-width: 40px; height: 40px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* 停靠面板：桌面 / 笔记本让出右侧宽度，不遮挡输入区（A.6）。
+   让位是布局变化，不做过渡（令牌护栏：transition 不动重排属性）；面板自身的滑入用 transform。 */
+@media (min-width: 721px) {
+  #screen-game.prefs-open { margin-right: min(360px, 92vw); }
+}
+/* 窄屏触控目标不小于 40px（A.6；「窄屏所有可点目标不小于 40px」） */
+@media (max-width: 720px) {
+  .ui-btn:where(.hud) { min-width: 40px; min-height: 40px; }
+  .story-prefs .ui-btn:where(.hud) { min-width: 40px; min-height: 40px; }
+  .prefs-head .world-back { min-height: 40px; }   /* 面板内下钻：返回也是 ≥40px 的触控目标 */
+  .modal select, .modal input[type="text"], .modal input[type="number"],
+  .modal input[type="password"], .modal textarea, .modal .ui-btn:where(:not(.hud, .icon-only)) {
+    min-height: 40px; box-sizing: border-box;
+  }
+  .set-back { min-height: 40px; }
+  /* 复选行 / 折叠摘要：整行可点，高度提到 40px（input 本体是原生复选框，可点区域是包裹它的 label） */
+  #modal-settings .check, #story-prefs .check { min-height: 40px; align-items: center; }
+  #modal-settings details > summary, #story-prefs details > summary {
+    min-height: 40px; box-sizing: border-box;
+  }
+  #modal-settings details.panel-block > summary, #story-prefs details.panel-block > summary {
+    padding: 11px 0;
+  }
+  /* 本对话设置面板（非 .modal）：控件与按钮同样 ≥40px */
+  #story-prefs select, #story-prefs input[type="text"], #story-prefs input[type="number"],
+  #story-prefs input[type="password"], #story-prefs textarea, #story-prefs input[type="range"] {
+    min-height: 40px; box-sizing: border-box;
+  }
+  #story-prefs .ui-btn:where(:not(.hud, .icon-only)) { min-height: 40px; box-sizing: border-box; }
+}
+
+/* 窄屏：底部弹层（同的下钻手势感） */
+@media (max-width: 720px) {
+  .set-shell { grid-template-columns: 1fr; gap: 0; }
+  .set-shell:not(.detail) .set-panels { display: none; }
+  .set-shell.detail .set-nav { display: none; }
+  .set-nav-item { width: 100%; }
+  .story-prefs {
+    top: auto; left: 0; right: 0; bottom: 0; width: auto;
+    max-height: 76vh; border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius) var(--radius) 0 0;
+    animation: var(--an-prefsUp) var(--m-dur-base) var(--ease-spring) both;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+html[data-motion="off"] .story-prefs { animation: none; }
+
+/* ==================== 字号 / 内容宽度 / 密度令牌 ==================== */
+#screen-game { --font-scale: 1; --content-w: 760px; --density: 1; }
+/* 智能体 / 扮演：内容列宽度吃 --content-w（居中） */
+#screen-game[data-layout="chat"] .chat-scroll {
+  padding-left: max(16px, calc((100% - var(--content-w, 760px)) / 2));
+  padding-right: max(16px, calc((100% - var(--content-w, 760px)) / 2));
+  gap: calc(22px * var(--density, 1));
+}
+/* 字号：气泡正文按 --font-scale 缩放（基准 17px，窄屏 16.5px） */
+#screen-game .chat-scroll .bubble { font-size: calc(17px * var(--font-scale, 1)); line-height: 1.95; }
+@media (max-width: 480px) {
+  #screen-game .chat-scroll .bubble { font-size: calc(16.5px * var(--font-scale, 1)); }
+}
+/* 密度：气泡间距同时缩（剧情 / 智能体 / 扮演统一） */
+#screen-game .chat-scroll { gap: calc(22px * var(--density, 1)); }
+@media (max-width: 900px) {
+  #screen-game .chat-scroll { gap: calc(18px * var(--density, 1)); }
+}
+
+
+/* ==================== 设置页（全部限定在 #modal-settings 内，不影响其它弹窗） ====================
+   版式：左侧安静的文字导航 + 右侧一栏滚动内容；卡片定高，切分组时不跳。
+   字段之间不再夹长段说明：副标题一行（.set-sub），高级项 / 长说明折进 <details>（.adv / .help）。 */
+#modal-settings .set-shell { display: grid; align-items: start; }
+#modal-settings .set-nav { display: flex; flex-direction: column; gap: 2px; }
+#modal-settings .set-nav-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  text-align: left;
+  font-family: var(--font-ui); font-size: 13.5px; letter-spacing: .05em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--m-t-color-fast) var(--ease-out), color var(--m-t-color-fast) var(--ease-out);
+}
+#modal-settings .set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: none; }
+#modal-settings .set-nav-item.active { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+#modal-settings .set-nav-item .ic { display: none; width: 16px; height: 16px; color: var(--ink-faint); }
+
+#modal-settings fieldset {
+  min-width: 0;
+  margin: 0 0 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+#modal-settings fieldset + fieldset { padding-top: 28px; border-top: 1px solid var(--line-soft); }
+#modal-settings legend {
+  /* legend 默认骑在 fieldset 上边框上；浮起来 + 清除后，它就成了普通的小节标题 */
+  float: left; display: block; width: 100%;
+  padding: 0 0 6px;
+  font-family: var(--font-ui); font-size: 15px; font-weight: 600; letter-spacing: .06em;
+  color: var(--ink);
+}
+#modal-settings legend + * { clear: both; }
+#modal-settings .set-sub {
+  margin: 0 0 16px;
+  font-family: var(--font-ui); font-size: 12.5px; line-height: 1.75;
+  color: var(--ink-dim);
+}
+#modal-settings .set-sub b { color: var(--ink); font-weight: 600; }
+#modal-settings label { margin-bottom: 14px; }
+#modal-settings .hint { font-size: 12.5px; line-height: 1.75; margin-top: 6px; }
+#modal-settings .hint code, #modal-settings .help-body code {
+  font-family: var(--font-mono); font-size: 11.5px;
+  padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--ink);
+}
+#modal-settings .check { flex-wrap: wrap; row-gap: 0; margin-bottom: 12px; }
+#modal-settings .check-sub { flex: 0 0 100%; padding-left: 24px; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
+#modal-settings .row-inline .check { margin-bottom: 0; }
+#modal-settings .row-inline { margin-top: 8px; }
+#modal-settings .panel-block { margin-top: 16px; padding-top: 14px; }
+#modal-settings .mp-title { color: var(--ink); font-weight: 600; margin: 0 0 10px; }
+#modal-settings #mp-editor { margin-top: 14px; }
+
+/* 测试连接：一行，按钮在左，结果在右 */
+#modal-settings .test-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 2px 0 14px;
+}
+#modal-settings .test-row .test-state { margin-top: 0; flex: 1 1 200px; min-width: 0; }
+
+/* 折叠块：高级参数 / 单独配置 / 详细设置（.adv，带边框）与填写说明（.help，无边框） */
+#modal-settings details.adv,
+#modal-settings details.help { margin-top: 8px; }
+#modal-settings details.adv {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+#modal-settings details.adv > summary,
+#modal-settings details.help > summary {
+  display: flex; align-items: center; gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-ui); font-size: 13px; letter-spacing: .04em;
+}
+#modal-settings details.adv > summary { padding: 10px 14px; color: var(--ink); }
+#modal-settings details.help > summary { padding: 6px 0; color: var(--ink-dim); }
+#modal-settings details.adv > summary::-webkit-details-marker,
+#modal-settings details.help > summary::-webkit-details-marker { display: none; }
+#modal-settings details.adv > summary::before,
+#modal-settings details.help > summary::before {
+  content: "";
+  flex: none;
+  width: 6px; height: 6px;
+  border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  color: var(--ink-dim);
+  transition: transform var(--m-t-shift-fast) var(--ease-out);
+}
+#modal-settings details[open] > summary::before { transform: rotate(45deg); }
+#modal-settings details.adv > summary:hover,
+#modal-settings details.help > summary:hover { color: var(--accent); }
+#modal-settings .adv-tag { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
+#modal-settings .adv-tag.on { color: var(--accent); }
+#modal-settings .adv-body { padding: 14px 14px 2px; border-top: 1px solid var(--line-soft); }
+#modal-settings .help-body { padding: 2px 0 4px; }
+#modal-settings .help-body p, #modal-settings .help-body .hint {
+  margin: 6px 0; font-size: 12.5px; line-height: 1.8; color: var(--ink-dim);
+}
+#modal-settings details.panel-block > summary { font-size: 13px; }
+#modal-settings .danger-row { margin: 0; padding-top: 22px; border-top: 1px solid var(--line-soft); text-align: left; }
+
+/* 桌面：定高卡片，左导航固定、右内容单独滚动 */
+@media (min-width: 721px) {
+  #modal-settings .modal-card { width: min(940px, 96vw); height: min(740px, 92vh); max-height: none; }
+  #modal-settings .modal-body { padding: 0; overflow: hidden; display: flex; }
+  #modal-settings .set-shell { flex: 1; min-height: 0; grid-template-columns: 196px minmax(0, 1fr); gap: 0; align-items: stretch; }
+  #modal-settings .set-nav { position: static; padding: 16px 10px; border-right: 1px solid var(--line-soft); overflow-y: auto; }
+  #modal-settings .set-panels { overflow-y: auto; padding: 26px 32px 30px; }
+  #modal-settings .set-panel-title { display: none; }   /* 左边已高亮当前分组，不再重复标题 */
+}
+/* 窄屏：列表 → 详情下钻（逻辑在 prefsui.js，这里只管长相） */
+@media (max-width: 720px) {
+  #modal-settings .modal-body { padding: 4px 16px 22px; }
+  #modal-settings .set-nav { gap: 0; }
+  #modal-settings .set-nav-item {
+    min-height: 54px; padding: 12px 4px;
+    font-size: 15.5px; color: var(--ink);
+    border-radius: 0; border-bottom: 1px solid var(--line-soft);
+  }
+  #modal-settings .set-nav-item.active { background: transparent; color: var(--ink); font-weight: 400; }
+  #modal-settings .set-nav-item .ic { display: block; }
+  #modal-settings .set-panel-title { margin: 6px 0 18px; font-size: 21px; letter-spacing: .06em; color: var(--ink); }
+  #modal-settings .set-back { margin: 10px 0 0; }
+  /* 下钻：列表态只显示分组列表，详情态只显示当前分组（这两条要带 #modal-settings，才压得过上面的 display:flex） */
+  #modal-settings .set-shell:not(.detail) .set-panels { display: none; }
+  #modal-settings .set-shell.detail .set-nav { display: none; }
+  #modal-settings fieldset { margin-bottom: 26px; }
+}

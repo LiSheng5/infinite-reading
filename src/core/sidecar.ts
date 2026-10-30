@@ -173,7 +173,7 @@ const global = globalThis as any;
     if (!global.EventSource) return;
     if (sse || sseConnecting) return;
     sseConnecting = true;
-    // EventSource 不能带 Authorization 头，token 也绝不进 URL（会进代理 / 日志 / Referer，审查 低危 #18）：
+    // EventSource 不能带 Authorization 头，token 也绝不进 URL（会进代理 / 日志 / Referer）：
     // 先用 Bearer 换一张短时效一次性 ticket，再以 ?ticket= 连接
     api('POST', '/api/events/ticket').then(t => {
       sseConnecting = false;
@@ -268,7 +268,7 @@ const global = globalThis as any;
   function can(feature) { return state === 'online' && !!features[feature]; }
   function config() { return { port: cfg.port, token: cfg.token }; }
   function getConfig() { return api('GET', '/api/config'); }
-  // 业务失败的统一出入口（审查 可维护性 #7）：响应体带 { ok:false, code } 时抛出与 api() 400 同形的 Error
+  // 业务失败的统一出入口：响应体带 { ok:false, code } 时抛出与 api() 400 同形的 Error
   //（err.code / err.status），调用方只用写一套 catch。成功则解包 body[key]。
   function unwrap(r, key) {
     if (r && r.ok === false) {

@@ -80,7 +80,7 @@ export interface NarrationEntry {
   versions?: string[];
   activeVersion?: number;
   ts: number;
-  nid?: string;           // 来自哪个树节点（§5⑧）
+  nid?: string;           // 来自哪个树节点
 }
 
 export interface PlayerEntry {
@@ -95,6 +95,7 @@ export interface ToolEntry {
   tool: string;
   summary: string;
   ts: number;
+  error?: string; // 失败留痕的原因（书记员未配置 / 网络失败 / 解析失败不再不可区分）
 }
 
 export interface ImageEntry {
@@ -127,7 +128,7 @@ export interface VideoEntry {
   duration?: number;
   resolution?: string;
   ts: number;
-  videoOmitted?: boolean; // 导出包里视频本体不随行（§0）
+  videoOmitted?: boolean; // 导出包里视频本体不随行
   remoteUrl?: string;     // 旧档 videoUrl 同义，仅降级用
 }
 

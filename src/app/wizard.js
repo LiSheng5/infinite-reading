@@ -1,81 +1,17 @@
 /*
- * src/app/wizard.js —— 开局向导（T-P2-3）
+ * src/app/wizard.js —— 开局向导
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { ChatProviders } from '../core/providers.ts';
 import { charApi } from '../screens/modal/state.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, DEFAULT_TOPIC, CHAT_PREMISE, DRAFT_SYSTEM, toast, openModal, closeModal, netErrHint, sleep, fmtTime, resolveSub } = A;
+  const { $, Store, DEFAULT_TOPIC, CHAT_PREMISE, DRAFT_SYSTEM, openModal, closeModal, netErrHint, sleep, fmtTime, resolveSub, reportUserFailure } = A;
 
 
-  /* ================= 本地存储与备份（P0 数据安全） =================
-   * 全部数据只在浏览器 localStorage（每站点约 5MB），没有任何服务端。这里做三件事：
-   *  1) 申请持久化存储 navigator.storage.persist()：磁盘压力下的 LRU 淘汰会跳过本站
-   *     （Safari 的 7 天无交互清除仍会生效，只能靠交互 / 加到主屏缓解）
-   *  2) 算清本应用占用量，到 70% 提前预警（原来的提示只在写入失败之后才出现，已经晚了）
-   *  3) 「一键导出全部备份」(.irbackup.json，可整体还原) + 超过 7 天没备份就提醒一次
-   */
-
-  // 只统计本应用的键（ir: 前缀）：localStorage 上限是所有键共享的，这里的占用才是我们能控的
-
-  // 真实占用：navigator.storage.estimate()（把 IndexedDB / Cache 等一起算在内，比数键位准得多）
-
-  // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
-
-  /* 「带原图备份」= 一个 zip 里放两样东西：
-   *   ir-backup.json      与普通备份完全同款（schema 2 只多一份 images 清单）
-   *   images/0001.png …   原图按二进制原样存放
-   * 为什么不把原图 base64 塞进 JSON：大图转 base64 体积涨约 1/3，还会在内存里堆成巨型字符串；
-   * zip 装的是原始字节，体积最省，导出 / 导入都不容易把内存打爆。代价是 .zip 不能直接肉眼查看。 */
-
-  // 超过 7 天没备份（且确实有故事）→ 启动后提醒一次；提醒本身每天最多一次，不刷屏
-
-  // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况
-
-  // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
-
-  /* ================= 剧情文本导入（R12 路径② / §4.11 / T-P6-1） =================
-   * 粘贴任意剧情文本 → 整理向导（用「起草模型」；只有装不下才 map-reduce）→
-   * premise + world 草稿 + 画风关键词 → 用户确认修改（不可跳过）→ 建新档 → 试画锚定 → 开场。
-   * 调用失败退回本地规则。 */
-
-  // 整理模型：弹窗里可选（默认跟随剧情模型；也能用单独配置的起草模型）
-
-  // 「这次用谁整理」的一行字（显示在提示与确认页上；避免只写模型名让人误以为是硬编码的）
-
-  // 整理模型的有效窗口：跟随剧情模型 → 用剧情模型的；起草模型 → 单独配了才查登记表
-
-  // 粘贴框下方的一行提示：整理模型 + 窗口 + 这次会一次调用还是 map-reduce（返回 plan 供调用方复用）
-
-  // 本地兜底整理：只截取原文开头并结构化（调用失败时用；标「本地规则」，等用户改）
-
-  // 分段摘要合并（§4.11：分段各出摘要，再一次合并成开局材料）
-
-  /* ================= 角色卡（R13 / §4.12 / T-P7-1） =================
-   * 统一编辑器：自建 = 空白表单；导入 = SillyTavern V2/V3 PNG（只兼容格式，不复制内容）；改完即生效。
-   * rp 开局 = 选（建 / 导入）一张角色卡；开场白作为首条旁白；示例对话喂给模型学口吻。 */
-
-  // 卡 → 世界卡人物条目（personality / speech 对接，§4.12）；用户手改过的字段按 mergeWorld 规则保护
-
-  // 开场白 = rp 首条旁白（不花一次 AI 调用；§4.12）
-
-  /* ---------------- 用户画像（R13 / §4.12 / T-P7-2） ----------------
-   * 开关默认全关、可按模式单独开或全开；范围 global（ir:user-profile）/ per-story 用户自选。
-   * 收集：真实模式由书记员校对时顺手提取；失败退回本地确定性规则（只认「我…」句式）。
-   * 注入：每轮只带与当前话题相关的 Top-N + 常驻一行摘要（assembleAI1 的 opts.profile，见 callAI1）。 */
-
-  // 当前生效的画像条目（按 scope 取全局或本档）；关开关 / 没故事 → 空
-
-  // 写入画像：关开关即停止收集；合并去重（同文只留最新），不设条数上限（§4.12 存储无上限）
-
-  // 失败兜底：只看玩家最后说的一句（确定性规则）
-
-  // 书记员输入里的画像指示：开没开都说清楚，省得模型乱输出
-
-  /* ================= 开局向导（T-P2-3 / §4.8） ================= */
+  /* ================= 开局向导 ================= */
 
   // 人物设定独立控件（可增删行）：姓名 / 性格 / 说话方式。
   // 行数据在 src/screens/modal/state.svelte.js，charApi 与旧 A.charEditor 同形的 set / get / add。
@@ -180,7 +116,7 @@ import { A } from './core.js';
       toast('草稿已填入，改成你自己的话即可');
     } catch (e) {
       fillWizard(localDraft(topic));
-      toast(netErrHint(e) + '（已改用本地模板草稿）', true, true);
+      reportUserFailure('起草', e, { message: netErrHint(e) + '（已改用本地模板草稿）' });   // 「起草」按钮仍在，可再点一次
     } finally {
       btn.disabled = false;
       label.textContent = '起草';
@@ -212,7 +148,7 @@ import { A } from './core.js';
     const title = (topic || firstSentence(worldText, 20) || '未命名故事').slice(0, 40);
     const premise = buildPremise({ title, world: worldText, role, chars, style, dev });
     const s = Store.newStory({ title, premise, mode: 'choice', styleTone: style });
-    // 向导同时初始化世界卡（§4.8）：人物栏 → characters，世界观 → place
+    // 向导同时初始化世界卡：人物栏 → characters，世界观 → place
     s.world.place = firstSentence(worldText, 40);
     s.world.characters = chars.map(c => ({
       name: c.name, presence: '在场', personality: c.personality, speech: c.speech, note: '', noteLocked: false,
@@ -221,14 +157,14 @@ import { A } from './core.js';
     S.story = s;
     closeModal('modal-wizard');
     A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.renderChat });   // §12：剧情模式「向导 → 试画」；开场由用户点「开始第一幕」
+    A.openAnchor({ onDone: renderChat });   // 剧情模式「向导 → 试画」；开场由用户点「开始第一幕」
   }
 
   function createStoryImmediate(mode) {
-    // R13：rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
+    // rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
     if (mode === 'rp') { A.openCardEditor({ mode: 'new' }); return; }
     const s = Store.newStory({
-      title: '新对话',           // UI-2 §3.2：初始标题「新对话」，回合 1 / 6 由小模型自动起标题
+      title: '新对话',           // 初始标题「新对话」，回合 1 / 6 由小模型自动起标题
       premise: CHAT_PREMISE,
       mode: 'chat',
     });

@@ -1,6 +1,6 @@
 <script>
   /* Checkbox.svelte —— 勾选项（阶段 3 组件库）
-   * 值双向绑定：bind:checked；label 为纯文本（用户内容不做 HTML 解释，§8）。 */
+   * 值双向绑定：bind:checked；label 为纯文本（用户内容不做 HTML 解释）。 */
   let {
     checked = $bindable(false),
     label = '',

@@ -7,7 +7,7 @@
    *   #btn-anchor-use 的 disabled 与文案由 setAnchorBusy / anchorDraftCard 改。
    * 所有按钮的 handler 都在 src/app/main.js；这里一个都不挂（否则双触发一次开锚定 / 锁定）。
    */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Button from '../../ui/Button.svelte';

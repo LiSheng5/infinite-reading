@@ -16,19 +16,17 @@ const os = require('os');
 const http = require('http');
 const spawn = require('child_process').spawn;
 
+const { check, run } = require('./_harness.js');
+
 const ROOT = path.join(__dirname, '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ir-sidecar-smoke-'));
 const PORT = 4400 + Math.floor(Math.random() * 500);
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 let sseReq = null;
 
-function req(method, p, body, token) {
+function reqOn(port, method, p, body, token) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
     const headers = {};
@@ -37,7 +35,7 @@ function req(method, p, body, token) {
       headers['Content-Type'] = 'application/json';
       headers['Content-Length'] = Buffer.byteLength(data);
     }
-    const r = http.request({ host: '127.0.0.1', port: PORT, path: p, method: method, headers: headers }, res => {
+    const r = http.request({ host: '127.0.0.1', port: port, path: p, method: method, headers: headers }, res => {
       let buf = '';
       res.on('data', c => { buf += c; });
       res.on('end', () => {
@@ -52,16 +50,43 @@ function req(method, p, body, token) {
   });
 }
 
-async function waitHealth(timeoutMs) {
+function req(method, p, body, token) {
+  return reqOn(PORT, method, p, body, token);
+}
+
+async function waitHealth(timeoutMs, port) {
+  const p = port || PORT;
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     try {
-      const r = await req('GET', '/health');
+      const r = await reqOn(p, 'GET', '/health');
       if (r.status === 200 && r.json) return r.json;
     } catch (_) {}
     await sleep(150);
   }
   return null;
+}
+
+function spawnServer(dataDir, port) {
+  return spawn(process.execPath, [path.join(ROOT, 'sidecar', 'server.mjs')], {
+    cwd: ROOT,
+    env: Object.assign({}, process.env, { IR_SIDECAR_DATA_DIR: dataDir, IR_SIDECAR_PORT: String(port) }),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+/* 等子进程退出；超时返回 'TIMEOUT' 并杀掉，避免测试挂死 */
+async function waitExit(child, timeoutMs) {
+  let timer = null;
+  const exited = new Promise(resolve => {
+    child.on('exit', code => resolve(code));
+    child.on('error', () => resolve(-1));
+  });
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve('TIMEOUT'), timeoutMs); });
+  const r = await Promise.race([exited, timeout]);
+  if (timer) clearTimeout(timer);
+  if (r === 'TIMEOUT') { try { child.kill(); } catch (_) {} }
+  return r;
 }
 
 function openSse(ticket) {
@@ -80,12 +105,44 @@ function openSse(ticket) {
   });
 }
 
+/* 锁文件：锁 = 单进程的唯一判据，TOCTOU 会让定时触发跑两遍，这里单独先验一遍。
+ *  1. 空锁文件 + 刚创建 = 另一个实例 open 后还没 write → 必须按「正在启动」拒绝，不能当陈旧锁抢走；
+ *  2. 内容里的 pid 已死 = 上次异常退出的遗留 → 允许多新实例接管。
+ * 两种情况各拉一个真实子进程（独立数据目录 + 独立端口），验完即杀。 */
+async function checkLockRules() {
+  const dir = path.join(TMP, 'lock-probe');
+  fs.mkdirSync(dir, { recursive: true });
+  const lock = path.join(dir, '.lock');
+
+  fs.writeFileSync(lock, '');
+  const empty = spawnServer(dir, PORT + 1);
+  let emptyErr = '';
+  empty.stdout.on('data', () => {});
+  empty.stderr.on('data', c => { emptyErr += c.toString(); });
+  const emptyCode = await waitExit(empty, 10000);
+  // 断言「主动拒绝」的文案：只看退出码会把启动崩溃（如未定义函数）误判成通过
+  check('D23：空锁文件（刚创建，可能还没写内容）→ 拒绝启动（而非崩溃）',
+    emptyCode === 1 && emptyErr.indexOf('已有另一个 sidecar 实例在运行') !== -1,
+    '退出码 ' + emptyCode + ' / ' + emptyErr.replace(/\s+/g, ' ').slice(0, 160));
+  check('D23：拒绝启动时不删别人的锁文件', fs.existsSync(lock), '锁文件被删了');
+
+  fs.writeFileSync(lock, JSON.stringify({ pid: 999999, at: 0, nonce: 'stale' }));
+  const takeover = spawnServer(dir, PORT + 1);
+  let takeoverErr = '';
+  takeover.stdout.on('data', () => {});
+  takeover.stderr.on('data', c => { takeoverErr += c.toString(); });
+  const health = await waitHealth(12000, PORT + 1);
+  check('D23：陈旧锁（pid 已死）→ 允许启动并接管', !!health,
+    health ? '' : ('未能启动 ' + takeoverErr.slice(0, 300)));
+  try { takeover.kill(); } catch (_) {}
+  await waitExit(takeover, 5000);
+  return !!health;
+}
+
 async function main() {
-  const child = spawn(process.execPath, [path.join(ROOT, 'sidecar', 'server.mjs')], {
-    cwd: ROOT,
-    env: Object.assign({}, process.env, { IR_SIDECAR_DATA_DIR: TMP, IR_SIDECAR_PORT: String(PORT) }),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  await checkLockRules();
+
+  const child = spawnServer(TMP, PORT);
   let childErr = '';
   child.stdout.on('data', () => {});
   child.stderr.on('data', c => { childErr += c.toString(); });
@@ -115,9 +172,33 @@ async function main() {
       JSON.stringify(Object.keys(cfg.json.config || {})));
     check('邮件密钥只回布尔', cfg.json.config.email.hasResendApiKey === false);
 
+    // token 口径：手改成非十六进制口令后必须照用，不能再被静默换成新随机值（前端会永久 401）
+    const cfgPath = path.join(TMP, 'config.json');
+    const rawCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    const myToken = 'my-own-token-0123';
+    fs.writeFileSync(cfgPath, JSON.stringify(Object.assign({}, rawCfg, { token: myToken }), null, 2));
+    await sleep(30);
+    const mineOk = await req('GET', '/api/config', null, myToken);
+    const oldDenied = await req('GET', '/api/config', null, token);
+    check('D25：自定义 token（非 32 位十六进制）照用，旧 token 失效',
+      mineOk.status === 200 && oldDenied.status === 401, mineOk.status + ' / ' + oldDenied.status);
+    const persisted = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token;
+    check('D25：自定义 token 原样留在 config.json（没被改写）', persisted === myToken, persisted);
+
+    fs.writeFileSync(cfgPath, JSON.stringify(rawCfg, null, 2));
+    await sleep(30);
+    const restored = await req('GET', '/api/config', null, token);
+    check('D25：改回原 token 后立即生效（配置缓存按 mtime / size 失效）', restored.status === 200, restored.status);
+
     const put = await req('PUT', '/api/config', { email: { enabled: true, dailyLimit: 3 } }, token);
     check('PUT 配置生效', put.status === 200 && put.json.config.email.enabled === true && put.json.config.email.dailyLimit === 3);
     check('PUT 不能改 token / port', !put.json.config.token && put.json.config.port === PORT);
+
+    // 收件箱：inbox 是 async，路由必须 await —— 漏掉时恒 400 + {}
+    const inbox = await req('GET', '/api/email/inbox?limit=5', null, token);
+    check('收件箱：mock 渠道返回 200 + messages 数组',
+      inbox.status === 200 && inbox.json && inbox.json.ok === true && Array.isArray(inbox.json.messages),
+      inbox.status + ' ' + String(inbox.raw).slice(0, 120));
 
     const clamp = await req('PUT', '/api/config', { payment: { perTx: -50, monthly: 'abc' } }, token);
     check('非法额度被夹回保守值 0',
@@ -137,7 +218,14 @@ async function main() {
       { name: 'user-once', type: 'once', spec: { at: Date.now() + 900 }, source: 'user', prompt: 'p', reason: 'r' }, token);
     check('用户新建触发器 = active', once.json.trigger.status === 'active', JSON.stringify(once.json.trigger));
 
-    // SSE 鉴权（审查 低危 #18）：token 不再走查询参数；先用 Bearer 换短时效一次性 ticket
+    // 同名覆盖：模型借同名 upsert 改写用户已确认的安排 → 400，原值不动
+    const overwrite = await req('POST', '/api/triggers',
+      { name: 'user-once', type: 'once', spec: { at: Date.now() + 900 }, source: 'model', prompt: '被改写的话', reason: 'r' }, token);
+    check('模型同名覆盖已确认触发器 → 400 TRIGGER_LOCKED',
+      overwrite.status === 400 && !!overwrite.json && overwrite.json.code === 'TRIGGER_LOCKED',
+      overwrite.status + ' ' + String(overwrite.raw).slice(0, 120));
+
+    // SSE 鉴权：token 不再走查询参数；先用 Bearer 换短时效一次性 ticket
     const noTicket = await req('GET', '/api/events');
     check('SSE：无 ticket → 401', noTicket.status === 401, noTicket.status);
     const tokAsTicket = await req('GET', '/api/events?token=' + encodeURIComponent(token));
@@ -175,17 +263,50 @@ async function main() {
     const pause = await req('POST', '/api/schedule/pause', { paused: true }, token);
     check('一键暂停', pause.json.paused === true);
 
-    // 错误映射（审查 低危 #17）：业务码走白名单 400 + 结构化 code；内部细节不外泄
+    // 错误映射：业务码走白名单 400 + 结构化 code；内部细节不外泄
     const badTrigger = await req('POST', '/api/triggers', { name: 'bad-type', type: 'nope', spec: {} }, token);
     check('业务错误码按白名单映射 400（BAD_TRIGGER_TYPE）',
       badTrigger.status === 400 && badTrigger.json && badTrigger.json.code === 'BAD_TRIGGER_TYPE', JSON.stringify(badTrigger.json));
-    // limit 非法值夹取（审查 低危 #19）：不再把 NaN 带进 SQL LIMIT 触发绑定异常
+    // limit 非法值夹取：不再把 NaN 带进 SQL LIMIT 触发绑定异常
     const auditBad = await req('GET', '/api/email/audit?limit=abc', null, token);
     check('审计 ?limit=abc 被夹取（返回列表而非绑定异常）',
       auditBad.status === 200 && Array.isArray(auditBad.json.audit), auditBad.status + ' ' + auditBad.raw.slice(0, 120));
 
+    // 金额入口校验：缺金额必须是 400 BAD_AMOUNT，而不是写坏台账后 500
+    const badAmount = await req('POST', '/api/payment/intents', { merchant: 'M', category: 'C' }, token);
+    check('支付：缺 amountCents → 400 BAD_AMOUNT（不是 500）',
+      badAmount.status === 400 && badAmount.json && badAmount.json.code === 'BAD_AMOUNT',
+      badAmount.status + ' ' + String(badAmount.raw).slice(0, 120));
+
+    // body 上限：超限要先回 413 + 可读文案再断连接；先 destroy 的话客户端只会拿到 ECONNRESET
+    const big = await req('POST', '/api/triggers',
+      { name: 'big-body', type: 'interval', spec: { everyMs: 60000 }, prompt: 'x'.repeat(256 * 1024) }, token)
+      .catch(e => ({ status: 0, json: null, raw: 'ERR:' + (e && e.message) }));
+    check('D44：body 超限 → 413 BODY_TOO_LARGE（不是 ECONNRESET）',
+      big.status === 413 && !!big.json && big.json.code === 'BODY_TOO_LARGE',
+      big.status + ' ' + String(big.raw).slice(0, 120));
+
     const notFound = await req('GET', '/api/nope', null, token);
     check('未知接口 → 404', notFound.status === 404, notFound.status);
+
+    // 放在最后：下面会换掉 token，后面不能再用首启 token 发请求
+    fs.writeFileSync(cfgPath, JSON.stringify(Object.assign({}, JSON.parse(fs.readFileSync(cfgPath, 'utf8')), { token: '' }), null, 2));
+    await sleep(50);
+    const afterEmpty = await req('GET', '/api/config', null, token);
+    const freshToken = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token;
+    check('D25：token 置空 → 生成新值并落盘（旧 token 失效）',
+      afterEmpty.status === 401 && typeof freshToken === 'string' && freshToken.length >= 32 && freshToken !== token,
+      afterEmpty.status + ' / ' + (freshToken || '').length);
+    check('D25：生成新 token 有日志提示（不静默改 token）',
+      childErr.indexOf('已生成新 token') !== -1, childErr.replace(/\s+/g, ' ').slice(-160));
+
+    // 释放锁只认自己的 nonce：把锁改成别人的内容，进程退出时不能顺手删掉
+    try { if (sseReq) { sseReq.destroy(); sseReq = null; } } catch (_) {}
+    const liveLock = path.join(TMP, '.lock');
+    fs.writeFileSync(liveLock, JSON.stringify({ pid: process.pid, at: 0, nonce: 'someone-else' }));
+    try { child.kill(); } catch (_) {}
+    await waitExit(child, 6000);
+    check('D23：退出时只删自己写的锁（外来的锁不被误删）', fs.existsSync(liveLock), '锁文件被删了');
   } finally {
     try { if (sseReq) sseReq.destroy(); } catch (_) {}
     try { child.kill(); } catch (_) {}
@@ -194,13 +315,4 @@ async function main() {
   }
 }
 
-main()
-  .catch(e => { check('测试过程无异常', false, e && e.message); })
-  .then(() => {
-    const pass = results.filter(r => r.hit).length;
-    for (const r of results) {
-      console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
-    }
-    console.log('\nsidecar 冒烟测试：' + pass + '/' + results.length + ' 通过');
-    if (pass !== results.length) process.exitCode = 1;
-  });
+run('sidecar 冒烟测试', main);

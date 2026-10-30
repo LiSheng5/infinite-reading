@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · ZIP 读写冒烟测试（js/zip.js）
+ * 无限阅读 · ZIP 读写冒烟测试（src/core/zip.ts）
  *
  * 为什么专门测它：全量备份「带原图」全靠这个手写的 ZIP 编码器 —— CRC 算错、偏移写错、
  * 长度字段用错宽度，产出的包会「能下载但打不开」，而且往往到换设备还原时才发现。
@@ -180,7 +180,7 @@ const toBuf = async blob => Buffer.from(await blob.arrayBuffer());
   if (process.argv.indexOf('--json') !== -1) {
     console.log(JSON.stringify({ hit: hit, total: results.length, checks: results }, null, 2));
   } else {
-    console.log('无限阅读 · ZIP 读写冒烟测试（js/zip.js）');
+    console.log('无限阅读 · ZIP 读写冒烟测试（src/core/zip.ts）');
     for (const r of results) {
       console.log((r.hit ? '[命中] ' : '[未中] ') + r.name + (r.detail ? '  —— ' + r.detail : ''));
     }

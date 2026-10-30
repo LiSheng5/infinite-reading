@@ -2,9 +2,10 @@
  *
  * src/app/render.js 的 renderChat / renderThumbs 经 ReadScreen 把视图模型推进来
  *（src/app/readmodel.js 同口径构建），组件只负责按旧 DOM 结构渲染：
- *   chatSeq / chat —— 聊天流 + 选项态：每次 renderChat 推数据 chatSeq +1，{#key} 整体重建，
- *                    与旧 renderChat 的 chat-scroll.innerHTML='' 同语义（思考链开合态、
- *                    流式 span 不跨推送残留）；
+ *   chat —— 聊天流 + 选项态：每次 renderChat 推数据；消息流按条目 key 做 keyed 更新
+ *          （key = log 条目对象身份，readmodel 的 WeakMap 发号）——旧气泡跨
+ *          renderChat 常驻，不再像旧 chat-scroll.innerHTML='' 那样整条销毁重建（内联图
+ *          不重新解码、入场动画不重放），思考链开合态随条目保留；
  *   thumbs / thumbsEmpty —— 缩略图条：整表替换（empty 口径同旧 renderThumbs：scenes 空才算空态）。
  * 旧行为函数零改动：流式 span.delta / typewrite 照旧往 .bubble-live 空壳里写（interior 由
  * render.js 的 fillLiveDom 回填）；syncKindSwitch / setSendButtonsBusy / updateHistoryBar /
@@ -14,9 +15,8 @@
 import { flushSync } from 'svelte';
 
 export const read = $state({
-  chatSeq: 0,
   chat: {
-    entries: [],      // [entryModel]（src/app/readmodel.js）
+    entries: [],      // [entryModel]（src/app/readmodel.js，每项带稳定 key）
     openingHint: false,
     live: false,      // 流式 / 打字机临时旁白在场（组件渲染两个空壳）
     liveReason: false,
@@ -35,7 +35,7 @@ export const read = $state({
  * flushSync：推完立即可读 DOM——renderChat 的末尾要 scrollChatBottom，round.js / turn.js
  * 随后要查 .bubble-live / .reason-live-text，不能等微任务批量处理。 */
 export function setChat(model) {
-  flushSync(() => { read.chatSeq += 1; read.chat = model; });
+  flushSync(() => { read.chat = model; });
 }
 
 export function setThumbs(model) {

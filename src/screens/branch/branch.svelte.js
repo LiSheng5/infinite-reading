@@ -5,7 +5,7 @@
  *   panel      —— 六个文本字段 + 三个按钮的 disabled（口径与旧 renderPanel 逐字一致）
  *
  * 分工（同屏 4 阅读页的约定）：动态面里只有面板是「文本 + 布尔」的形状，走状态桥；
- * SVG 画布（节点 / 边 / 标签）按任务书 §7.3「构造方式保持」仍由 src/app/branch.js
+ * SVG 画布（节点 / 边 / 标签）按「构造方式保持」仍由 src/app/branch.js
  * 用 createElementNS 命令式构建——那是画布，不是组件能替的表单。
  */
 import { flushSync } from 'svelte';

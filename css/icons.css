@@ -1,0 +1,33 @@
+/* ==================== 图标（手绘 SVG sprite） ====================
+ * 图标基类 .ic 与各处的尺寸修饰（颜色一律 currentColor）。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 图标（手绘 SVG sprite，见 index.html 顶部 #ir-icons） ====================
+   描边风格统一写在这里：24 网格、1.6 描边、圆头圆角、颜色跟随文字色（currentColor）。
+   注意：<use> 里的元素吃不到外部选择器，实心圆点在 sprite 里用 fill 属性单独写。 */
+.ic {
+  width: 1.15em; height: 1.15em;
+  fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round;
+  flex: none;
+  vertical-align: -0.2em;
+}
+.ic-l { margin-right: .4em; }
+.ic-r { margin-left: .3em; }
+.ic-in { vertical-align: -0.28em; }
+/* 顺序有讲究：.ui-btn .ic 是四种按钮尺寸的兜底，放最前；
+   下面三条与它同特异性（0,2,0），靠先后顺序覆盖——改成前缀式选择器会连带改掉优先级。 */
+.ui-btn .ic { width: 16px; height: 16px; }
+.ui-btn:where(.hud) .ic { width: 18px; height: 18px; vertical-align: middle; }
+.hud-icon .ic { width: 20px; height: 20px; }
+.ui-btn:where(.mini) .ic { width: 14px; height: 14px; }
+.ui-btn.icon-only .ic { width: 18px; height: 18px; vertical-align: middle; }
+.tool-btn .ic { width: 15px; height: 15px; vertical-align: -3px; }
+.menu-item .ic { width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; color: var(--ink-dim); }
+.menu-item:hover .ic { color: var(--accent); }
+.stage-btn .ic, .stage-exit .ic { width: 19px; height: 19px; vertical-align: middle; }
+.toast-close .ic { width: 14px; height: 14px; vertical-align: middle; }
+.mode-chip .ic { width: 13px; height: 13px; vertical-align: -2px; }
+.reason-caret .ic { width: 12px; height: 12px; vertical-align: -2px; }
+.stage-empty .ic { width: 1.1em; height: 1.1em; }

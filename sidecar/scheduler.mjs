@@ -43,7 +43,7 @@ export function inQuietHours(quiet, ms) {
 }
 
 /* ---------------- 规格归一化 ----------------
- * 业务失败一律返回 fail(code)（审查 可维护性 #7）；编程错误才 throw。 */
+ * 业务失败一律返回 fail(code)；编程错误才 throw。 */
 
 export function normalizeSpec(type, spec) {
   const s = (spec && typeof spec === 'object') ? spec : {};
@@ -127,7 +127,7 @@ export function createScheduler(deps) {
   function deliveredToday(t0) {
     const [d0, d1] = dayRange(t0);
     const r = db.prepare(
-      'SELECT COUNT(*) AS n FROM trigger_fires WHERE status IN ' + sqlIn([FIRE.PENDING, FIRE.DELIVERED, FIRE.DONE]) + ' AND due_at >= ? AND due_at < ?'
+      'SELECT COUNT(*) AS n FROM trigger_fires WHERE status IN ' + sqlIn([FIRE.PENDING, FIRE.DELIVERED]) + ' AND due_at >= ? AND due_at < ?'
     ).get(d0, d1);
     return (r && r.n) || 0;
   }
@@ -211,9 +211,18 @@ export function createScheduler(deps) {
 
   /*
    * 按 (user_id, name) upsert。
-   * source='model'（默认）：新建后是 pending_confirm，需用户在界面上确认才生效；
-   * source='user'：用户在界面上自己建的，直接 active。
-   * 业务失败返回 fail(code)（审查 可维护性 #7），成功返回触发器对象。
+   *
+   * 确认闸门：请求体里的 source 不能当凭据——默认一律按 model 处理（前端的调度工具
+   * 也显式传 'model'），'user' 只留给进程内调用 / 测试。模型这条路径改不动已确认的行。
+   *   - 新建：pending_confirm，用户确认后才生效；
+   *   - 已越过闸门（active / paused）的同名触发器：模型做**任何实质修改都直接拒绝**
+   *     （TRIGGER_LOCKED），库里那行一个字段都不动。不用「先覆盖内容、再退回 pending_confirm」：
+   *     那样 prompt 在用户点确认之前就已经被换掉，用户点「取消」也拿不回批准过的内容，
+   *     而确认界面只显示排期、看不到 diff。要改就换个名字新建（用户确认后再用），
+   *     或由用户在界面上取消后重建。
+   *   - 内容完全没变：原样返回，不重排（模型每轮重报同一触发器不会顶掉 next_at）。
+   *   - pending_confirm 的行还没被批准，模型在用户确认前修正它属正常修改，允许覆盖。
+   * 业务失败返回 fail(code)，成功返回触发器对象。
    */
   function upsertTrigger(input) {
     const src = (input && typeof input === 'object') ? input : {};
@@ -226,12 +235,34 @@ export function createScheduler(deps) {
     const source = src.source === 'user' ? 'user' : 'model';
 
     const existing = findByName(name);
-    const status = existing ? existing.status : (source === 'model' ? TRIGGER.PENDING_CONFIRM : TRIGGER.ACTIVE);
     const enabled = src.enabled === undefined ? 1 : (src.enabled ? 1 : 0);
     const channel = String(src.channel || '').slice(0, 200);
     const prompt = String(src.prompt || '').slice(0, 4000);
     const reason = String(src.reason || '').slice(0, 500);
-    const nextAt = (status === 'active' && enabled) ? initialNext(type, spec, t0) : null;
+
+    // 「实质内容没变」：模型重报同一触发器时不重新确认，也不把 next_at 往后推。
+    const sameContent = !!existing
+      && String(existing.type) === type
+      && JSON.stringify(safeJSON(existing.spec, {})) === JSON.stringify(spec)
+      && String(existing.channel || '') === channel
+      && String(existing.prompt || '') === prompt
+      && String(existing.reason || '') === reason
+      && Number(existing.enabled) === enabled;
+
+    // 安全：模型不能改写用户已确认的触发器。拒绝时整行原样保留——
+    // 不先覆盖再退回 pending_confirm，否则批准过的 prompt 在用户确认前就已经丢了。
+    if (existing && source === 'model'
+      && existing.status !== TRIGGER.PENDING_CONFIRM
+      && !sameContent) {
+      return fail('TRIGGER_LOCKED');
+    }
+
+    // status 只由 confirmTrigger / cancelTrigger 改；upsert 不再写 status，
+    // 免得「改内容」这一步顺带把状态挪了。
+    const status = existing ? existing.status : (source === 'model' ? TRIGGER.PENDING_CONFIRM : TRIGGER.ACTIVE);
+    const nextAt = (status === TRIGGER.ACTIVE && enabled)
+      ? (sameContent && existing.next_at != null ? Number(existing.next_at) : initialNext(type, spec, t0))
+      : null;
 
     if (existing) {
       db.prepare(
@@ -331,7 +362,7 @@ export function createScheduler(deps) {
     timer = setTimeout(() => {
       timer = null;
       try { tick(); } catch (_) { /* 单次失败不拖垮调度循环 */ }
-      // arm() 也要在 try 里（审查 中危 #15）：这里抛出没人接，一次 DB 抖动就能让调度循环静默停摆
+      // arm() 也要在 try 里：这里抛出没人接，一次 DB 抖动就能让调度循环静默停摆
       try {
         arm();
       } catch (_) {
@@ -373,7 +404,7 @@ export function createScheduler(deps) {
         triggers: db.prepare('SELECT COUNT(*) AS n FROM triggers').get().n,
         active: db.prepare('SELECT COUNT(*) AS n FROM triggers WHERE status=? AND enabled=1').get(TRIGGER.ACTIVE).n,
         pending: db.prepare('SELECT COUNT(*) AS n FROM trigger_fires WHERE status=?').get(FIRE.PENDING).n,
-        deliveredToday: deliveredToday(now()),   // 键名与函数对齐（审查 可维护性 #12：原 firedToday 实取 deliveredToday）
+        deliveredToday: deliveredToday(now()),   // 键名与函数对齐（原 firedToday 实取 deliveredToday）
       };
     },
   };

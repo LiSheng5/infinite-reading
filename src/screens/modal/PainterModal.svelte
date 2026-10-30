@@ -9,7 +9,7 @@
    * 关闭按钮（btn-close-painter / btn-pw-close）由 src/app/main.js 绑到 A.closeWorkbench，
    * 这里不挂 handler——挂了会双触发一次 closeModal。
    */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Select from '../../ui/Select.svelte';

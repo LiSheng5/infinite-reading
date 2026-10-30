@@ -5,7 +5,7 @@
    * （#btn-do-export → A.doExport）都不变。导出按钮的文案会在打包原图时临时改成
    * 「打包原图中…」再还原，所以它只能有纯文本子节点（不能塞图标）。
    * 关闭钮额外挂一次 closeModal：0.12.1 的 #btn-close-export 也是直接 hidden，绕过了弹窗栈。 */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Checkbox from '../../ui/Checkbox.svelte';
   import Button from '../../ui/Button.svelte';
   import { closeModal } from '../../ui/modalHost.js';

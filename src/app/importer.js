@@ -1,45 +1,20 @@
 /*
- * src/app/importer.js —— 剧情文本导入（R12 路径②）
+ * src/app/importer.js —— 剧情文本导入（路径②）
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Context } from '../core/context.ts';
 import { ChatProviders } from '../core/providers.ts';
 import { ImportText } from '../core/importText.ts';
+import { WriteBack } from '../core/writeBack.ts';
 import { charApi } from '../screens/modal/state.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, Cap, toast, openModal, closeModal, resolveSub } = A;
+  const { $, Store, Cap, openModal, closeModal, resolveSub } = A;
 
 
-  /* ================= 本地存储与备份（P0 数据安全） =================
-   * 全部数据只在浏览器 localStorage（每站点约 5MB），没有任何服务端。这里做三件事：
-   *  1) 申请持久化存储 navigator.storage.persist()：磁盘压力下的 LRU 淘汰会跳过本站
-   *     （Safari 的 7 天无交互清除仍会生效，只能靠交互 / 加到主屏缓解）
-   *  2) 算清本应用占用量，到 70% 提前预警（原来的提示只在写入失败之后才出现，已经晚了）
-   *  3) 「一键导出全部备份」(.irbackup.json，可整体还原) + 超过 7 天没备份就提醒一次
-   */
-
-  // 只统计本应用的键（ir: 前缀）：localStorage 上限是所有键共享的，这里的占用才是我们能控的
-
-  // 真实占用：navigator.storage.estimate()（把 IndexedDB / Cache 等一起算在内，比数键位准得多）
-
-  // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
-
-  /* 「带原图备份」= 一个 zip 里放两样东西：
-   *   ir-backup.json      与普通备份完全同款（schema 2 只多一份 images 清单）
-   *   images/0001.png …   原图按二进制原样存放
-   * 为什么不把原图 base64 塞进 JSON：大图转 base64 体积涨约 1/3，还会在内存里堆成巨型字符串；
-   * zip 装的是原始字节，体积最省，导出 / 导入都不容易把内存打爆。代价是 .zip 不能直接肉眼查看。 */
-
-  // 超过 7 天没备份（且确实有故事）→ 启动后提醒一次；提醒本身每天最多一次，不刷屏
-
-  // 从一个 zip 里找备份正文：优先根目录，也接受「被塞进一层文件夹」的情况
-
-  // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
-
-  /* ================= 剧情文本导入（R12 路径② / §4.11 / T-P6-1） =================
+  /* ================= 剧情文本导入（路径②） =================
    * 粘贴任意剧情文本 → 整理向导（用「起草模型」；只有装不下才 map-reduce）→
    * premise + world 草稿 + 画风关键词 → 用户确认修改（不可跳过）→ 建新档 → 试画锚定 → 开场。
    * 调用失败退回本地规则。 */
@@ -71,7 +46,7 @@ import { A } from './core.js';
       try {
         const w = Cap && Cap.contextWindowOf ? Cap.contextWindowOf(sub.model || S.settings.chat.model, sub.provider) : null;
         return w || 0;
-      } catch (_) { return 0; }
+      } catch (_) { return 0; }   // 登记表查询失败 = 未知窗口（只影响提示与分段策略，按一次调用处理）
     }
     return A.chatContextWindow();
   }
@@ -93,7 +68,7 @@ import { A } from './core.js';
   }
 
   function openImportText() {
-    S.importJob = null;
+    cancelImportJob();
     $('#it-text').value = '';
     $('#it-model-mode').value = S.importModelMode;   // 记住上次选的整理模型
     $('#it-step-paste').classList.remove('hidden');
@@ -104,8 +79,19 @@ import { A } from './core.js';
     $('#it-text').focus();
   }
 
-  function closeImportText() {
+  // 异步写回契约：关窗 / 重开 = 结束这次整理任务——标记 cancelled 并中止在途请求；
+  // 续体（分段摘要 / 合并 / 整理）靠 job.cancelled 与 S.importJob !== job 自行退出，
+  // 不会把结果写回已置空 / 已换掉的任务（writeBackIfSameJob 是最后一道闸）。
+  function cancelImportJob() {
+    const job = S.importJob;
     S.importJob = null;
+    if (!job) return;
+    job.cancelled = true;
+    if (job.abortCtrl) { try { job.abortCtrl.abort(); } catch (_) { /* 已结束的请求再 abort 会抛：清理是幂等的，忽略 */ } job.abortCtrl = null; }
+  }
+
+  function closeImportText() {
+    cancelImportJob();
     closeModal('modal-import-text');
   }
 
@@ -114,9 +100,9 @@ import { A } from './core.js';
     if (el) el.textContent = text || '';
   }
 
-  async function callImportChat(cfg, task, text, meta) {
+  async function callImportChat(cfg, task, text, meta, hooks) {
     const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
-    return adapter.chat(cfg, Context.assembleImporter(task, text, meta));
+    return adapter.chat(cfg, Context.assembleImporter(task, text, meta), hooks);
   }
 
   // 纯解析逻辑（模型回包 JSON / 本地兜底规则 / 人物行）已抽到 src/core/importText.ts，
@@ -149,16 +135,17 @@ import { A } from './core.js';
       + '。下面每一栏都可以改——确认这一步不能跳过。';
   }
 
-  // 分段摘要合并（§4.11：分段各出摘要，再一次合并成开局材料）
-  async function reduceImportSummaries(cfg, summaries, budget) {
+  // 分段摘要合并（分段各出摘要，再一次合并成开局材料）
+  async function reduceImportSummaries(cfg, summaries, budget, stale, hooks) {
     let list = summaries.slice();
     for (let round = 0; round < 4; round++) {
       const batches = Context.planImportMerge(list, budget);
       if (batches.length <= 1) break;                 // 已能一次装下（或只剩一条）
       const next = [];
       for (let i = 0; i < batches.length; i++) {
+        if (stale && stale()) return '';              // 弹窗已关：不再继续花模型调用
         setImportStatus('合并摘要 · 第 ' + (i + 1) + ' / ' + batches.length + ' 批…');
-        const raw = await callImportChat(cfg, 'merge', batches[i].join('\n\n'));
+        const raw = await callImportChat(cfg, 'merge', batches[i].join('\n\n'), undefined, hooks);
         next.push(parseImportSummary(raw) || batches[i].join(' ').slice(0, 200));
       }
       list = next;
@@ -172,7 +159,13 @@ import { A } from './core.js';
     if (raw.length < 20) { toast('先贴一段剧情文本（至少 20 字），再点「开始整理」', true); return; }
     const cfg = importCfg();
     const plan = Context.planImport(raw, importContextWindow());
-    S.importJob = { raw: raw, plan: plan, busy: true, result: null, err: '' };
+    // 异步写回契约：任务对象持有在局部，关窗 / 重开 / 新一轮整理都会把 S.importJob 置空或换掉
+    //（cancelImportJob 还会标 cancelled + abort 在途请求）；续体只认自己这一次的 job，
+    // 绝不写 S.importJob.err / .busy，最后一段写回也过 writeBackIfSameJob 闸。
+    const job = { raw: raw, plan: plan, busy: true, result: null, err: '', cancelled: false, abortCtrl: null };
+    S.importJob = job;
+    const stale = () => job.cancelled || !WriteBack.isSameJob(S.importJob, job);
+    const hooks = { onAborter(ctrl) { job.abortCtrl = ctrl; } };
     $('#it-step-paste').classList.add('hidden');
     $('#it-step-confirm').classList.add('hidden');
     $('#it-step-run').classList.remove('hidden');
@@ -186,33 +179,39 @@ import { A } from './core.js';
       if (plan.needsMap) {
         const summaries = [];
         for (let i = 0; i < plan.chunks.length; i++) {
+          if (stale()) return;                        // 弹窗已关：不再继续花模型调用
           setImportStatus('分段摘要 第 ' + (i + 1) + ' / ' + plan.chunks.length + ' 段…');
-          const one = await callImportChat(cfg, 'map', plan.chunks[i], { index: i + 1, total: plan.chunks.length });
+          const one = await callImportChat(cfg, 'map', plan.chunks[i], { index: i + 1, total: plan.chunks.length }, hooks);
           summaries.push(parseImportSummary(one) || String(plan.chunks[i]).slice(0, 120));
         }
+        if (stale()) return;
         setImportStatus('合并摘要…');
-        const merged = await reduceImportSummaries(cfg, summaries, plan.budget);
+        const merged = await reduceImportSummaries(cfg, summaries, plan.budget, stale, hooks);
+        if (stale()) return;
         setImportStatus('整理成故事设定…');
-        res = parseImportResult(await callImportChat(cfg, 'final', merged));
+        res = parseImportResult(await callImportChat(cfg, 'final', merged, undefined, hooks));
       } else {
-        res = parseImportResult(await callImportChat(cfg, 'final', raw));
+        res = parseImportResult(await callImportChat(cfg, 'final', raw, undefined, hooks));
       }
     } catch (e) {
-      S.importJob.err = (e && e.message) || String(e);
+      job.err = (e && e.message) || String(e);
       res = null;
     }
 
+    if (stale()) return;   // 关窗 / 任务被新任务顶掉：结果不再回写，也不碰已经隐藏的 DOM
     const local = !res;
     if (local) res = localImport(raw);
-    S.importJob.busy = false;
-    S.importJob.result = res;
-    fillImportForm(res, plan);
-    $('#it-step-run').classList.add('hidden');
-    $('#it-step-confirm').classList.remove('hidden');
-    toast(local
-      ? ('整理没成功（' + (S.importJob.err || '模型没给出可用结果') + '）：已用本地规则生成草稿，请手动补充')
-      : ('整理完成（' + (plan.needsMap ? plan.chunks.length + ' 段 map-reduce' : '一次调用') + '）：确认或改完再开局'),
-      local, local);
+    WriteBack.writeBackIfSameJob(S.importJob, job, (j) => {
+      j.busy = false;
+      j.result = res;
+      fillImportForm(res, plan);
+      $('#it-step-run').classList.add('hidden');
+      $('#it-step-confirm').classList.remove('hidden');
+      toast(local
+        ? ('整理没成功（' + (j.err || '模型没给出可用结果') + '）：已用本地规则生成草稿，请手动补充')
+        : ('整理完成（' + (plan.needsMap ? plan.chunks.length + ' 段 map-reduce' : '一次调用') + '）：确认或改完再开局'),
+        local, local);
+    });
   }
 
   function startFromImport() {
@@ -239,7 +238,7 @@ import { A } from './core.js';
     closeModal('modal-import-text');
     S.importJob = null;
     A.enterGame(true, { deferOpening: true });
-    A.openAnchor({ onDone: A.renderChat });   // §4.11：建新档 → 试画锚定；开场由用户点「开始第一幕」
+    A.openAnchor({ onDone: renderChat });   // 建新档 → 试画锚定；开场由用户点「开始第一幕」
   }
 
   A.reg({ importPlanHint, openImportText, closeImportText, runImportText, startFromImport });

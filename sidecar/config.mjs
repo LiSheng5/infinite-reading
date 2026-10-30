@@ -93,6 +93,37 @@ export function defaultConfig(port) {
   };
 }
 
+/* ---------------- token 口径 ----------------
+ * 旧实现要求 token 匹配 `^[0-9a-f]{32,}$`，不匹配就换成新随机值并落盘、且不打日志：
+ * 用户手改成自己的口令后，应用里存着的旧 token 永久 401，看起来像「服务坏了」。
+ * 现在「非空即用」：只有缺失 / 空串才生成新值（生成时打一条日志提醒前端要重填）；
+ * 长度上限只为避免把整篇文本塞进请求头，不改变可用性。 */
+const TOKEN_MAX = 256;
+let tokenWarned = false;
+
+function warnToken(msg) {
+  if (tokenWarned) return;   // 同一进程只提醒一次：配置读取是高频路径
+  tokenWarned = true;
+  try { console.warn('[sidecar] ' + msg); } catch (_) { /* 无 console 的环境忽略 */ }
+}
+
+function resolveToken(v, fallback) {
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (s && s.length <= TOKEN_MAX) return s;
+    if (s) {
+      warnToken('config.token 超过 ' + TOKEN_MAX + ' 字符，已截断使用（建议改短）。');
+      return s.slice(0, TOKEN_MAX);
+    }
+  } else if (v !== undefined && v !== null) {
+    warnToken('config.token 不是字符串（' + typeof v + '），已生成新 token；应用里需要重新填写。');
+    return fallback;
+  }
+  // 缺失 / 空串：这里才生成新值（调用方给的 fallback 已经是随机值）
+  warnToken('config.token 缺失或为空，已生成新 token；应用「设置 → 本地服务」里需要重新填写。');
+  return fallback;
+}
+
 /* 把任意输入夹成一份合法配置；base 只用于补 token / port 这类不可缺省项 */
 export function sanitizeConfig(raw, base) {
   const def = base || defaultConfig();
@@ -101,9 +132,7 @@ export function sanitizeConfig(raw, base) {
   const rSched = (raw.schedule && typeof raw.schedule === 'object') ? raw.schedule : {};
   const rPay = (raw.payment && typeof raw.payment === 'object') ? raw.payment : {};
 
-  const token = (typeof raw.token === 'string' && /^[0-9a-f]{32,}$/i.test(raw.token))
-    ? raw.token
-    : def.token;
+  const token = resolveToken(raw.token, def.token);
 
   const budgets = {};
   if (rPay.budgets && typeof rPay.budgets === 'object') {
@@ -178,7 +207,7 @@ function writeConfigFile(cfg) {
   return rememberConfig(cfg);   // 写盘即刷缓存：saveConfig 后的读不必再回盘
 }
 
-/* ---------------- 读配置（mtime 缓存，审查 可维护性 #6 三·6） ----------------
+/* ---------------- 读配置（mtime 缓存） ----------------
  * 此前每个 HTTP 请求都 loadConfig() = 读盘 + 双向 JSON 比较 + 可能回写——高频请求下是无谓 IO。
  * 现按 (mtimeMs, size) 缓存：文件没动过直接用缓存；用户手改文件（mtime 变）或 saveConfig 写盘
  * （writeConfigFile 同步刷新缓存）后自动失效重读——「手改无需重启」的语义不变。 */

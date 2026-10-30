@@ -10,7 +10,13 @@
  */
 import { A } from '../../app/core.js';
 
-export const panel = $state({ view: 'list', dirty: false, listScroll: 0 });
+export const panel = $state({ view: 'list', dirty: false });
+
+/* 一级滚动位置（进二级前快照，返回时还原）。**故意是普通模块变量，不是 $state**：
+ * StoryPrefsPanel 的 $effect 要读它，读了 $state 就成了响应式依赖 —— 而 openWorld() 先写
+ * 滚动位置再写 view，effect 会在「滚动位置刚变」时多跑一遍、把焦点从标题抢到「编辑」上。
+ * 读普通变量不进依赖图，effect 只在 view 变化时跑。 */
+let listScroll = 0;
 
 const app = () => A;
 
@@ -22,10 +28,15 @@ export function syncDirty() {
   panel.dirty = !!story && A.worldFormChanged(story.world || {});
 }
 
+/** 一级视图上次的滚动位置（普通变量的读取口，调用方不会因此建立响应式依赖） */
+export function listScrollTop() {
+  return listScroll;
+}
+
 /** 进二级视图：记下一级滚动位置（返回时还原） */
 export function openWorld() {
   const scroll = document.querySelector('#story-prefs .prefs-scroll');
-  panel.listScroll = scroll ? scroll.scrollTop : 0;
+  listScroll = scroll ? scroll.scrollTop : 0;
   syncDirty();
   panel.view = 'world';
 }
@@ -41,7 +52,7 @@ export function onOpen() {
   syncDirty();
 }
 
-/** Esc 层级（§3.2）：先退二级、再关面板；都没开就交回全局 Esc 链 */
+/** Esc 层级：先退二级、再关面板；都没开就交回全局 Esc 链 */
 export function esc() {
   if (panel.view === 'world') { backToList(); return true; }
   const A = app();

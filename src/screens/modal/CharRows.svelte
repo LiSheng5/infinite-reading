@@ -41,31 +41,9 @@
 </div>
 
 <style>
-  .char-head {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 6px;
-  }
-  .char-head span {
-    flex: 1 1 0;
-    min-width: 0;
-    font-family: var(--font-ui);
-    font-size: 12px;
-    letter-spacing: .08em;
-    color: var(--ink-dim);
-  }
+  /* 行 / 表头的几何在 css/read.css（与设置页世界卡的行编辑器共用一份），这里只留本组件独占的格子 */
   .char-head .del-gap { flex: 0 0 40px; }
 
-  .char-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .char-row {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
   .cell { flex: 1 1 0; min-width: 0; }
   .del-cell { flex: 0 0 40px; display: flex; }
 

@@ -6,10 +6,12 @@
  *   - 首页版本文字：src/screens/home/HomeScreen.svelte 用 `__IR_VERSION__`（vite define）
  *   - 导出包 / 备份包的 app 戳：src/core/{store,backupPack}.ts 用 `__IR_VERSION__`
  *   - Service Worker 缓存名：sw.js 里 `'ir-v' + '__IR_VERSION__'`，构建期由 vite.config.mjs 替换
- * 本脚本只负责「构建管不到」的两处：
+ * 本脚本只负责「构建管不到」的三处：
  *   - package.json 的 version（npm 元数据，必须与 VERSION 一致）
+ *   - package-lock.json 的根包 version（顶层与 packages."".version 两处；依赖自己的版本行不碰）
  *   - README 徽章与「当前版本」文字（文档，随发版更新）
  * 同时守住三条红线：占位符不许丢、`?v=` 不许回来、运行时源码里不许再写版本字面量。
+ * 同步目标文件缺失一律报错——缺失不等于通过，否则文件被删 / 路径改名会静默假绿。
  *
  * 用法：
  *   node tools/sync-version.mjs           写入
@@ -30,11 +32,20 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 
 let dirty = 0;
 
-/* ---------- 1. 构建管不到的两处：npm 元数据与文档 ---------- */
+/* ---------- 1. 构建管不到的三处：npm 元数据与文档 ---------- */
 const TARGETS = [
   {
     file: 'package.json',
     find: () => /("version"\s*:\s*")[^"]*(")/g,
+    replace: (_m, a, b) => a + version + b,
+  },
+  {
+    // package-lock.json 只动根包的 version 两处（顶层与 packages."":）。
+    // 依赖条目也有几百行 "version"，所以正则锚在「name 紧挨 version」上；
+    // expect: 2 是防失配假绿——npm 将来改写格式时命中数一变就报错，而不是静默一致。
+    file: 'package-lock.json',
+    expect: 2,
+    find: () => /("name": "[^"]+",\s*\n\s*"version": ")[^"]*(")/g,
     replace: (_m, a, b) => a + version + b,
   },
   {
@@ -63,8 +74,22 @@ const TARGETS = [
 
 for (const t of TARGETS) {
   const p = join(ROOT, t.file);
-  if (!existsSync(p)) continue;
+  if (!existsSync(p)) {
+    // 缺失不是「无需同步」：目标文件被删 / 改名时静默跳过 = 假绿，一律报错
+    console.error('缺文件 ' + t.file + '（同步目标不存在，补回文件或从 TARGETS 移除）');
+    dirty += 1;
+    continue;
+  }
   const before = readFileSync(p, 'utf8');
+  const re = t.find();
+  if (t.expect != null) {
+    const hits = (before.match(re) || []).length;
+    if (hits !== t.expect) {
+      console.error('命中数不对 ' + t.file + '：期望 ' + t.expect + ' 处，实际 ' + hits + ' 处（上游格式变了，正则要跟着改）');
+      dirty += 1;
+      continue;
+    }
+  }
   const after = before.replace(t.find(), t.replace);
   if (before === after) {
     console.log('一致  ' + t.file);
@@ -84,10 +109,15 @@ const PLACEHOLDERS = [
   ['sw.js', '__IR_VERSION__'],
   ['src/screens/home/HomeScreen.svelte', '__IR_VERSION__'],
   ['src/core/version.ts', '__IR_VERSION__'],
+  ['index.html', '__IR_VERSION__'],   // meta 版本戳，构建期由 transformIndexHtml 替换
 ];
 for (const [file, needle] of PLACEHOLDERS) {
   const p = join(ROOT, file);
-  if (!existsSync(p)) continue;
+  if (!existsSync(p)) {
+    console.error('缺文件 ' + file + '（占位检查目标不存在）');
+    dirty += 1;
+    continue;
+  }
   if (!readFileSync(p, 'utf8').includes(needle)) {
     console.error(file + ' 缺构建注入占位 ' + needle + '（版本号不许手写）');
     dirty += 1;

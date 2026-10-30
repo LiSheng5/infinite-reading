@@ -4,7 +4,7 @@
    * 全部由 sidecar 在代码层强制（src/app/features.js 的 openPaymentModal / doPaymentSubmit）。
    * 结果行（#pm-result）由 doPaymentSubmit 写 textContent；提交钮 handler 在 src/app/main.js，不重复挂。
    */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Button from '../../ui/Button.svelte';

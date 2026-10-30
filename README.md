@@ -40,7 +40,7 @@ cd infinite-reading
 
    然后任选一种方式启动：
    - **Windows 一键**：双击 `启动.bat`——没有产物会先构建，再起本地服务并自动打开浏览器（优先用 Python，没有就退回内置的 PowerShell 服务器）
-   - **单文件双击**：直接双击 `dist/single/index.html`（全部内联，`file://` 可开；也可 `npm run bundle` 复制成 `dist/ir.html`）
+   - **单文件双击**：直接双击 `dist/single/index.html`（JS / CSS / 图标全部内联成一个 HTML，`file://` 可开；也可 `npm run bundle` 复制成 `dist/ir.html`）
    - 本地静态服务（更稳，推荐）：`npx serve dist/site` 或 `python -m http.server 8000 --directory dist/site`
    - 开发模式：`npm run dev`（Vite dev server，热更新；发布前请用构建产物验收）
 2. 点「⚙ 接入模型」，填 **Base URL**（下拉可选，也可手填）、**API Key**、**模型名**（生图模型同理）。
@@ -97,7 +97,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 **备份**：「模型设置 → 本地存储与备份 → 一键导出全部备份」有两种产物，拖回书架窗口即可整体还原：
 
-- `.irbackup.json` —— 全部故事 + 模型设置 + 用户画像，体积可控；默认不含 API Key，可勾选带上
+- `.irbackup.json` —— 全部故事 + 模型设置 + 用户画像，体积可控；默认不含 API Key，可勾选带上。**本地服务的 token 无论如何都不进备份**（它是本机连接凭据，换设备还原也没有意义）
 - `.zip` —— 上面那份正文 + **全部原图**（勾选「备份里也带上原图」）；图片按二进制原样打包，比 base64 省约 1/3 体积，换设备时连图一起搬
 
 - 占用到 70% 预警；超 7 天未备份启动时提醒
@@ -108,7 +108,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 走法 | 命令 / 操作 | 适合 |
 |---|---|---|
 | 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve dist/site` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
-| 单文件 | `npm run bundle` → `dist/ir.html`（约 560 KB） | 发给别人：一个 HTML 文件，双击即玩 |
+| 单文件 | `npm run bundle` → `dist/ir.html`（约 640 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
 | 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 22.5：内置 `node:sqlite`，见 `sidecar/README.md`） |
@@ -145,7 +145,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `src/core/roleCard.ts` | 角色卡（SillyTavern PNG 解析） |
 | `src/core/modelCapabilities.ts` | 模型参数登记表（默认留空） |
 | `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 21 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
-| `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗外壳 / 视图过渡） |
+| `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗卡片 / 视图过渡） |
 | `src/core/sidecar.ts` + `src/core/features.ts` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `src/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
@@ -189,7 +189,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 ## 参与与许可
 
-- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 24 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 34 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
 - **遇到问题**：安全相关请走私密渠道（见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「安全说明」），其余请提 Issue（有模板）。
 - **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「第三方资源与许可」。

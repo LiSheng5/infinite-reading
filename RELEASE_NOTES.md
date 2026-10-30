@@ -4,7 +4,7 @@
 
 这一版把「纯前端零构建」迁到 **Vite 8 + Svelte 5**，逐屏重做了界面层，并保留了两种发布形态：
 
-- `dist/single/index.html`：单文件，双击（`file://`）即可打开，JS / CSS / 图标全部内联
+- `dist/single/index.html`：单文件，双击（`file://`）即可打开，JS / CSS / 图标全部内联（图标为 data URL，产物目录只有这一个 HTML；PWA 的 manifest 只随 `dist/site/`）
 - `dist/site/`：多文件，供 GitHub Pages 与 Docker 使用，可安装为 PWA、断网可用
 
 ## 一、这次更新
@@ -30,7 +30,7 @@
 
 - 只放行「注定会变」的字段：导出时刻 `exportedAt`、版本串 `app`、导入落盘刷新的 `updatedAt`、导入标题的「（导入）」后缀、图片重建的 `ts`。其余任何字段不一致都算失败。
 - 比对器自检（负测试）：改坏 `world.place`、删字段、加字段、数组条数变化、单故事标题真不一致，全部能被抓出；放行字段不误报。这保证「逐字段一致」不是空跑。
-- API Key：默认导出与夹具文件**不含任何 Key / baseUrl**；带 Key 的导出只做内存校验，从不落盘。
+- API Key：默认导出与夹具文件**不含任何 Key / baseUrl**；带 Key 的导出只做内存校验，从不落盘。侧车的 `sidecar.token` 属本机凭据，任何模式都不进备份，导入时也不采信包里的值。
 - 全量 `npm test` 通过（含 schema / store / tree / prefs / 设置 id / zip / 侧车 / 前端冒烟 / `tsc --noEmit`），旧版存档的迁移路径仍在测试覆盖内。
 - `file://` 与 `localhost` 的存储隔离保持原样：升级不会合并、移动或重写任一边的存档。
 

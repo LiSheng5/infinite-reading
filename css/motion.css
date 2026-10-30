@@ -1,5 +1,5 @@
 /* ==================== 动效模块（统一 motion 模块 · CSS 端） ====================
-   任务书 §6.2。分工：
+分工：
    · 档位语义与逐动画三档行为声明 → src/core/motion.ts（ANIMATIONS 是真源）
    · 档位政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
    · DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js
@@ -17,7 +17,7 @@
    逐档测量；阶段 6 已删运行时登记（registerLoop 随自查页退役）。 */
 
 /* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
-   小面积装饰元素允许用 @property 注册的自定义属性做动画（任务书 §6.2 放宽项），
+   小面积装饰元素允许用 @property 注册的自定义属性做动画（放宽项），
    其余动画仍只准动合成层属性。注册块必须：syntax 是可动画类型、inherits: false。
    --t：首页无限符号逐字符的浅色占比（app.js 写入；阶段 5 的真渐变流动就动它）。 */
 @property --t {
@@ -48,7 +48,7 @@
 }
 html[data-motion="standard"] {
   --m-dur-fast: var(--dur-fast);
-  --m-dur-base: var(--dur-shift);   /* 短位移 ≤160ms（§6.2） */
+  --m-dur-base: var(--dur-shift);   /* 短位移 ≤160ms */
   --m-dur-slow: var(--dur-shift);
   --m-dur-flash: var(--dur-shift);
   --m-t-shift-fast: var(--dur-fast);
@@ -139,13 +139,13 @@ html[data-motion="off"] {
 }
 
 /* ==================== 视图过渡（View Transitions） ====================
-   阶段 5 第 2 步：src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
+   阶段 5：src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
    调 document.startViewTransition；快照动画本身全部由下面三条伪元素规则提供，
    时长一律走 --m-dur-vt-*（再由上面三个档位块映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
    过渡名单与三档 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：
    这三条规则的 animation-duration 只准 var(--m-dur-vt-*)。
    注意：::view-transition-* 匹配不到 html[data-paused] * / [data-loops-paused] * 这类选择器，
-   过渡期的循环暂停与预算复位要单独处理（任务书「坑」）。 */
+   过渡期的循环暂停与预算复位要单独处理。 */
 ::view-transition-old(*) {
   animation-duration: var(--m-dur-vt-out);
   animation-timing-function: var(--ease-out);
@@ -154,7 +154,7 @@ html[data-motion="off"] {
   animation-duration: var(--m-dur-vt-fade);
   animation-timing-function: var(--ease-out);
 }
-/* 组容器：共享元素（第 4 步的 stage-art）的位置与尺寸补间走这里 */
+/* 组容器：共享元素（的 stage-art）的位置与尺寸补间走这里 */
 ::view-transition-group(*) {
   animation-duration: var(--m-dur-vt-shift);
   animation-timing-function: var(--ease-out);
@@ -246,7 +246,7 @@ html[data-paused] *::after {
     animation-iteration-count: 1 !important;
     transition-duration: var(--dur-none) !important;
   }
-  /* 上面那条 * 规则匹配不到视图过渡的伪元素，快照要单列（任务书「坑」） */
+  /* 上面那条 * 规则匹配不到视图过渡的伪元素，快照要单列 */
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {

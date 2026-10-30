@@ -11,30 +11,41 @@
  *
  * 用法：node eval/email-test.js
  */
-const path = require('path');
-const { pathToFileURL } = require('url');
-
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
-function localMs(y, mo, d, h, mi) { return new Date(y, mo - 1, d, h, mi, 0, 0).getTime(); }
+const { check, run, loadEsm, localMs } = require('./_harness.js');
 
 async function main() {
-  const mod = f => pathToFileURL(path.join(__dirname, '..', 'sidecar', f)).href;
-  const { createEmail } = await import(mod('email.mjs'));
-  const { openDbAt } = await import(mod('db.mjs'));
+  const { createEmail } = await loadEsm('email.mjs');
+  const { openDbAt } = await loadEsm('db.mjs');
 
   let VNOW = localMs(2026, 1, 5, 12, 0);
 
-  function fresh(overrides) {
+  function fresh(overrides, providers) {
     const db = openDbAt(':memory:');
     const cfg = {
       email: Object.assign({
         enabled: true, provider: 'mock', allowlist: [], dailyLimit: 0, from: 'me@example.com', resendApiKey: '',
       }, overrides || {}),
     };
-    return { db: db, cfg: cfg, mail: createEmail({ db: db, getConfig: () => cfg, now: () => VNOW }) };
+    const deps = { db: db, getConfig: () => cfg, now: () => VNOW };
+    if (providers) deps.providers = providers;
+    return { db: db, cfg: cfg, mail: createEmail(deps) };
+  }
+
+  // 慢速发送桩：把「上限检查 → await provider.send」之间的窗口撑开，才能验证占位是否生效
+  function slowProviders() {
+    const box = { calls: 0 };
+    box.providers = {
+      mock: {
+        label: '慢速桩',
+        async send() {
+          box.calls += 1;
+          await new Promise(r => setTimeout(r, 20));
+          return { id: 'slow-' + box.calls, status: 'ok' };
+        },
+        async list() { return { ok: true, messages: [] }; },
+      },
+    };
+    return box;
   }
 
   /* 1. 功能未开启：直接拒绝并留痕 */
@@ -166,7 +177,7 @@ async function main() {
     check('草稿：重复丢弃返回 false', mail.discardDraft(d.id) === false);
   }
 
-  /* 11. 审计 limit 非法值（?limit=abc）：NaN 不进 SQL LIMIT（审查 低危 #19） */
+  /* 11. 审计 limit 非法值（?limit=abc）：NaN 不进 SQL LIMIT */
   {
     const { mail } = fresh({ allowlist: ['a@b.com'], dailyLimit: 2 });
     await mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
@@ -177,15 +188,43 @@ async function main() {
     check('审计 limit 为负：夹回默认值', Array.isArray(neg) && neg.length === 1);
   }
 
-  const pass = results.filter(r => r.hit).length;
-  for (const r of results) {
-    console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
+  /* 12. 并发突破每日上限：上限检查与 provider.send 之间必须「先占位再发送」 */
+  {
+    const box = slowProviders();
+    const { mail } = fresh({ provider: 'mock', allowlist: ['a@b.com'], dailyLimit: 2 }, box.providers);
+    const rs = await Promise.all([1, 2, 3, 4, 5].map(i => mail.send({ to: 'a@b.com', subject: 's' + i, body: 'b', actor: 'user' })));
+    check('D22 并发：5 封同时发、上限 2 → 只成功 2 封（占位先行）',
+      rs.filter(x => x.ok).length === 2 && box.calls === 2,
+      'ok=' + rs.filter(x => x.ok).length + ' calls=' + box.calls);
+    check('D22 并发：其余都被 DAILY_LIMIT_EXCEEDED 拒绝',
+      rs.filter(x => !x.ok).every(x => x.code === 'DAILY_LIMIT_EXCEEDED'),
+      JSON.stringify(rs.filter(x => !x.ok).map(x => x.code)));
+    check('D22 并发：当日计数 = 上限（没有多发）', mail.stats().sentToday === 2, JSON.stringify(mail.stats()));
   }
-  console.log('\n邮件单测：' + pass + '/' + results.length + ' 通过');
-  if (pass !== results.length) process.exitCode = 1;
+
+  /* 13. 草稿双击 / 并发确认：只有第一个能抢占 pending → sending */
+  {
+    const box = slowProviders();
+    const { mail } = fresh({ provider: 'mock', allowlist: [], dailyLimit: 5 }, box.providers);
+    const d = mail.createDraft({ to: 'x@y.com', subject: 's', body: 'b' });
+    const both = await Promise.all([mail.sendDraft(d.id, { actor: 'user' }), mail.sendDraft(d.id, { actor: 'user' })]);
+    check('D22 双击确认：只真正发一封', box.calls === 1 && both.filter(x => x.ok).length === 1,
+      'calls=' + box.calls + ' ' + JSON.stringify(both.map(x => x.code || 'ok')));
+    check('D22 双击确认：另一路返回 DRAFT_ALREADY_SENT',
+      both.filter(x => x.code === 'DRAFT_ALREADY_SENT').length === 1, JSON.stringify(both.map(x => x.code || 'ok')));
+    check('D22 双击确认：草稿最终为 sent', mail.getDraft(d.id).status === 'sent', mail.getDraft(d.id).status);
+  }
+
+  /* 14. 草稿发送失败要退回 pending（不能卡在 sending 里永远不可重试） */
+  {
+    const { mail } = fresh({ allowlist: [], dailyLimit: 0 });
+    const d = mail.createDraft({ to: 'x@y.com', subject: 's', body: 'b' });
+    const r = await mail.sendDraft(d.id, { actor: 'user' });
+    check('D22 草稿失败：返回 DAILY_LIMIT_EXCEEDED', r.ok === false && r.code === 'DAILY_LIMIT_EXCEEDED', JSON.stringify(r));
+    check('D22 草稿失败：草稿回到 pending（可重试 / 可丢弃）', mail.getDraft(d.id).status === 'pending', mail.getDraft(d.id).status);
+    check('D22 草稿失败：不计入当日已发', mail.stats().sentToday === 0, JSON.stringify(mail.stats()));
+  }
+
 }
 
-main().catch(e => {
-  console.error('测试异常：', e);
-  process.exitCode = 1;
-});
+run('邮件单测', main);

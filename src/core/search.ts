@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 全文搜索（Search，纯逻辑，Node 可测，UI-2 §3.4）
+ * 无限阅读 · 全文搜索（Search，纯逻辑，Node 可测）
  *
  * 职责：
  *   buildDoc(story)      故事 → 搜索文档（含全部分支节点；文本已规整）
@@ -60,8 +60,8 @@ import { plainReply as plainReplyOfTree } from './tree.ts';
 
   /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
 
-  // 助手回复 → 纯文本：唯一实现在 plainReply（tree.js，审查 可维护性 三·4）。
-  // store.js 的书架摘要共用同一口径，schema 演进只改一处；tree.js 必须先加载，缺了直接报错不静默降级
+  // 助手回复 → 纯文本：唯一实现在 tree.ts 的 plainReply。
+  // store.ts 的书架摘要共用同一口径，schema 演进只改一处；静态 import 缺了直接报错不静默降级
   const plainReply = plainReplyOfTree;
 
   // 玩家行动文本：去掉 [玩家行动] / [设定] 标记
@@ -189,17 +189,18 @@ import { plainReply as plainReplyOfTree } from './tree.ts';
         }
       }
 
-      out.push({ id: doc.id, score: score, titleRanges: titleRanges, hits: hits });
+      // updatedAt 在命中时一并带出。比较器只读字段——以前是在比较器里
+      // 线性扫 docs 找同 id 的 updatedAt（每次比较 O(n) → 整体 O(n² log n)），
+      // 书架故事一多，同分档位的排序就成了查询的主要耗时。
+      out.push({
+        id: doc.id, score: score, updatedAt: +doc.updatedAt || 0,
+        titleRanges: titleRanges, hits: hits,
+      });
     }
 
     out.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
-      var ua = 0, ub = 0;
-      for (var i = 0; i < docs.length; i++) {
-        if (docs[i] && docs[i].id === a.id) ua = +docs[i].updatedAt || 0;
-        if (docs[i] && docs[i].id === b.id) ub = +docs[i].updatedAt || 0;
-      }
-      return ub - ua;
+      return b.updatedAt - a.updatedAt;
     });
     return out.slice(0, limit);
   }
@@ -237,7 +238,7 @@ import { plainReply as plainReplyOfTree } from './tree.ts';
     return out;
   }
 
-  /* ---------------- 内存索引（不持久化，§3.4） ---------------- */
+  /* ---------------- 内存索引（不持久化） ---------------- */
 
   function createIndex() {
     var map = new Map();

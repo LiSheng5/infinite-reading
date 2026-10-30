@@ -1,6 +1,6 @@
 <script>
   /* Field.svelte —— 表单字段容器（阶段 3 组件库）
-   * 一行副标题（hint），长说明由屏幕层放「填写说明」（§7.2：字段间不夹长段文字）。
+   * 一行副标题（hint），长说明由屏幕层放「填写说明」（字段间不夹长段文字）。
    * 控件放在 children 里；id 由使用方传给控件并回传给本组件（label for 对齐）。 */
   let { label = '', hint = '', for: forId = null, error = '', children } = $props();
 </script>

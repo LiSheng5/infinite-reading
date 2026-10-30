@@ -6,11 +6,11 @@ import { Prefs } from '../core/prefs.ts';
 import { Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
 import { setChat, setThumbs } from '../screens/read/read.svelte.js';
-import { A } from './core.js';
+import { A, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, KIND_LABELS, motionLevel, toast, fmtTime, persistSettings, saveAll } = A;
+  const { $, Store, MODE_LABELS, KIND_LABELS, motionLevel, fmtTime, persistSettings } = A;
 
   function scrollChatBottom() {
     const box = $('#chat-scroll');
@@ -56,39 +56,41 @@ import { A } from './core.js';
       S.liveReasonOpen = wrap.classList.contains('open');
       panel.scrollTop = panel.scrollHeight;   // 展开后立刻跟到最新
     };
-    wrap.appendChild(btn);
-    wrap.appendChild(panel);
+    wrap.replaceChildren(btn, panel);   // 幂等：空壳跨 renderChat 常驻，重复回填不叠加
   }
 
   // 阶段 4 屏 4：流式 / 打字机临时旁白挂进组件渲染的两个空壳（与旧 DOM 同位置同结构）。
   // 空壳的显隐由视图模型的 live / liveReason 决定；interior 与 class 状态照旧命令式回填，
   // S.liveEl / S.liveReasonEl 的同步语义与流式 span 追踪零改动（round.js / turn.js 不用改）。
+  // 幂等：{#key} 整体重建已删，同一 live 窗口内空壳跨 renderChat 常驻——只回填空壳，
+  // 在途的 span.delta / 思考窗 interior 由 appendLiveDelta / updateLiveReasoning 原地维护，
+  // 不在这里覆盖（回合内的工具留痕 renderChat、设置改动 renderChat 不再打断流式）。
   function fillLiveDom() {
     if (!S.live) return;
     const shell = $('#chat-scroll').querySelector('.reason-live');
     if (shell) {
-      reasonLiveInto(shell, S.live.reasoning);
+      S.liveReasonEl = shell;
+      if (!shell.firstChild) reasonLiveInto(shell, S.live.reasoning);
       if (S.liveReasonOpen) shell.classList.add('open');
       if (S.liveReasonCollapsed) shell.classList.add('collapsed');
-      S.liveReasonEl = shell;
       const p = shell.querySelector('.reason-panel');
       if (p) p.scrollTop = p.scrollHeight;
     }
     const bubble = $('#chat-scroll').querySelector('.bubble-live');
-    if (bubble) {
+    if (bubble && !bubble.firstChild) {
       if (S.live.text) {
         bubble.textContent = S.live.text;
       } else {
         const pill = document.createElement('span');
         pill.className = 'gen-pill';
         pill.textContent = '生成中…';
-        bubble.appendChild(pill);
+        bubble.replaceChildren(pill);
       }
     }
   }
 
   function renderChat() {
-    S.liveEl = null;   // DOM 重建后旧引用失效（否则工具回合后的第二次流式会写进已脱离的节点）
+    S.liveEl = null;   // 流式空壳随 live / liveReason 标志重建，旧引用可能失效（否则工具回合后的第二次流式会写进已脱离的节点）
     S.liveReasonEl = null;
     A.resetLiveDelta();   // 同理：span 追踪只对当前气泡有效
     const box = $('#chat-scroll');
@@ -96,7 +98,7 @@ import { A } from './core.js';
     // 流式临时旁白的两个空壳（reason-live / bubble-live）由组件渲染，interior 仍走旧 DOM 拼装
     //（fillLiveDom：span.delta 逐段淡入与 typewrite 都是命令式动画代码，零改动）。
     if (!box) return;
-    A.updateHistoryBar();   // UI-4 §5：历史位置提示条跟着 head 走（head 有孩子就亮）
+    A.updateHistoryBar();   // 历史位置提示条跟着 head 走（head 有孩子就亮）
     setChat(A.readChatModel());
     if (!S.story) return;
     fillLiveDom();
@@ -147,7 +149,7 @@ import { A } from './core.js';
 
   /* ================= 渲染：画面面板 ================= */
 
-  // 舞台当前图（UI-1 §4.4）：换画交叉淡入、缩略图 → 原图 blur-up、rich 档 Ken Burns
+  // 舞台当前图：换画交叉淡入、缩略图 → 原图 blur-up、rich 档 Ken Burns
   let stageShownSrc = '';   // 当前显示的 src
   let stageShownId = '';    // 当前场景 id（区分「换画」与「缩略图升级原图」）
   let stageLoadToken = 0;   // 快速连点缩略条：只让最后一次生效
@@ -206,7 +208,7 @@ import { A } from './core.js';
     pre.src = src;
   }
 
-  // 视频场景：video 元素接管舞台；文件未到先显示封面；动效 off 不自动播放、只显示封面（§8）
+  // 视频场景：video 元素接管舞台；文件未到先显示封面；动效 off 不自动播放、只显示封面
   function setStageVideo(sc) {
     const v = $('#stage-video');
     if (!v) return;
@@ -286,17 +288,17 @@ import { A } from './core.js';
   function enterGame(fresh, opts) {
     opts = opts || {};
     if (!S.story) return;
-    // 过渡的 update 回调要下一帧才跑（阶段 5 第 3 步）：先把故事抓在闭包里，
+    // 过渡的 update 回调要下一帧才跑（阶段 5）：先把故事抓在闭包里，
     // 免得等待期间被别的入口（返回首页 / 换故事）把 S.story 置空。
     const story = S.story;
-    // 分支树（§4.1/§3）：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
+    // 分支树：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
     try {
       Tree.ensure(S.story);
       Tree.project(S.story);
     } catch (e) { console.warn('Tree 初始化失败（按存档原样继续）：', e); }
     story.ui = Object.assign(Store.defaultUi(), story.ui || {});
-    A.renderStoryPrefs();   // UI-3 §7：切换对话整体重绘本对话设置面板（不残留上一个对话的值）
-    // 切屏收口到 Nav（阶段 5 第 3 步）：原「三处 classList 写 .hidden」由 showScreen 统一改，
+    A.renderStoryPrefs();   // 切换对话整体重绘本对话设置面板（不残留上一个对话的值）
+    // 切屏收口到 Nav（阶段 5）：原「三处 classList 写 .hidden」由 showScreen 统一改，
     // 换画 / 聊天 / 布局这些 DOM 变更全部放进 mutate —— 过渡的新快照拿到的就是渲染完的阅读页。
     Nav.showScreen('read', () => {
       $('#screen-game').classList.remove('stage-strip', 'text-hidden');
@@ -313,10 +315,10 @@ import { A } from './core.js';
         S.currentChoices = A.choicesFromHead();
         renderChat();
         saveAll();
-        // P-2：进入故事不再自动生成第一幕（省一次调用）；空档由 renderChat 的
-        //      「开始第一幕」按钮触发。试画锚定（P4）关闭后同样只回到这个按钮。
+        // 进入故事不再自动生成第一幕（省一次调用）；空档由 renderChat 的
+        // 「开始第一幕」按钮触发。试画锚定关闭后同样只回到这个按钮。
       } else {
-        S.currentChoices = A.choicesFromHead();   // §4.3：选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
+        S.currentChoices = A.choicesFromHead();   // 选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
         renderNarrationToolsAfterLoad();
         saveAll();
         // 空档（例：锚定向导还没走完就刷新了页面）同样交给「开始第一幕」按钮

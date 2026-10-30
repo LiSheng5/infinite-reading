@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 分支树布局测试（js/treeLayout.js，UI-4 任务书 §3 / §8）
+ * 无限阅读 · 分支树布局测试（src/core/treeLayout.ts）
  *
  * 不开浏览器、不联网：
  *   1. 线性链 → 单泳道、行号递增、无分叉边；
@@ -12,7 +12,8 @@
  *   6. 标签：JSON 取旁白、坏 JSON 当纯文本、码点截断、<script> 原样出现在文本里且无拼好的 HTML；
  *   7. 确定性：同输入两次输出深相等；
  *   8. 规模：2000 节点 < 500ms（Node 宽松上限）；
- *   9. 空树 / 只有根 / 损坏节点（缺 parent、环）不抛错。
+ *   9. 空树 / 只有根 / 损坏节点（缺 parent、环）不抛错；
+ *  10. 分阶段纯函数：buildKids / assignRows / tracePath / packLanes 各自单独对账。
  *
  * 用法：node eval/treelayout-test.js
  */
@@ -30,7 +31,7 @@ function check(name, ok, detail) {
   results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
 }
 
-/* ---------------- 测试脚手架：直接造树（不依赖 js/tree.js 的提交流程） ---------------- */
+/* ---------------- 测试脚手架：直接造树（不依赖 src/core/tree.ts 的提交流程） ---------------- */
 
 function mkTree(spec) {
   // spec: { links: [[parentId, childId]…], head, turns: {id: turn}, actions: {id: action},
@@ -351,6 +352,96 @@ function segHitsNode(out, a, b, allow) {
     t.head = 'nope';
     return TL.compute(t, {});
   });
+}
+
+/* ---------------- 10. 分阶段纯函数（逐段对账，不再只能整体对账） ---------------- */
+{
+  /* 10.1 buildKids：children 表归一（顺序 / 去重 / 自引用 / 不存在的孩子 / parent 指针补登） */
+  const map = {
+    root: { children: ['a', 'a', 'a', 'gone', 'root'], parent: null, active: 'a' },
+    a: { children: ['b'], parent: 'root', active: 'b' },
+    b: { children: [], parent: null },        // parent 指针缺失，由 a.children 记账
+    c: { children: [], parent: 'a' },         // 只登记在 parent 指针上
+    bad: null,                                // 非对象节点
+  };
+  const kids = TL.buildKids(map);
+  check('10. buildKids：剔除重复 / 自引用 / 不存在的孩子，保持数组序',
+    JSON.stringify(kids.get('root')) === JSON.stringify(['a']), JSON.stringify(kids.get('root')));
+  check('10. buildKids：parent 指针补登到 children 末尾',
+    JSON.stringify(kids.get('a')) === JSON.stringify(['b', 'c']), JSON.stringify(kids.get('a')));
+  check('10. buildKids：非对象节点不建 children 格（必然不可达）',
+    kids.has('bad') === false, JSON.stringify(Array.from(kids.keys())));
+  check('10. buildKids：不改入参（children 数组原样）',
+    map.root.children.length === 5 && map.a.children.length === 1);
+
+  /* 10.2 assignRows：行 = BFS 深度、order = 发现序、父指针唯一、路径 root→head */
+  const H = TL.assignRows(kids, 'root', 'c');
+  check('10. assignRows：行 = BFS 深度',
+    H.row.get('root') === 0 && H.row.get('a') === 1 && H.row.get('b') === 2 && H.row.get('c') === 2,
+    JSON.stringify(Array.from(H.row.entries())));
+  check('10. assignRows：order = BFS 发现序（确定性基准）',
+    JSON.stringify(H.order) === JSON.stringify(['root', 'a', 'b', 'c']), JSON.stringify(H.order));
+  check('10. assignRows：父指针唯一（b 只挂在 a 下）',
+    H.parentOf.get('root') === null && H.parentOf.get('a') === 'root' && H.parentOf.get('b') === 'a');
+  check('10. assignRows：当前路径 root→head',
+    JSON.stringify(H.path) === JSON.stringify(['root', 'a', 'c']), JSON.stringify(H.path));
+  check('10. assignRows：onPath 与 path 一致',
+    H.onPath.size === 3 && H.onPath.has('c') && !H.onPath.has('b'));
+
+  /* 10.3 tracePath：根只有自己 / head 悬空 → 空 / 环只走一遍 */
+  check('10. tracePath：根节点路径只有自己',
+    JSON.stringify(TL.tracePath('root', H.row, H.parentOf)) === JSON.stringify(['root']));
+  check('10. tracePath：head 悬空 → 空路径',
+    TL.tracePath('nope', H.row, H.parentOf).length === 0);
+  const cycMap = { root: { children: ['x'] }, x: { children: ['root'] } };
+  const cycH = TL.assignRows(TL.buildKids(cycMap), 'root', 'x');
+  check('10. tracePath：环只走一遍（root→x），BFS 不二次入队',
+    JSON.stringify(cycH.path) === JSON.stringify(['root', 'x']) && cycH.order.length === 2,
+    JSON.stringify(cycH.path) + ' order=' + JSON.stringify(cycH.order));
+
+  // 段间装配：tree → { kids, row, order, path } → laneOf（后面两个用例共用）
+  const stagesOf = tree => {
+    const k = TL.buildKids(tree.nodes);
+    const h = TL.assignRows(k, tree.root, tree.head);
+    return { kids: k, H: h, lane: TL.packLanes(tree.root, tree.nodes, k, h.row, h.order, h.path) };
+  };
+
+  /* 10.4 packLanes：主干 lane 0；行区间重叠的并行支线递增；不重叠可复用同一泳道 */
+  {
+    // 主干 root→t1→t2→t3（head=t3）；t1 挂 x1→x2（行 2..3），t2 挂 y1（行 3）→ 与 x 区间重叠
+    const t = mkTree({
+      links: [['root', 't1'], ['t1', 't2'], ['t2', 't3'], ['t1', 'x1'], ['x1', 'x2'], ['t2', 'y1']],
+      head: 't3',
+    });
+    const S = stagesOf(t);
+    const lane = id => S.lane.get(id);
+    check('10. packLanes：主干恒在 lane 0',
+      ['root', 't1', 't2', 't3'].every(id => lane(id) === 0), JSON.stringify(Array.from(S.lane.entries())));
+    check('10. packLanes：支线整条脊同泳道',
+      lane('x1') === 1 && lane('x2') === 1, 'x1=' + lane('x1') + ' x2=' + lane('x2'));
+    check('10. packLanes：行区间重叠的并行支线换到更靠右的泳道',
+      lane('y1') === 2, 'y1=' + lane('y1'));
+    check('10. packLanes：order 里每个节点都有泳道',
+      S.H.order.every(id => S.lane.has(id)));
+
+    // 纯函数：同入参两次结果相同，且不改入参
+    const before = JSON.stringify([S.H.order, Array.from(S.H.row.entries())]);
+    const again = TL.packLanes(t.root, t.nodes, S.kids, S.H.row, S.H.order, S.H.path);
+    check('10. packLanes：同入参 → 同出参（确定性）',
+      JSON.stringify(Array.from(again.entries())) === JSON.stringify(Array.from(S.lane.entries())));
+    check('10. packLanes：不改入参（row / order 原样）',
+      JSON.stringify([S.H.order, Array.from(S.H.row.entries())]) === before);
+  }
+  {
+    // 主干 root→t1…t5；t1 挂 x1→x2（行 2..3），t4 挂 z1→z2（行 5..6）→ 行区间不重叠 → 复用泳道 1
+    const links = [];
+    for (let i = 1; i <= 5; i++) links.push([i === 1 ? 'root' : 't' + (i - 1), 't' + i]);
+    links.push(['t1', 'x1'], ['x1', 'x2'], ['t4', 'z1'], ['z1', 'z2']);
+    const t = mkTree({ links: links, head: 't5' });
+    const lane = stagesOf(t).lane;
+    check('10. packLanes：子树结束后泳道被后续分支复用',
+      lane.get('x1') === 1 && lane.get('z1') === 1, 'x1=' + lane.get('x1') + ' z1=' + lane.get('z1'));
+  }
 }
 
 /* ---------------- 汇总 ---------------- */

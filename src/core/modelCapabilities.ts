@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 模型参数「预填参考」表（可选，T-M-1）
+ * 无限阅读 · 模型参数「预填参考」表（可选）
  *
  * 定位：厂商模型与参数更新极快，本项目**不追同步**，**也不预置任何厂商 / 模型数据**——
  * 上下文窗口（70% 压缩阈值要用到它）、思考档位、图片尺寸、视频参数、额外字段等
@@ -8,7 +8,7 @@
  * 真正稳定的硬约定是适配器接口（src/core/providers.ts）：
  *   ChatProviders[provider].chat(cfg, messages, hooks)
  *   ImageProviders[provider].generate(cfg, prompt)
- * 手填通道（providers.js 支持）：
+ * 手填通道（providers.ts 支持）：
  *   cfg.model / baseUrl / apiKey / temperature
  *   cfg.contextWindow   上下文窗口（0 = 未知，压缩退回条数兜底）
  *   cfg.thinking        思考档位（'default' | 'on' | 'off' | 厂商档位值）

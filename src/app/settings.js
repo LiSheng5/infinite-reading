@@ -8,11 +8,11 @@ import { Context } from '../core/context.ts';
 import { RoleCard } from '../core/roleCard.ts';
 import { Tree } from '../core/tree.ts';
 import { syncDirty } from '../screens/storyPrefs/panel.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, applyMotion, toast, irConfirm, fmtTime, saveAll, miniBtn } = A;
+  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, applyMotion, irConfirm, fmtTime, miniBtn } = A;
 
   function syncSettingsToForm() {
     A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
@@ -65,7 +65,7 @@ import { A } from './core.js';
     $('#s-show-reasoning').checked = !!S.settings.showReasoning;
     $('#s-tools-enabled').checked = S.settings.toolsEnabled !== 'off';
     A.renderNoToolsHint();
-    // R13 用户画像：默认全关，可按模式单独开或全开（'all' 与三个勾等价）
+    // 用户画像：默认全关，可按模式单独开或全开（'all' 与三个勾等价）
     const up = S.settings.userProfile || {};
     const enabled = up.enabled === 'all' ? { choice: true, chat: true, rp: true } : (up.enabled || {});
     $('#s-profile-choice').checked = !!enabled.choice;
@@ -79,12 +79,12 @@ import { A } from './core.js';
     if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
     if ($('#s-ui-motion')) $('#s-ui-motion').value = ['auto', 'off', 'standard', 'rich'].indexOf(sui.motion) >= 0 ? sui.motion : 'auto';
-    // UI-3 §4.1 外观：字号 / 宽度 / 密度默认（扮演 / 智能体；本对话可覆盖）
+    // 外观：字号 / 宽度 / 密度默认（扮演 / 智能体；本对话可覆盖）
     if ($('#s-ui-font')) $('#s-ui-font').value = ['sm', 'md', 'lg'].indexOf(sui.fontScale) >= 0 ? sui.fontScale : 'md';
     if ($('#s-ui-width')) $('#s-ui-width').value = ['narrow', 'standard', 'wide'].indexOf(sui.width) >= 0 ? sui.width : 'standard';
     if ($('#s-ui-density')) $('#s-ui-density').value = ['compact', 'standard'].indexOf(sui.density) >= 0 ? sui.density : 'standard';
     A.renderCapabilityFields();
-    A.renderModelProfiles();   // UI-3：模型库列表（模型设置 · 模型库）
+    A.renderModelProfiles();   // 模型库列表（模型设置 · 模型库）
     renderStoryPanels();
     renderInjectHint();
     A.renderSavepoints();
@@ -133,7 +133,7 @@ import { A } from './core.js';
       S.settings.chat.thinking = 'default';
     }
     S.settings.chat.contextWindow = Math.max(0, parseInt($('#s-chat-ctx').value, 10) || 0);
-    // 手填参数原样并入请求体（providers.js mergeExtraParams）
+    // 手填参数原样并入请求体（providers.ts 的 mergeExtraParams）
     S.settings.chat.extraParams = $('#s-chat-params').value.trim();
 
     S.settings.painter.baseUrl = $('#s-painter-base').value.trim();
@@ -168,7 +168,7 @@ import { A } from './core.js';
     S.settings.video.baseUrl = $('#s-video-base').value.trim();
     S.settings.video.model = $('#s-video-model').value.trim();
     S.settings.video.apiKey = $('#s-video-key').value.trim();
-    // 时长 / 分辨率 / 比例以这些控件为唯一来源（审查 三·2）：「自定义请求参数」只补其它键，
+    // 时长 / 分辨率 / 比例以这些控件为唯一来源：「自定义请求参数」只补其它键，
     // 同名 key 会被控件值覆盖（providers.applyVideoControlParams 同口径）
     S.settings.video.duration = Math.max(4, Math.min(15, parseInt($('#s-video-duration').value, 10) || 5));
     S.settings.video.resolution = $('#s-video-resolution').value || '768P';
@@ -179,7 +179,7 @@ import { A } from './core.js';
     if (!$('#wrap-image-quality').classList.contains('hidden')) S.settings.image.quality = $('#s-image-quality').value;
     else delete S.settings.image.quality;
 
-    // R13 用户画像：三个勾全开 = 'all'（等价写法，省得以后加模式还要改数据）
+    // 用户画像：三个勾全开 = 'all'（等价写法，省得以后加模式还要改数据）
     const pChoice = $('#s-profile-choice').checked;
     const pChat = $('#s-profile-chat').checked;
     const pRp = $('#s-profile-rp').checked;
@@ -188,7 +188,7 @@ import { A } from './core.js';
       scope: $('#s-profile-scope').value === 'per-story' ? 'per-story' : 'global',
     };
 
-    // 界面：布局 / 选项显示（P2；沉浸态不写回，保存后回到自动布局）
+    // 界面：布局 / 选项显示（沉浸态不写回，保存后回到自动布局）
     if (!S.settings.ui) S.settings.ui = Store.defaultSettings().ui;
     if ($('#s-ui-layout')) {
       const lv = $('#s-ui-layout').value;
@@ -200,7 +200,7 @@ import { A } from './core.js';
       S.settings.ui.motion = ['auto', 'off', 'standard', 'rich'].indexOf(mv) >= 0 ? mv : 'auto';
       applyMotion();   // 动效强度即时生效
     }
-    // UI-3 §4.1：字号 / 宽度 / 密度默认（非法值回默认）
+    // 字号 / 宽度 / 密度默认（非法值回默认）
     if ($('#s-ui-font')) {
       const fv = $('#s-ui-font').value;
       S.settings.ui.fontScale = ['sm', 'md', 'lg'].indexOf(fv) >= 0 ? fv : 'md';
@@ -223,8 +223,8 @@ import { A } from './core.js';
     // 「当前故事」组迁入本对话设置面板而移除（阶段 4 屏 2 迁移方案）：
     // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
     saveAll();
-    if (S.story) { A.applyLayout(); A.renderChat(); }   // 布局 / 选项显示即时生效
-    if (prevShowReasoning !== S.settings.showReasoning) A.renderChat();   // 思考链开关即时生效
+    if (S.story) { A.applyLayout(); renderChat(); }   // 布局 / 选项显示即时生效
+    if (prevShowReasoning !== S.settings.showReasoning) renderChat();   // 思考链开关即时生效
   }
 
   /* ---- 「测试连接」：只读当前输入框的值 ----
@@ -300,7 +300,7 @@ import { A } from './core.js';
 
   /* ================= 故事记忆面板（世界卡 / 摘要栈 / 留痕 / 模式） ================= */
 
-  // P4「画风」区域：视觉设定卡状态 + 滚动风格摘要 + 重走锚定入口
+  // 「画风」区域：视觉设定卡状态 + 滚动风格摘要 + 重走锚定入口
   function renderStylePanel() {
     const has = !!S.story;
     const card = has ? S.story.styleCard : null;
@@ -372,7 +372,19 @@ import { A } from './core.js';
       sum.textContent = '地点：' + (w.place || '—') + ' · 时间：' + (w.time || '—')
         + ' · 人物 ' + chars + ' 位 · 摘要 ' + ((S.story.summaries || []).length) + ' 幕';
     }
-    $('#world-scribe-at').textContent = w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString()) : '尚未校对';
+    // 书记员状态区分「未启用 / 未配置 / 失败 / 成功」——失败可归因（error 来自
+    // turn.js 写的 {tool:'scribe', error} 留痕；'未配置书记员模型' 两处同串，见 runScribe）。
+    const sc = S.settings.scribe || {};
+    let lastScribe = null;
+    for (let i = (S.story.log || []).length - 1; i >= 0; i--) {
+      const e = S.story.log[i];
+      if (e.type === 'tool' && e.tool === 'scribe') { lastScribe = e; break; }
+    }
+    $('#world-scribe-at').textContent = !sc.enabled ? '书记员未启用：世界卡由本地规则维护'
+      : (lastScribe && lastScribe.error === '未配置书记员模型') ? '书记员未配置模型：世界卡由本地规则维护（设置里补上模型与 Key）'
+      : (lastScribe && lastScribe.error) ? ('上次书记员任务失败（已退回本地规则）：' + String(lastScribe.error).slice(0, 60))
+      : w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString())
+      : '尚未校对';
     const sl = $('#summary-list'); sl.replaceChildren();
     (S.story.summaries || []).forEach(s => { const d = document.createElement('div'); d.className = 'mono-line'; d.textContent = s; sl.appendChild(d); });
     $('#sum-count').textContent = (S.story.summaries || []).length;
@@ -385,7 +397,7 @@ import { A } from './core.js';
     syncStoryPanel();   // 回填后再对账一次（回填只在未判变时发生，这里兜住保存后的时序）
   }
 
-  // 角色卡状态（R13）：rp 常驻；切出 rp 时卡保留在存档里只是停用（§4.8）
+  // 角色卡状态：rp 常驻；切出 rp 时卡保留在存档里只是停用
   function renderCardPanel() {
     const el = $('#rc-status');
     if (!el) return;
@@ -472,7 +484,7 @@ import { A } from './core.js';
     if (!(opts && opts.silent)) toast('世界卡已保存，下一回合生效');
   }
 
-  /* ---------- 🧠 注入记忆（§4.4 手动层；第十六轮定案：不用 tool_choice） ---------- */
+  /* ---------- 🧠 注入记忆（手动层；定案：不用 tool_choice） ---------- */
 
   // 按钮在「模型设置 · 故事记忆」里：点一下排定下一回合强制注入完整世界卡 + 设定 + 视觉设定卡
   function toggleInjectMemory() {
@@ -495,7 +507,7 @@ import { A } from './core.js';
       : '手动层：点一下排定下一回合强制注入完整记忆（世界卡 + 设定 + 视觉设定卡），让 AI 先复述处境再继续。';
   }
 
-  /* ---------- 用户画像面板（R13 / §4.12：面板在模型设置里，每条可删、可清空） ---------- */
+  /* ---------- 用户画像面板（面板在模型设置里，每条可删、可清空） ---------- */
 
   function profileStore() {
     const scope = (S.settings.userProfile || {}).scope === 'per-story' ? 'per-story' : 'global';
@@ -557,13 +569,13 @@ import { A } from './core.js';
     const m = e.target.value;
     const prev = S.story.mode || 'choice';
     if (m === 'rp' && !S.story.characterCard) {
-      // §4.8：切到 rp 时若没有角色卡 → 弹角色卡选择 / 新建；取消则留在原模式
+      // 切到 rp 时若没有角色卡 → 弹角色卡选择 / 新建；取消则留在原模式
       S.story.mode = m;
       $('#hud-mode').textContent = MODE_LABELS[m] || '剧情';
       saveAll();
       A.applyLayout();
       A.syncKindSwitch();
-      A.renderChat();
+      renderChat();
       A.openCardEditor({
         mode: 'edit',
         onCancel: () => {
@@ -573,7 +585,7 @@ import { A } from './core.js';
           saveAll();
           A.applyLayout();
           A.syncKindSwitch();
-          A.renderChat();
+          renderChat();
         },
       });
       return;
@@ -583,7 +595,7 @@ import { A } from './core.js';
     saveAll();
     A.applyLayout();      // 剧情 ↔ chat/rp 来回切：舞台与图都还在（只是不显示），布局要跟着模式走
     A.syncKindSwitch();   // chat 隐藏做 / 说 / 导演；story.ui.kind 保留不清
-    A.renderChat();
+    renderChat();
     renderStoryPanels();
   }
 

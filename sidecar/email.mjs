@@ -12,7 +12,7 @@
  * 一律由用户在界面显式发起 → 确认 → 执行（见 ARCHITECTURE.md）。
  */
 import { genId, dayRange } from './util.mjs';
-import { AUDIT, DRAFT } from './statuses.mjs';
+import { AUDIT, DRAFT, sqlIn } from './statuses.mjs';
 
 export const EMAIL_CODES = [
   'EMAIL_DISABLED',
@@ -80,6 +80,13 @@ export function createEmail(deps) {
   const now = deps.now || (() => Date.now());
   const providers = deps.providers || createProviders();
 
+  // 崩溃恢复：sending / pending 是「发送中」的临时态，进程被杀会留下残渣。
+  //   - 草稿卡在 sending → 放回 pending，用户还能重试或丢弃；
+  //   - 审计占位卡在 pending → 标成 denied（INTERRUPTED），不能把没发出去的信算进当日已发。
+  db.prepare('UPDATE email_drafts SET status=? WHERE status=?').run(DRAFT.PENDING, DRAFT.SENDING);
+  db.prepare('UPDATE email_audit SET status=?, code=? WHERE kind=? AND status=?')
+    .run(AUDIT.DENIED, 'INTERRUPTED', 'send', AUDIT.PENDING);
+
   function providerOf(cfg) {
     const name = (cfg.email && cfg.email.provider) || 'mock';
     return providers[name] || providers.mock;
@@ -93,12 +100,13 @@ export function createEmail(deps) {
     return id;
   }
 
-  // 当日成功发送数（本地日聚合审计表）
+  // 当日已发数（本地日聚合审计表）。pending 是本实现新加的「发送占位」：
+  // 先落库再发送，并发请求才会看到额度已被这封占用。
   function sentToday(t0) {
     const [d0, d1] = dayRange(t0);
     const r = db.prepare(
-      'SELECT COUNT(*) AS n FROM email_audit WHERE kind=? AND status=? AND at >= ? AND at < ?'
-    ).get('send', AUDIT.OK, d0, d1);
+      'SELECT COUNT(*) AS n FROM email_audit WHERE kind=? AND status IN ' + sqlIn([AUDIT.OK, AUDIT.PENDING]) + ' AND at >= ? AND at < ?'
+    ).get('send', d0, d1);
     return (r && r.n) || 0;
   }
 
@@ -170,20 +178,26 @@ export function createEmail(deps) {
       audit('send', addr, subject, AUDIT.DENIED, 'DAILY_LIMIT_EXCEEDED', actor);
       return { ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '每日发送上限为 0（默认保守值），请先在设置里调大。' };
     }
-    if (sentToday(now()) >= limit) {
+    // 上限检查与占位必须是同一段同步代码（中间不能有 await），否则并发请求会
+    // 全部通过检查、一起把今日发信量顶到上限之外。
+    const t1 = now();
+    if (sentToday(t1) >= limit) {
       audit('send', addr, subject, AUDIT.DENIED, 'DAILY_LIMIT_EXCEEDED', actor);
       return { ok: false, code: 'DAILY_LIMIT_EXCEEDED', message: '今天的发送量已达上限（' + limit + ' 封）。' };
     }
+    // 占位：这条 pending 审计从这一刻起就计入当日已发；发送结束再改成 ok / denied
+    const ticket = audit('send', addr, subject, AUDIT.PENDING, '', actor);
 
     try {
       const provider = providerOf(cfg);
       const out = await provider.send(cfg, { to: addr, subject: subject, body: body });
-      audit('send', addr, subject, AUDIT.OK, '', actor);
+      db.prepare('UPDATE email_audit SET status=? WHERE id=?').run(AUDIT.OK, ticket);
       return { ok: true, id: (out && out.id) || '', provider: (cfg.email && cfg.email.provider) || 'mock', to: addr };
     } catch (err) {
       const code = String((err && err.message) || err);
       const mapped = code.indexOf('MISSING_RESEND_API_KEY') >= 0 ? 'MISSING_RESEND_API_KEY' : 'PROVIDER_ERROR';
-      audit('send', addr, subject, AUDIT.DENIED, mapped, actor);
+      // 发送失败：占位改成 denied（不计入当日已发），额度还回去
+      db.prepare('UPDATE email_audit SET status=?, code=? WHERE id=?').run(AUDIT.DENIED, mapped, ticket);
       return { ok: false, code: mapped, message: '发送失败：' + code };
     }
   }
@@ -192,14 +206,29 @@ export function createEmail(deps) {
   async function sendDraft(id, opts) {
     const draft = getDraft(id);
     if (!draft) return { ok: false, code: 'DRAFT_NOT_FOUND', message: '找不到这封草稿。' };
-    if (draft.status !== DRAFT.PENDING) return { ok: false, code: 'DRAFT_ALREADY_SENT', message: '这封草稿已经处理过了。' };
-    const res = await send({
-      to: draft.to, subject: draft.subject, body: draft.body,
-      actor: (opts && opts.actor) || 'user',
-    }, { confirmed: true });   // 确认动作发生在这里（用户点了草稿确认），不是请求体字段
+    // 同步抢占：双击 / 两个并发确认里只有第一个能把 pending 抢成 sending，
+    // 另一个 changes=0 → 直接按「已处理」返回，绝不会发第二封。
+    const claim = db.prepare('UPDATE email_drafts SET status=? WHERE id=? AND status=?')
+      .run(DRAFT.SENDING, draft.id, DRAFT.PENDING);
+    if (claim.changes === 0) return { ok: false, code: 'DRAFT_ALREADY_SENT', message: '这封草稿已经处理过了。' };
+
+    let res;
+    try {
+      res = await send({
+        to: draft.to, subject: draft.subject, body: draft.body,
+        actor: (opts && opts.actor) || 'user',
+      }, { confirmed: true });   // 确认动作发生在这里（用户点了草稿确认），不是请求体字段
+    } catch (err) {
+      // 意外异常（DB 抛出等）：放回 pending，别让草稿永久卡在 sending
+      db.prepare('UPDATE email_drafts SET status=? WHERE id=? AND status=?').run(DRAFT.PENDING, draft.id, DRAFT.SENDING);
+      throw err;
+    }
     if (res.ok) {
       db.prepare('UPDATE email_drafts SET status=? WHERE id=?').run(DRAFT.SENT, draft.id);
       audit('confirm', draft.to, draft.subject, AUDIT.OK, '', (opts && opts.actor) || 'user');
+    } else {
+      // 发送失败（上限 / 服务商）：退回 pending，用户可重试或丢弃
+      db.prepare('UPDATE email_drafts SET status=? WHERE id=? AND status=?').run(DRAFT.PENDING, draft.id, DRAFT.SENDING);
     }
     return res;
   }
@@ -210,7 +239,7 @@ export function createEmail(deps) {
     return info.changes > 0;
   }
 
-  // limit 归一（审查 低危 #19）：Number('abc') 是 NaN，直接进 SQL LIMIT 会触发绑定异常——
+  // limit 归一：Number('abc') 是 NaN，直接进 SQL LIMIT 会触发绑定异常——
   // 非有限数 / 非正数一律回退默认值，再夹到上限内。
   function clampLimit(v, dflt, max) {
     const n = Math.floor(Number(v));

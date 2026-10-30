@@ -1,8 +1,8 @@
 <script>
-  /* 阶段 4 · 屏 1 首页（Svelte 5 重写，任务书 §7.1）
+  /* 阶段 4 · 屏 1 首页（Svelte 5 重写）
    * 版式与 0.12.1 保持：ASCII 无限符号 → 「继续上次」→ 三张模式卡 → 底部文字入口 → 版本文字。
    * 无限符号沿用逐字拆 span 的实现（深色在底、浅色在 ::after 叠层只动 opacity），
-   * 三档行为不变：只有 rich 档循环，其余档停在「深 → 浅 → 深」静态渐变（css/style.css 的 .inf）。
+   * 三档行为不变：只有 rich 档循环，其余档停在「深 → 浅 → 深」静态渐变（css/home.css 的 .inf）。
    * 动作直连应用层注册表（src/app/core.js 的 A）。 */
   import Icon from '../../ui/Icon.svelte';
   import { home } from './home.svelte.js';
@@ -21,8 +21,10 @@
     "    '-~~~~-'       '-~~~~-'",
   ];
 
-  // 逐字拆行（与 src/app/main.js 的 buildInfinity 同算法）：
+  // 逐字拆行（把每个非空白字符包成 span.c）：
   //   --x = 所在列（循环相位，色带从左往右流）；--t = 静态时的浅蓝占比
+  // 深色在底层、浅色在 ::after 叠层，只改叠层 opacity 做深浅循环（守住动画白名单），
+  // 循环强度跟随 data-motion（css/home.css 的 .inf）
   const width = Math.max(...ART.map(r => r.length));
   const rows = ART.map(row => {
     const cells = [];

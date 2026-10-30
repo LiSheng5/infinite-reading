@@ -13,7 +13,7 @@
  * 再用 Intl 把候选点换回真实 UTC 并校验偏移是否一致（夏令时切换时可能需要再收敛一次）。
  * 这样日常表达式几毫秒级出结果，也不会在夏令时边界上算错。
  *
- * 错误风格（审查 可维护性 #7）：表达式非法是业务失败 → parseCron 返回 { ok:false, code:'CRON_*' }，
+ * 错误风格：表达式非法是业务失败 → parseCron 返回 { ok:false, code:'CRON_*' }，
  * 不 throw；nextRun 遇到非法表达式按「找不到下一次」返回 null。
  */
 import { fail, isFail } from './util.mjs';
@@ -139,18 +139,8 @@ function offsetMs(tz, ms) {
 
 /* ---------------- 匹配 ---------------- */
 
-export function matchesCron(cron, f) {
-  if (!cron.month.has(f.month)) return false;
-  if (!cron.hour.has(f.hour)) return false;
-  if (!cron.minute.has(f.minute)) return false;
-  const domOk = cron.dom.has(f.day);
-  const dowOk = cron.dow.has(f.dow);
-  // Vixie cron 语义：日与周都受限时取「或」
-  if (cron.domRestricted && cron.dowRestricted) return domOk || dowOk;
-  if (cron.domRestricted) return domOk;
-  if (cron.dowRestricted) return dowOk;
-  return true;
-}
+/* 匹配只有「下一次是什么时候」这一个入口（nextRun）：扫描时逐分钟就地判月 / 日 / 时 / 分，
+ * 不另留一个「给定字段是否匹配」的辅助函数——两份判定迟早会漂移。 */
 
 /* 在「墙上时间」（伪 UTC 时间戳）里按分钟找下一个匹配点；纯整数运算，不碰时区 */
 function scanWall(cron, wallStart) {
@@ -170,6 +160,7 @@ function scanWall(cron, wallStart) {
     const dow = d.getUTCDay();
     const domOk = cron.dom.has(day);
     const dowOk = cron.dow.has(dow);
+    // Vixie cron 语义：日与周都受限时取「或」而不是「与」
     const dayOk = (cron.domRestricted && cron.dowRestricted) ? (domOk || dowOk)
       : cron.domRestricted ? domOk
         : cron.dowRestricted ? dowOk

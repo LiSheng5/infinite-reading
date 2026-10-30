@@ -34,16 +34,23 @@ if (r.status !== 0) {
   process.exit(r.status || 1);
 }
 
-// 2) 自检 + 落到契约路径：产物里不该再有指向本地 css/js 的外部引用
+// 2) 自检 + 落到契约路径：产物里不该再有指向本地文件的外部引用（JS / CSS 要内联，图标 / manifest 也是）
 const single = join(ROOT, 'dist', 'single', 'index.html');
 let html;
 try { html = readFileSync(single, 'utf8'); } catch (e) {
   console.error('没找到构建产物 ' + single + '：' + e.message);
   process.exit(1);
 }
-const left = html.match(/<(?:script|link)\b[^>]*(?:src|href)="(?:css|js|src)\//g) || [];
+// data:（图标内联）与 #（svg use 内部引用）之外的 src / href 都算没内联
+const left = [...html.matchAll(/<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"/g)]
+  .map(m => m[1])
+  .filter(v => !v.startsWith('data:') && !v.startsWith('#') && !/^https?:/.test(v));
 if (left.length) {
   console.error('单文件产物里仍有未内联的本地引用（' + left.length + ' 处）：' + left.join(' , '));
+  process.exit(1);
+}
+if (html.includes('__IR_VERSION__')) {
+  console.error('单文件产物里还有 __IR_VERSION__ 占位符没被替换');
   process.exit(1);
 }
 

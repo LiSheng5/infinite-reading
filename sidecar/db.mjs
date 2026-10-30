@@ -13,7 +13,7 @@ import { TX, TRIGGER, FIRE, DRAFT, AUDIT } from './statuses.mjs';
 
 let _db = null;
 
-// 状态列的取值与默认值唯一口径在 statuses.mjs（审查 可维护性 #6）：SQL 拼接处一律引用那边的常量
+// 状态列的取值与默认值唯一口径在 statuses.mjs：SQL 拼接处一律引用那边的常量
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS triggers (
   id          TEXT PRIMARY KEY,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS trigger_fires (
   id           TEXT PRIMARY KEY,
   trigger_id   TEXT NOT NULL,
   due_at       INTEGER NOT NULL,
-  status       TEXT NOT NULL DEFAULT '${FIRE.PENDING}',   -- pending | delivered | skipped | done
+  status       TEXT NOT NULL DEFAULT '${FIRE.PENDING}',   -- pending | delivered | skipped
   reason       TEXT NOT NULL DEFAULT '',
   claimed_at   INTEGER,
   delivered_at INTEGER,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS email_audit (
   kind     TEXT NOT NULL,                 -- send | draft | confirm
   to_addr  TEXT NOT NULL DEFAULT '',
   subject  TEXT NOT NULL DEFAULT '',
-  status   TEXT NOT NULL DEFAULT '${AUDIT.OK}',    -- ok | denied
+  status   TEXT NOT NULL DEFAULT '${AUDIT.OK}',    -- ok | pending（发送占位） | denied
   code     TEXT NOT NULL DEFAULT '',
   actor    TEXT NOT NULL DEFAULT 'user'   -- user | agent | system
 );
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS email_drafts (
   to_addr TEXT NOT NULL DEFAULT '',
   subject TEXT NOT NULL DEFAULT '',
   body    TEXT NOT NULL DEFAULT '',
-  status  TEXT NOT NULL DEFAULT '${DRAFT.PENDING}'  -- pending | sent | discarded
+  status  TEXT NOT NULL DEFAULT '${DRAFT.PENDING}'  -- pending | sending | sent | discarded
 );
 
 CREATE TABLE IF NOT EXISTS payment_mandates (
@@ -109,7 +109,7 @@ export function openDbAt(file) {
   try { db.exec('PRAGMA foreign_keys = ON'); } catch (_) {}
   db.exec(SCHEMA);
   tryAlter(db, "ALTER TABLE payment_transactions ADD COLUMN provider_ref TEXT NOT NULL DEFAULT ''");
-  // 支出按授权范围（mandate）关联统计（审查 中危 #13）：老库补列，幂等
+  // 支出按授权范围（mandate）关联统计：老库补列，幂等
   tryAlter(db, "ALTER TABLE payment_transactions ADD COLUMN mandate_id TEXT NOT NULL DEFAULT ''");
   return db;
 }

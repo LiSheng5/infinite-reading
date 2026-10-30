@@ -1,6 +1,6 @@
 # 贡献指南
 
-先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（24 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
+先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（34 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
 
 感谢你愿意花时间。本文包含四部分：**贡献流程（一~八）**、**行为准则（九）**、**安全说明（十）**、**第三方资源与许可（十一）**；后三部分按需查阅。
 
@@ -40,11 +40,13 @@ src/core/               核心逻辑（TS，Node 可 require）：providers / co
 src/ui/                 基础组件库（Svelte 5）+ 动效 / 切屏 / 弹窗栈 / 视图过渡内核
 src/screens/            7 个屏幕的组件与 $state 模块：home / settings / storyPrefs / shelf / read / branch / modal
 css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角）；:root 之外不写颜色字面量
-css/style.css           屏幕样式（全部按作用域限定）
+css/style.css           屏幕样式入口（只有 @import + 设计原则 / 断点标尺 / 按钮词汇）
+css/{base,home,shelf,read,overlays,responsive,settings,branch,icons}.css   9 个分片：import 顺序 = 层叠顺序（M4）；某个屏的样式就改它那一片
 css/motion.css          动效档位收口 + @keyframes 唯一定义点 + 暂停规则
 eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
-eval/*-test.js          24 个门禁：tokens / motion / settings-ids / schema / tree / prefs / proposals / zip / 侧车 …
+eval/_harness.js        门禁共用脚手架：check / finish / run / loadEsm / localMs（不单独跑，不算门禁）
+eval/*-test.js          34 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / schema / tree / prefs / backup-pack / store-images / proposals / writeback / features / ui-state / zip / 侧车 …
 sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events
 manifest.webmanifest / sw.js / src/pwa.js   PWA：清单、Service Worker、注册
 icons/                  应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
@@ -58,26 +60,33 @@ tools/                  构建与验收脚本（版本号同步、单文件打�
 ## 三、动手前请先跑一遍自检
 
 ```bash
-npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 24 个 eval 门禁 + 结构门禁 + tsc
+npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 34 个 eval 门禁 + 结构门禁 + tsc
 ```
 
 它的组成与用途：
 
 - `node eval/run.js`：用固定剧本重放 32 回合，检查「上下文组装 / 压缩 / 启发式召回 / 角色卡 / 画像」是否被改坏——**不调用任何 API、不产生费用**，改记忆机制前尤其要先跑。
 - `node eval/tokens-test.js` / `node eval/motion-test.js`：`:root` 之外无颜色字面量、`@keyframes` 属性白名单、三档动效声明表与 CSS 逐项对齐。
-- `node eval/settings-ids-test.js`：154 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）。
-- `node eval/app-structure-test.js`：入口 import 顺序、模块行数上限、`A.reg` 键唯一、顶层解构白名单。
+- `node eval/css-structure-test.js`：样式分片与入口 `@import` 一一对应且顺序固定、断点只用标尺（480 / 640 / 720 / 721 / 900 / `hover: none`）、按钮只有 `.ui-btn` 一套词汇（旧类名一律拦下）。改 CSS 前先看它。
+- `node eval/comments-test.js`：注释里不许出现仓库外的编号（任务书章节号、审查条目号、阶段号、轮次号）；要引用就引仓内文档（`ARCHITECTURE.md §4.2`）。约定见 §四「注释写什么」。
+- `node eval/error-policy-test.js`：网络 / 模型 / 存储这类真实失败的 catch 不许静默吞掉（必须有上报出口或说明性注释）；同时单测 `errorText` / `shortError` / `failureEntry`。约定见 `ARCHITECTURE.md §2.2` 与 §四「失败处理」。
+- `node eval/settings-ids-test.js`：155 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）。
+- `node eval/app-structure-test.js`：入口 import 顺序、模块行数上限、`A.reg` 键唯一、顶层解构白名单、高频入口（`renderChat` / `saveAll` / `toast`）必须是 `core.js` 的命名导出（调用方不再写 `A.xxx`）。
+- `node eval/features-test.js`：主动消息编排（同 `fireId` 只送一次 / 忙时排队 / 条件满足按序投递）；`clear()` 撤回待送时连去重记忆一起清——只清队列会让被撤掉的触达在下次补跑时被静默丢弃。见 `ARCHITECTURE.md §2` 的 `src/core/features.ts` 行。
+- 侧车相关的门禁（`scheduler-test` / `email-test` / `payment-test` / `sidecar-smoke` / `frontend-smoke`）共用 `eval/_harness.js`：断言、汇总、退出码、`loadEsm()`（动态 import 侧车模块）、`localMs()`（本地时区的日期构造）。新写门禁直接 `require('./_harness.js')` + `run('标题', main)`，不要再抄一份 `check()` 与汇总循环。
 - `tsc --noEmit`：`src/core/*.ts` 的类型检查。
 
 ## 四、代码取向
 
 - **构建期依赖可以有，运行时第三方依赖不行**：不引入运行时 JS 库；不新增任何远程请求（字体、CDN、统计）。项目承诺「纯本地运行」。
 - **数据层不许动**：`story` 结构 / `.irstory.json` / `.irbackup.json` / `.zip` 备份一个字段都不许改；改动结构必须走 `src/core/store.ts` 的 `migrateStory` / `SCHEMA` 升级，老存档要能继续打开（`eval/schema-test.js` + 回归夹具守着）。
-- **模块写法**：核心逻辑是 ES module（`src/core/*.ts`，各自 export 真实 API、模块间静态 import）；界面行为层是 ES module + `src/app/core.js` 的注册表 `A`——**不要**新建全局命名空间（旧的 `window.IR` 已删）。跨模块调用写 `A.xxx()`，只在顶部解构 core 的导出。
+- **模块写法**：核心逻辑是 ES module（`src/core/*.ts`，各自 export 真实 API、模块间静态 import）；界面行为层是 ES module + `src/app/core.js` 的注册表 `A`——**不要**新建全局命名空间（旧的 `window.IR` 已删）。跨模块调用写 `A.xxx()`，只在顶部解构 core 的导出；高频入口（`renderChat` / `saveAll` / `toast`）例外，从 `./core.js` 命名 import（IDE 能 Ctrl+Click），口径与门槛见 `ARCHITECTURE.md §2.1` 第 2 条。
 - **界面写法**：屏幕用 Svelte 5（`$state` / `$props`），状态模块与组件分离；容器只替换内容，屏幕可见性仍归 `src/ui/navigation.js` 的 `Nav.showScreen`。安全红线：用户 / 模型产出**一律文本插值**，禁止 `{@html}` 与 `innerHTML`（`eval/ui-lib-test.js` 会拦）。
 - **动效**：任何新动画都要在 `src/core/motion.ts` 的 `ANIMATIONS` / `TRANSITIONS` 声明三档行为；`@keyframes` 只写在 `css/motion.css`；`off` 档不许有位移与循环。
 - **改了前端资源看不到变化**：先用 DevTools → Application → Service Workers 注销（`sw.js` 会缓存静态资源），别怀疑人生。
 - **文案**：界面与注释用简体中文，术语保持一致（如「世界状态卡」「画师子代理」「存档点」）。
+- **失败处理**：用户可行动的失败 → `A.reportUserFailure`（错误 toast 7 秒 + 调用方保留重试入口）；纯后台降级 → `A.reportBackgroundFailure`（`console.warn`，影响故事状态时用 `A.failureEntry` 在 `WriteBack` 闸内落 tool 留痕）；清理 / 探测 / 解析兜底可以吞，但 catch 里要写清为什么。**真实失败绝不允许空 catch**，`eval/error-policy-test.js` 会逐个拦下。完整口径见 `ARCHITECTURE.md §2.2`。
+- **注释写什么**：写**为什么**，不写「见某某任务书 §x」「审查 D5」——那些文档不在仓库里，编号半年后没人能追溯。要引用就引仓内文件（`ARCHITECTURE.md §4.2`、`eval/xxx-test.js`），并且让读者点得开；一句话能说清的约束就别只留编号。`eval/comments-test.js` 会把外部编号（任务书章节号 / 审查条目号 / 屏号 / 阶段号 / 轮次号）与「删编号留下的空括号、连续标点」一起拦下。
 
 ## 五、版本号
 
@@ -86,13 +95,14 @@ npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 24 个 eva
 - 首页版本文字：`src/screens/home/HomeScreen.svelte` 的 `__IR_VERSION__`（vite `define`）
 - 导出包 / 备份包戳：`src/core/version.ts` 的 `APP_VERSION`（同一占位）
 - Service Worker 缓存名：`sw.js` 的 `'ir-v' + '__IR_VERSION__'`，构建期替换
+- HTML 版本戳：`index.html` 的 `<meta name="ir-version" content="__IR_VERSION__">`，构建期由 `vite.config.mjs` 替换
 
 ```bash
 echo 0.13.0 > VERSION      # 1) 改真源
-npm run sync:version       # 2) 同步 package.json 与 README 徽章/「当前版本」行
+npm run sync:version       # 2) 同步 package.json / package-lock.json 与 README 徽章/「当前版本」行
 ```
 
-`node tools/sync-version.mjs --check`（`npm test` 第一步）会守三条红线：占位符不许丢、`?v=` 不许回来、`src/` 与 `sw.js` 里不许出现当前版本的字面量。
+`node tools/sync-version.mjs --check`（`npm test` 第一步）会守三条红线：占位符不许丢（`sw.js` / 首页 / `version.ts` / `index.html` 四处）、`?v=` 不许回来、`src/` 与 `sw.js` 里不许出现当前版本的字面量；同步目标文件缺失或命中数不对一律报错，不算通过。
 
 ## 六、许可红线（重要）
 
@@ -199,7 +209,7 @@ npm run sync:version       # 2) 同步 package.json 与 README 徽章/「当前�
 | 事项 | 说明 | 应对 |
 |---|---|---|
 | 只绑回环地址 | 服务只监听 `127.0.0.1:4319`，局域网 / 外网都访问不到 | 不要把绑定地址改成 `0.0.0.0`——那是另一个风险等级，本项目不做 |
-| 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json` | 防的是「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。别把 token 贴到公开地方 |
+| 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json`，**导出备份时无条件剥离**（即使勾选带上 API Key 也不带它） | 防的是「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。别把 token 贴到公开地方 |
 | CORS 只回显本机来源 | 接口只对 `file://`（Origin 为 `null`）与 `localhost / 127.0.0.1 / [::1]` 回 `Access-Control-Allow-Origin`，其它来源不给 CORS 头 | 即使 token 泄漏，任意网页也读不到接口响应（token 之外的第二道防线）。机器名 / 局域网 IP 打开的页面用不了侧车三件套，请用 localhost 打开 |
 | 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`（Windows 上 `mode:0o600` 无效，启动写盘时会用 `icacls` 把 `config.json` 收紧为仅当前用户可读写，失败不阻断），`sidecar/data/` 已加入 `.gitignore`；仓库自带的静态服务（`启动.bat` / `tools/serve.py` / `tools/serve.ps1`）对 `sidecar/data/` 与 `.git/` 统一拒绝 | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥；自己起别的静态服务时也要排除这两个目录 |
 | SSE 走短时效一次性 ticket | `EventSource` 不能自定义请求头，token 也**不进 URL**（会进代理 / 访问日志 / Referer）：先 `POST /api/events/ticket`（Bearer）换一张 30 秒有效、一次性 ticket，再以 `/api/events?ticket=…` 连接 | 服务端日志**不记录 token、不记录邮件正文**；ticket 用掉即删，连接数有上限（超限 429） |

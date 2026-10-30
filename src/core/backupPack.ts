@@ -23,9 +23,12 @@ const IMAGE_EXT: Record<string, string> = {
 };
 
 // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
-// UI-3：模型库 profiles[] 同样走这把刀（默认不带 Key 的语义不变，只是覆盖新增的 profiles）
+// 模型库 profiles[] 同样走这把刀（默认不带 Key 的语义不变，只是覆盖新增的 profiles）
+// sidecar.token 是本机服务的连接凭据，不随备份走——它与 API Key 不同，
+// 换设备还原没有意义，分享备份却等于把本机服务的钥匙一起发出去，因此无条件剥掉（含「带上 API Key」模式）。
 function buildBackupPack(settings: any, userProfile: any[], stories: any[], stripKeys: boolean) {
   const s = clone(settings);
+  if (s.sidecar && typeof s.sidecar === 'object') s.sidecar.token = '';
   if (stripKeys) {
     ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
     if (Array.isArray(s.profiles)) s.profiles.forEach((p: any) => { if (p) p.apiKey = ''; });
@@ -41,7 +44,7 @@ function buildBackupPack(settings: any, userProfile: any[], stories: any[], stri
 
 async function buildBackupZip(pack: any, onProgress?: (done: number, total: number, bytes: number) => void) {
   // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份。
-  // §0：视频本体不进备份（体积），只留封面——封面在 scene / log 的 thumb 里随 json 走。
+  // 视频本体不进备份（体积），只留封面——封面在 scene / log 的 thumb 里随 json 走。
   const ids: any[] = Array.from(Store.knownImageIds()).filter((id: any) => !/^vid:/.test(String(id)));
   const files: any[] = [];
   const manifest: any[] = [];
@@ -59,6 +62,23 @@ async function buildBackupZip(pack: any, onProgress?: (done: number, total: numb
   const body = Object.assign({}, pack, { schema: 2, images: manifest });
   files.unshift({ name: 'ir-backup.json', data: JSON.stringify(body, null, 1) });
   return { blob: await Zip.build(files), count: manifest.length, bytes: bytes };
+}
+
+/* 导入备份时的凭证合并。
+ * 备份默认不带 API Key（见 buildBackupPack），导入时不能因此把本机现有的 Key 冲成空；
+ * 而 settings.sidecar.token 是**本机**侧车的连接凭据：包里的值属于导出那台机器，
+ * 照收只会让连接 401，所以一律沿用本机现有值（本机没配就留空，由用户自己填）。 */
+function restoreSecrets(prevSettings: any, incoming: any) {
+  const prev = (prevSettings && typeof prevSettings === 'object') ? prevSettings : {};
+  const next = incoming;
+  if (!next || typeof next !== 'object') return next;
+  ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => {
+    if (next[k] && !next[k].apiKey && prev[k] && prev[k].apiKey) next[k].apiKey = prev[k].apiKey;
+  });
+  if (next.sidecar && typeof next.sidecar === 'object') {
+    next.sidecar.token = (prev.sidecar && prev.sidecar.token) || '';
+  }
+  return next;
 }
 
 // 备份正文的数据校验：过滤有效 story / 图片清单，算出 zip 里缺失的图片数（纯数据，不碰界面）
@@ -109,14 +129,14 @@ function storyFromPack(obj: any) {
     // 视频条目：只随包带封面（videoOmitted），本体没导出——导入后显示「视频未随备份导出」
     kind: im.kind || undefined, videoOmitted: im.videoOmitted || undefined,
     mode: im.mode || undefined, duration: im.duration || undefined,
-    // 导入档案不可信（审查 中危 #12）：thumb 白名单只放行 data:/blob:，坏数据不进存储
+    // 导入档案不可信：thumb 白名单只放行 data:/blob:，坏数据不进存储
     thumb: Store.safeThumb(im.thumb), src: im.src || null, ts: Date.now(),
   }));
   st.lastBg = st.scenes.length ? st.scenes[st.scenes.length - 1].id : null;
-  // UI-3 §3.4：本对话偏好随包导入（只有 profileId + 显示用标签；凭证在导出侧已剥）。
+  // 本对话偏好随包导入（只有 profileId + 显示用标签；凭证在导出侧已剥）。
   // 本机没有该 profile 时 resolveChatCfg 自动回退默认，本对话设置面板会提示。
   if (obj.prefs && typeof obj.prefs === 'object') st.prefs = Store.sanitizePrefsSafe(obj.prefs);
-  st.tree = obj.tree ? clone(obj.tree) : null;   // full 包带的分支树（§5⑧）
+  st.tree = obj.tree ? clone(obj.tree) : null;   // full 包带的分支树
   Tree.ensure(st);                               // 导入后建 / 校验树（无树旧包 → 线性链）
   return st;
 }
@@ -128,6 +148,7 @@ const BackupPack = {
   parseBackup,
   pickBackupJson,
   storyFromPack,
+  restoreSecrets,
 };
 
-export { BackupPack, IMAGE_EXT, buildBackupPack, buildBackupZip, parseBackup, pickBackupJson, storyFromPack };
+export { BackupPack, IMAGE_EXT, buildBackupPack, buildBackupZip, parseBackup, pickBackupJson, storyFromPack, restoreSecrets };

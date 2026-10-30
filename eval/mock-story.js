@@ -1,12 +1,12 @@
 /*
- * 无限阅读 · 评测用长局剧本（T-P0-2）
+ * 无限阅读 · 评测用长局剧本
  *
  * 32 个节点 + 5 类探针，仅供离线评测（eval/run.js）重放使用。
  * 运行时不用这份剧本；评测靠它量化「上下文组装 / 压缩逻辑」的好坏（不调用任何 API）。
  *
  *  - reply：与真实 AI1 输出同构（narration / choices / scene_change / scene_summary）
  *  - world：AI1「自报」的世界卡增量，评测时浅合并进 story.world
- *  - tool_calls：模拟工具调用回包（recall_world_state / update_memory；P-1 起剧情场景不再依赖
+ *  - tool_calls：模拟工具调用回包（recall_world_state / update_memory；剧情场景不再依赖
  *    request_image——作画只剩按钮触发，工具调用与出图解耦）
  *  - probes：5 类探针（角色名 / 时间设定 / 伏笔原话 / 地点细节 / 玩家自己说过的事），
  *            在第 10 / 20 / 30 回合插入「追问回合」，供 eval 判定组装后的上下文命中率。

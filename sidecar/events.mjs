@@ -4,7 +4,7 @@
  * 侧车 → 前端（页面开着时）的唯一推送通道：到点触发、待确认变化等。
  * 只推事件，不推全量；页面没开时事件自然没人收，前端下次打开先拉 /api/pending 补齐。
  *
- * 资源与凭据边界（审查 低危 #18/#19）：
+ * 资源与凭据边界：
  *   - 连接凭「短时效一次性 ticket」——EventSource 不能带 Authorization 头，token 绝不进 URL / 日志；
  *   - 客户端数量有上限，超限由调用方回 429（慢连接 / 僵尸连接不无限堆积）；
  *   - 写失败的客户端就地清理，不留在集合里继续吃广播。
@@ -80,7 +80,7 @@ export function broadcast(event, data) {
   const payload = 'event: ' + String(event) + '\ndata: ' + JSON.stringify(data == null ? {} : data) + '\n\n';
   for (const c of clients) {
     try { c.res.write(payload); }
-    catch (_) { if (c.cleanup) c.cleanup(); }   // 写失败的客户端就地清理（审查 #19）
+    catch (_) { if (c.cleanup) c.cleanup(); }   // 写失败的客户端就地清理
   }
   return clients.size;
 }

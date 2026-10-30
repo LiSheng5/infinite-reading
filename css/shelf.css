@@ -1,0 +1,184 @@
+/* ==================== 书架（会话列表 + 搜索） ====================
+ * 会话行、搜索框、分组折叠、「＋ 新建」入口。
+ * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
+ * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+
+/* ==================== 书架（会话列表 + 搜索） ==================== */
+.screen { position: absolute; inset: 0; }
+#screen-shelf { overflow-y: auto; display: flex; justify-content: center; padding: 40px 24px 30px; }
+.shelf-wrap { width: min(880px, 96vw); }
+.shelf-head {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 20px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.shelf-title {
+  font-family: var(--font-title);
+  font-size: 28px; font-weight: 400; line-height: 1.35;
+  letter-spacing: .12em; color: var(--ink);
+  margin: 0; flex: 0 0 auto;
+}
+.shelf-search {
+  position: relative; display: flex; align-items: center;
+  flex: 1 1 240px; max-width: 560px;
+}
+.shelf-search-input {
+  width: 100%; height: 40px;
+  padding: 0 40px 0 14px;
+  font-family: var(--font-ui); font-size: 14px; color: var(--ink);
+  background: var(--field-bg);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: var(--field-inset);
+}
+.shelf-search-input::placeholder { color: var(--ink-faint); }
+.shelf-search-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: var(--field-inset), 0 0 0 3px var(--accent-soft);
+}
+#shelf-search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px;
+}
+.shelf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.title {
+  font-family: var(--font-title);
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: .12em;
+  color: var(--ink);
+}
+.subtitle {
+  font-family: var(--font-ui);
+  color: var(--ink-dim);
+  font-size: 12.5px;
+  letter-spacing: .2em;
+  margin-top: 8px;
+}
+/* 分组头：吸顶 + 轻微毛玻璃（backdrop-filter 只用在这一个元素上） */
+.shelf-group-head {
+  position: sticky; top: 0; z-index: 5;
+  padding: 12px 4px 8px;
+  font-family: var(--font-ui); font-size: 12.5px;
+  letter-spacing: .12em; color: var(--ink-dim);
+  background: var(--bg-glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* 行（row）：缩略图 / 模式图标 + 标题 + 次行 + 一行摘要 + 「⋯」 */
+.shelf-row {
+  position: relative;   /* 「⋯」行菜单的定位锚点 */
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 8px 12px 11px;
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background var(--m-t-color-fast) var(--ease-out);
+}
+.shelf-row:hover { background: var(--hover-tint); }
+.shelf-row:focus-visible { outline: 2px solid var(--accent-line); outline-offset: -2px; }
+.shelf-row.current { border-left-color: var(--accent); }   /* 当前进行中的对话 */
+.shelf-row-thumb {
+  flex: 0 0 56px; width: 56px; height: 56px;
+  border-radius: var(--radius);
+  background: var(--surface-2) center / cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+}
+.shelf-row-body { flex: 1; min-width: 0; }
+.shelf-row-title {
+  font-family: var(--font-note); font-size: 15.5px; line-height: 1.5;
+  color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.shelf-row-meta {
+  font-family: var(--font-en); font-size: 12px; letter-spacing: .04em;
+  color: var(--ink-dim); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.shelf-row-snippet {
+  font-family: var(--font-ui); font-size: 12.5px;
+  color: var(--ink-faint); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.shelf-row-more {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  border: none; background: transparent; border-radius: var(--radius);
+  color: var(--ink-dim); font-size: 18px; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out);
+}
+.shelf-row:hover .shelf-row-more, .shelf-row-more:focus-visible { opacity: 1; }
+@media (hover: none) { .shelf-row-more { opacity: 1; } }   /* 触屏常显 */
+.row-menu { top: calc(100% - 8px); right: 8px; }
+.shelf-more { display: block; margin: 14px auto 6px; }
+
+/* 行进入：错峰淡入上移（rowIn 只在 rich 跑，见 ANIMATIONS.rowIn） */
+html[data-motion="rich"] .shelf-row.row-in { animation: var(--an-rowIn) var(--m-dur-base) var(--ease-out) both; }
+/* 标题打字机结束后的淡入替换（standard 档） */
+.shelf-row-title.title-swap { animation: var(--an-titleSwap) var(--m-dur-base) var(--ease-out) both; }
+
+/* 搜索结果：标题 + 模式 + 时间 + 至多 2 条片段，命中用 mark 高亮 */
+.shelf-results { display: flex; flex-direction: column; }
+.shelf-hit {
+  position: relative;   /* 行菜单定位锚点 */
+  padding: 12px 10px 12px 13px;
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+.shelf-hit:hover, .shelf-hit.active { background: var(--hover-tint); }
+.shelf-hit.active { border-left-color: var(--accent); }
+.shelf-hit-title { font-family: var(--font-note); font-size: 15.5px; line-height: 1.5; color: var(--ink); }
+.shelf-hit-meta {
+  font-family: var(--font-en); font-size: 12px; color: var(--ink-dim); margin-top: 3px;
+}
+.shelf-hit-snippet {
+  font-family: var(--font-ui); font-size: 12.5px; line-height: 1.65;
+  color: var(--ink-dim); margin-top: 6px;
+}
+mark {
+  background: var(--accent-soft); color: var(--ink);
+  border-radius: 3px; padding: 0 1px;
+}
+/* 搜索结果 ↔ 分组列表 交叉淡入（rich 档；standard/off 自动降级为短淡入；fadeIn 见动效基座） */
+.fade-swap { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
+
+/* 搜索结果点进对话：命中消息的短暂高亮（蓝色描边淡出）
+   叠加层画描边、只动 opacity（动效等级：只动合成层属性） */
+.hit-flash { position: relative; }
+.hit-flash::after {
+  content: "";
+  position: absolute; inset: -3px;
+  border: 2px solid var(--accent-line);
+  border-radius: var(--radius);
+  pointer-events: none;
+  animation: var(--an-fadeOut) var(--m-dur-flash) var(--ease-out) both;
+}
+
+/* 空状态：一句话 + 「＋ 新建」大按钮 */
+.shelf-empty {
+  text-align: center; padding: 56px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-dim);
+  font-family: var(--font-ui);
+  font-size: 15px;
+}
+.shelf-empty-text { margin: 0 0 18px; }
+.shelf-empty .empty-new { font-size: 16px; padding: 13px 30px; }
+.shelf-empty b { color: var(--accent); font-weight: 600; }
+.shelf-empty .hint { margin-top: 16px; font-size: 13px; }
+.shelf-foot {
+  text-align: center;
+  color: var(--ink-dim);
+  font-family: var(--font-cursive);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  margin: 34px 0 8px;
+}
+#screen-shelf.dragover .shelf-empty, #screen-shelf.dragover .shelf-list, #screen-shelf.dragover .shelf-results {
+  outline: 1px solid var(--accent); outline-offset: 6px; border-radius: 2px;
+}

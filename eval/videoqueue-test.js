@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * eval/videoqueue-test.js —— 视频队列专有场景：与作画队列互不干扰 + video key 去重口径（任务书 v0.12.0 §7/§12）
+ * eval/videoqueue-test.js —— 视频队列专有场景：与作画队列互不干扰 + video key 去重口径
  *
  * 视频是独立的异步队列（IR.PaintQueue 的第二个实例，run() 内部就是整段轮询）。
  * PaintQueue 单实例的串行推进 / 出错隔离 / anchor.dead / has/size 语义统一在
@@ -9,7 +9,7 @@
  * 两件事（Node、不联网）：
  *   1. videoQ 跑长任务时，paintQ 照常出图（两个队列实例互不阻塞）；
  *   2. 同 key 去重：video:<sceneId>:i2v / video:<headNodeId>:t2v 已在队列里就不再入队
- *      （q.has，js/app/video.js 的 enqueueVideo 口径）；跑完后 key 释放，可再生成一段。
+ *      （q.has，src/app/video.js 的 enqueueVideo 口径）；跑完后 key 释放，可再生成一段。
  *
  * 用法：node eval/videoqueue-test.js
  */
@@ -66,7 +66,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const videoQ = PaintQueue.create({});
     let runs = 0;
     const enqueueIfNew = key => {
-      if (videoQ.has(key)) return null;   // 应用侧的去重口径（js/app/video.js 的 enqueueVideo）
+      if (videoQ.has(key)) return null;   // 应用侧的去重口径（src/app/video.js 的 enqueueVideo）
       return videoQ.enqueue({ key: key, run: async () => { runs++; await sleep(10); return key; } });
     };
 

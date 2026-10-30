@@ -1,18 +1,18 @@
 /*
- * src/app/backup.js —— 本地存储与备份（P0 数据安全）
+ * src/app/backup.js —— 本地存储与备份（数据安全）
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Storage } from '../core/storage.ts';
 import { BackupPack } from '../core/backupPack.ts';
 import { Zip } from '../core/zip.ts';
-import { A } from './core.js';
+import { A, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, toast, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
+  const { $, Store, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
 
 
-  /* ================= 本地存储与备份（P0 数据安全） =================
+  /* ================= 本地存储与备份（数据安全） =================
    * 全部数据只在浏览器 localStorage（每站点约 5MB），没有任何服务端。这里做三件事：
    *  1) 申请持久化存储 navigator.storage.persist()：磁盘压力下的 LRU 淘汰会跳过本站
    *     （Safari 的 7 天无交互清除仍会生效，只能靠交互 / 加到主屏缓解）
@@ -44,7 +44,7 @@ import { A } from './core.js';
         chars += k.length + String(LS.getItem(k) || '').length;
         keys++;
       }
-    } catch (_) {}
+    } catch (_) { /* 读不到 localStorage（隐私模式等）：占用按 0 显示，不影响备份 */ }
     return { chars: chars, keys: keys };
   }
 
@@ -71,9 +71,11 @@ import { A } from './core.js';
     if (!el) return;
     el.textContent = '正在统计占用…';
     let est = null;
-    try { est = Storage ? await Storage.estimate() : null; } catch (_) {}
+    try { est = Storage ? await Storage.estimate() : null; }
+    catch (_) { /* 探测失败：下面按「查不到占用统计」显示，不影响导出 */ }
     let imgs = 0;
-    try { imgs = (await Store.listImageKeys()).length; } catch (_) {}
+    try { imgs = (await Store.listImageKeys()).length; }
+    catch (_) { /* 原图键读不到：按 0 张显示，导出仍按故事清单打包 */ }
     el.textContent = (est && est.usage != null)
       ? ('实测占用：约 ' + fmtMB(est.usage) + (est.quota ? '（浏览器给的额度约 ' + fmtMB(est.quota) + '）' : '')
         + ' · 现存原图 ' + imgs + ' 张。IndexedDB 的可用容量取决于浏览器、设备剩余空间与存储策略，不是无限大。')
@@ -199,12 +201,9 @@ import { A } from './core.js';
       n++;
     }
     if (obj.settings) {
-      const prev = S.settings;
-      S.settings = Store.migrateSettings(obj.settings);
-      // 备份可能刻意不带 Key：别把现有 Key 覆盖成空
-      ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => {
-        if (S.settings[k] && !S.settings[k].apiKey && prev[k] && prev[k].apiKey) S.settings[k].apiKey = prev[k].apiKey;
-      });
+      // 凭证合并：备份默认不带 Key，不能反手把本机 Key 冲成空；
+      // sidecar token 一律沿用本机的（包里的值属于导出那台机器）。规则在 core，可单测。
+      S.settings = BackupPack.restoreSecrets(S.settings, Store.migrateSettings(obj.settings));
       persistSettings();
       A.syncSettingsToForm();
     }
@@ -249,11 +248,11 @@ import { A } from './core.js';
   }
 
   function openSettings() {
-    A.closeStoryPrefs();   // UI-3：全局设置与本对话设置互斥（避免面板叠在弹窗上）
+    A.closeStoryPrefs();   // 全局设置与本对话设置互斥（避免面板叠在弹窗上）
     A.syncSettingsToForm();
     renderStoragePanel();
     openModal('modal-settings');
-    A.initSettingsNav();   // UI-3 §4.1：分组导航态（窄屏列表 / 桌面左导航）
+    A.initSettingsNav();   // 分组导航态（窄屏列表 / 桌面左导航）
     A.renderSidecarStatus();
     A.syncAdvPanels();     // 已有内容的折叠块（单独配置 / 高级参数）自动展开
     if (A.sidecarReady()) {   // 打开设置时刷新一次安全项（真源在侧车）；填完再同步一次折叠块
@@ -311,10 +310,10 @@ import { A } from './core.js';
   }
 
   function applyImport(obj) {
-    if (obj && obj.format === 'ir-backup') { applyBackupImport(obj); return; }   // 整体备份还原（P0）
+    if (obj && obj.format === 'ir-backup') { applyBackupImport(obj); return; }   // 整体备份还原
     if (!obj || obj.format !== 'ir-story') { toast('这不是一个 .irstory.json / .irbackup.json 档案', true, true); return; }
     if (obj.kind === 'premise') {
-      // 精简设定包 → 预填开局向导（§4.11 路径①）
+      // 精简设定包 → 预填开局向导（路径①）
       closeModal('modal-new');
       A.openWizard(wizardPrefillFromPack(obj));
       toast('精简设定包：已预填向导，确认后开始', false, true);
@@ -337,7 +336,7 @@ import { A } from './core.js';
             // 这里 story 已被 showShelf 置空：直接在导入的 st 上找（原写法 findImageEntry 永远找不到）
             const entry = (st.log || []).find(e => e && e.type === 'image' && e.id === sc.id);
             if (entry) entry.imageId = imageId;
-            // 分支树里同一张 scene / 图片条目也换键（§5⑧）：否则非当前分支的图全是死键
+            // 分支树里同一张 scene / 图片条目也换键：否则非当前分支的图全是死键
             const nodes = st.tree && st.tree.nodes;
             if (nodes) for (const nid of Object.keys(nodes)) {
               for (const sm of (nodes[nid].scenes || [])) if (sm && sm.id === sc.id) sm.imageId = imageId;
@@ -345,7 +344,7 @@ import { A } from './core.js';
             }
           }
         }
-        // 竞态守卫（审查 中危 #14）：换键是异步的，期间故事可能已被删除——
+        // 竞态守卫：换键是异步的，期间故事可能已被删除——
         // 保存前校验还存在，否则 saveStory 会把已删故事“复活”
         if (!Store.loadStory(st.id)) return;
         Store.saveStory(st);   // 换键结果要落盘（story 已切走，saveAll 是空操作）

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 书架索引条目测试（js/store.js，UI-2 §5）
+ * 无限阅读 · 书架索引条目测试（src/core/store.ts）
  *
  * 不开浏览器、不联网：
  *   1. saveStory 写出的索引条目含 mode / turn / titleAuto / snippet；
@@ -59,6 +59,17 @@ const KEYS = Store.KEYS;
     JSON.stringify(entry));
   check('saveStory：snippet 取最近一条旁白纯文本',
     entry.snippet === '门铃响了，店员抬头看了一眼。', entry.snippet);
+  // 索引条目带 profileId，模型库的「几个对话在用」只读索引，不再逐档 loadStory
+  check('saveStory：没有本对话模型时 profileId 记空串',
+    entry && entry.profileId === '', JSON.stringify(entry && entry.profileId));
+  {
+    const sp = Store.newStory({ title: '用 Alpha 的对话', mode: 'chat' });
+    sp.prefs = { profileId: 'p_alpha', profileLabel: 'Alpha · m1' };
+    Store.saveStory(sp);
+    const ep = Store.listIndex().find(x => x.id === sp.id);
+    check('saveStory：索引条目记录 story.prefs.profileId',
+      ep && ep.profileId === 'p_alpha', JSON.stringify(ep && ep.profileId));
+  }
 
   // 剧情模式助手 JSON：snippet 剥掉 JSON
   const st2 = Store.newStory({ title: '剧情', mode: 'choice' });
@@ -142,7 +153,32 @@ const KEYS = Store.KEYS;
     Store.loadStory(st.id) == null);
 }
 
-/* ---------------- 4. titleAuto 默认值 ---------------- */
+/* ---------------- 4. 旧索引缺 profileId ---------------- */
+
+{
+  const st = Store.newStory({ title: '用模型的对话', mode: 'chat' });
+  st.prefs = { profileId: 'p_beta', profileLabel: 'Beta' };
+  Store.saveStory(st);
+  // 造一份「0.13.0 线之前的完整条目」：展示字段都在，唯独没有 profileId 这一列
+  const idx = Store.listIndex().map(it => {
+    const o = Object.assign({}, it);
+    if (o.id === st.id) delete o.profileId;
+    return o;
+  });
+  localStorage.setItem(KEYS.index, JSON.stringify(idx));
+
+  const r1 = Store.ensureIndexComplete();
+  const back = Store.listIndex().find(x => x.id === st.id);
+  check('迁移：缺 profileId 的条目会被补齐（从故事 prefs 取）',
+    r1.patched === 1 && back && back.profileId === 'p_beta',
+    JSON.stringify({ patched: r1.patched, profileId: back && back.profileId }));
+  const snap = JSON.stringify(Store.listIndex());
+  const r2 = Store.ensureIndexComplete();
+  check('迁移：补完 profileId 之后再跑是空操作（幂等）',
+    r2.patched === 0 && JSON.stringify(Store.listIndex()) === snap, JSON.stringify(r2));
+}
+
+/* ---------------- 5. titleAuto 默认值 ---------------- */
 
 {
   check('newStory：chat / rp 默认 titleAuto=true',

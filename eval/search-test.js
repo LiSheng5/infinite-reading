@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 全文搜索纯逻辑测试（js/search.js，UI-2 §5）
+ * 无限阅读 · 全文搜索纯逻辑测试（src/core/search.ts）
  *
  * 不开浏览器、不联网：
  *   1. 中文子串命中；多词 AND；大小写与全半角规整（NFKC）；
@@ -29,7 +29,7 @@ function check(name, ok, detail) {
   results.push({ name, hit: !!ok, detail: detail == null ? '' : String(detail) });
 }
 
-// 造一个最小 tree 形状的故事（节点字段与 js/tree.js makeNode 同口径）
+// 造一个最小 tree 形状的故事（节点字段与 src/core/tree.ts 建节点处同口径）
 function storyOf(opts) {
   opts = opts || {};
   const nodes = {};
@@ -100,6 +100,30 @@ function storyOf(opts) {
   const r2 = S.query([t1, t2], '同一个词');
   check('query：同分按更新时间新到旧', r2.length === 2 && r2[0].id === 'new' && r2[1].id === 'old',
     r2.map(x => x.id).join(','));
+  check('query：结果项自带 updatedAt，比较器不用再扫 docs',
+    r2.length === 2 && r2.every(x => typeof x.updatedAt === 'number')
+      && r2[0].updatedAt === 9 && r2[1].updatedAt === 1,
+    JSON.stringify(r2.map(x => ({ id: x.id, updatedAt: x.updatedAt }))));
+  // 反向验证：扫描被计数。旧实现每次比较都把 docs 从头扫一遍，
+  // N 个同分文档 → O(N² log N) 次读取；现在只该有外层循环的 N 次。
+  {
+    const N = 200;
+    const docs = [];
+    for (let i = 0; i < N; i++) {
+      docs.push(S.buildDoc(storyOf({
+        id: 'q' + i, title: '同分队列 ' + i, updatedAt: i,
+        nodes: [{ user: '同一个词', reply: '' }],
+      })));
+    }
+    let reads = 0;
+    const counted = new Proxy(docs, {
+      get(t, k, rcv) { if (typeof k === 'string' && /^\d+$/.test(k)) reads++; return Reflect.get(t, k, rcv); },
+    });
+    const r3 = S.query(counted, '同一个词', { limit: N });
+    check('query：比较器不再线性扫 docs（读取次数 ≈ 文档数）',
+      r3.length === N && r3[0].id === 'q' + (N - 1) && reads <= N + 8,
+      'reads=' + reads + ' docs=' + N);
+  }
 }
 
 /* ---------------- 3. 非当前分支 ---------------- */

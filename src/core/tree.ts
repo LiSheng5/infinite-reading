@@ -2,16 +2,16 @@
  * 无限阅读 · 分支树数据层（第一期：数据模型 + 投影）
  *
  * 职责：story.tree 是回合树的**唯一真源**；story.log / messages / scenes / world / …
- * 全是「根 → head」这条路径的派生物（任务书 §2 / §3）。
+ * 全是「根 → head」这条路径的派生物。
  *  - 纯逻辑：不碰 DOM、不碰 Storage、不联网；Node 里 require 就能测
  *  - 零依赖、零构建：IIFE 挂到全局 IR
  *
- * 另承载 IR 根级纯工具（genId / clone / sleep / plainReply，审查 可维护性 #5 与三·1/三·4/三·5）：
+ * 另承载 IR 根级纯工具（genId / clone / sleep / plainReply，与）：
  * 零依赖、全模块可引用的小函数收敛在这里一处实现，其它模块只调用、不再各写一份。
  *
  * API（本期）：
  *   ensure(story)            建树 / 校验（幂等）；无树的旧档降级建线性链，
- *                            末条旁白 versions>1 展开成兄弟、旧存档点 sp.turn→nodeId 映射（§6）
+ *                            末条旁白 versions>1 展开成兄弟、旧存档点 sp.turn→nodeId 映射
  *   begin(story)             回合开始：记下 logMark（在 pushLog 之前调）
  *   commit(story, opts)      回合成功落一个 turn 节点，head 前移
  *   seal(story, nodeId)      回合结算后封存：entries 再切片、算 msgFloor、存 State
@@ -19,14 +19,14 @@
  *   pathOf(story, nodeId)    根到某节点的路径（含两端）
  *   siblings(story, nodeId)  某节点的兄弟 id 列表（含自身，按创建序）；无父 → [nodeId]
  *   switchSibling(story, nodeId, dir)  切兄弟（dir = -1 | +1），沿 active 下探到叶子后投影
- *   switchTo(story, nodeId)  直接落到某节点（存档点回档，§4.6），投影 + active 记忆对齐
- *   latestLeaf(story, nodeId)  沿 active 下探到叶子（descend 的公开版，UI-4 §2.2）
- *   forkBefore(story, nodeId)  落到该回合发生之前（= parent），返回原玩家行动（UI-4 §2.3）
- *   canResume(story, nodeId)  该节点能否作为「继续 / 分叉」的落点（sid 未知则不行，UI-4 §2.4）
- *   pushLate(story, nodeId, entry|scene)  晚到条目 / 画面（§4.4）：写节点；在路径上再同步进投影
+ *   switchTo(story, nodeId)  直接落到某节点（存档点回档），投影 + active 记忆对齐
+ *   latestLeaf(story, nodeId)  沿 active 下探到叶子（descend 的公开版）
+ *   forkBefore(story, nodeId)  落到该回合发生之前（= parent），返回原玩家行动
+ *   canResume(story, nodeId)  该节点能否作为「继续 / 分叉」的落点（sid 未知则不行）
+ *   pushLate(story, nodeId, entry|scene)  晚到条目 / 画面：写节点；在路径上再同步进投影
  *   imageIdsOf(tree)         全树（含非当前分支）引用到的原图 id
  *
- * 约定（§3）：
+ * 约定：
  *   - 条目与消息对象**按引用共享**（project 不 clone 它们）：log 条目的就地修改
  *     （reasoning 补写等）自动落在树上；**State 才 clone**。
  *   - msgFloor = 路径 turn 节点序列的下标（0 = 第一个 turn 节点）：
@@ -39,7 +39,7 @@ import type { Story, StoryTree } from './schema.ts';
  * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const TREE_V = 1;
-  // story 裁剪窗口的唯一口径：store.js 的 serializeStory 与书架导出一律引用这里的导出，
+  // story 裁剪窗口的唯一口径：store.ts 的 serializeStory 与书架导出一律引用这里的导出，
   // 不要再在别处写 120 / 12 / 5 字面量（改一处漏一处会静默裁错档）
   const LOG_WINDOW = 120;      // serializeStory 的 log 裁剪
   const SCENE_WINDOW = 12;     // serializeStory 的 scenes 裁剪
@@ -47,7 +47,7 @@ import type { Story, StoryTree } from './schema.ts';
   const PAINTER_THREAD_KEEP = 20;  // State 里的 painterThread 只留末 20 条
 
   let seq = 0;
-  // ID 生成的唯一口径（审查 可维护性 #5）：前端各处（store / painter / library / video /
+  // ID 生成的唯一口径：前端各处（store / painter / library / video /
   // styleanchor / proposals）一律用 genId(prefix)，不要再各写 Date.now().toString(36)+random 变体。
   //   prefix —— 实体前缀（n/st/s/pf/sc/sp/vd/style/pp…）；
   //   now    —— 可选时间戳（提案等需要「以注入时间为准」的确定性场景），缺省 Date.now()。
@@ -57,7 +57,7 @@ import type { Story, StoryTree } from './schema.ts';
     return prefix + Number(now || Date.now()).toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 5);
   }
 
-  // 深拷贝的唯一口径（审查 可维护性 三·1）：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
+  // 深拷贝的唯一口径：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
   // 循环引用不炸）；环境没有或内容不可克隆（函数等）时回落 JSON 往返。
   // State / msgSnap 等一律用 clone，不要再各写 JSON.parse(JSON.stringify(x))。
   function clone(x) {
@@ -68,13 +68,13 @@ import type { Story, StoryTree } from './schema.ts';
     return JSON.parse(JSON.stringify(x));
   }
 
-  // 异步等待的唯一口径（审查 可维护性 三·5）：适配器轮询（providers）与 app 工具共用
+  // 异步等待的唯一口径：适配器轮询（providers）与 app 工具共用
   function sleep(ms) {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
-  // 助手回复 → 纯文本的唯一口径（审查 可维护性 三·4）：剧情模式是 JSON（narration / 旁白），
-  // 解析失败 / 无旁白字段时当纯文本（§3.4）。search.js 索引与 store.js 书架摘要共用这一份。
+  // 助手回复 → 纯文本的唯一口径：剧情模式是 JSON（narration / 旁白），
+  // 解析失败 / 无旁白字段时当纯文本。search.ts 索引与 store.ts 书架摘要共用这一份。
   function plainReply(raw) {
     const s = String(raw == null ? '' : raw);
     const t = s.trim();
@@ -96,7 +96,7 @@ import type { Story, StoryTree } from './schema.ts';
   /* ---------------- 基础形状 ---------------- */
 
   // 与 serializeStory 输出同口径的 sceneMeta（不含 src：原图走 images store）
-  // 视频场景字段（§5）：videoId / thumb（封面）/ sourceSceneId / mode / taskId / remoteUrl
+  // 视频场景字段：videoId / thumb（封面）/ sourceSceneId / mode / taskId / remoteUrl
   function sceneMetaOf(s) {
     return {
       id: s.id, alt: s.alt || '', prompt: s.prompt || '', promptRaw: s.promptRaw || '',
@@ -117,7 +117,7 @@ import type { Story, StoryTree } from './schema.ts';
     };
   }
 
-  // 结算后的 State 快照（§2）：随分支回退的那部分剧情推导产物
+  // 结算后的 State 快照：随分支回退的那部分剧情推导产物
   function stateOf(story) {
     return {
       world: clone(story.world || {}),
@@ -129,7 +129,7 @@ import type { Story, StoryTree } from './schema.ts';
     };
   }
 
-  // states 去重池（§2）：与父节点的 state 序列化后相同 → 复用父节点的 sid
+  // states 去重池：与父节点的 state 序列化后相同 → 复用父节点的 sid
   function internState(tree, state, parentSid) {
     const key = JSON.stringify(state);
     if (parentSid != null && tree.states[parentSid] && JSON.stringify(tree.states[parentSid]) === key) {
@@ -158,7 +158,7 @@ import type { Story, StoryTree } from './schema.ts';
       scenes: opts.scenes || [],
       sid: opts.sid == null ? null : opts.sid,
       msgFloor: typeof opts.msgFloor === 'number' ? opts.msgFloor : 0,
-      msgSnap: opts.msgSnap || null,   // 窗口对不齐时的退化路径（§3）：整窗口克隆
+      msgSnap: opts.msgSnap || null,   // 窗口对不齐时的退化路径：整窗口克隆
       sealed: !!opts.sealed,
       turn: +opts.turn || 0,
       ts: opts.ts || Date.now(),
@@ -225,7 +225,7 @@ import type { Story, StoryTree } from './schema.ts';
     return out.reverse();
   }
 
-  /* ---------------- messages 窗口（§3） ---------------- */
+  /* ---------------- messages 窗口 ---------------- */
 
   function sameMsg(a, b) {
     if (a === b) return true;
@@ -250,9 +250,9 @@ import type { Story, StoryTree } from './schema.ts';
     return { msgFloor: floor, msgSnap: clone(messages) };
   }
 
-  /* ---------------- ensure：建树 / 校验（§2，幂等） ---------------- */
+  /* ---------------- ensure：建树 / 校验（幂等） ---------------- */
 
-  // 无树旧档 → 线性链（迁移细则见任务书 §6）：
+  // 无树旧档 → 线性链（迁移细则见）：
   //   - 根节点 sid = 当前 State（旧档没有更早的历史状态）；
   //   - 按 messages 成对 + log 对应条目生成 turn 节点，链只覆盖现存的回合；
   //   - 只有 head 的 sid 是真实当前 State（复用根节点的 sid），更早的节点 sid = null；
@@ -273,7 +273,7 @@ import type { Story, StoryTree } from './schema.ts';
     for (let i = 0; i + 1 < messages.length; i += 2) pairs.push([messages[i], messages[i + 1]]);
 
     // log 按行动条目切组：每个 player / choice / agent 条目开一组；首个行动之前的归「开场组」。
-    // 失败回合的「走神」提示条目（versions: [] 的 narration）不是树的一部分，直接丢弃（§10）。
+    // 失败回合的「走神」提示条目（versions: [] 的 narration）不是树的一部分，直接丢弃。
     const groups = [];
     let cur = null;
     for (const e of log) {
@@ -326,7 +326,7 @@ import type { Story, StoryTree } from './schema.ts';
       turnNodes[j].sid = (j === turnNodes.length - 1) ? root.sid : null;
     }
 
-    // 窗口：head 按 §3 的成对规则算；更早的节点记 0（旧档的链就等于现存窗口，历史窗口已不可考）
+    // 窗口：head 按的成对规则算；更早的节点记 0（旧档的链就等于现存窗口，历史窗口已不可考）
     const head = tree.nodes[tree.head];
     if (head.kind === 'turn') {
       const w = computeWindow(tree, head, messages);
@@ -340,11 +340,11 @@ import type { Story, StoryTree } from './schema.ts';
       const nd = tree.nodes[id];
       if (nd !== head && nd.kind === 'turn') nd.msgFloor = 0;
     }
-    expandVersions(tree);      // §6：末条旁白 versions>1 展开成兄弟（须在窗口算完之后）
+    expandVersions(tree);      // 末条旁白 versions>1 展开成兄弟（须在窗口算完之后）
     return tree;
   }
 
-  // §6：末条旁白 versions > 1 → 把其余版本展开成 head 的兄弟节点（旧版本栈退役）。
+  // 末条旁白 versions > 1 → 把其余版本展开成 head 的兄弟节点（旧版本栈退役）。
   // 兄弟是**近似**节点：同 action、assistantMsg 只有 {narration}、标 meta.approx、sid 复用 head 的；
   // 兄弟序 = 版本序，activeVersion 那一版留在链上当 head。只有迁移（buildLinear）会走到这里。
   function expandVersions(tree) {
@@ -388,7 +388,7 @@ import type { Story, StoryTree } from './schema.ts';
     parent.active = head.id;
   }
 
-  // §6：旧存档点（无 nodeId）用 sp.turn 对应到链上同 turn 的节点；对不上就保持无 nodeId。
+  // 旧存档点（无 nodeId）用 sp.turn 对应到链上同 turn 的节点；对不上就保持无 nodeId。
   // 幂等：只补缺失的 nodeId，已有的与补不上的都不动。
   function mapSavepoints(story, tree) {
     const sps = Array.isArray(story.savepoints) ? story.savepoints : null;
@@ -408,7 +408,7 @@ import type { Story, StoryTree } from './schema.ts';
     const t = story.tree;
     if (t && t.v === TREE_V && t.nodes && t.nodes[t.root] && t.nodes[t.head]) {
       if (!t.states || typeof t.states !== 'object') t.states = {};
-      mapSavepoints(story, t);        // §6：旧存档点 sp.turn → nodeId（只补缺失，幂等）
+      mapSavepoints(story, t);        // 旧存档点 sp.turn → nodeId（只补缺失，幂等）
       return t;                       // 合法树直接用（幂等）
     }
     if (t) console.warn('Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不丢）');
@@ -417,7 +417,7 @@ import type { Story, StoryTree } from './schema.ts';
     return story.tree;
   }
 
-  /* ---------------- 回合生命周期（§4.1） ---------------- */
+  /* ---------------- 回合生命周期 ---------------- */
 
   // 回合开始：记下 logMark（必须在 pushLog(player) 之前调）
   function begin(story: Story) {
@@ -426,7 +426,7 @@ import type { Story, StoryTree } from './schema.ts';
   }
 
   // 回合成功：落一个 turn 节点（parent = 当前 head），head 前移。
-  // UI-4 §2.1：head 停在非叶子节点（switchTo 回到历史位置后再发送）时同样以它为 parent——
+  // head 停在非叶子节点（switchTo 回到历史位置后再发送）时同样以它为 parent——
   // 新节点追加到该节点 children 末尾并更新 parent.active，天然产生一条新分支（测试固定）。
   function commit(story: Story, opts) {
     opts = opts || {};
@@ -443,10 +443,10 @@ import type { Story, StoryTree } from './schema.ts';
       entries: entries,
       sealed: false,
       turn: +story.turn || 0,
-      meta: opts.meta || {},   // UI-3 §3.3：meta.model 记本回合模型名（无密钥 / URL）
+      meta: opts.meta || {},   // meta.model 记本回合模型名（无密钥 / URL）
     });
     node.scenes = scenesFor(story, node.entries);
-    // narration 条目写上 nid：UI 靠它找兄弟（§4.1）
+    // narration 条目写上 nid：UI 靠它找兄弟
     for (const e of node.entries) if (e && e.type === 'narration') e.nid = node.id;
     tree.nodes[node.id] = node;
     parent.children.push(node.id);
@@ -456,14 +456,14 @@ import type { Story, StoryTree } from './schema.ts';
   }
 
   // 回合结算后封存（必须在 postTurn 之后：书记员 / 压缩会改 world / summaries / messages，
-  // 并往 log 追加 tool 条目——先 seal 会存到「半结算」状态，§10）
+  // 并往 log 追加 tool 条目——先 seal 会存到「半结算」状态，事后补的条目只能走 pushLate）
   function seal(story: Story, nodeId) {
     const tree = ensure(story);
     const node = tree.nodes[nodeId];
     if (!node) { console.warn('Tree.seal：节点不存在', nodeId); return null; }
     if (node.sealed) return node;      // 幂等
 
-    // entries / scenes 再切一遍片：收进 postTurn 追加的 tool 条目与迟到的图（§4.1）
+    // entries / scenes 再切一遍片：收进 postTurn 追加的 tool 条目与迟到的图
     const from = node.entries.length ? (story.log || []).indexOf(node.entries[0]) : -1;
     if (from >= 0) node.entries = story.log.slice(from);
     node.scenes = scenesFor(story, node.entries);
@@ -480,7 +480,7 @@ import type { Story, StoryTree } from './schema.ts';
     return node;
   }
 
-  /* ---------------- 投影（§3）：树是真源，其余都是派生物 ---------------- */
+  /* ---------------- 投影：树是真源，其余都是派生物 ---------------- */
 
   // 手改世界卡 / 摘要栈等「派生数据」后调用：把 head 的内联状态换成当前值。
   // 否则下一次 project（进入故事 / 切分支）会用旧快照把手改回滚掉。
@@ -525,7 +525,7 @@ import type { Story, StoryTree } from './schema.ts';
 
     story.turn = +head.turn || 0;
 
-    // State：sid === null（迁移来的旧节点，状态未知）→ 保持当前值不动（§6）
+    // State：sid === null（迁移来的旧节点，状态未知）→ 保持当前值不动
     const st = (head.sid != null && tree.states) ? tree.states[head.sid] : null;
     if (st) {
       story.world = clone(st.world);
@@ -543,7 +543,7 @@ import type { Story, StoryTree } from './schema.ts';
     return pathNodes(tree, nodeId).map(n => n.id);
   }
 
-  /* ---------------- 兄弟切换（§4.3） ---------------- */
+  /* ---------------- 兄弟切换 ---------------- */
 
   // 沿 active 一路下探到叶子；没有 active（或指向已删的孩子）就取最后一个孩子
   function descend(tree, nodeId) {
@@ -572,7 +572,7 @@ import type { Story, StoryTree } from './schema.ts';
     return (tree.nodes[node.parent].children || []).slice();
   }
 
-  // dir = -1 | +1：切到相邻兄弟，parent.active 记住它，再沿 active 下探到叶子（§4.3）。
+  // dir = -1 | +1：切到相邻兄弟，parent.active 记住它，再沿 active 下探到叶子。
   // 越界 / 根节点 / 未知节点 → 返回 null 且完全不动；成功返回新的 head 节点。
   function switchSibling(story: Story, nodeId, dir) {
     const tree = ensure(story);
@@ -590,7 +590,7 @@ import type { Story, StoryTree } from './schema.ts';
     return head;
   }
 
-  // 直接落到某节点（存档点回档，§4.6）：head + 投影，并把路径上的 active 记忆对齐到目标——
+  // 直接落到某节点（存档点回档）：head + 投影，并把路径上的 active 记忆对齐到目标——
   // 回到哪条支线，active 就指哪条；之后再切兄弟回来，落在当前所在的位置。
   function switchTo(story: Story, nodeId) {
     const tree = ensure(story);
@@ -603,16 +603,16 @@ import type { Story, StoryTree } from './schema.ts';
     return node;
   }
 
-  /* ---------------- UI-4 §2：任意节点继续 / 分叉 ---------------- */
+  /* ---------------- 任意节点继续 / 分叉 ---------------- */
 
-  // §2.2：沿 active 下探到叶子（descend 的公开版本，纯读不改）；无 active 时取最后一个孩子
+  // 沿 active 下探到叶子（descend 的公开版本，纯读不改）；无 active 时取最后一个孩子
   function latestLeaf(story: Story, nodeId) {
     const tree = story && story.tree;
     if (!tree || !tree.nodes) return null;
     return descend(tree, nodeId == null ? tree.head : nodeId);
   }
 
-  // §2.3：站在「这一回合发生之前」= 把 head 落到 node.parent，供「改我说的」预填原话后分叉。
+  // 站在「这一回合发生之前」= 把 head 落到 node.parent，供「改我说的」预填原话后分叉。
   // 根节点（没有 parent）与开局节点（action.type === 'opening'）不可改写 → { ok:false, reason }。
   function forkBefore(story: Story, nodeId) {
     const tree = ensure(story);
@@ -631,8 +631,8 @@ import type { Story, StoryTree } from './schema.ts';
     };
   }
 
-  // §2.4（纯函数）：sid === null（旧档迁移来的早期回合，状态未知）→ 只能看，不能落到这里继续。
-  // project 对 sid === null 会保持当前状态不动，落到这种节点世界卡 / 摘要就是错的（§9）。
+  // （纯函数）：sid === null（旧档迁移来的早期回合，状态未知）→ 只能看，不能落到这里继续。
+  // project 对 sid === null 会保持当前状态不动，落到这种节点世界卡 / 摘要就是错的。
   // 兼容两种调用：canResume(story, nodeId) / canResume(node)。
   function canResume(story: any, nodeId?) {
     let node = null;
@@ -643,7 +643,7 @@ import type { Story, StoryTree } from './schema.ts';
     return !!(node && node.sid != null);
   }
 
-  /* ---------------- 晚到的条目 / 画面（§4.4） ---------------- */
+  /* ---------------- 晚到的条目 / 画面 ---------------- */
 
   // entry（有 type）→ node.entries；scene（无 type）→ node.scenes（收成不含 src 的同口径形状）。
   // 节点在当前路径上 → 同一个对象插进 story.log / story.scenes 里该节点末条**之后**
@@ -680,10 +680,10 @@ import type { Story, StoryTree } from './schema.ts';
     return true;
   }
 
-  /* ---------------- 全树图集（§5：清理孤儿 / 删除 / 备份用） ---------------- */
+  /* ---------------- 全树图集（清理孤儿 / 删除 / 备份用） ---------------- */
 
   // tree.nodes[*].scenes 与 entries 里的 imageId 都算进去（含非当前分支），去重后返回。
-  // 漏掉树内引用就会**静默删掉别的分支的图**（§10）。
+  // 漏掉树内引用就会**静默删掉别的分支的图**。
   function imageIdsOf(tree: StoryTree | null): string[] {
     const out = [];
     const seen = new Set();

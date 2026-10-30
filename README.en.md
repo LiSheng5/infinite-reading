@@ -42,7 +42,7 @@ cd infinite-reading
    ```
 
    Then run it — either way works:
-   - **Single file**: double-click `dist/single/index.html` (everything inlined, `file://` works; `npm run bundle` copies it to `dist/ir.html`)
+   - **Single file**: double-click `dist/single/index.html` (JS / CSS / icons all inlined into one HTML, `file://` works; `npm run bundle` copies it to `dist/ir.html`)
    - **Local server** (more robust, recommended): `npx serve dist/site` or `python -m http.server 8000 --directory dist/site`
    - **Development**: `npm run dev` (Vite dev server with HMR; ship the built output)
 2. Click **⚙ Connect a model** and fill in **Base URL** (pick from the dropdown or type your own), **API Key**, and **model name**. Image models are configured the same way.
@@ -100,7 +100,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 | Way | Command / action | Good for |
 |---|---|---|
 | Local server | `npx serve dist/site` (or `启动.bat` on Windows) | Daily use: avoids the `file://` CORS and storage split |
-| Single file | `npm run bundle` → `dist/ir.html` (~560 KB) | Sharing: one HTML file, double-click and play |
+| Single file | `npm run bundle` → `dist/ir.html` (~640 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
 | Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22.5 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
@@ -136,7 +136,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `src/core/roleCard.ts` | Character cards (SillyTavern PNG parsing) |
 | `src/core/modelCapabilities.ts` | Model parameter registry (empty by default) |
 | `src/app/main.js` | Composition root: installs the modal shell, binds events, boots (business logic lives in the 21 modules under `src/app/` — see ARCHITECTURE.md §2.1) |
-| `src/screens/` + `src/ui/` | Svelte 5 screens and the base component library (icons / buttons / modal shell / view transitions) |
+| `src/screens/` + `src/ui/` | Svelte 5 screens and the base component library (icons / buttons / modal card / view transitions) |
 | `src/core/sidecar.ts` + `src/core/features.ts` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `src/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
@@ -180,7 +180,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 ## Contributing and license
 
-- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (24 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
+- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (34 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -6,7 +6,7 @@
    *   #cf-check / #cf-check-text / #cf-ok（文案会被换成「保存」等）
    * 确定 / 取消 / 关闭 / 回车 / 点遮罩仍由 src/app/main.js 的既有绑定收口（走 closeConfirm 收 Promise），
    * 所以本组件一个 handler 都不挂——挂了会重复 resolve。 */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Button from '../../ui/Button.svelte';
 </script>

@@ -1,4 +1,4 @@
-/* UI-1 动效强度解析 + 三档声明表单测（§6.2 / 阶段 3）——纯逻辑、不开浏览器、不联网。
+/*  动效强度解析 + 三档声明表单测（阶段 3）——纯逻辑、不开浏览器、不联网。
  *
  * IR.Motion.resolve(pref, prefersReduced)：
  *   auto → prefersReduced ? 'off' : 'rich'
@@ -14,7 +14,7 @@
  * 阶段 5 新增（过渡内核的声明表）：
  *   TRANSITIONS 逐过渡动作三档 kind / 时长：off 一律 instant/0；standard 只准 instant|fade；
  *   rich 可到 shift|shared；时长 ≤ 该档 TIERS 上限（shift/shared 按 maxShiftMs，fade 按 maxOpacityMs）；
- *   shared 只准 rich；五个动作的 standard / rich 形态与任务书三档矩阵逐条对齐。
+ *   shared 只准 rich；五个动作的 standard / rich 形态与三档矩阵逐条对齐。
  *
  * 用法：node eval/motion-test.js（任一不过 → 退出码 1）
  */
@@ -62,11 +62,11 @@ ok('TIERS 三档齐备', ['off', 'standard', 'rich'].every(l => Motion.TIERS && 
 const off = Motion.TIERS.off;
 const std = Motion.TIERS.standard;
 const rich = Motion.TIERS.rich;
-eq('off 透明度上限 80ms（§6.2）', off.maxOpacityMs, 80);
+eq('off 透明度上限 80ms', off.maxOpacityMs, 80);
 eq('off 无位移', off.maxShiftMs, 0);
 eq('off 无循环', off.loops, false);
-eq('standard 短位移 ≤160ms（§6.2）', std.maxShiftMs, 160);
-eq('standard 无循环（§6.2）', std.loops, false);
+eq('standard 短位移 ≤160ms', std.maxShiftMs, 160);
+eq('standard 无循环', std.loops, false);
 eq('rich 全开', rich.loops, true);
 eq('LOOP_BUDGET = 3（同屏循环上限）', Motion.LOOP_BUDGET, 3);
 eq('rich 的循环预算 = LOOP_BUDGET', rich.loopBudget, Motion.LOOP_BUDGET);
@@ -90,7 +90,7 @@ for (const [name, spec] of Object.entries(SPECS)) {
   ok(name + ' 恰好声明 off/standard/rich', keys === 'off,rich,standard', '实为 ' + keys);
   for (const tier of ['off', 'standard', 'rich']) {
     ok(name + '.' + tier + ' 合法（' + spec[tier] + '）', VOCAB[tier].has(spec[tier]),
-      '§6.2：' + tier + ' 不允许 ' + spec[tier]);
+      tier + ' 不允许 ' + spec[tier]);
   }
   ok(name + ' 档次富度 off ≤ standard ≤ rich',
     RICHNESS[spec.off] <= RICHNESS[spec.standard] && RICHNESS[spec.standard] <= RICHNESS[spec.rich]);
@@ -110,7 +110,7 @@ for (const name of TRANS_ACTIONS) {
   ok('TRANSITIONS.' + name + ' 已声明', !!(TRANS && TRANS[name]), '缺少 ' + name);
 }
 
-// 任务书「三档验收矩阵」：standard = 交叉淡入、rich = 位移 / 共享元素
+// 「三档验收矩阵」：standard = 交叉淡入、rich = 位移 / 共享元素
 const TRANS_MATRIX = {
   screen: ['fade', 'shift'],       // 切屏：standard 交叉淡入 / rich 淡入 + 短位移
   stageArt: ['fade', 'shared'],    // 舞台换画：standard 淡入 / rich 共享元素
@@ -132,14 +132,14 @@ for (const [name, spec] of Object.entries(TRANS || {})) {
   for (const tier of ['off', 'standard', 'rich']) {
     const s = spec[tier] || {};
     ok(name + '.' + tier + ' kind 合法（' + s.kind + '）', TKIND[tier].has(s.kind),
-      '§5 三档矩阵：' + tier + ' 不允许 ' + s.kind);
+      '三档矩阵：' + tier + ' 不允许 ' + s.kind);
     ok(name + '.' + tier + ' 有毫秒时长', typeof s.ms === 'number' && s.ms >= 0 && s.ms <= 1000, '实为 ' + s.ms);
     const cap = (s.kind === 'shift' || s.kind === 'shared')
       ? Motion.TIERS[tier].maxShiftMs
       : Motion.TIERS[tier].maxOpacityMs;
     ok(name + '.' + tier + ' 时长 ≤ 该档上限（' + s.ms + ' ≤ ' + cap + 'ms）', s.ms <= cap,
-      '§6.2：' + tier + ' 上限 ' + cap + 'ms');
-    if (s.kind === 'shared') ok(name + '.' + tier + ' 共享元素只准 rich', tier === 'rich', '§5：shared 仅 rich');
+      tier + ' 上限 ' + cap + 'ms');
+    if (s.kind === 'shared') ok(name + '.' + tier + ' 共享元素只准 rich', tier === 'rich', 'shared 仅 rich');
   }
   ok(name + ' 过渡档次富度 off ≤ standard ≤ rich',
     (TRICH[spec.off.kind] || 0) <= (TRICH[spec.standard.kind] || 0)

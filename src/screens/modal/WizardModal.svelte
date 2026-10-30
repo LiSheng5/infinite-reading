@@ -7,7 +7,7 @@
    * 取消 / 关闭额外挂一次 closeModal：0.12.1 这两个钮是直接 classList.add('hidden')，
    * 会把记录留在弹窗栈里（6a 清单里的遗留），这里借重建顺手收口；app.js 的旧绑定
    * 随后再执行一次 hidden 也无害（关过一次的弹窗 class 已经对了）。 */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Button from '../../ui/Button.svelte';
@@ -59,12 +59,4 @@
 <style>
   .draft-field { flex: 1 1 auto; min-width: 0; }
   .draft-field :global(.field) { margin-bottom: 0; }
-  .char-editor { margin-bottom: 12px; }
-  .char-title {
-    font-family: var(--font-ui);
-    font-size: 12.5px;
-    color: var(--ink-dim);
-    letter-spacing: .05em;
-    margin-bottom: 6px;
-  }
 </style>

@@ -1,7 +1,7 @@
 /*
  * acceptance/tools/fixture.mjs —— 回归夹具（阶段 0 / 0.12.1）
  *
- * 任务书 §5 阶段 0：「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
+ *  阶段 0：「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
  * 用户画像），后续每阶段都要能导入、还原、再导出，并与原文件逐字段比对。」
  *
  * 产物（acceptance/0.12.1/fixture/）：
@@ -349,7 +349,7 @@ async function buildFixture() {
         backup: RULES_BACKUP,
         story: RULES_STORY,
         zipExtra: 'zip 里的 images/* 按 manifest 的 id 对齐后逐字节 sha256 比对（path 编号差异放行）',
-        note: '除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚该阶段（任务书 §11）。',
+        note: '除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚该阶段。',
       },
       consoleErrors,
     };
@@ -385,7 +385,7 @@ async function seedInPage(page) {
       return { thumb: c.toDataURL('image/jpeg', 0.72), png: c.toDataURL('image/png') };
     };
 
-    // —— 回合：与 js/app/round.js / eval/run.js 同口径 ——
+    // —— 回合：与 src/app/round.js / eval/run.js 同口径 ——
     function playTurn(st, t, opening) {
       const ts = nextTs();
       const mark = Tree.begin(st);
@@ -558,13 +558,13 @@ async function seedInPage(page) {
           await paintOnNode(stA, node, 'video', out.videos.length, stA.scenes.find(s => s.kind !== 'video'));
         }
       }
-      // 摘要栈（C-A）：7 回合的短局触发不了压缩，直接放两条 compressStory/localSummarize
+      // 摘要栈：7 回合的短局触发不了压缩，直接放两条 compressStory/localSummarize
       // 产出的同形状槽位（摘要条目就是纯字符串），把 summaries[] 的往返覆盖上
       stA.summaries = [
         '【第1幕】雨夜便利店（收银台与货架区）｜深夜·雨夜｜在场：周叙｜发生：进店避雨、看锅边便签、与店员搭话｜伏笔：锅边便签；挑便宜的就走',
         '【第2幕】墙上停摆的挂钟｜凌晨两点多｜在场：周叙｜发生：挂钟停在 2:47、收音机数数声｜伏笔：周叙的劝告：挑便宜的就走',
       ];
-      // 视频里带一个「进行中」的生视频任务（§5⑤ pendingVideos）
+      // 视频里带一个「进行中」的生视频任务（pendingVideos）
       stA.pendingVideos = [{
         taskId: 'vid-task-fixture-pending', mode: 'i2v', prompt: '缓慢推近储物间的纸箱',
         sourceSceneId: (stA.scenes.find(s => s.kind !== 'video') || {}).id || null,

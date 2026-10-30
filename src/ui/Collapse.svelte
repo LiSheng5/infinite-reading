@@ -1,6 +1,6 @@
 <script>
   /* Collapse.svelte —— 折叠块（阶段 3 组件库）
-   * §7.2：高级参数 / 长说明 /「单独配置」默认折叠，摘要行右侧带状态标签
+   * 高级参数 / 长说明 /「单独配置」默认折叠，摘要行右侧带状态标签
    * （如「沿用剧情模型」/「已单独配置」/「未启用」）；是否自动展开由使用方决定后写 open。
    * open 双向绑定。展开内容只做单次淡入位移（--an-leafIn，档位由动效模块收口），
    * 高度不参与过渡（transition 不动 height / max-height，tokens-test 硬禁令）。 */
@@ -48,7 +48,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    min-height: 40px;              /* 触屏可点目标 ≥ 40px（§7.2） */
+    min-height: 40px;              /* 触屏可点目标 ≥ 40px */
     padding: 8px 12px;
     font-family: var(--font-ui);
     font-size: 13px;

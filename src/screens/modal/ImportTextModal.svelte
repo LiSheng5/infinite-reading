@@ -4,7 +4,7 @@
    *   #it-step-paste / #it-step-run.hidden / #it-step-confirm.hidden
    * 所以三个容器只渲染一次、不写 class 表达式（避免 Svelte 重渲染把 legacy 的显隐打回去）。
    * 人物行同样走状态桥（kind = 'import'），与确认页的 itChars() 是同一份数据。 */
-  import Card from './Card.svelte';
+  import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';
   import Select from '../../ui/Select.svelte';
@@ -88,13 +88,5 @@
 
 <style>
   .step-actions { margin-top: 10px; }
-  .char-editor { margin-bottom: 12px; }
-  .char-title {
-    font-family: var(--font-ui);
-    font-size: 12.5px;
-    color: var(--ink-dim);
-    letter-spacing: .05em;
-    margin-bottom: 6px;
-  }
   .grid2 :global(.field) { margin-bottom: 0; }
 </style>

@@ -3,7 +3,7 @@
    * 只产标记、不带读写：w-* 的回填 / 判变 / 落盘仍在 src/app/settings.js
    *（renderStoryPanels / worldFormChanged / saveWorldFromForm），人物行由 charEditor
    *（variant: card）渲染进 #w-characters，摘要栈与留痕照旧由界面层填。
-   * 布局：正文内滚 + 底部 sticky 保存栏（btn-save-world + world-scribe-at，§3.2）；
+   * 布局：正文内滚 + 底部 sticky 保存栏（btn-save-world + world-scribe-at）；
    * 「保存世界卡」只在表单真的改动过才可点（panel.dirty ← A.worldFormChanged）。 */
   import { panel, syncDirty } from './panel.svelte.js';
 </script>
@@ -19,7 +19,7 @@
     <div class="char-editor">
       <label>人物（每人一行：姓名 / 在场或离场 / 性格 / 说话方式 / 备注）</label>
       <div id="w-characters" class="char-rows"></div>
-      <button type="button" id="btn-w-char-add" class="mini-btn char-add">+ 添加人物</button>
+      <button type="button" id="btn-w-char-add" class="ui-btn mini char-add">+ 添加人物</button>
       <span class="hint">还没填也可以：剧情里出现的人物会在书记员校对时自动补上，随时能改</span>
     </div>
     <label>关系·阶段<input id="w-rel-stage" type="text" /></label>
@@ -35,7 +35,7 @@
     </details>
   </div>
   <div class="world-save-bar">
-    <button id="btn-save-world" class="btn primary" type="button" disabled={!panel.dirty}>保存世界卡</button>
+    <button id="btn-save-world" class="ui-btn primary" type="button" disabled={!panel.dirty}>保存世界卡</button>
     <span id="world-scribe-at" class="hint"></span>
   </div>
 </div>

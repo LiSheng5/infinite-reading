@@ -2,19 +2,19 @@
  * src/app/main.js —— 组合根：事件绑定 + 启动（阶段 6 起是唯一的界面入口）
  *
  * 结构：
- *  书架（应用入口，§7/T-P2-1）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
- *  → 阅读页（聊天记录 : 画面 双栏，§4.6）→ AI1 回合（上下文走 Context，与评测同源）
- *  → 画师子代理 + 生图（§3.2/§4.7）→ 书记员 / 压缩（§4.1/§4.10）→ 存档点 / 导出导入（§4.11）
+ *  书架（应用入口）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
+ *  → 阅读页（聊天记录 : 画面双栏）→ AI1 回合（上下文走 Context，与评测同源）
+ *  → 画师子代理 + 生图→ 书记员 / 压缩→ 存档点 / 导出导入
  * 存档：统一走 Store（schema v3）；图片只存缩略图以控制体积。
  */
 import { Sidecar } from '../core/sidecar.ts';
 import { Nav } from '../ui/navigation.js';
 import { installShell } from '../ui/modalHost.js';
 import { esc as storyPanelEsc } from '../screens/storyPrefs/panel.svelte.js';
-import { A } from './core.js';
+import { A, renderChat, saveAll, toast } from './core.js';
 
   const S = A.state;
-  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, toast, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, saveAll, resolveSub, imageCfg, miniBtn } = A;
+  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, resolveSub, imageCfg, miniBtn } = A;
 
   /* ================= 事件绑定 ================= */
 
@@ -30,10 +30,10 @@ import { A } from './core.js';
         else A.createStoryImmediate(mode);
       };
     });
-    A.initShelf();   // UI-2：搜索框 / 键盘 / 空状态按钮（src/app/shelf.js）
+    A.initShelf();   // 搜索框 / 键盘 / 空状态按钮（src/app/shelf.js）
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 
-    // —— 剧情文本导入（R12 路径②，§4.11 / T-P6-1） ——
+    // —— 剧情文本导入（路径②） ——
     $('#btn-close-import-text').onclick = A.closeImportText;
     $('#btn-it-cancel').onclick = A.closeImportText;
     $('#btn-it-run').onclick = A.runImportText;
@@ -84,9 +84,9 @@ import { A } from './core.js';
     const manualGenerate = () => {
       A.closeMenus();
       if (!S.story) { toast('先打开一个故事吧'); return; }
-      if (S.busy) { toast('回复生成中，这一幕写完再作画'); return; }   // §3.C：回复生成中不入队
+      if (S.busy) { toast('回复生成中，这一幕写完再作画'); return; }   // 回复生成中不入队
       if (offlineBlocked('这次作画')) return;   // 离线：不排进队列，也不花额度
-      const key = 'manual:' + A.treeHeadNodeId();   // §3.C：同一幕不重复入队
+      const key = 'manual:' + A.treeHeadNodeId();   // 同一幕不重复入队
       if (A.paintQ.has(key)) { toast('这一幕已在作画队列里'); return; }
       // 场景描述读当前 head 的 lastSceneSummary（投影后即 story.lastSceneSummary）
       A.enqueueImage(S.story.lastSceneSummary, A.treeHeadNodeId(), key);
@@ -94,7 +94,7 @@ import { A } from './core.js';
     };
     $('#btn-manual-gen').onclick = manualGenerate;
     $('#btn-stage-gen').onclick = e => { if (e) e.stopPropagation(); manualGenerate(); };
-    // 生视频（MiniMax，§8）：🎬 点开小菜单（以当前图生成 / 按剧情文生）；独立异步队列，不堵出图
+    // 生视频（MiniMax）：🎬 点开小菜单（以当前图生成 / 按剧情文生）；独立异步队列，不堵出图
     const openVideoMenu = e => {
       if (e) e.stopPropagation();
       const item = $('#btn-video-i2v');
@@ -143,7 +143,7 @@ import { A } from './core.js';
 
     // —— 输入 ——
     const doSend = (opts) => {
-      // P0-1：busy 期间只有点「停止」按钮才中断；Enter / 输入不触发（玩家可能只是提前打字）
+      // busy 期间只有点「停止」按钮才中断；Enter / 输入不触发（玩家可能只是提前打字）
       if (S.busy) { if (opts && opts.allowStop) requestChatStop(); return; }
       const v = $('#player-input').value.trim();
       if (!v) return;
@@ -169,7 +169,7 @@ import { A } from './core.js';
     $('#btn-inspiration').onclick = () => {
       if (!S.currentChoices.length || S.busy || S.live) return;
       S.choicesTrayOpen = !S.choicesTrayOpen;
-      A.renderChat();
+      renderChat();
       if (S.choicesTrayOpen) {
         const tray = $('#choice-tray');
         if (tray) tray.scrollLeft = 0;
@@ -193,23 +193,25 @@ import { A } from './core.js';
 
     A.bindSplitter();
 
-    // —— UI-3：本对话设置面板 / 模型库 / 全局设置分组导航 ——
+    // —— 本对话设置面板 / 模型库 / 全局设置分组导航 ——
     A.bindPrefsUI();
     A.initSettingsNav();
 
-    // —— UI-4：分支页（顶栏「⋯」→「分支」/ 书架行菜单 / 历史位置提示条） ——
+    // —— 分支页（顶栏「⋯」→「分支」/ 书架行菜单 / 历史位置提示条） ——
     A.initBranch();
 
     // —— 向导 ——
-    $('#btn-close-wizard').onclick = () => $('#modal-wizard').classList.add('hidden');
-    $('#btn-wz-cancel').onclick = () => $('#modal-wizard').classList.add('hidden');
+    // #btn-close-wizard / #btn-wz-cancel 已由 WizardModal.svelte 挂 closeModal('modal-wizard')：
+    // 这里不再用 classList.add('hidden') 关窗——那样绕开弹窗栈，栈里留一条已隐藏的记录，
+    // Esc 会先「关掉」它，用户感觉 Esc 失灵一次；aria-hidden / 焦点还原也一并落空。同一个按钮
+    // 两处赋值还会互相覆盖（Svelte 的事件监听比 onclick 属性先挂上，赋值会顶掉它）。
     $('#btn-wz-draft').onclick = A.draftWizard;
     $('#btn-wz-start').onclick = A.startFromWizard;
 
     // —— 导出 / 设置 ——
-    $('#btn-close-export').onclick = () => $('#modal-export').classList.add('hidden');
+    // #btn-close-export 同理（ExportModal.svelte 里已是 closeModal('modal-export')）
     $('#btn-do-export').onclick = A.doExport;
-    // —— 画师工作台（T-P3-1） ——
+    // —— 画师工作台 ——
     $('#btn-close-painter').onclick = A.closeWorkbench;
     $('#btn-pw-close').onclick = A.closeWorkbench;
     $('#modal-painter').addEventListener('click', e => {
@@ -218,7 +220,7 @@ import { A } from './core.js';
     $('#btn-pw-redraw').onclick = A.redrawFromWorkbench;
     $('#btn-pw-force').onclick = A.forceRedrawByCard;
     $('#btn-pw-send').onclick = A.painterThreadSend;
-    $('#btn-pw-video').onclick = A.pwVideoGenerate;   // 工作台「视频」区（§8）
+    $('#btn-pw-video').onclick = A.pwVideoGenerate;   // 工作台「视频」区
     $('#pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') A.painterThreadSend(); });
     $('#btn-pw-reset').onclick = () => {
       if (!S.pw) return;
@@ -233,7 +235,7 @@ import { A } from './core.js';
     $('#pw-width').oninput = A.pwShowWh;
     $('#pw-height').oninput = A.pwShowWh;
 
-    // —— 画风锚定（T-P4-1） ——
+    // —— 画风锚定 ——
     $('#btn-close-anchor').onclick = A.closeAnchor;
     $('#btn-anchor-more').onclick = A.runAnchorBatch;
     $('#btn-anchor-skip').onclick = A.closeAnchor;
@@ -272,7 +274,7 @@ import { A } from './core.js';
     $('#btn-save-world').onclick = A.saveWorldFromForm;
     $('#btn-inject-memory').onclick = A.toggleInjectMemory;
 
-    // —— 角色卡（R13 / T-P7-1） ——
+    // —— 角色卡 ——
     $('#btn-edit-card').onclick = () => { if (!S.story) { toast('先打开一个故事'); return; } A.openCardEditor({ mode: 'edit' }); };
     $('#btn-close-card').onclick = () => A.closeCardEditor(true);
     $('#btn-rc-cancel').onclick = () => A.closeCardEditor(true);
@@ -286,7 +288,7 @@ import { A } from './core.js';
       if (e.target === $('#modal-card')) A.closeCardEditor(true);
     });
 
-    // —— 用户画像（R13 / T-P7-2） ——
+    // —— 用户画像 ——
     $('#btn-profile-all').onclick = () => {
       ['#s-profile-choice', '#s-profile-chat', '#s-profile-rp'].forEach(s => { $(s).checked = true; });
     };
@@ -374,7 +376,7 @@ import { A } from './core.js';
       A.showStart();
       toast('已清空');
     };
-    // 模型名变化 → 按能力重排参数字段（T-M-1）
+    // 模型名变化 → 按能力重排参数字段
     $('#s-chat-model').addEventListener('change', () => {
       const cap = Cap.find('chat', $('#s-chat-model').value.trim());
       S.settings.chat.model = $('#s-chat-model').value.trim();
@@ -405,7 +407,7 @@ import { A } from './core.js';
     if (lightbox) lightbox.onclick = () => A.closeLightbox();
 
     // Esc：只关最上层弹窗（确认弹窗要走 closeConfirm 才能收掉 Promise）；
-    // 没有弹窗时才退出沉浸态（P2）。
+    // 没有弹窗时才退出沉浸态。
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;
       if (A.closeLightbox()) return;   // 灯箱最先关（点遮罩也能关）
@@ -446,35 +448,6 @@ import { A } from './core.js';
     });
   }
 
-  /* ================= 首页无限符号 =================
-   * #start-infinity 里是一块 ASCII 字符画。这里把每个非空白字符包成 span.c：
-   *   --x = 所在列（决定循环里的相位，色带从左往右流）
-   *   --t = 静态时的浅蓝占比（动效关 / 标准档时就停在一道「深 → 浅 → 深」的渐变上）
-   * 深色在底层、浅色在 ::after 叠层，只改叠层 opacity 来做深浅循环——
-   * 守项目的动画白名单（只动 opacity），循环强度跟随 data-motion（见 style.css 的 .inf）。 */
-  function buildInfinity() {
-    const pre = $('#start-infinity');
-    if (!pre || pre.dataset.ready === '1') return;
-    pre.dataset.ready = '1';
-    const rows = pre.textContent.split('\n');
-    const width = Math.max.apply(null, rows.map(r => r.length)) || 1;
-    pre.textContent = '';
-    rows.forEach((row, ri) => {
-      for (let x = 0; x < row.length; x++) {
-        const ch = row[x];
-        if (ch === ' ') { pre.appendChild(document.createTextNode(' ')); continue; }
-        const span = document.createElement('span');
-        span.className = 'c';
-        span.dataset.c = ch;
-        span.textContent = ch;
-        span.style.setProperty('--x', String(x));
-        span.style.setProperty('--t', (0.5 - 0.5 * Math.cos(2 * Math.PI * x / Math.max(1, width - 1))).toFixed(2));
-        pre.appendChild(span);
-      }
-      if (ri < rows.length - 1) pre.appendChild(document.createTextNode('\n'));
-    });
-  }
-
   /* ================= 启动 ================= */
 
   function init() {
@@ -489,14 +462,13 @@ import { A } from './core.js';
 
     Store.migrateLegacy();            // v0.1 旧档 → v0.2（幂等）
     S.settings = Store.loadSettings();  // 迁移后重新读取
-    // 动效强度（UI-1）：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
+    // 动效强度：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
     applyMotion();
     if (motionMQ) {
       if (motionMQ.addEventListener) motionMQ.addEventListener('change', applyMotion);
       else if (motionMQ.addListener) motionMQ.addListener(applyMotion);
     }
     A.watchStageVisibility();           // Ken Burns 离屏暂停
-    buildInfinity();                    // 首页无限符号（逐字上色 + 深浅蓝循环）
     installShell();                     // 11 个弹窗搬进唯一的壳层（幂等）
     bind();
     A.syncSettingsToForm();
@@ -504,8 +476,8 @@ import { A } from './core.js';
     A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
     A.showStart();                      // 入口 = 开始页（v0.1 原样）
     A.renderShelf();
-    A.initStorageGuard().then(A.renderStoragePanel);   // P0：申请持久化 + 刷新存储面板
-    A.remindBackupIfNeeded();                        // P0：7 天没备份就提醒一次
+    A.initStorageGuard().then(A.renderStoragePanel);   // 申请持久化 + 刷新存储面板
+    A.remindBackupIfNeeded();                        // 7 天没备份就提醒一次
   }
 
   // 先进 boot（装载 IndexedDB / 把 localStorage 旧数据迁过来），再进界面。

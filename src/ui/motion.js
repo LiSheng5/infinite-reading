@@ -1,5 +1,5 @@
 /*
- * src/ui/motion.js —— 统一 motion 模块 · DOM 端（阶段 3，任务书 §6.2）
+ * src/ui/motion.js —— 统一 motion 模块 · DOM 端（阶段 3）
  *
  * 分工：档位语义与三档行为声明在 src/core/motion.ts（纯逻辑、Node 可测）；
  * 政策变量、@keyframes、暂停规则在 css/motion.css。本文件只做 DOM 接线：
@@ -67,11 +67,11 @@ export function suspendLoops(el) {
   };
 }
 
-/* ---------- 过渡期循环冻结（阶段 5 第 8 步） ----------
+/* ---------- 过渡期循环冻结（阶段 5） ----------
  * 为什么需要：视图过渡一开，页面被新旧两张快照盖住，但 live DOM 里的循环并没有停。
  * 过渡 220ms 后撤掉快照那一下，Ken Burns / 环境光 / 流光 / 呼吸已经从「快照里的相位」
- * 自己往前跑了 220ms —— 看起来就是跳一下。任务书「坑」也点名：::view-transition-*
- * 伪元素匹配不到 html[data-paused] * / [data-loop="wait"] 这类选择器，暂停要单独处理。
+ * 自己往前跑了 220ms —— 看起来就是跳一下。而且 ::view-transition-* 伪元素
+ * 匹配不到 html[data-paused] * / [data-loop="wait"] 这类选择器，暂停要单独处理。
  *
  * 做法：在 VT 的 update 回调里（新快照拍摄之前）把所有**正在跑**的真实 DOM 循环暂停，
  * 过渡收尾（含 skipTransition / 被下一段顶掉）再逐个 play() —— 只恢复自己暂停的那些：

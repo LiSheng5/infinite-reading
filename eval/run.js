@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 上下文组装评测（T-P0-1，设计出处 §4.10 C-D）
+ * 无限阅读 · 上下文组装评测（设计出处）
  *
  * 作用：离线量化「上下文组装 / 压缩逻辑」的好坏，改记忆机制前先跑它。
  *   - 重放长局剧本（eval/mock-story.js 的 IR.MockStory，32 回合）
  *   - 与运行时同源地跑 v2 组装（IR.Context.assembleAI1）与压缩链（IR.Context.compressStory）
  *   - 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 里是否含探针事实
  *   - 只测组装/压缩逻辑本身，不调用任何 API
- *   - 输出 5 类探针命中率 + 总分，并对比 P0 记录的 v0.1 基线（60.0%）
+ *   - 输出 5 类探针命中率 + 总分，并对比记录的 v0.1 基线（60.0%）
  *
  * 用法：node eval/run.js   [--json] [--no-fail]
  *   --json     追加机器可读的 JSON 结果（CI 解析用）
@@ -30,16 +30,16 @@ if (!Context || !MockStory) {
 
 const CATEGORIES = ['角色名', '时间设定', '伏笔原话', '地点细节', '玩家自己说过的事'];
 
-// P0 记录的 v0.1 基线分（system + 最近 20 条 messages + premise），用于回归对比
+// 记录的 v0.1 基线分（system + 最近 20 条 messages + premise），用于回归对比
 const BASELINE_V1 = 60.0;
 
-/* ---------- 复刻运行时的一回合归档（与 js/app.js 一致） ---------- */
+/* ---------- 复刻运行时的一回合归档（与 src/app/turn.js 落 log / messages 的口径一致） ---------- */
 function buildStory() {
   return Store.newStory({ title: MockStory.title, premise: MockStory.premise, mode: 'choice' });
 }
 
 function applyToolCalls(story, calls) {
-  // 归档语义与真实链路同源（审查 可维护性 二·10）：工具吸收 / 提案留痕跳过 / 画像门控
+  // 归档语义与真实链路同源：工具吸收 / 提案留痕跳过 / 画像门控
   // 都走 IR.Context.absorbToolCalls——这里只注入「画像门控开、合并去重同真源」的写入函数
   Context.absorbToolCalls(story, calls, {
     applyProfile: entries => { story.userProfile = Context.mergeProfile(story.userProfile || [], entries); },
@@ -54,7 +54,7 @@ function applyTurn(story, t, opening) {
 
   const r = t.reply;
   if (r.world) Context.mergeWorld(story.world, r.world);           // AI1 自报世界卡（增量浅合并）
-  // 条目形状与 turn.js 同源（审查 可维护性 二·10）：narrationEntry（含 versions / activeVersion）
+  // 条目形状与 turn.js 同源：narrationEntry（含 versions / activeVersion）
   // 与 assistantEntry（slimReply 四字段）都用 IR.Context 的唯一实现
   const rr = {
     narration: r.narration || '', choices: r.choices || [],
@@ -65,7 +65,7 @@ function applyTurn(story, t, opening) {
   if (r.tool_calls) applyToolCalls(story, r.tool_calls);
 
   story.turn += 1;
-  // 压缩链（C-A/C-C）：超窗口即压进摘要栈
+  // 压缩链（-C）：超窗口即压进摘要栈
   Context.compressStory(story, { summarize: Context.localSummarize });
 }
 
@@ -100,10 +100,10 @@ function evaluate() {
       });
     }
   }
-  return { results, tokenSeries, story, heuristic: checkHeuristic(story), p7: checkP7(), archive: checkArchive(story), mockTools: checkMockTools() };
+  return { results, tokenSeries, story, heuristic: checkHeuristic(story), card: checkCardProfile(), archive: checkArchive(story), mockTools: checkMockTools() };
 }
 
-/* ---------- C-E 启发式注入校验（T-P5-3 / §4.10 C-E） ----------
+/* ----------  启发式注入校验 ----------
  * 用最终世界卡（角色 / 时间 / 伏笔都齐）各问一句：
  *   命中实体词 → 组装结果里必须出现「对应条目」；无实体词 → 不许注入（零成本）。
  * 这里只测客户端匹配 + 注入，不依赖模型是否调工具（覆盖「静默忽略工具」情形）。 */
@@ -133,7 +133,7 @@ function checkHeuristic(story) {
   return out;
 }
 
-/* ---------- P7 角色卡 + 用户画像校验（T-P7-1 / T-P7-2 / §4.12） ----------
+/* ----------  角色卡 + 用户画像校验 ----------
  * 角色卡：自造一张 V2（tEXt `chara`）与一张 V3（iTXt `ccv3`）PNG，验证解析 / 字段映射 / 世界卡对接 / CRC 护栏；
  *        再验 rp 组装带卡与关系、choice 组装不带（不涨常驻预算）。
  * 画像：按需求注入 Top-N + 一行摘要、条数 / 长度封顶、开关语义、合并去重、离线本地提取。
@@ -200,7 +200,7 @@ const V3_CARD = {
   },
 };
 
-function checkP7() {
+function checkCardProfile() {
   const out = [];
   const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
 
@@ -331,10 +331,46 @@ function checkP7() {
   push('剧情模式组装：历史 assistant 消息转成中文键（与本轮契约一致）',
     cnText.indexOf('"旁白":"门开了。"') !== -1 && cnText.indexOf('"narration"') === -1, 'ok');
 
+  /* —— 组装分层（主函数只保留顺序，每层一个 append）：选项逐个生效、互不串层 —— */
+  const layerStory = Store.newStory({ mode: 'rp', premise: '角色扮演：沈砚', characterCard: card2 });
+  layerStory.messages.push(
+    { role: 'user', content: '[玩家行动] 第一句' },
+    { role: 'assistant', content: JSON.stringify({ narration: '第一句答' }) },
+    { role: 'user', content: '[玩家行动] 第二句' },
+  );
+  const plainAsm = Context.messagesToText(Context.assembleAI1(layerStory, '继续'));
+  push('默认层：[当前情势] 常驻、【世界状态卡】不常驻',
+    plainAsm.indexOf('[当前情势]') !== -1 && plainAsm.indexOf('[世界状态卡]') === -1, 'ok');
+
+  push('omitSummaryLine：[当前情势] 整条不注入',
+    Context.messagesToText(Context.assembleAI1(layerStory, '继续', { omitSummaryLine: true })).indexOf('[当前情势]') === -1, 'ok');
+
+  push('includeWorld：常驻整张世界状态卡',
+    Context.messagesToText(Context.assembleAI1(layerStory, '继续', { includeWorld: true })).indexOf('[世界状态卡]') !== -1, 'ok');
+
+  const toolsAsm = Context.messagesToText(Context.assembleAI1(layerStory, '继续', { tools: ['request_image', 'schedule_once'] }));
+  push('tools：清单与调度策略一起下发',
+    toolsAsm.indexOf('[可用工具] request_image / schedule_once') !== -1
+      && toolsAsm.indexOf(Context.SCHEDULE_POLICY_TEXT) !== -1, 'ok');
+
+  const layered = Context.assembleAI1(layerStory, '继续', {
+    recall: ['world'], inject: ['INJECT特征串'], forceInject: true, heuristic: false,
+  });
+  const userMsgText = layered[layered.length - 1].content;
+  push('单次注入层顺序：召回 → 工具回传 → 强制注入，全部并进本轮 user 前缀',
+    userMsgText.indexOf('[召回 · 世界状态卡]') === 0
+      && userMsgText.indexOf('[召回 · 世界状态卡]') < userMsgText.indexOf('INJECT特征串')
+      && userMsgText.indexOf('INJECT特征串') < userMsgText.indexOf('[强制注入 · 完整记忆]')
+      && userMsgText.indexOf('[强制注入 · 完整记忆]') < userMsgText.indexOf('[玩家行动] 继续'), 'ok');
+
+  const winAsm = Context.messagesToText(Context.assembleAI1(layerStory, '继续', { windowMessages: 1 }));
+  push('windowMessages：只带最后 1 条历史（更早的交给摘要栈）',
+    winAsm.indexOf('第二句') !== -1 && winAsm.indexOf('第一句答') === -1, 'ok');
+
   return out;
 }
 
-/* ---------- 归档形状对齐校验（审查 可维护性 二·10） ----------
+/* ---------- 归档形状对齐校验 ----------
  * 复刻归档此前与 turn.js 字段漂移：缺 versions / activeVersion、提案留痕没跳过、画像无门控。
  * 现归档走 IR.Context 共享实现（narrationEntry / assistantEntry / absorbToolCalls），
  * 这里把「形状契约」钉住：共享实现或复刻一漂移，评测即失败。 */
@@ -359,7 +395,7 @@ function checkArchive(story) {
       } catch (_) { return false; }
     }), asst.length + ' 条');
 
-  // 合成调用钉语义：提案工具跳过留痕；画像写入走 applyProfile 门控（二·10 两个漂移点）
+  // 合成调用钉语义：提案工具跳过留痕；画像写入走 applyProfile 门控（两个漂移点）
   const s2 = Store.newStory({ mode: 'chat', premise: 'x' });
   applyToolCalls(s2, [{ name: 'email_propose', arguments: '{"to":"a@b.c","subject":"hi","body":"x"}' }]);
   push('提案类工具吸收时跳过 tool 留痕（留痕是提案卡本身）',
@@ -372,7 +408,7 @@ function checkArchive(story) {
   return out;
 }
 
-/* ---------- mock 工具形状 == 运行时 schema（审查 文档一致性 5.7） ----------
+/* ---------- mock 工具形状 == 运行时 schema ----------
  * mock-story 的 tool_calls 曾写出真实 schema 里不存在的参数（update_memory 的 scope），
  * 真实链路会整包忽略 → 剧本「声称记住了」实际什么都没写，评测数据掺水。
  * 这里把剧本里的每次工具调用对着运行时导出的工具 schema 钉一遍：
@@ -426,8 +462,8 @@ function pad(str, width) {
 function report(out) {
   const { results, tokenSeries } = out;
   const lines = [];
-  lines.push('无限阅读 · 上下文组装评测（T-P0-1 / §4.10 C-D）');
-  lines.push('组装实现：IR.Context.assembleAI1（v2：摘要行 + 摘要栈 + 保留窗口 ' + Context.DEFAULT_KEEP_MESSAGES + ' 条 + C-E 启发式注入）');
+  lines.push('无限阅读 · 上下文组装评测');
+  lines.push('组装实现：IR.Context.assembleAI1（v2：摘要行 + 摘要栈 + 保留窗口 ' + Context.DEFAULT_KEEP_MESSAGES + ' 条 + 启发式注入）');
   lines.push('剧本：' + MockStory.title + '（' + MockStory.turns.length + ' 回合）· 探针 ' + results.length + ' 条 · 不消耗任何 API');
   lines.push('');
   lines.push('—— 追问回合明细 ——');
@@ -458,36 +494,36 @@ function report(out) {
   const tlast = tokenSeries[tokenSeries.length - 1];
   lines.push('');
   lines.push('总分：' + totalHit + '/' + totalAll + ' = ' + score + '%');
-  lines.push('对比 v0.1 基线（P0 记录）：' + BASELINE_V1 + '% → ' + (Number(score) >= BASELINE_V1 ? '不低于基线 ✅' : '低于基线 ❌'));
+  lines.push('对比 v0.1 基线（记录）：' + BASELINE_V1 + '% → ' + (Number(score) >= BASELINE_V1 ? '不低于基线 ✅' : '低于基线 ❌'));
   lines.push('组装长度（字）：最小 ' + tmin + ' / 最大 ' + tmax + '（末回合 ' + tlast + '）—— 压缩链使其保持稳定');
 
   const heur = out.heuristic || [];
   if (heur.length) {
     lines.push('');
-    lines.push('—— C-E 启发式注入（T-P5-3 / §4.10 C-E：与工具召回并行的兜底）——');
+    lines.push('—— 启发式注入（与工具召回并行的兜底）——');
     for (const h of heur) {
       const q = h.question.length > 20 ? h.question.slice(0, 19) + '…' : h.question;
       lines.push(pad(h.name, 30) + (h.hit ? '[命中]' : '[未中]') + '  ' + pad(q, 40) + ' 注入 ' + h.entries + ' 条');
     }
     const hhit = heur.filter(x => x.hit).length;
-    lines.push('C-E 校验：' + hhit + '/' + heur.length + (hhit === heur.length
+    lines.push('启发式注入校验：' + hhit + '/' + heur.length + (hhit === heur.length
       ? ' ✅（输入含实体词 → 上下文出现对应条目；无实体词不注入）'
       : ' ❌'));
   }
 
-  const p7 = out.p7 || [];
-  if (p7.length) {
+  const card = out.card || [];
+  if (card.length) {
     lines.push('');
-    lines.push('—— P7 角色卡 + 用户画像（T-P7-1 / T-P7-2 / §4.12）——');
-    for (const c of p7) lines.push(pad(c.name, 40) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
-    const phit = p7.filter(x => x.hit).length;
-    lines.push('P7 校验：' + phit + '/' + p7.length + (phit === p7.length ? ' ✅' : ' ❌'));
+    lines.push('—— 角色卡 + 用户画像 ——');
+    for (const c of card) lines.push(pad(c.name, 40) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
+    const phit = card.filter(x => x.hit).length;
+    lines.push('角色卡 / 画像校验：' + phit + '/' + card.length + (phit === card.length ? ' ✅' : ' ❌'));
   }
 
   const arch = out.archive || [];
   if (arch.length) {
     lines.push('');
-    lines.push('—— 归档形状对齐（审查 可维护性 二·10：与 turn.js 共用 IR.Context 归档）——');
+    lines.push('—— 归档形状对齐（与 turn.js 共用 IR.Context 归档）——');
     for (const c of arch) lines.push(pad(c.name, 56) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
     const ahit = arch.filter(x => x.hit).length;
     lines.push('归档校验：' + ahit + '/' + arch.length + (ahit === arch.length ? ' ✅' : ' ❌'));
@@ -496,7 +532,7 @@ function report(out) {
   const mock = out.mockTools || [];
   if (mock.length) {
     lines.push('');
-    lines.push('—— mock 工具形状 == 运行时 schema（审查 文档一致性 5.7：剧本参数对齐工具注册表）——');
+    lines.push('—— mock 工具形状 == 运行时 schema（剧本参数对齐工具注册表）——');
     for (const c of mock) lines.push(pad(c.name, 56) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
     const mhit = mock.filter(x => x.hit).length;
     lines.push('mock 工具校验：' + mhit + '/' + mock.length + (mhit === mock.length ? ' ✅' : ' ❌'));
@@ -506,7 +542,7 @@ function report(out) {
   return {
     results, totalHit, totalAll, score: Number(score), tmin, tmax, tlast,
     heuristic: heur, heuristicHit: heur.filter(x => x.hit).length,
-    p7: p7, p7Hit: p7.filter(x => x.hit).length,
+    card: card, cardHit: card.filter(x => x.hit).length,
     archive: arch, archiveHit: arch.filter(x => x.hit).length,
     mockTools: mock, mockToolsHit: mock.filter(x => x.hit).length,
   };
@@ -515,15 +551,15 @@ function report(out) {
 const summary = report(evaluate());
 
 /* ---------- 退出码（供 CI 拦截回归） ----------
- * 总分低于 v0.1 基线，或 C-E / P7 校验未全中 → 退出 1。
+ * 总分低于 v0.1 基线，或 启发式注入 / 角色卡校验未全中 → 退出 1。
  * 只想看报告、不在意退出码时加 --no-fail。 */
 const failed = [];
 if (summary.score < BASELINE_V1) failed.push('总分 ' + summary.score + '% 低于基线 ' + BASELINE_V1 + '%');
 if (summary.heuristicHit < summary.heuristic.length) {
-  failed.push('C-E 校验 ' + summary.heuristicHit + '/' + summary.heuristic.length + ' 未全中');
+  failed.push('启发式注入校验 ' + summary.heuristicHit + '/' + summary.heuristic.length + ' 未全中');
 }
-if (summary.p7Hit < summary.p7.length) {
-  failed.push('P7 校验 ' + summary.p7Hit + '/' + summary.p7.length + ' 未全中');
+if (summary.cardHit < summary.card.length) {
+  failed.push('角色卡 / 画像校验 ' + summary.cardHit + '/' + summary.card.length + ' 未全中');
 }
 if (summary.archiveHit < summary.archive.length) {
   failed.push('归档形状校验 ' + summary.archiveHit + '/' + summary.archive.length + ' 未全中');
@@ -543,7 +579,7 @@ if (process.argv.indexOf('--json') !== -1) {
     baselineV1: BASELINE_V1,
     assembledTokens: { min: summary.tmin, max: summary.tmax, last: summary.tlast },
     heuristic: { hit: summary.heuristicHit, total: summary.heuristic.length, checks: summary.heuristic },
-    p7: { hit: summary.p7Hit, total: summary.p7.length, checks: summary.p7 },
+    card: { hit: summary.cardHit, total: summary.card.length, checks: summary.card },
     archive: { hit: summary.archiveHit, total: summary.archive.length, checks: summary.archive },
     mockTools: { hit: summary.mockToolsHit, total: summary.mockTools.length, checks: summary.mockTools },
     probes: summary.results.map(r => ({ turn: r.turn, category: r.category, hit: r.hit, answer: r.answer })),

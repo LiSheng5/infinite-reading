@@ -1,10 +1,10 @@
 /*
- * 无限阅读 · sidecar 通用小工具（审查 可维护性 #5：ID 生成 / 日期口径 / JSON 解析收敛）
+ * 无限阅读 · sidecar 通用小工具（ID 生成 / 日期口径 / JSON 解析收敛）
  *
  * 此前 genId / dayKey / safeJSON 在 payment / email / scheduler 各一份拷贝、num 在
  * payment-policy 与 payment 各一份——「修日期口径要改多处」。这里收敛为单一实现，各模块 import。
  *
- * 错误风格唯一约定（审查 可维护性 #7）：
+ * 错误风格唯一约定：
  *   - 业务失败（输入不合法 / 策略拒绝 / 资源不存在）→ 返回 fail(code) 的 { ok:false, code, message }，不 throw；
  *   - 编程错误（DB 抛出、违反不变量）→ throw，由 server.mjs 的 catch 统一兜成 500。
  * 不要再混用 throw Error('CODE') / {ok:false} / 中文 message 三套。
@@ -48,7 +48,7 @@ export function monthKey(ms) {
 }
 
 // 本地日/月区间 [start, end)（毫秒）。与 dayKey / monthKey 的本地口径一致，
-// 供 SQL 的 `at >= ? AND at < ?` 做范围聚合（审查 可维护性 #8：不再全表 SELECT 后 JS 过滤）。
+// 供 SQL 的 `at >= ? AND at < ?` 做范围聚合（不再全表 SELECT 后 JS 过滤）。
 export function dayRange(ms) {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);

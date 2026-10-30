@@ -1,8 +1,7 @@
 /*
- * src/app/models.js —— 模型能力（T-M-1 / §4.13）
+ * src/app/models.js —— 模型能力
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-import { Motion } from '../core/motion.ts';
 import { Prefs } from '../core/prefs.ts';
 import { Nav } from '../ui/navigation.js';
 import { A } from './core.js';
@@ -12,65 +11,17 @@ import { A } from './core.js';
   const { $, Cap, IMAGE_ASPECTS } = A;
 
 
-  /* ---------- P0-1（2026-10-14 评审）：请求中断 ----------
-   * providers.chat 经 hooks.onAborter 回填当前请求的 AbortController；
-   * 发送按钮在 busy 期间变成「停止」，点了就 abort 当前请求并跳过所有自动重试。 */
-
-  // 用户主动停止导致的请求失败：跳过「流式失败转非流式」「tools 400 降级」等自动重试
-  // busy 期间发送按钮变身「停止」：按钮保持可点，点击即中断当前回合
-  // 顶栏忙碌进度线 #busy-line 跟着同一状态显隐（UI-1 §4.3）
-
-  /* ================= 动效基座（UI-1） ================= */
-
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
-
-  // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
-
-  // 动效令牌里的时长（毫秒）：JS 侧的 WAAPI 与 CSS 共用同一个真源
-
-  /* ================= 小工具 ================= */
-
-  // 同一时刻只保留一条提示（后来者替换前者）：文本写进 #toast-text，
-  // 错误提示额外给一个关闭按钮，其余情况不吃鼠标事件（pointer-events: none）。
-
-  /* 自建 confirm / prompt（内嵌预览是沙箱 iframe，原生弹窗被静默忽略 →
-     直接返回 false / null，表现为「点了没反应」，故不使用原生 confirm / prompt）。
-     irConfirm(msg, { title, okText, input, value, placeholder }) → Promise
-       无输入：确定 resolve(true)，取消 / 关闭 resolve(null)
-       有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null) */
-
-  /* ---------- 弹窗栈（P0-3） ----------
-   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起。
-   * 这里做一个最小的统一入口：
-   *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
-   *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
-   *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
-   *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
-   * 现有 id 与 DOM 全部保持不变。 */
-
-  // Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）
-
-  /* 断网守卫：离线时【不发请求、也不排队】，直接告诉用户「这次点了不算」。
-   * 不排队是刻意的：出图时机有「每轮 / 选择后」的自动触发，若排队等联网后补发，
-   * 用户会在毫不知情的情况下被扣一笔额度。 */
-
-  // 体积显示：1 MB 以下按 KB 显示 —— 否则「68 KB 的备份」会显示成 0.0 MB，看着像没内容
-
-  // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型
-
-  // 生图配置：预填档位优先；'__custom__' 或未登记时按比例 + 宽高算 size（R8）
-  // override 供画师工作台传入本图的出图参数（比例 / 宽高）
-
-  /* ---------------- 模型能力（T-M-1 / §4.13） ---------------- */
+  /* ---------------- 模型能力 ---------------- */
 
   function capChat() {
-    try { return Cap && Cap.find ? Cap.find('chat', S.settings.chat.model) : null; } catch (_) { return null; }
+    // 登记表是纯数据查询；查不到 / 抛错都按「未登记」处理（界面退回默认能力，不打扰用户）
+    try { return Cap && Cap.find ? Cap.find('chat', S.settings.chat.model) : null; } catch (_) { /* 未登记 = 默认能力 */ return null; }
   }
   function capImage() {
-    try { return Cap && Cap.find ? Cap.find('image', S.settings.image.model) : null; } catch (_) { return null; }
+    try { return Cap && Cap.find ? Cap.find('image', S.settings.image.model) : null; } catch (_) { /* 未登记 = 默认能力 */ return null; }
   }
 
-  // 有效主模型配置（UI-3 §3.3）：story.prefs.profileId → 模型库；缺省 / 找不到 → 默认主模型。
+  // 有效主模型配置：story.prefs.profileId → 模型库；缺省 / 找不到 → 默认主模型。
   // 所有发给主模型的请求与派生量（contextWindow / thinking / extraParams / noTools 键）都走它，
   // 不再直接读 S.settings.chat。
   function chatCfg() {
@@ -87,7 +38,7 @@ import { A } from './core.js';
     try {
       const cap = Cap && Cap.find ? Cap.find('chat', cfg.model) : null;
       return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
-    } catch (_) { return 0; }
+    } catch (_) { return 0; }   // 登记表查询失败 = 未知窗口（压缩按条数兜底，功能不受影响）
   }
 
   function sizeRatioLabel(s) {
@@ -124,7 +75,7 @@ import { A } from './core.js';
     $('#s-image-height').disabled = !show;
   }
 
-  // 选项一律 createElement + textContent（审查 低危 #21，红线「绝不 innerHTML 拼片段」）：
+  // 选项一律 createElement + textContent（红线「绝不 innerHTML 拼片段」）：
   // 当前数据源是静态注册表，但拼接写法在未来数据源一变即成注入点
   function fillOptions(sel, opts) {
     if (!sel) return;
@@ -218,7 +169,7 @@ import { A } from './core.js';
 
   // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
   // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
-  // 阶段 5 第 4 步：换画走 Nav.stageArt —— 新旧图同名 stage-art，rich 档是共享元素过渡
+  // 阶段 5：换画走 Nav.stageArt —— 新旧图同名 stage-art，rich 档是共享元素过渡
   //（同一元素的旧 / 新快照做补间，过渡期暂停 Ken Burns，结束按档位恢复）。
   // 换画的两条路都汇到这里：AI 出图后 stagePlaySwap 的 animationend、点缩略图（renderStage → 同一条链）、
   // 视频场景取封面；同图重复调用（renderStage 反复跑）不再开新的一段。
@@ -257,5 +208,5 @@ import { A } from './core.js';
     });
   }
 
-  A.reg({ chatCfg, chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
+  A.reg({ chatContextWindow, showImageWh, renderCapabilityFields, setStageArt, thumb });
 

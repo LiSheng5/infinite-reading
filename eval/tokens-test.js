@@ -1,4 +1,4 @@
-/* 令牌与动效纪律回归检查（UI-1 → 阶段 3 §6）——零依赖、不开浏览器。
+/* 令牌与动效纪律回归检查（→ 阶段 3）——零依赖、不开浏览器。
  *
  * 阶段 3 口径（旧检查一条不删，按统一 motion 模块更新；新增项标 [新]）：
  * 1. 必需令牌（颜色 + 动效 + 档位参数）都在 css/tokens.css 的 :root；
@@ -13,14 +13,14 @@
  * 7. [新] 时长 / 缓动只走令牌：animation 时长 var(--m-dur-*|--loop-*)、transition 时长
  *    var(--m-t-*|--m-dur-*)、缓动 var(--ease-*)，时间字面量只准 0；
  * 8. [新] 循环只准 var(--m-iter)（字面量 infinite 全禁）；带 var(--m-iter) 的动画在
- *    声明表必须是 rich: 'loop'（§6.2：standard 无循环、off 无循环）；
+ *    声明表必须是 rich: 'loop'（standard 无循环、off 无循环）；
  * 9. [新] 动画名一律经声明表：animation 简写必须 var(--an-*)，--an-* 名表三档值
  *    与 ANIMATIONS 逐条推导一致（off/standard/rich 各一块）；
  * 10. [新] 暂停机制在位：data-paused / data-loops-paused / data-loop="wait" 都有
  *    animation-play-state: paused 规则（页面不可见、子树挂起、循环预算排队）；
  * 11. [新] 视图过渡（阶段 5）：::view-transition-group/old/new(*) 三条规则在位，
  *    animation-duration 只准 var(--m-dur-vt-*)；TRANSITIONS 里用到的每个 kind 都有对应变量；
- * 12. [新] 图标 lint（§6.3）：CSS content: 值与 Svelte 模板不得出现 emoji /
+ * 12. [新] 图标 lint：CSS content: 值与 Svelte 模板不得出现 emoji /
  *    符号字符当图标（▶ ⚙ ⚡ ← ↑ ↓ ＋ ⋯ ✕ ✓ 等；部分系统会渲染成彩色 emoji）。
  *
  * 用法：node eval/tokens-test.js（任一不过 → 退出码 1）
@@ -34,8 +34,15 @@ const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const TOK = read('css/tokens.css');        // 令牌真源（:root）
-const STYLE = read('css/style.css');       // 屏幕样式（只消费）
 const MOTION = read('css/motion.css');     // 统一 motion 模块（@keyframes + 档位政策 + 声明表镜像）
+
+// 屏幕样式 = style.css 入口（只有 @import）+ 各分片（拆文件）。
+// 这里按目录收全部「非令牌 / 非动效」的 CSS，新增分片不会漏检；
+// 分片清单与 @import 顺序由 eval/css-structure-test.js 守。
+const SCREEN_FILES = fs.readdirSync(path.join(ROOT, 'css'))
+  .filter((n) => n.endsWith('.css') && n !== 'tokens.css' && n !== 'motion.css')
+  .sort();
+const STYLE = SCREEN_FILES.map((n) => read('css/' + n)).join('\n');
 
 // Svelte 组件的 <style> 块按「文件#style」并入 CSS 检查面
 const svelteFiles = [];
@@ -47,10 +54,8 @@ const svelteFiles = [];
   }
 })(path.join(ROOT, 'src'));
 
-const CSS_SOURCES = [
-  { name: 'css/style.css', text: STYLE },
-  { name: 'css/motion.css', text: MOTION },
-];
+const CSS_SOURCES = SCREEN_FILES.map((n) => ({ name: 'css/' + n, text: read('css/' + n) }));
+CSS_SOURCES.push({ name: 'css/motion.css', text: MOTION });
 for (const f of svelteFiles) {
   const rel = path.relative(ROOT, f).split(path.sep).join('/');
   const src = fs.readFileSync(f, 'utf8');
@@ -72,7 +77,7 @@ function check(name, ok, detail) {
 const ALLOW_COLORS = [
   {
     file: 'src/app/video.js',
-    reason: '视频抓帧失败时的兜底封面是 canvas 现画的「图片内容」（黑底 + 手绘播放三角，§6.3 特意不依赖字体画 ▶），不是 UI 配色',
+    reason: '视频抓帧失败时的兜底封面是 canvas 现画的「图片内容」（黑底 + 手绘播放三角，特意不依赖字体画 ▶），不是 UI 配色',
   },
 ];
 
@@ -205,7 +210,7 @@ for (const { name, text } of CSS_SOURCES) {
     if (hit) cssHits.push(name + ' ' + prop + ': ' + value.slice(0, 60));
   });
 }
-check('style/motion/组件样式 :root 之外无颜色字面量', cssHits.length === 0, cssHits.join(' | '));
+check('屏幕分片/motion/组件样式 :root 之外无颜色字面量', cssHits.length === 0, cssHits.join(' | '));
 
 // src/**（.ts/.js）：业务代码不得写死颜色（canvas 画图内容进允许名单）
 const jsHits = [];
@@ -230,7 +235,7 @@ for (const { dir, rel, exts } of SCAN_DIRS) {
     }
   }
 }
-check('js/* 与 src/** 无未允许的颜色字面量', jsHits.length === 0, jsHits.slice(0, 5).join(' | '));
+check('src/** 无未允许的颜色字面量', jsHits.length === 0, jsHits.slice(0, 5).join(' | '));
 
 /* ---------- 3. [新] @keyframes 只在 css/motion.css，与声明表逐名对齐 ---------- */
 
@@ -351,7 +356,7 @@ eachDeclaration(STYLE + '\n' + MOTION, (prop, value) => {
   }
 });
 for (const { name, text } of CSS_SOURCES) {
-  if (name === 'css/style.css' || name === 'css/motion.css') continue;
+  if (!name.endsWith('#style')) continue;   // 屏幕分片已并入 STYLE，这里只补 Svelte 组件的样式块
   eachDeclaration(text, (prop, value) => {
     if (!/^(animation|transition)(-[\w-]+)?$/.test(prop)) return;
     for (const m of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,|\))/g)) {
@@ -432,12 +437,7 @@ function scanTiming(name, text) {
     }
   });
 }
-scanTiming('css/style.css', STYLE);
-scanTiming('css/motion.css', MOTION);
-for (const { name, text } of CSS_SOURCES) {
-  if (name === 'css/style.css' || name === 'css/motion.css') continue;
-  scanTiming(name, text);
-}
+for (const { name, text } of CSS_SOURCES) scanTiming(name, text);
 check('时长/缓动只走令牌，循环只走 var(--m-iter)，名字只走 --an-*', timingBad.length === 0, timingBad.slice(0, 8).join(' | '));
 
 /* ---------- 10. [新] 暂停机制在位 ---------- */

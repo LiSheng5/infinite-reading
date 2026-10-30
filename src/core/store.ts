@@ -4,7 +4,7 @@
  * 职责：所有存档读写都走这里，避免散落各处。
  *  - 存储前缀统一 ir:（settings / story:<id> / story-index / current / user-profile）
  *  - story schema v3：log / world / styleCard / rollingStyle / characterCard /
- *    userProfile / painterThread / messages / mode / savepoints（设计 §2）
+ *    userProfile / painterThread / messages / mode / savepoints（设计）
  *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 src/core/tree.ts）
  *  - 主库 = IndexedDB（见 src/core/storage.ts）：解除 localStorage 约 5MB 的天花板，
  *    原图以 Blob 存 images store，不再转成 base64 塞进文本
@@ -49,6 +49,11 @@ import { APP_VERSION } from './version.ts';
   };
 
   const MIGRATED_V3 = 'ir:migrated-v3';           // localStorage → IndexedDB 迁移标记
+
+  // 动效档位的「首帧镜像」：只写 localStorage（IDB 是异步的，首帧读不到）。
+  // index.html 的 <head> 内联脚本在 CSS 生效前读它，先把 html[data-motion] 写上，
+  // 「减少动态效果」的用户就不会先看到一帧 rich 动效。真源仍是 settings.ui.motion。
+  const MOTION_MIRROR = 'ir:motion';
 
   // v0.1 的旧键，只读、不删（迁移失败还能退回旧版本）
   const LEGACY = {
@@ -180,12 +185,12 @@ import { APP_VERSION } from './version.ts';
       track(Storage.put('kv', key, on ? 1 : null).catch(persistFail));
       return;
     }
-    // 与 writeLSJSON 同一告警口径（审查 低危 #20）：配额满等失败不再静默吞掉
+    // 与 writeLSJSON 同一告警口径：配额满等失败不再静默吞掉
     try { if (on) ls().setItem(key, '1'); else ls().removeItem(key); }
     catch (e) { console.warn('写入失败（可能超出本地存储限额）', key, e); }
   }
 
-  // ID 生成统一走 tree 的 genId（审查 可维护性 #5）：不再各写时间戳+随机变体。
+  // ID 生成统一走 tree 的 genId：不再各写时间戳+随机变体。
   // 默认前缀 's'（故事），需要别的前缀时显式传（如 genId('pf')）。
   function genId(prefix?) {
     return rootGenId(prefix || 's');
@@ -198,7 +203,7 @@ import { APP_VERSION } from './version.ts';
       place: '', time: '',
       characters: [],              // [{ name, presence, personality, speech, note }]
       threads: [],                 // ['伏笔...']
-      relationship: { stage: '', bonds: [], notes: '' }, // R13 关系记忆
+      relationship: { stage: '', bonds: [], notes: '' }, // 关系记忆
       scene: '',                   // 画面参考一句话
       updatedAt: 0, scribeAt: 0,   // 上次书记员校对时间
     };
@@ -283,8 +288,8 @@ import { APP_VERSION } from './version.ts';
       chat: {
         // 不预置任何厂商 / 模型：Base URL 与模型名全部由用户手填（避免跟着厂商变动维护）
         provider: 'openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 0.9,
-        thinking: 'default',   // T-M-1：思考档位（default = 不下发；其余值按预填表换算 / 手填）
-        contextWindow: 0,      // T-M-1：上下文窗口（0 = 未填；预填表命中时自动；70% 压缩阈值按它算）
+        thinking: 'default',   // 思考档位（default = 不下发；其余值按预填表换算 / 手填）
+        contextWindow: 0,      // 上下文窗口（0 = 未填；预填表命中时自动；70% 压缩阈值按它算）
         extraParams: '',       // 任意厂商参数（"a=b, c.d=e" 或对象），原样并入请求体
       },
       painter: defaultSubModel(),                              // 画师子代理（写绘画提示词）
@@ -293,45 +298,45 @@ import { APP_VERSION } from './version.ts';
         aiTasks: true,       // 书记员兼任「压缩摘要 + 滚动风格摘要」；调用失败自动走本地规则
       }),
       draft: defaultSubModel(),                                // 开局向导起草
-      // UI-3 模型库（§3.1）：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
+      // 模型库：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
       // refMode：'off' = 纯文生图；“'prev' = 把上一张图当参考图（MiniMax subject_reference）
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '', refMode: 'off' },
       // 生视频（MiniMax V2「minimax-video」）：异步任务。
-      // 时长 / 分辨率 / 比例以面板控件为唯一来源（审查 三·2）；extraParams 只补其它键。
+      // 时长 / 分辨率 / 比例以面板控件为唯一来源；extraParams 只补其它键。
       video: {
         provider: 'minimax-video', baseUrl: '', apiKey: '', model: '',
         duration: 5, resolution: '768P', ratio: '16:9', extraParams: '',
       },
       userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
-      // 界面布局（P2）：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
+      // 界面布局：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
       ui: {
         layout: 'auto',          // auto | split | stack | immersive
         splitRatio: 0.5,         // 双栏比例（每栏最小约 28%）
         imageCollapsed: false,   // 舞台收起（聊天占满）
         choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
-        motion: 'auto',          // 动效强度（UI-1）：auto | off | standard | rich
-        // UI-3 §3.5：扮演 / 智能体的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
+        motion: 'auto',          // 动效强度：auto | off | standard | rich
+        // 扮演 / 智能体的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
         fontScale: 'md',         // sm | md | lg
         width: 'standard',       // narrow | standard | wide
         density: 'standard',     // compact | standard
       },
       showReasoning: true,
       toolsEnabled: 'on',
-      noTools: [],            // P5-1 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
-      stylePreset: 'anime',   // P4 视觉设定卡之前的兜底画风
+      noTools: [],            // 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
+      stylePreset: 'anime',   // 视觉设定卡之前的兜底画风
       styleCustom: '',
-      // P-1（v0.11.0）：出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
+      // v0.11.0：出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
       // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
       // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
       sidecar: { port: 4319, token: '' },
-      // P0 数据安全：备份时间戳（7 天没备份就提醒一次；提醒本身每天最多一次）
+      // 数据安全：备份时间戳（7 天没备份就提醒一次；提醒本身每天最多一次）
       lastBackupAt: 0,
       lastBackupRemindAt: 0,
     };
   }
 
-  // UI-3 §3.1 模型库（profiles）迁移：幂等；已有数据原样保留，只保证每条有字符串 id
+  // 模型库（profiles）迁移：幂等；已有数据原样保留，只保证每条有字符串 id
   function migrateProfiles(raw) {
     if (!Array.isArray(raw)) return [];
     const out = [];
@@ -347,7 +352,7 @@ import { APP_VERSION } from './version.ts';
   }
 
   // 从 extraParams 里抽出 duration / resolution / ratio（历史迁移折进去的同名键）：
-  // 值带回控件字段，键从 extraParams 移除——「唯一源 = 面板控件」（审查 三·2）
+  // 值带回控件字段，键从 extraParams 移除——「唯一源 = 面板控件」
   function extractVideoControlParams(raw) {
     const out = { extraParams: raw, duration: null, resolution: null, ratio: null };
     const keepVal = v => (v == null || v === '' ? null : v);
@@ -374,116 +379,207 @@ import { APP_VERSION } from './version.ts';
     return out;
   }
 
-  // v0.1 / 任意旧设置 → v0.2（幂等）
-  function migrateSettings(raw) {
-    const d = defaultSettings();
-    raw = (raw && typeof raw === 'object') ? raw : {};
+  /* ---------------- 旧档迁移：声明式步骤表 ----------------
+   * 迁移原先是两个「顺序脚本」（migrateSettings ~110 行、migrateStory ~55 行）：改一处就得读完
+   * 整段，还得自己在脑子里排出「这行属于哪个版本」。现在改成有序步骤表——每步自带
+   * `since`（该形状来自哪一版）、`what`（迁什么）、`when`（幂等判据）、`apply`（动作），
+   * 主函数只剩执行器。约定：
+   *  - 顺序有意义：表按版本升序读，后一步读到的是前一步写好的 out；
+   *  - 幂等：when 只问「数据是否已是新形状」，二次迁移整表跳过（schema-test / prefs-test 守着）；
+   *  - 加迁移 = 表尾加一条，已有步骤不用重读。
+   */
+  type MigrateStep<Ctx> = {
+    since: string;                     // 该形状自哪一版 / 哪个阶段存在（沿用代码里的编号，不另编 semver）
+    what: string;                      // 这一步迁什么（出错时一眼定位）
+    when: (c: Ctx) => boolean;         // 幂等判据
+    apply: (c: Ctx) => void;           // 就地改 c.out
+  };
 
-    const out: any = {
-      chat: Object.assign({}, d.chat, raw.chat || {}),
-      painter: Object.assign({}, d.painter, raw.painter || {}),
-      scribe: Object.assign({}, d.scribe, raw.scribe || {}),
-      draft: Object.assign({}, d.draft, raw.draft || {}),
-      image: Object.assign({}, d.image, raw.image || {}),
-      video: Object.assign({}, d.video, raw.video || {}),
-      userProfile: Object.assign({}, d.userProfile, raw.userProfile || {}, {
-        // 'all' 是合法写法（= 三个模式全开）：必须原样保留；只有对象才做深合并
-        //（修：此前 Object.assign({}, 默认, 'all') 会把字符串拆成 0/1/2 索引键，刷新后三个勾全丢）
-        enabled: ((raw.userProfile && raw.userProfile.enabled) === 'all')
-          ? 'all'
-          : Object.assign({}, d.userProfile.enabled, (raw.userProfile && raw.userProfile.enabled) || {}),
-      }),
-      showReasoning: ('showReasoning' in raw) ? !!raw.showReasoning : d.showReasoning,
-      toolsEnabled: raw.toolsEnabled === 'off' ? 'off' : 'on',
-      noTools: Array.isArray(raw.noTools)
-        ? raw.noTools.filter(x => x && x.baseUrl && x.model).slice(-20).map(x => ({ baseUrl: String(x.baseUrl), model: String(x.model), at: +x.at || 0 }))
-        : [],
-      stylePreset: raw.stylePreset || d.stylePreset,
-      styleCustom: raw.styleCustom || '',
-      // P-1（v0.11.0）：trigger（出图时机）停止读写——defaultSettings 不再写它，
-      // 旧值原样留在存档里（不读、不删），与 split / showImage 旧字段同一处理方式
-    };
-    if (raw && typeof raw === 'object' && 'trigger' in raw) out.trigger = raw.trigger;
+  function runSteps<Ctx>(steps: Array<MigrateStep<Ctx>>, ctx: Ctx): Ctx {
+    for (const s of steps) if (s.when(ctx)) s.apply(ctx);
+    return ctx;
+  }
 
-    // 界面布局（P2，新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
-    const rawUi = (raw.ui && typeof raw.ui === 'object') ? raw.ui : {};
-    let ratio = +rawUi.splitRatio;
-    if (!Number.isFinite(ratio) || ratio <= 0) ratio = d.ui.splitRatio;
-    out.ui = {
-      layout: ['auto', 'split', 'stack', 'immersive'].indexOf(rawUi.layout) >= 0 ? rawUi.layout : d.ui.layout,
-      splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
-      imageCollapsed: !!rawUi.imageCollapsed,
-      choices: rawUi.choices === 'always' ? 'always' : 'tray',
-      // 动效强度（UI-1）：auto | off | standard | rich，非法值当 auto（幂等）
-      motion: ['auto', 'off', 'standard', 'rich'].indexOf(rawUi.motion) >= 0 ? rawUi.motion : 'auto',
-      // UI-3 §3.5：字号 / 宽度 / 密度默认（令牌驱动；非法值回默认）
-      fontScale: ['sm', 'md', 'lg'].indexOf(rawUi.fontScale) >= 0 ? rawUi.fontScale : d.ui.fontScale,
-      width: ['narrow', 'standard', 'wide'].indexOf(rawUi.width) >= 0 ? rawUi.width : d.ui.width,
-      density: ['compact', 'standard'].indexOf(rawUi.density) >= 0 ? rawUi.density : d.ui.density,
-    };
+  /* 设置迁移表：任意旧设置 → 当前形状（顺序即版本顺序） */
+  type SettingsCtx = { d: any; raw: any; out: any };
 
-    // UI-3 §3.1 模型库：幂等补 profiles；已有条目原样保留（只保证有字符串 id）
-    out.profiles = migrateProfiles(raw.profiles);
-
-    out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;
-    out.scribe.every = (raw.scribe && +raw.scribe.every) ? +raw.scribe.every : 10;
-    out.scribe.aiTasks = (raw.scribe && 'aiTasks' in raw.scribe) ? !!raw.scribe.aiTasks : true;
-
-    // 可选本地服务：只迁移连接信息（端口 + token）；安全项真源在侧车 config.json
-    out.sidecar = {
-      port: (raw.sidecar && +raw.sidecar.port > 0 && +raw.sidecar.port < 65536)
-        ? Math.floor(+raw.sidecar.port)
-        : d.sidecar.port,
-      token: (raw.sidecar && typeof raw.sidecar.token === 'string')
-        ? raw.sidecar.token.trim().slice(0, 200)
-        : '',
-    };
-
-    // P0 数据安全：备份时间戳（幂等校验）
-    out.lastBackupAt = (+raw.lastBackupAt > 0) ? +raw.lastBackupAt : 0;
-    out.lastBackupRemindAt = (+raw.lastBackupRemindAt > 0) ? +raw.lastBackupRemindAt : 0;
-
-    // T-M-1：思考档位 / 上下文窗口 / 手填参数（幂等校验）
-    // 旧版 mock provider 已不存在：一律迁回真实接口（用户需补填 Base URL / 模型）
-    out.chat.provider = 'openai-compatible';
-    // 生图适配器：'mock' → OpenAI 兼容；MiniMax 原生接口的旧别名统一成 'minimax-image'。
-    // 其它值原样保留。
-    const IMAGE_PROVIDER_ALIAS = { mock: 'openai-images', minimax: 'minimax-image', 'minimax-images': 'minimax-image' };
-    if (IMAGE_PROVIDER_ALIAS[out.image.provider]) out.image.provider = IMAGE_PROVIDER_ALIAS[out.image.provider];
-    out.chat.thinking = (typeof out.chat.thinking === 'string' && out.chat.thinking) ? out.chat.thinking : 'default';
-    out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
-    if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
-    if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
-    // 参考图开关（v0.12.1）：只认 'prev'，其余一律 'off'（旧档没有这个字段 → 关闭）
-    out.image.refMode = (raw.image && raw.image.refMode === 'prev') ? 'prev' : 'off';
-    // §5.7：生视频 provider 一律 'minimax-video'（'openai-videos' / 'minimax' 等旧值迁移）
-    out.video.provider = 'minimax-video';
-    if (typeof out.video.extraParams !== 'string' && !(out.video.extraParams && typeof out.video.extraParams === 'object')) out.video.extraParams = '';
-    // 时长 / 分辨率 / 比例的唯一来源 = 面板控件（审查 三·2 双数据源）：
-    // 旧迁移曾把这三项折进 extraParams（当时控件下线过一段时间），同名键会盖住下拉框——
-    // 「改了没生效」。这里把 extraParams 里的同名键折回控件字段并移除（值不丢，唯一源从此只有控件；
-    // providers 的 applyVideoControlParams 同口径，运行时同名键也被控件覆盖）。
+  const SETTINGS_STEPS: Array<MigrateStep<SettingsCtx>> = [
+    // v0.2 基线：各分节「默认值 ← 旧值」逐键合并。后面的步只在这份结果上做归一 / 夹值。
     {
-      const pick = extractVideoControlParams(out.video.extraParams);
-      out.video.extraParams = pick.extraParams;
-      if (pick.duration != null) out.video.duration = pick.duration;
-      if (pick.resolution != null) out.video.resolution = pick.resolution;
-      if (pick.ratio != null) out.video.ratio = pick.ratio;
-      const dv = parseInt(out.video.duration, 10);
-      out.video.duration = Math.max(4, Math.min(15, Number.isFinite(dv) ? dv : 5));
-      out.video.resolution = String(out.video.resolution || '').toUpperCase();
-      if (['480P', '768P', '1080P'].indexOf(out.video.resolution) < 0) out.video.resolution = '768P';
-      out.video.ratio = String(out.video.ratio || '');
-      if (['16:9', '9:16', '1:1'].indexOf(out.video.ratio) < 0) out.video.ratio = '16:9';
-    }
+      since: 'v0.2',
+      what: '各分节铺默认值（chat / painter / scribe / draft / image / video / userProfile + 顶层键）',
+      when: () => true,
+      apply: ({ raw, out, d }) => {
+        out.chat = Object.assign({}, d.chat, raw.chat || {});
+        out.painter = Object.assign({}, d.painter, raw.painter || {});
+        out.scribe = Object.assign({}, d.scribe, raw.scribe || {});
+        out.draft = Object.assign({}, d.draft, raw.draft || {});
+        out.image = Object.assign({}, d.image, raw.image || {});
+        out.video = Object.assign({}, d.video, raw.video || {});
+        out.userProfile = Object.assign({}, d.userProfile, raw.userProfile || {}, {
+          // 'all' 是合法写法（= 三个模式全开）：必须原样保留；只有对象才做深合并
+          //（修：此前 Object.assign({}, 默认, 'all') 会把字符串拆成 0/1/2 索引键，刷新后三个勾全丢）
+          enabled: ((raw.userProfile && raw.userProfile.enabled) === 'all')
+            ? 'all'
+            : Object.assign({}, d.userProfile.enabled, (raw.userProfile && raw.userProfile.enabled) || {}),
+        });
+        out.showReasoning = ('showReasoning' in raw) ? !!raw.showReasoning : d.showReasoning;
+        out.toolsEnabled = raw.toolsEnabled === 'off' ? 'off' : 'on';
+        out.noTools = Array.isArray(raw.noTools)
+          ? raw.noTools.filter(x => x && x.baseUrl && x.model).slice(-20).map(x => ({ baseUrl: String(x.baseUrl), model: String(x.model), at: +x.at || 0 }))
+          : [];
+        out.stylePreset = raw.stylePreset || d.stylePreset;
+        out.styleCustom = raw.styleCustom || '';
+      },
+    },
+    // v0.11.0：trigger（出图时机）停止读写——defaultSettings 不再写它，
+    // 旧值原样留在存档里（不读、不删），与 split / showImage 旧字段同一处理方式
+    {
+      since: 'v0.11.0',
+      what: 'trigger 下线：旧值原样透传（不读、不删）',
+      when: ({ raw }) => 'trigger' in raw,
+      apply: ({ raw, out }) => { out.trigger = raw.trigger; },
+    },
+    // 界面布局（新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
+    {
+      since: 'v0.3 – v0.11.0',
+      what: '界面布局 ui：layout / splitRatio 夹值，choices / motion / fontScale / width / density 回默认',
+      when: () => true,
+      apply: ({ raw, out, d }) => {
+        const rawUi = (raw.ui && typeof raw.ui === 'object') ? raw.ui : {};
+        let ratio = +rawUi.splitRatio;
+        if (!Number.isFinite(ratio) || ratio <= 0) ratio = d.ui.splitRatio;
+        out.ui = {
+          layout: ['auto', 'split', 'stack', 'immersive'].indexOf(rawUi.layout) >= 0 ? rawUi.layout : d.ui.layout,
+          splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
+          imageCollapsed: !!rawUi.imageCollapsed,
+          choices: rawUi.choices === 'always' ? 'always' : 'tray',
+          // 动效强度：auto | off | standard | rich，非法值当 auto（幂等）
+          motion: ['auto', 'off', 'standard', 'rich'].indexOf(rawUi.motion) >= 0 ? rawUi.motion : 'auto',
+          // 字号 / 宽度 / 密度默认（令牌驱动；非法值回默认）
+          fontScale: ['sm', 'md', 'lg'].indexOf(rawUi.fontScale) >= 0 ? rawUi.fontScale : d.ui.fontScale,
+          width: ['narrow', 'standard', 'wide'].indexOf(rawUi.width) >= 0 ? rawUi.width : d.ui.width,
+          density: ['compact', 'standard'].indexOf(rawUi.density) >= 0 ? rawUi.density : d.ui.density,
+        };
+      },
+    },
+    // 模型库：幂等补 profiles；已有条目原样保留（只保证有字符串 id）
+    {
+      since: 'v0.11.0',
+      what: '模型库 profiles：补数组 + 坏条目修 id / 防重 id',
+      when: () => true,
+      apply: ({ raw, out }) => { out.profiles = migrateProfiles(raw.profiles); },
+    },
+    {
+      since: 'v0.2 – v0.11.0',
+      what: '书记员 scribe：enabled / every / aiTasks 三项补默认（0 与缺省都按默认）',
+      when: () => true,
+      apply: ({ raw, out }) => {
+        out.scribe.enabled = (raw.scribe && 'enabled' in raw.scribe) ? !!raw.scribe.enabled : true;
+        out.scribe.every = (raw.scribe && +raw.scribe.every) ? +raw.scribe.every : 10;
+        out.scribe.aiTasks = (raw.scribe && 'aiTasks' in raw.scribe) ? !!raw.scribe.aiTasks : true;
+      },
+    },
+    // 可选本地服务：只迁移连接信息（端口 + token）；安全项真源在侧车 config.json
+    {
+      since: 'v0.3.0（sidecar）',
+      what: '本地服务 sidecar：端口落回 1–65535，token 去空白并截断（缺省空串）',
+      when: () => true,
+      apply: ({ raw, out, d }) => {
+        out.sidecar = {
+          port: (raw.sidecar && +raw.sidecar.port > 0 && +raw.sidecar.port < 65536)
+            ? Math.floor(+raw.sidecar.port)
+            : d.sidecar.port,
+          token: (raw.sidecar && typeof raw.sidecar.token === 'string')
+            ? raw.sidecar.token.trim().slice(0, 200)
+            : '',
+        };
+      },
+    },
+    // 数据安全：备份时间戳（幂等校验）
+    {
+      since: '数据安全',
+      what: '备份时间戳 lastBackupAt / lastBackupRemindAt（只认正数时间）',
+      when: () => true,
+      apply: ({ raw, out }) => {
+        out.lastBackupAt = (+raw.lastBackupAt > 0) ? +raw.lastBackupAt : 0;
+        out.lastBackupRemindAt = (+raw.lastBackupRemindAt > 0) ? +raw.lastBackupRemindAt : 0;
+      },
+    },
+    // 思考档位 / 上下文窗口 / 手填参数（幂等校验）。旧版 mock provider 已不存在：
+    // 一律迁回真实接口（用户需补填 Base URL / 模型）
+    {
+      since: 'v0.11.0',
+      what: 'provider 归一（chat 一律 openai-compatible、image 旧别名 → minimax-image）+ thinking / contextWindow / extraParams 兜底',
+      when: () => true,
+      apply: ({ out }) => {
+        out.chat.provider = 'openai-compatible';
+        // 生图适配器：'mock' → OpenAI 兼容；MiniMax 原生接口的旧别名统一成 'minimax-image'。
+        // 其它值原样保留。
+        const IMAGE_PROVIDER_ALIAS = { mock: 'openai-images', minimax: 'minimax-image', 'minimax-images': 'minimax-image' };
+        if (IMAGE_PROVIDER_ALIAS[out.image.provider]) out.image.provider = IMAGE_PROVIDER_ALIAS[out.image.provider];
+        out.chat.thinking = (typeof out.chat.thinking === 'string' && out.chat.thinking) ? out.chat.thinking : 'default';
+        out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
+        if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
+        if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
+      },
+    },
+    // 参考图开关（v0.12.1）：只认 'prev'，其余一律 'off'（旧档没有这个字段 → 关闭）
+    {
+      since: 'v0.12.1',
+      what: '生图参考图开关 image.refMode（只认 prev，其余 off）',
+      when: () => true,
+      apply: ({ raw, out }) => {
+        out.image.refMode = (raw.image && raw.image.refMode === 'prev') ? 'prev' : 'off';
+      },
+    },
+    // 生视频 provider 一律 'minimax-video'（'openai-videos' / 'minimax' 等旧值迁移）
+    {
+      since: 'v0.12.0',
+      what: '生视频：provider 钉死 minimax-video；extraParams 里的 duration / resolution / ratio 折回控件字段并夹值',
+      when: () => true,
+      apply: ({ out }) => {
+        out.video.provider = 'minimax-video';
+        if (typeof out.video.extraParams !== 'string' && !(out.video.extraParams && typeof out.video.extraParams === 'object')) out.video.extraParams = '';
+        // 时长 / 分辨率 / 比例的唯一来源 = 面板控件（双数据源）：
+        // 旧迁移曾把这三项折进 extraParams（当时控件下线过一段时间），同名键会盖住下拉框——
+        // 「改了没生效」。这里把 extraParams 里的同名键折回控件字段并移除（值不丢，唯一源从此只有控件；
+        // providers 的 applyVideoControlParams 同口径，运行时同名键也被控件覆盖）。
+        const pick = extractVideoControlParams(out.video.extraParams);
+        out.video.extraParams = pick.extraParams;
+        if (pick.duration != null) out.video.duration = pick.duration;
+        if (pick.resolution != null) out.video.resolution = pick.resolution;
+        if (pick.ratio != null) out.video.ratio = pick.ratio;
+        const dv = parseInt(out.video.duration, 10);
+        out.video.duration = Math.max(4, Math.min(15, Number.isFinite(dv) ? dv : 5));
+        out.video.resolution = String(out.video.resolution || '').toUpperCase();
+        if (['480P', '768P', '1080P'].indexOf(out.video.resolution) < 0) out.video.resolution = '768P';
+        out.video.ratio = String(out.video.ratio || '');
+        if (['16:9', '9:16', '1:1'].indexOf(out.video.ratio) < 0) out.video.ratio = '16:9';
+      },
+    },
+    // v0.1 的 image.size 字符串 → aspect/width/height。旧键一律删除（已在 aspect 上的也不留）
+    {
+      since: 'v0.1',
+      what: 'image.size（512x768）→ aspect / width / height，并删掉旧键',
+      when: () => true,
+      apply: ({ raw, out }) => {
+        if (raw.image && raw.image.size && !raw.image.aspect) {
+          const m = String(raw.image.size).match(/(\d+)\s*[x×]\s*(\d+)/i);
+          if (m) { out.image.width = +m[1]; out.image.height = +m[2]; out.image.aspect = 'custom'; }
+        }
+        delete out.image.size;
+      },
+    },
+  ];
 
-    // v0.1 的 image.size 字符串 → aspect/width/height（R8）
-    if (raw.image && raw.image.size && !raw.image.aspect) {
-      const m = String(raw.image.size).match(/(\d+)\s*[x×]\s*(\d+)/i);
-      if (m) { out.image.width = +m[1]; out.image.height = +m[2]; out.image.aspect = 'custom'; }
-    }
-    delete out.image.size;
-    return out;
+  // v0.1 / 任意旧设置 → 当前形状（幂等）：逐条执行 SETTINGS_STEPS
+  function migrateSettings(raw) {
+    return runSteps(SETTINGS_STEPS, {
+      d: defaultSettings(),
+      raw: (raw && typeof raw === 'object') ? raw : {},
+      out: {},
+    }).out;
   }
 
   /* ---------------- story v2 ---------------- */
@@ -492,7 +588,7 @@ import { APP_VERSION } from './version.ts';
     opts = opts || {};
     const now = Date.now();
     const mode = opts.mode || 'choice';         // choice | chat | rp
-    // UI-2 §3.2：新建的智能体 / 扮演对话自动起标题（titleAuto），剧情新故事标题来自设定
+    // 新建的智能体 / 扮演对话自动起标题（titleAuto），剧情新故事标题来自设定
     const titleAuto = ('titleAuto' in opts)
       ? !!opts.titleAuto
       : (mode === 'chat' || mode === 'rp');
@@ -500,8 +596,8 @@ import { APP_VERSION } from './version.ts';
       schema: SCHEMA,
       id: opts.id || genId(),
       title: opts.title || (titleAuto ? '新对话' : '未命名故事'),
-      titleAuto: titleAuto,                   // true = 标题可被自动覆盖（UI-2 §3.2）
-      titleGen: +opts.titleGen || 0,          // 已自动生成次数（0 / 1 / 2，§3.3 触发点）
+      titleAuto: titleAuto,                   // true = 标题可被自动覆盖
+      titleGen: +opts.titleGen || 0,          // 已自动生成次数（0 / 1 / 2，触发点）
       premise: opts.premise || '',
       mode: mode,
       createdAt: opts.createdAt || now,
@@ -511,80 +607,123 @@ import { APP_VERSION } from './version.ts';
       world: Object.assign(defaultWorld(), opts.world || {}),
       styleCard: opts.styleCard || null,       // 未锚定 = null
       rollingStyle: Object.assign(defaultRollingStyle(), opts.rollingStyle || {}),
-      styleTone: opts.styleTone || '',         // 向导「风格基调」栏（P2-3，P4 试画锚定的依据）
+      styleTone: opts.styleTone || '',         // 向导「风格基调」栏（试画锚定的依据）
       characterCard: opts.characterCard || null,
       userProfile: opts.userProfile || [],
       painterThread: opts.painterThread || [],
       messages: opts.messages || [],           // AI1 原始对话（滑动窗口）
-      summaries: opts.summaries || [],         // C-A 场景摘要栈（T-P1-4）
-      savepoints: opts.savepoints || [],       // 存档点（P2-1）
-      ui: Object.assign(defaultUi(), opts.ui || {}), // 界面状态随存档（§4.6/§4.9）
+      summaries: opts.summaries || [],         // 场景摘要栈
+      savepoints: opts.savepoints || [],       // 存档点
+      ui: Object.assign(defaultUi(), opts.ui || {}), // 界面状态随存档
 
       // 运行时辅助字段（随档保存，方便续玩）
       turn: 0,
       scenes: [],                              // 已生成图片（含 thumb / prompt）
       lastBg: null,
       lastSceneSummary: '',
-      pendingVideos: [],                       // 已提交、未出结果的生视频任务（§5⑤）
+      pendingVideos: [],                       // 已提交、未出结果的生视频任务
     };
   }
 
-  // v1 / 任意旧档 → v2（幂等）
+  /* 故事迁移表：任意旧档 → 当前形状（顺序即版本顺序，幂等） */
+  type StoryCtx = { raw: any; out: any };
+
+  const STORY_STEPS: Array<MigrateStep<StoryCtx>> = [
+    // v0.2 基线：newStory 打底 + 各字段「默认值 ← 旧值」，log / scenes 条目就地归一
+    {
+      since: 'v0.2',
+      what: '字段铺默认值（newStory 打底）；log 走 migrateLogEntry、scenes 走 normVideoFields',
+      when: () => true,
+      apply: (c) => {
+        const raw = c.raw;
+        const out = c.out = newStory({ id: raw.id, title: raw.title, premise: raw.premise, mode: raw.mode });
+        out.titleGen = +raw.titleGen || 0;
+        out.createdAt = raw.createdAt || out.createdAt;
+        out.updatedAt = raw.updatedAt || out.updatedAt;
+        out.log = Array.isArray(raw.log) ? raw.log.map(migrateLogEntry) : [];
+        out.world = Object.assign(defaultWorld(), raw.world || {});
+        out.world.relationship = Object.assign(defaultWorld().relationship, (raw.world && raw.world.relationship) || {});
+        out.styleCard = raw.styleCard || null;
+        out.rollingStyle = Object.assign(defaultRollingStyle(), raw.rollingStyle || {});
+        out.styleTone = raw.styleTone || '';
+        out.characterCard = raw.characterCard || null;
+        out.userProfile = Array.isArray(raw.userProfile) ? raw.userProfile : [];
+        out.painterThread = Array.isArray(raw.painterThread) ? raw.painterThread : [];
+        out.messages = Array.isArray(raw.messages) ? raw.messages : [];
+        out.summaries = Array.isArray(raw.summaries) ? raw.summaries : [];
+        out.savepoints = Array.isArray(raw.savepoints) ? raw.savepoints : [];
+        out.ui = Object.assign(defaultUi(), raw.ui || {});
+        out.turn = raw.turn || 0;
+        out.scenes = Array.isArray(raw.scenes) ? raw.scenes.map(normVideoFields) : [];
+        out.lastBg = raw.lastBg || null;
+        out.lastSceneSummary = raw.lastSceneSummary || '';
+      },
+    },
+    // 旧存档一律 titleAuto=false（保留现有标题）；只有存档里显式记了才沿用
+    {
+      since: 'v0.11.0',
+      what: '旧档 titleAuto=false（保住现有标题）；显式记了才沿用',
+      when: () => true,
+      apply: (c) => { c.out.titleAuto = ('titleAuto' in c.raw) ? !!c.raw.titleAuto : false; },
+    },
+    {
+      since: 'v0.2',
+      what: '画师线程 ai2Thread → painterThread（新键已在就不动）',
+      when: ({ raw }) => !Array.isArray(raw.painterThread) && Array.isArray(raw.ai2Thread),
+      apply: (c) => { c.out.painterThread = c.raw.ai2Thread; },
+    },
+    // 已提交未出结果的生视频任务（重启 / 切档后恢复轮询用），原样保留
+    {
+      since: 'v0.12.0',
+      what: '未出结果的生视频任务 pendingVideos（只留带 taskId 的条目）',
+      when: () => true,
+      apply: (c) => {
+        c.out.pendingVideos = Array.isArray(c.raw.pendingVideos)
+          ? c.raw.pendingVideos.filter(x => x && x.taskId)
+          : [];
+      },
+    },
+    {
+      since: 'v0.2',
+      what: '世界卡 scene 空着时用上一幕的场景摘要回填',
+      when: (c) => !c.out.world.scene && !!c.out.lastSceneSummary,
+      apply: (c) => { c.out.world.scene = c.out.lastSceneSummary; },
+    },
+    // 分支树原样透传（schema v3）：这里不校验、不依赖 Tree——合法性与降级重建由 Tree.ensure 负责
+    // 视频字段归一同样扫一遍树里的 scenes / entries（漏了会留下两种字段名并存）
+    {
+      since: 'v0.12.0（schema v3）',
+      what: '分支树原样透传 + 树内 scenes / entries 视频字段归一（poster → thumb、videoUrl → remoteUrl）',
+      when: ({ raw }) => !!raw.tree,
+      apply: (c) => {
+        c.out.tree = c.raw.tree;
+        const tn = c.out.tree.nodes;
+        if (tn && typeof tn === 'object') {
+          Object.keys(tn).forEach(id => {
+            const n = tn[id];
+            if (!n) return;
+            (Array.isArray(n.scenes) ? n.scenes : []).forEach(normVideoFields);
+            (Array.isArray(n.entries) ? n.entries : []).forEach(normVideoFields);
+          });
+        }
+      },
+    },
+    // 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的旧档不报错
+    {
+      since: 'v0.11.0',
+      what: '本对话偏好 prefs 透传并清洗（丢未知键、剥凭证）；无 prefs 不长出 prefs',
+      when: ({ raw }) => !!(raw.prefs && typeof raw.prefs === 'object'),
+      apply: (c) => { c.out.prefs = sanitizePrefsSafe(c.raw.prefs); },
+    },
+  ];
+
+  // v1 / 任意旧档 → 当前形状（幂等）：深拷贝后逐条执行 STORY_STEPS
   function migrateStory(raw: any): Story | null {
     if (!raw || typeof raw !== 'object') return null;
     // 先深拷贝再组装：loadStory 拿到的是 MEM 里的「已保存」对象，tree / messages / savepoints 等
     // 若原样透传引用，现场改动会把已保存快照带脏（normVideoFields 还会就地归一）。拷贝一次，两侧解耦。
-    raw = JSON.parse(JSON.stringify(raw));
-    const out = newStory({ id: raw.id, title: raw.title, premise: raw.premise, mode: raw.mode });
-    // UI-2 §3.2：旧存档一律 titleAuto=false（保留现有标题）；只有存档里显式记了才沿用
-    out.titleAuto = ('titleAuto' in raw) ? !!raw.titleAuto : false;
-    out.titleGen = +raw.titleGen || 0;
-    out.createdAt = raw.createdAt || out.createdAt;
-    out.updatedAt = raw.updatedAt || out.updatedAt;
-
-    out.log = Array.isArray(raw.log) ? raw.log.map(migrateLogEntry) : [];
-    out.world = Object.assign(defaultWorld(), raw.world || {});
-    out.world.relationship = Object.assign(defaultWorld().relationship, (raw.world && raw.world.relationship) || {});
-    out.styleCard = raw.styleCard || null;
-    out.rollingStyle = Object.assign(defaultRollingStyle(), raw.rollingStyle || {});
-    out.styleTone = raw.styleTone || '';
-    out.characterCard = raw.characterCard || null;
-    out.userProfile = Array.isArray(raw.userProfile) ? raw.userProfile : [];
-    // 第八轮：ai2Thread → painterThread
-    out.painterThread = Array.isArray(raw.painterThread) ? raw.painterThread
-      : (Array.isArray(raw.ai2Thread) ? raw.ai2Thread : []);
-    out.messages = Array.isArray(raw.messages) ? raw.messages : [];
-    out.summaries = Array.isArray(raw.summaries) ? raw.summaries : [];
-    out.savepoints = Array.isArray(raw.savepoints) ? raw.savepoints : [];
-    out.ui = Object.assign(defaultUi(), raw.ui || {});
-    out.turn = raw.turn || 0;
-    out.scenes = Array.isArray(raw.scenes) ? raw.scenes.map(normVideoFields) : [];
-    out.lastBg = raw.lastBg || null;
-    out.lastSceneSummary = raw.lastSceneSummary || '';
-    // §5⑤：已提交未出结果的生视频任务（重启 / 切档后恢复轮询用），原样保留
-    out.pendingVideos = Array.isArray(raw.pendingVideos)
-      ? raw.pendingVideos.filter(x => x && x.taskId)
-      : [];
-    if (!out.world.scene && out.lastSceneSummary) out.world.scene = out.lastSceneSummary;
-    // 分支树原样透传（schema v3）：这里不校验、不依赖 Tree——合法性与降级重建由 Tree.ensure 负责
-    // 视频字段归一同样扫一遍树里的 scenes / entries（§5③：漏了会留下两种字段名并存）
-    if (raw.tree) {
-      out.tree = raw.tree;
-      const tn = out.tree.nodes;
-      if (tn && typeof tn === 'object') {
-        Object.keys(tn).forEach(id => {
-          const n = tn[id];
-          if (!n) return;
-          (Array.isArray(n.scenes) ? n.scenes : []).forEach(normVideoFields);
-          (Array.isArray(n.entries) ? n.entries : []).forEach(normVideoFields);
-        });
-      }
-    }
-    // UI-3 §3.2 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的旧档不报错
-    if (raw.prefs && typeof raw.prefs === 'object') {
-      out.prefs = sanitizePrefsSafe(raw.prefs);
-    }
-    return out;
+    const ctx: StoryCtx = { raw: JSON.parse(JSON.stringify(raw)), out: null };
+    return runSteps(STORY_STEPS, ctx).out;
   }
 
   // prefs 清洗统一入口（唯一实现在 Prefs，静态导入 = 永远在位；不再有「缺位兜底」死路径）
@@ -592,7 +731,7 @@ import { APP_VERSION } from './version.ts';
     return Prefs.sanitizePrefs(raw);
   }
 
-  // 视频条目字段归一（§5）：旧档的 poster / videoUrl 就是现在的 thumb / remoteUrl
+  // 视频条目字段归一：旧档的 poster / videoUrl 就是现在的 thumb / remoteUrl
   function normVideoFields(o) {
     if (!o || typeof o !== 'object') return o;
     if (o.poster && !o.thumb) o.thumb = o.poster;
@@ -695,6 +834,7 @@ import { APP_VERSION } from './version.ts';
         out.backend = 'indexeddb';
         return out;
       } catch (e) {
+        // 记下错误，循环外统一退回 localStorage 并 console.warn（失败不静默）
         lastErr = e;
         if (attempt === 0) await new Promise(r => setTimeout(r, 300));
       }
@@ -725,11 +865,25 @@ import { APP_VERSION } from './version.ts';
 
   /* ---------------- 读写 API ---------------- */
 
+  // 把动效档位镜像进 localStorage（'auto' 也写：内联脚本按 Motion.resolve 同口径解析）
+  function mirrorMotion(s: any) {
+    try {
+      const raw = s && s.ui ? s.ui.motion : 'auto';
+      const v = (raw === 'off' || raw === 'standard' || raw === 'rich') ? raw : 'auto';
+      ls().setItem(MOTION_MIRROR, v);
+    } catch (_) { /* 配额 / 隐私模式：首帧退回 matchMedia 判断，不影响功能 */ }
+  }
+
   function loadSettings() {
     const raw = readKV(KEYS.settings);
-    return migrateSettings(raw);
+    const s = migrateSettings(raw);
+    mirrorMotion(s);   // 下一次打开页面时 <head> 的内联脚本能读到准确档位
+    return s;
   }
-  function saveSettings(s) { return writeKV(KEYS.settings, s || {}); }
+  function saveSettings(s) {
+    mirrorMotion(s);
+    return writeKV(KEYS.settings, s || {});
+  }
 
   function listIndex() {
     const a = readKV(KEYS.index);
@@ -747,7 +901,7 @@ import { APP_VERSION } from './version.ts';
     const last = sc[sc.length - 1];
     return safeThumb(last.thumb || last.poster);
   }
-  // 缩略图白名单（审查 中危 #12）：导入档案是不可信输入，thumb 只放行 data:/blob: 前缀，
+  // 缩略图白名单：导入档案是不可信输入，thumb 只放行 data:/blob: 前缀，
   // 其余（外链、javascript:、带引号的 CSS 注入串）一律丢弃；拼 CSS url() 的一侧还要 JSON.stringify 转义。
   function safeThumb(src) {
     const s = String(src == null ? '' : src);
@@ -759,16 +913,16 @@ import { APP_VERSION } from './version.ts';
     const T = Tree;
     const out = Object.assign({}, story, {
       log: (story.log || []).slice(-T.LOG_WINDOW).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
-      // scene 字段是白名单（§5①）：新字段不加会在这里被丢掉
+      // scene 字段是白名单：新字段不加会在这里被丢掉
       scenes: (story.scenes || []).slice(-T.SCENE_WINDOW).map(s => ({
         id: s.id, alt: s.alt, prompt: s.prompt, promptRaw: s.promptRaw || '',
         kind: s.kind || undefined,                 // 'video' = 视频场景（其余按图片处理）
         aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
-        styleCardId: s.styleCardId || undefined,   // 每张图记录锚定版本（P4）
+        styleCardId: s.styleCardId || undefined,   // 每张图记录锚定版本
         supersededBy: s.supersededBy || undefined,
         thumb: s.thumb || (s as any).poster || null,        // 图片缩略图 / 视频封面（JPEG dataURL）
         imageId: s.imageId || undefined,           // 原图在 IndexedDB images 里的键
-        // —— 视频场景（kind:'video'）字段（§5）——
+        // —— 视频场景（kind:'video'）字段——
         videoId: s.videoId || undefined,           // 视频 Blob 键（vid:<sceneId>）
         sourceSceneId: s.sourceSceneId || undefined, // 图生才有：首帧来自哪张图
         mode: s.mode || undefined,                 // 'i2v' | 't2v'
@@ -780,7 +934,7 @@ import { APP_VERSION } from './version.ts';
       })),
       savepoints: (story.savepoints || []).slice(-T.SAVEPOINT_KEEP),   // 存档点最多保留 5 个
     });
-    // UI-3 §3.2/§3.4：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
+    // /：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
     if (story.prefs && typeof story.prefs === 'object') out.prefs = sanitizePrefsSafe(story.prefs);
     else delete out.prefs;
     // 落盘快照一律深拷贝（与 Tree 的「深拷贝存入」同口径）：out 若与在用 story 共享
@@ -789,7 +943,7 @@ import { APP_VERSION } from './version.ts';
     return JSON.parse(JSON.stringify(out));
   }
 
-  /* ---------------- 导出包（UI-3 §3.4：剥凭证 + 附 profileLabel） ----------------
+  /* ---------------- 导出包（剥凭证 + 附 profileLabel） ----------------
    * 纯函数：images 由调用方（library.js）从 IndexedDB 取回后传入。
    * 安全红线：prefs 只带 profileId（不透明 id）与 profileLabel（仅显示）；
    * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
@@ -804,7 +958,7 @@ import { APP_VERSION } from './version.ts';
       images: images || [],
     };
     if (kind === 'full') {
-      // §0/§10：视频条目只留封面 + 说明（videoOmitted），本体与限时链接都不进导出包
+      // 视频条目只留封面 + 说明（videoOmitted），本体与限时链接都不进导出包
       pack.log = (st.log || []).map(e => (e && e.type === 'video')
         ? {
           type: 'video', id: e.id, alt: e.alt || '', thumb: e.thumb || (e as any).poster || null,
@@ -819,7 +973,7 @@ import { APP_VERSION } from './version.ts';
       pack.userProfile = st.userProfile || [];
       pack.turn = st.turn || 0;
       pack.lastSceneSummary = st.lastSceneSummary || '';
-      pack.tree = st.tree || null;   // 分支树（§5⑧）：full 包带整棵树，导入后 ensure 复原分支
+      pack.tree = st.tree || null;   // 分支树：full 包带整棵树，导入后 ensure 复原分支
     }
     const prefs = P && typeof P.exportPrefs === 'function'
       ? P.exportPrefs(st, settings)
@@ -841,11 +995,13 @@ import { APP_VERSION } from './version.ts';
       title: story.title,
       updatedAt: story.updatedAt,
       thumb: storyThumb(story),
-      // UI-2 §3.1：索引条目扩充——书架只读索引，不再对每个故事 loadStory
+      // 索引条目扩充——书架只读索引，不再对每个故事 loadStory
       mode: story.mode || 'choice',
       turn: +story.turn || 0,
       titleAuto: story.titleAuto === true,
       snippet: storySnippet(story),   // 每次重算（切兄弟 / 重试后会变，不缓存）
+      // 模型库里「几个对话在用这个模型」只读索引，不再把全部故事反序列化一遍
+      profileId: (story.prefs && typeof story.prefs.profileId === 'string') ? story.prefs.profileId : '',
     });
     writeKV(KEYS.index, idx);
     // 搜索索引增量重建（防抖约 800ms；Search 静态导入，永远在位）
@@ -859,17 +1015,23 @@ import { APP_VERSION } from './version.ts';
   function deleteStory(id) {
     if (!id) return;
     const raw = readStoryRaw(id);
+    const mine = imageIdsOf(raw);
     removeStoryRaw(id);
     writeKV(KEYS.index, listIndex().filter(x => x.id !== id));
     if (getCurrentId() === id) setCurrentId(null);
-    imageIdsOf(raw).forEach(x => releaseImage(x));   // 顺手删原图，不留孤儿占空间
-    // UI-2 §3.1：同步清理搜索文档
+    // 只释放「没有其它故事再引用」的原图：两个故事共享 imageId 时（同一份带图备份
+    // 导入两次、或「导出故事 → 再导入」都会这样），删一个不能顺手把另一个的原图删掉，
+    // 否则对方的画面只剩缩略图。knownImageIds() 在删除 + 索引更新之后取，
+    // 剩下的引用才是真正还在用的——与「清理孤儿原图」同一口径。
+    const keep = knownImageIds();
+    mine.forEach(x => { if (!keep.has(x)) releaseImage(x); });
+    // 同步清理搜索文档
     Search.drop(id);
   }
 
-  /* ---------------- 索引条目：snippet 与旧索引迁移（UI-2 §3.1） ---------------- */
+  /* ---------------- 索引条目：snippet 与旧索引迁移 ---------------- */
 
-  // 助手回复纯文本：唯一实现在 tree 的 plainReply（审查 可维护性 三·4），
+  // 助手回复纯文本：唯一实现在 tree 的 plainReply，
   // 与 search 索引共用同一口径——「JSON 旁白提取」不再有第二份实现
   const plainReplyText = plainReply;
 
@@ -905,8 +1067,9 @@ import { APP_VERSION } from './version.ts';
     return a.length > 60 ? a.slice(0, 60).join('') : text;
   }
 
-  // 旧索引条目（缺 mode / turn / titleAuto / snippet）按需 loadStory 补齐并整体回写一次。
+  // 旧索引条目（缺 mode / turn / titleAuto / snippet / profileId）按需 loadStory 补齐并整体回写一次。
   // 幂等：补完后不再触发。坏条目（无 id）与「故事已不存在」的条目剔除并计入 anomalies。
+  // profileId 是后加的：老索引没有这一列，补齐一次之后模型库面板就只读索引。
   function ensureIndexComplete() {
     const idx = listIndex();
     let changed = false;
@@ -920,7 +1083,8 @@ import { APP_VERSION } from './version.ts';
         continue;
       }
       const complete = it.mode != null && it.turn != null
-        && typeof it.titleAuto === 'boolean' && it.snippet != null;
+        && typeof it.titleAuto === 'boolean' && it.snippet != null
+        && typeof it.profileId === 'string';
       if (complete) { out.push(it); continue; }
       const st = loadStory(it.id);
       if (!st) {
@@ -937,6 +1101,7 @@ import { APP_VERSION } from './version.ts';
         turn: +st.turn || 0,
         titleAuto: st.titleAuto === true,
         snippet: storySnippet(st),
+        profileId: (st.prefs && typeof st.prefs.profileId === 'string') ? st.prefs.profileId : '',
       }));
     }
     if (changed) writeKV(KEYS.index, out);
@@ -959,7 +1124,7 @@ import { APP_VERSION } from './version.ts';
       if (e && e.videoId) out.push(e.videoId);
     });
     // 分支树里引用到的图/视频也算（含非当前分支）：漏掉就会在删除故事 /「清理孤儿原图」时
-    // **静默删掉别的分支的图**（任务书 §10）。tree 形状的遍历（含 videoId，§5③）只有
+    // **静默删掉别的分支的图**。tree 形状的遍历（含 videoId）只有
     // Tree.imageIdsOf 一份实现，这里只负责 log / scenes——两份实现一旦漂移就是删档级事故。
     if (rawStory.tree) {
       Tree.imageIdsOf(rawStory.tree).forEach(x => out.push(x));
@@ -1018,7 +1183,7 @@ import { APP_VERSION } from './version.ts';
 
   function releaseImages(ids) { (ids || []).forEach(id => releaseImage(id)); }
 
-  /* ---------------- 视频（Blob，§5④） ----------------
+  /* ---------------- 视频（Blob） ----------------
    * 与原图共用同一个 images store（键名 vid:<sceneId>，不升 DB 版本）。
    * 不进 blobCache —— 会挤掉图片缓存、占内存；用独立的 1~2 条小缓存。
    * trim 只丢「引用」、绝不 revoke：播放中的 objectURL 不得被回收（同原图的约定）。 */
@@ -1098,7 +1263,7 @@ import { APP_VERSION } from './version.ts';
     return keep;
   }
 
-  /* ---------------- 用户画像（R13 / §4.12） ----------------
+  /* ---------------- 用户画像 ----------------
    * scope='global' 时存全局 ir:user-profile（跨故事共享）；scope='per-story' 时存 story.userProfile。
    * 条目形如 { text, kind: 'fact'|'preference'|'taboo', updatedAt }。 */
 
@@ -1162,7 +1327,7 @@ import { APP_VERSION } from './version.ts';
       ids.forEach(id => removeStoryRaw(id));
       MEM.stories.clear();
       listImageKeys().then(keys => keys.forEach(k => releaseImage(k))).catch(() => {});
-    } catch (_) {}
+    } catch (_) { /* 清空是尽力而为：某个键删不掉也不该让调用方抛错（数据已不可用，刷新后自然重来） */ }
   }
 
   const Store = {
@@ -1187,7 +1352,7 @@ import { APP_VERSION } from './version.ts';
       // 原图（Blob）
       imageIdsOf, putImage, getImage, imageURL, releaseImage, releaseImages,
       listImageKeys, knownImageIds,
-      // 视频（Blob，键名 vid:<sceneId>，§5④）
+      // 视频（Blob，键名 vid:<sceneId>）
       putVideo, getVideo, videoURL, releaseVideo,
   };
   export { Store };

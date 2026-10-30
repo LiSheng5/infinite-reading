@@ -2,7 +2,7 @@
  * 无限阅读 · 存储适配器（IndexedDB 主库 / 回退）
  *
  * 为什么要有这一层：localStorage 每站点约 5MB，是本项目最大的硬伤（ARCHITECTURE §11）。
- * 这里把「大容量存储」抽成独立适配器，让 store.js 只面对一套接口：
+ * 这里把「大容量存储」抽成独立适配器，让 store.ts 只面对一套接口：
  *
  *   ir-db（IndexedDB，版本 1）
  *   ├── kv       小数据：settings / story-index / current / user-profile / 迁移标记
@@ -10,9 +10,9 @@
  *   └── images   原图 Blob（键 = imageId，值 = { blob, meta, at }）
  *
  * 三条不变量：
- *   ① 这个文件不碰 localStorage，也不懂 story schema —— 迁移策略全部由 store.js 决定
+ *   ① 这个文件不碰 localStorage，也不懂 story schema —— 迁移策略全部由 store.ts 决定
  *   ② 任何一步用不了 IndexedDB（Node / 无痕 / 老浏览器 / 打开失败），
- *      available 就是 false，store.js 立刻退回 v0.2 的 localStorage 路径，功能不降级只降容量
+ *      available 就是 false，store.ts 立刻退回 v0.2 的 localStorage 路径，功能不降级只降容量
  *   ③ 只做「开库 + 增删改查」，不做业务判断；写失败一律 reject，由调用方决定怎么办
  *
  * 零依赖；Node 下加载也不会报错（available = false）。
@@ -127,10 +127,6 @@ const global = globalThis as any;
         t.onerror = () => reject(t.error || new Error('IndexedDB 事务失败'));
         t.onabort = () => reject(t.error || new Error('IndexedDB 事务被中断'));
       }));
-    },
-
-    clear(name) {
-      return store(name, 'readwrite', os => os.clear()).then(() => true);
     },
 
     // 估算可用空间（Chromium / Firefox 支持；Safari 较旧版本可能没有）

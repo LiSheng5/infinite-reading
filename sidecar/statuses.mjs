@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · sidecar · 状态字面量唯一口径（审查 可维护性 #6）
+ * 无限阅读 · sidecar · 状态字面量唯一口径
  *
  * 此前 payment / scheduler / email 的状态字符串散落在 SQL 拼接里（'pending'、'pending_confirm'…），
  * 拼错一个字母就是「静默 0 行更新」。这里集中导出枚举 + SQL IN 片段构造，
@@ -27,24 +27,27 @@ export const TRIGGER = {
   PAUSED: 'paused',
 };
 
-/* 触发记录（trigger_fires）状态 */
+/* 触发记录（trigger_fires）状态：pending 占位待投递 → delivered 已投递到前端；skipped 放弃本次
+ * （只写这三种：投递是一次性的，没有「已完成」这种第四态） */
 export const FIRE = {
   PENDING: 'pending',
   DELIVERED: 'delivered',
   SKIPPED: 'skipped',
-  DONE: 'done',
 };
 
-/* 邮件草稿状态 */
+/* 邮件草稿状态：pending 待确认 → sending 发送中（同步抢占态，防双击发两封）→ sent
+ * 发送失败会退回 pending（可重试 / 可丢弃）；进程被杀留下的 sending 在启动时复位 */
 export const DRAFT = {
   PENDING: 'pending',
+  SENDING: 'sending',
   SENT: 'sent',
   DISCARDED: 'discarded',
 };
 
-/* 邮件审计结果 */
+/* 邮件审计结果：pending = 已占位、发送中（计入当日已发，防并发突破上限） */
 export const AUDIT = {
   OK: 'ok',
+  PENDING: 'pending',
   DENIED: 'denied',
 };
 

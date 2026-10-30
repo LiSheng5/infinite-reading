@@ -1,9 +1,9 @@
-/* 基础组件库回归检查（阶段 3 §6.3 / §8）——不开浏览器、不联网（svelte/compiler 只编译不执行）。
+/* 基础组件库回归检查（阶段 3）——不开浏览器、不联网（svelte/compiler 只编译不执行）。
  *
  * 1. src/ 下所有 .svelte 组件都能被 Svelte 5 编译（语法 / runes 用法门禁）；
  * 2. 图标逐字对账：Icon.svelte 每个分支的图形与 index.html 的 <symbol id="i-名字"> 完全一致
- *    （任务书 §6.3「图标本身保持不变」），名字集合一致且 28 个；
- * 3. 安全红线（§8）：src/** 不得出现 {@html} 与 innerHTML——用户 / 模型产出一律 textContent 等价渲染；
+ *    （「图标本身保持不变」），名字集合一致且 28 个；
+ * 3. 安全红线：src/** 不得出现 {@html} 与 innerHTML——用户 / 模型产出一律 textContent 等价渲染；
  * 4. 组件样式只走令牌：Svelte <style> 里不得出现颜色字面量（与 tokens-test 双保险）。
  *
  * 用法：node eval/ui-lib-test.js（任一不过 → 退出码 1）

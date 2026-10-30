@@ -4,6 +4,7 @@
  * 只做一件事：把「侧车说该触发了」变成「走和真实用户消息完全相同的回合流程」，并且：
  *   - 去重：同一条触发（fireId）只会被送一次（SSE 与「打开页面补跑」可能同时捞到同一条）；
  *   - 排队：agent 正忙 / 没打开故事 / 当前是剧情模式 → 先攒着，条件满足再送；
+ *   - 撤回：clear() 把队列与去重记忆一起清——撤掉的触达相当于没来过，下次补跑还能收；
  *   - 条件判断交给 app.js 注册的 canDeliver（只有它知道 busy 与 story.mode）。
  *
  * app.js 拥有唯一的回合链路（sendPlayerAction），所以这里不自己调模型，
@@ -58,7 +59,16 @@
   }
 
   function size() { return queue.length; }
-  function clear() { queue.length = 0; }
+  function resetSeen() { seen.clear(); seenOrder.length = 0; }
+
+  // 撤回待送：队列与去重记忆一起清——被清掉的触达等于「还没送过」，条件满足时还能再收。
+  // 只清队列会把同一个 fireId 永久挡在门外：它在侧车的待送列表里仍在（没 ack），
+  // 下一次「打开页面补跑」照样捞回来，然后被 seen 静默丢弃。已送成功的那些早在侧车 ack 掉了，
+  // 忘掉 seen 不会让它们重放。
+  function clear() {
+    queue.length = 0;
+    resetSeen();
+  }
 
   const Features = {
     attach: attach,
@@ -66,6 +76,6 @@
     drain: drain,
     size: size,
     clear: clear,
-    resetSeen: function () { seen.clear(); seenOrder.length = 0; },
+    resetSeen: resetSeen,
   };
   export { Features };
