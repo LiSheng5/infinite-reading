@@ -7,26 +7,17 @@
   import Icon from '../../ui/Icon.svelte';
   import { home } from './home.svelte.js';
   import { A as appApi } from '../../app/core.js';
+  import { HOME_ART } from './art.js';
 
   const VERSION = __IR_VERSION__;   // 构建注入（vite.config.mjs 的 define）：版本号不再手写
 
-  // ASCII 字符画（与 index.html 旧首页逐字一致）
-  const ART = [
-    "    .-~~~~-.       .-~~~~-.",
-    "  .'        '.   .'        '.",
-    " /            \\ /            \\",
-    "|              X              |",
-    " \\            / \\            /",
-    "  '.        .'   '.        .'",
-    "    '-~~~~-'       '-~~~~-'",
-  ];
-
+  // 字符画来自 ./art.js（唯一真源）：无 JS 兜底那份由构建期从同一个文件注入 index.html
   // 逐字拆行（把每个非空白字符包成 span.c）：
   //   --x = 所在列（循环相位，色带从左往右流）；--t = 静态时的浅蓝占比
   // 深色在底层、浅色在 ::after 叠层，只改叠层 opacity 做深浅循环（守住动画白名单），
   // 循环强度跟随 data-motion（css/home.css 的 .inf）
-  const width = Math.max(...ART.map(r => r.length));
-  const rows = ART.map(row => {
+  const width = Math.max(...HOME_ART.map(r => r.length));
+  const rows = HOME_ART.map(row => {
     const cells = [];
     for (let x = 0; x < row.length; x++) {
       const ch = row[x];

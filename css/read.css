@@ -163,12 +163,6 @@
 }
 .img-alt-row .ui-btn:where(.mini) { opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); flex: 0 0 auto; }
 .bubble-image:hover .ui-btn:where(.mini), .bubble-image:focus-within .ui-btn:where(.mini) { opacity: 1; }
-.img-superseded {
-  font-family: var(--font-ui);
-  font-size: 11.5px;
-  color: var(--ink-faint);
-  padding: 0;
-}
 
 /* 内联图气泡（chat / rp：舞台没了，图直接排在聊天流里；点图开灯箱） */
 .bubble-image-inline {
@@ -369,7 +363,6 @@
 }
 .version-nav { display: inline-flex; align-items: center; gap: 6px; }
 .version-label { font-family: var(--font-ui); font-size: 12px; color: var(--ink-dim); min-width: 30px; text-align: center; }
-.h-versions { color: var(--ink-faint); font-size: 11.5px; margin-left: 6px; }
 
 /* ---------- 输入区外壳 ---------- */
 .composer {

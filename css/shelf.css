@@ -40,21 +40,6 @@
   width: 36px; height: 36px;
 }
 .shelf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
-.title {
-  font-family: var(--font-title);
-  font-size: 34px;
-  font-weight: 400;
-  line-height: 1.35;
-  letter-spacing: .12em;
-  color: var(--ink);
-}
-.subtitle {
-  font-family: var(--font-ui);
-  color: var(--ink-dim);
-  font-size: 12.5px;
-  letter-spacing: .2em;
-  margin-top: 8px;
-}
 /* 分组头：吸顶 + 轻微毛玻璃（backdrop-filter 只用在这一个元素上） */
 .shelf-group-head {
   position: sticky; top: 0; z-index: 5;

@@ -87,13 +87,5 @@ const WriteBack = {
   writeBackToStory,
 };
 
-export {
-  WriteBack,
-  isSameStory,
-  assertStory,
-  writeBackIfSameStory,
-  isSameJob,
-  writeBackIfSameJob,
-  resolveWriteBackStory,
-  writeBackToStory,
-};
+// 调用方（turn / round / painter / importer）一律用 WriteBack.xxx；不再逐个二次导出
+export { WriteBack };

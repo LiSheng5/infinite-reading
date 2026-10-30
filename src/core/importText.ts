@@ -91,4 +91,5 @@ const ImportText = {
   parseImportCharacters,
 };
 
-export { ImportText, parseImportJson, parseImportSummary, parseImportResult, localImport, parseImportCharacters };
+// 调用方只经 ImportText 一个入口（src/app/importer.js），五个解析函数不再单独二次导出
+export { ImportText };

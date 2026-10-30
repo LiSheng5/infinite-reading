@@ -522,8 +522,9 @@ function checkBackupPack(pack: any): string[] {
   return problems;
 }
 
+// 运行时校验只经 Schema 一个入口（调用方是 eval/schema-test.js）；函数本身不再单独二次导出
 const Schema = {
   checkStory, checkStoryPack, checkBackupPack, checkTree,
 };
 
-export { Schema, checkStory, checkStoryPack, checkBackupPack, checkTree };
+export { Schema };

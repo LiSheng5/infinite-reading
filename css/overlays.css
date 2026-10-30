@@ -13,7 +13,6 @@
   overflow-y: auto;
   padding: 24px 12px;
 }
-.modal.modal-top { z-index: 32; }
 .modal-card {
   width: min(680px, 96vw);      /* 版心 */
   max-height: 92vh;

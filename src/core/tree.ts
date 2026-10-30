@@ -700,7 +700,7 @@ import type { Story, StoryTree } from './schema.ts';
 
   // 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
   const Tree = {
-    TREE_V, LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
+    LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
     ensure, begin, commit, seal, project, pathOf, resyncState,
     siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
     pushLate, imageIdsOf,

@@ -272,10 +272,11 @@ import { APP_VERSION } from './version.ts';
   }
 
   // 界面状态（随存档记住）：输入类型（做 / 说 / 导演）。
-  // split / showImage / immersive 是 v0.3 的旧字段，仍原样保留在存档里（不读、不删），
-  // 布局状态已统一到 settings.ui（layout / splitRatio / imageCollapsed）。
+  // 布局状态已统一到 settings.ui（layout / splitRatio / imageCollapsed），这里只写 kind。
+  // v0.3 的 split / showImage / immersive 三个字段不再写进新档；读档时 Object.assign 会把
+  // 旧档里的它们原样带过（不读、不删），所以老档不需要迁移、也不会因为这里少写而丢数据。
   function defaultUi() {
-    return { kind: 'do', split: 0.5, showImage: true, immersive: false };
+    return { kind: 'do' };
   }
 
   function defaultSubModel() {
@@ -948,7 +949,6 @@ import { APP_VERSION } from './version.ts';
    * 安全红线：prefs 只带 profileId（不透明 id）与 profileLabel（仅显示）；
    * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
   function buildStoryPack(st: Story, kind: string, images: any[], settings: any): StoryPack {
-    const P = Prefs;
     const pack: StoryPack = {
       format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v' + APP_VERSION,   // 构建注入
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
@@ -975,14 +975,11 @@ import { APP_VERSION } from './version.ts';
       pack.lastSceneSummary = st.lastSceneSummary || '';
       pack.tree = st.tree || null;   // 分支树：full 包带整棵树，导入后 ensure 复原分支
     }
-    const prefs = P && typeof P.exportPrefs === 'function'
-      ? P.exportPrefs(st, settings)
-      : (st.prefs && typeof st.prefs.profileId === 'string' && st.prefs.profileId
-        ? { profileId: st.prefs.profileId, profileLabel: st.prefs.profileLabel || '' }
-        : null);
+    // 静态 import = 永远在位：缺位兜底是走不到的路径，直接调用
+    const prefs = Prefs.exportPrefs(st, settings);
     if (prefs) pack.prefs = prefs;
     // 兜底剥凭证：整棵树（含 log / tree / world）任意层级的凭证形键名一律去掉
-    return P && typeof P.stripSecrets === 'function' ? P.stripSecrets(pack) : pack;
+    return Prefs.stripSecrets(pack) as StoryPack;
   }
   function saveStory(story: Story): boolean {
     if (!story || !story.id) return false;

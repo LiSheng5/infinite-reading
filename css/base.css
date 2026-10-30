@@ -38,17 +38,6 @@ body {
 /* 鼠标点击不画焦点环，但保留键盘焦点环 */
 :focus:not(:focus-visible) { outline: none; }
 
-/* ==================== 分隔用的小符号 ==================== */
-/* 线装书里的花饰：❦ / ◆ 代替普通 hr */
-.ornament {
-  text-align: center;
-  color: var(--accent);
-  letter-spacing: 0.6em;
-  font-size: 12px;
-  opacity: 0.75;
-  user-select: none;
-}
-
 /* ==================== 链接：蓝强调 + 手写下划线 ==================== */
 a {
   color: var(--accent);

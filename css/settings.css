@@ -61,7 +61,7 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 
 /* ====================  设置分层：全局设置分组导航 ==================== */
 #modal-settings .modal-card { width: min(880px, 96vw); }
-.set-shell { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 18px; align-items: start; }
+/* .set-shell 的列宽 / 间距只由两个断点给：≤720 单列、≥721 侧栏 196px（见本文件尾部的分层段） */
 .set-nav { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
 .set-nav-item {
   text-align: left; padding: 10px 12px; min-height: 40px;

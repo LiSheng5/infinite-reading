@@ -142,7 +142,6 @@ function storyFromPack(obj: any) {
 }
 
 const BackupPack = {
-  IMAGE_EXT,
   buildBackupPack,
   buildBackupZip,
   parseBackup,
@@ -151,4 +150,4 @@ const BackupPack = {
   restoreSecrets,
 };
 
-export { BackupPack, IMAGE_EXT, buildBackupPack, buildBackupZip, parseBackup, pickBackupJson, storyFromPack, restoreSecrets };
+export { BackupPack };

@@ -34,7 +34,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/treeLayout.ts` | 分支页画布几何（**纯逻辑**）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出，分四段纯函数（各自可单测） | `TreeLayout.compute`、`buildKids` / `assignRows` / `packLanes`（分层三段）、`pointsToD` |
 | `src/core/storage.ts` | IndexedDB 适配器（**唯一碰 IndexedDB 的地方**）：开库 + 增删改查，`available=false` 时上层自然退回 localStorage | `Storage.available`、`get` / `put` / `del` / `keys` / `entries`、`estimate` |
 | `src/core/store.ts` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步；旧档迁移 | `Store.boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
-| `src/core/schema.ts` | 档案形状的类型真源 + 运行时校验（`eval/schema-test.js` 固定） | `checkStory`、`checkStoryPack`、`checkBackupPack`、`checkTree` |
+| `src/core/schema.ts` | 档案形状的类型真源 + 运行时校验（`eval/schema-test.js` 固定） | `Schema.checkStory`、`Schema.checkStoryPack`、`Schema.checkBackupPack`、`Schema.checkTree` |
 | `src/core/prefs.ts` | 本对话偏好（设置分层，**纯逻辑**）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析、导出剥凭证 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
 | `src/core/modelCapabilities.ts` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
 | `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
@@ -60,6 +60,8 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 - `dist/site/`：多文件，资产带内容 hash；`sw.js` 的预缓存清单与缓存名在构建期注入，index.html 的 meta 版本戳（`__IR_VERSION__` 占位）也在构建期替换。GitHub Pages / Docker 用它。
 - `dist/single/index.html`：单文件，JS / CSS / 图片全部内联（`vite-plugin-singlefile`），图标另以 data URL 内联、manifest 链接在构建收尾时摘掉（file:// 无 PWA 诉求），产物目录只剩这一个 HTML，`file://` 双击可开。
+
+同一个插件的 `transformIndexHtml` 还负责首页无 JS 兜底的字符画：`index.html` 里只留 `<!--IR_HOME_ART-->` 占位，字符画由唯一真源 `src/screens/home/art.js` 拼成 `<pre class="inf">` 注入（组件与兜底不各写一份；占位没被替换，构建收尾就报错）。`eval/ui-state-test.js` 盯着「字符画只在 art.js 里出现一次」。
 
 **存储的两条硬约束**（改动时必须守住）：
 
@@ -192,7 +194,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - `titleAuto` / `titleGen`：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn === 1`（第一次）与 `turn === 6`（第二次），失败不计次。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
-- `ui`（随故事记住的界面状态）：`kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）；旧版遗留的 `split / showImage / immersive` 原样保留但不读取——布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
+- `ui`（随故事记住的界面状态）：只写 `kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）。旧档里遗留的 `split / showImage / immersive` 读档时由 `Object.assign(defaultUi(), raw.ui)` 原样带过、不读取也不删除（新档不再写）；布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
 - `prefs`（本对话偏好，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`trigger`、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。
 - `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `Tree.ensure` 幂等迁移成线性链（末条旁白 `versions > 1` 展开成兄弟、旧存档点按 `sp.turn` 映射 `nodeId`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 `Tree.LOG_WINDOW`（120）条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 `Tree.SCENE_WINDOW`（12）张、`savepoints` 只保留末 `Tree.SAVEPOINT_KEEP`（5）个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。裁剪窗口的唯一口径在 `src/core/tree.ts` 顶部常量（store 与书架导出一律引用导出值），**不要在别处写字面量**。落盘快照**深拷贝**、`migrateStory` 入口同样先深拷贝——「已保存」内存快照不会被现场就地修改带脏，异步 put 也不会写进未 save 的现场。
@@ -213,7 +215,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs.trigger` 随 `PREF_KEYS` 去掉，导入旧包按未知键丢弃。）
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
 **主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`thinking` / `extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。

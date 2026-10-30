@@ -111,28 +111,16 @@
   --font-note:    var(--font-ui);
   --font-cursive: var(--font-body);
   --font-en:      var(--font-ui);
-  --font-quote:   var(--font-body);
   --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* —— 兼容旧样式里的变量名（其余规则只引用这些，不再出现字面色） —— */
-  --paper:          var(--bg);
+  /* —— 兼容旧样式里的变量名（其余规则只引用这些，不再出现字面色） ——
+   * 只留仍在用的别名；页面没有的元素（花饰 / 便签 / 暗角 / 颗粒 / 引文）对应的令牌
+   * 已随样式一起删除，不再留「定义了但没人读」的名字。 */
   --paper-2:        var(--surface);
   --paper-3:        var(--stage);
-  --btn-bg:         var(--surface-2);
   --btn-ink:        var(--ink);
   --btn-line:       var(--line-strong);
-  --note-paper:     transparent;
-  --note-shadow:    none;
-  --note-rim:       transparent;
-  --note-fiber-a:   0;
-  --note-grain-a:   0;
   --bubble-ink:          var(--ink);
-  --bubble-ink-dim:      var(--ink-dim);
-  --bubble-accent:       var(--accent);
   --bubble-accent-soft:  var(--accent-soft);
   --bubble-accent-line:  var(--accent-line);
-  --vig-in:         transparent;
-  --vig-out:        transparent;
-  --grain-opacity:  0;
-  --grain-blend:    normal;
 }

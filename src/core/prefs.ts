@@ -15,13 +15,12 @@
 
   /* ---------------- 白名单 ---------------- */
 
-  // story.prefs 的顶层键（未知键一律丢弃）
-  // v0.11.0：trigger（出图时机）整体下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错
-  const PREF_KEYS = ['profileId', 'profileLabel', 'choices', 'showReasoning', 'tools', 'ui'];
+  // story.prefs 的顶层键只有 profileId / profileLabel / choices / showReasoning / tools / ui，
+  // 页面布局键只有 layout / splitRatio / imageCollapsed / fontScale / width / density。
+  // 逐键收窄写在 sanitizePrefs / sanitizeUi 里，不另设键名数组：数组与实现分家时谁也不会报错。
+  // trigger（出图时机）已下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错。
   // 工具开关键（仅智能体用；true = 跟随全局可用性，false = 本对话关掉）
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
-  // 页面布局键
-  const UI_KEYS = ['layout', 'splitRatio', 'imageCollapsed', 'fontScale', 'width', 'density'];
 
   const CHOICES_VALUES = ['tray', 'always'];
   const LAYOUT_VALUES = ['auto', 'split', 'stack', 'immersive'];
@@ -301,7 +300,7 @@
   }
 
   const Prefs = {
-    PREF_KEYS, TOOL_KEYS, UI_KEYS,
+    TOOL_KEYS,
     SECRET_KEY_RE,
     toolCategory,
     stripSecrets,

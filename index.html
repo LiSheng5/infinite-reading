@@ -106,19 +106,14 @@
 
   <!-- ========== 开始页（应用入口） ==========
        顶部是 ASCII 无限符号（src/screens/home 把每个字符包成 span，做深蓝 → 浅蓝的循环；
-       没有 JS 时就是下面这块静态深蓝字符画，「静态深蓝版本」兜底）；
+       没有 JS 时就是同一份字符画的静态深蓝版本，构建期注入）；
        三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
-    <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）；
-         以下是无 JS 兜底：静态深蓝字符画（「没有 JS 或动画关闭时也要有静态深蓝版本」）。 -->
+    <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）。
+         以下是无 JS 兜底：字符画不在这里维护——唯一真源是 src/screens/home/art.js，
+         构建期由 vite.config.mjs 的 irShell 把下面的占位换成拼好的 <pre class="inf">。 -->
     <div class="start-card">
-      <h1 class="start-mark" aria-label="无限阅读"><pre class="inf" aria-hidden="true">    .-~~~~-.       .-~~~~-.
-  .'        '.   .'        '.
- /            \ /            \
-|              X              |
- \            / \            /
-  '.        .'   '.        .'
-    '-~~~~-'       '-~~~~-'</pre></h1>
+      <h1 class="start-mark" aria-label="无限阅读"><!--IR_HOME_ART--></h1>
     </div>
   </section>
 
@@ -197,7 +192,7 @@
   </div>
 
   <!-- ========== 角色卡：统一编辑器 = 自建空白表单 / 导入后可编辑 ========== -->
-  <div id="modal-card" class="modal modal-top hidden">
+  <div id="modal-card" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
@@ -218,7 +213,7 @@
   <!-- ========== 通用确认 / 输入弹窗 ==========
        替代原生 confirm / prompt：内嵌预览（沙箱 iframe）会静默忽略原生弹窗、
        直接返回 false / null，表现为「点了没反应」，因此一律走这个自建弹窗。 -->
-  <div id="modal-confirm" class="modal modal-top hidden">
+  <div id="modal-confirm" class="modal hidden">
     <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 

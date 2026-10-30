@@ -105,6 +105,3 @@
     TRANSITIONS: TRANSITIONS,
   };
   export { Motion };
-  export const TIERS_POLICY = TIERS;
-  export const ANIMATION_SPECS = ANIMATIONS;
-  export const TRANSITION_SPECS = TRANSITIONS;

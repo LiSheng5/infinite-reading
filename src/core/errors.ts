@@ -65,7 +65,6 @@ function failureEntry(tool: string, err: any, opts?: { summary?: string; ts?: nu
   };
 }
 
-const Errors = { errorText, shortError, failureEntry };
-
-export { Errors, errorText, shortError, failureEntry };
+// 导出面只留三个函数（调用方一律命名 import）；不再额外包一个同名命名空间对象
+export { errorText, shortError, failureEntry };
 export type { FailureEntry };

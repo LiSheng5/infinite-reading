@@ -18,7 +18,9 @@
  *      外壳不再是一个 Svelte 组件（modalHost 直接建 display:contents 层容器）；
  *   7. 静态回归 ：屏幕挂载外壳（取容器 → 清空 → data-impl → mount）只有
  *      src/screens/_mount.js 一份，7 个 index.js 只声明「容器 → 组件」，
- *      挂载 id 与 index.html 里的容器逐个对账。
+ *      挂载 id 与 index.html 里的容器逐个对账；
+ *   8. 静态回归 ：首页 ASCII 字符画只有 src/screens/home/art.js 一份——
+ *      组件直接 import，index.html 的无 JS 兜底由构建期从同一个源注入。
  *
  * 用法：node eval/ui-state-test.js
  */
@@ -333,6 +335,43 @@ async function main() {
     const html = read('index.html');
     const missing = ids.filter((id) => html.indexOf('id="' + id + '"') < 0);
     ok(missing.length === 0, '每个挂载点都在 index.html 里' + (missing.length ? '：' + missing.join('、') : ''));
+  }
+
+  /* ---------------- 8. 首页字符画只有一份 ---------------- */
+  console.log('[8] 首页字符画只有一份（组件与无 JS 兜底同源）');
+  {
+    const NEEDLE = '.-~~~~-.';
+    const artFile = 'src/screens/home/art.js';
+    ok(read(artFile).indexOf(NEEDLE) >= 0, '字符画真源是 src/screens/home/art.js');
+
+    // 全仓只准这一份：index.html 兜底 / 组件常量 / 构建脚本里再抄一次就是第二真源
+    const owners = [];
+    const walkArt = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { walkArt(p); continue; }
+        if (!/\.(js|ts|svelte|html|mjs)$/.test(e.name)) continue;
+        if (fs.readFileSync(p, 'utf8').indexOf(NEEDLE) >= 0) owners.push(path.relative(ROOT, p).split(path.sep).join('/'));
+      }
+    };
+    walkArt(path.join(ROOT, 'src'));
+    for (const f of ['index.html', 'vite.config.mjs']) {
+      if (read(f).indexOf(NEEDLE) >= 0) owners.push(f);
+    }
+    eq(owners.join(' '), artFile, '字符画只在 art.js 里写一次');
+
+    const home = read('src/screens/home/HomeScreen.svelte');
+    ok(home.indexOf("from './art.js'") >= 0 && /HOME_ART\.map\(/.test(home),
+      '首页组件从 art.js 取字符画（不再自带 ART 常量）');
+
+    ok(read('index.html').indexOf('<!--IR_HOME_ART-->') >= 0, 'index.html 的无 JS 兜底只留占位');
+
+    const vite = stripComments(read('vite.config.mjs'));
+    ok(/import \{ HOME_ART \} from '\.\/src\/screens\/home\/art\.js';/.test(vite),
+      '构建配置从同一个源取字符画');
+    ok(/replaceAll\('<!--IR_HOME_ART-->'/.test(vite), 'transformIndexHtml 把占位换成字符画');
+    eq((vite.match(/includes\('<!--IR_HOME_ART-->'\)/g) || []).length, 2,
+      '两种产物都有「占位没被替换就报错」的自检');
   }
 
   if (failed) {
