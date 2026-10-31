@@ -212,8 +212,9 @@ export function createScheduler(deps) {
   /*
    * 按 (user_id, name) upsert。
    *
-   * 确认闸门：请求体里的 source 不能当凭据——默认一律按 model 处理（前端的调度工具
-   * 也显式传 'model'），'user' 只留给进程内调用 / 测试。模型这条路径改不动已确认的行。
+   * 确认闸门：`source` 不是请求体字段、也不从 input 里读——HTTP 路由拿不到「用户本人在场」
+   * 的证据，一律按 model 处理。要按用户身份写入，只有进程内调用能显式传 opts.asUser
+   * （前端没有这条路径：用户能做的只有 confirm / cancel）。模型这条路径改不动已确认的行。
    *   - 新建：pending_confirm，用户确认后才生效；
    *   - 已越过闸门（active / paused）的同名触发器：模型做**任何实质修改都直接拒绝**
    *     （TRIGGER_LOCKED），库里那行一个字段都不动。不用「先覆盖内容、再退回 pending_confirm」：
@@ -224,7 +225,7 @@ export function createScheduler(deps) {
    *   - pending_confirm 的行还没被批准，模型在用户确认前修正它属正常修改，允许覆盖。
    * 业务失败返回 fail(code)，成功返回触发器对象。
    */
-  function upsertTrigger(input) {
+  function upsertTrigger(input, opts) {
     const src = (input && typeof input === 'object') ? input : {};
     const name = String(src.name || '').trim();
     if (!name) return fail('NAME_REQUIRED');
@@ -232,7 +233,7 @@ export function createScheduler(deps) {
     const spec = normalizeSpec(type, src.spec);
     if (isFail(spec)) return spec;
     const t0 = now();
-    const source = src.source === 'user' ? 'user' : 'model';
+    const source = (opts && opts.asUser === true) ? 'user' : 'model';
 
     const existing = findByName(name);
     const enabled = src.enabled === undefined ? 1 : (src.enabled ? 1 : 0);

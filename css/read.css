@@ -174,7 +174,7 @@
   max-width: min(100%, 420px);
   max-height: 420px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   cursor: zoom-in;
   display: block;
@@ -201,7 +201,7 @@
   max-width: min(92vw, 1100px);
   max-height: 76vh;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--stage);
 }
@@ -405,7 +405,7 @@
   flex: 1; min-width: 0;
   height: 44px;
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: var(--fs-field);
   letter-spacing: .01em;
   color: var(--ink);
   background: var(--surface);

@@ -28,7 +28,7 @@
     display: block;
     width: 100%;
     font-family: var(--font-ui);
-    font-size: 14px;
+    font-size: var(--fs-field);
     letter-spacing: .01em;
     color: var(--ink);
     background: var(--field-bg);

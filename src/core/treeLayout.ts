@@ -27,6 +27,7 @@
  * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。
  * v0.13.0：分层拆成 buildKids / assignRows / tracePath / packLanes 四段
  *   （只挪职责与闭包，几何公式与合并口径未动）。 */
+import { plainReply } from './tree.ts';
 
   const DEFAULTS = {
     collapseRun: 8,
@@ -46,19 +47,14 @@
     return Array.from(String(s == null ? '' : s)).slice(0, Math.max(0, n | 0)).join('');
   }
 
-  // 助手回复文本：剧情模式是 JSON（slimReply：narration；旧档中文键：旁白）；坏 JSON 当纯文本
+  // 节点回复 → 纯文本：剧情模式是 JSON（slimReply：narration；旧档中文键：旁白）；坏 JSON 当纯文本。
+  // 剥 JSON 的唯一实现在 tree.ts 的 plainReply，这里只补「content 不是非空字符串就当没有」的守卫
+  // （缺字段 / 异常值不该被 String() 成 "[object Object]" 进标签）。标签与分支页面板预览共用。
   function replyText(node) {
     const m = node && node.assistantMsg;
     const c = m && m.content;
     if (typeof c !== 'string' || !c) return '';
-    try {
-      const j = JSON.parse(c);
-      if (j && typeof j === 'object' && !Array.isArray(j)) {
-        const n = j.narration != null ? j.narration : (j['旁白'] != null ? j['旁白'] : null);
-        if (n != null) return String(n);
-      }
-    } catch (_) { /* 坏 JSON：整段当纯文本 */ }
-    return c;
+    return plainReply(c);
   }
 
   // 标签：回合序号 + 玩家行动（开局没有玩家行动 → 取 AI 旁白）前 labelLen 个码点
@@ -449,6 +445,7 @@
     compute: compute,
     pointsToD: pointsToD,
     codeSlice: codeSlice,
+    replyText: replyText,
     buildKids: buildKids,
     assignRows: assignRows,
     tracePath: tracePath,

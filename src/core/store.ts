@@ -92,6 +92,7 @@ import { APP_VERSION } from './version.ts';
   let pending = 0;                                // 未落盘的后台写
   let drainers = [];
   let bootError = null;                           // boot 阶段失败原因（退回 localStorage 时非空）
+  let bootBlocked = false;                        // 失败原因是不是「另一个标签页占着库」（可重试，不是坏了）
   let lastPersistError = null;
   let onPersistErrorFn = null;
   let onImageReadyFn = null;
@@ -289,9 +290,10 @@ import { APP_VERSION } from './version.ts';
       chat: {
         // 不预置任何厂商 / 模型：Base URL 与模型名全部由用户手填（避免跟着厂商变动维护）
         provider: 'openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 0.9,
-        thinking: 'default',   // 思考档位（default = 不下发；其余值按预填表换算 / 手填）
-        contextWindow: 0,      // 上下文窗口（0 = 未填；预填表命中时自动；70% 压缩阈值按它算）
+        contextWindow: 0,      // 上下文窗口（0 = 未填；参考表命中时自动；70% 压缩阈值按它算）
         extraParams: '',       // 任意厂商参数（"a=b, c.d=e" 或对象），原样并入请求体
+        // 思考档位（thinking）v0.13.0 起下线：不再写入，旧档里的值原样带过、不读不删；
+        // 厂商形参（reasoning_effort / thinking.type…）写进 extraParams，原样并入请求体
       },
       painter: defaultSubModel(),                              // 画师子代理（写绘画提示词）
       scribe: Object.assign(defaultSubModel(), {
@@ -507,11 +509,11 @@ import { APP_VERSION } from './version.ts';
         out.lastBackupRemindAt = (+raw.lastBackupRemindAt > 0) ? +raw.lastBackupRemindAt : 0;
       },
     },
-    // 思考档位 / 上下文窗口 / 手填参数（幂等校验）。旧版 mock provider 已不存在：
+    // 上下文窗口 / 手填参数（幂等校验）。旧版 mock provider 已不存在：
     // 一律迁回真实接口（用户需补填 Base URL / 模型）
     {
       since: 'v0.11.0',
-      what: 'provider 归一（chat 一律 openai-compatible、image 旧别名 → minimax-image）+ thinking / contextWindow / extraParams 兜底',
+      what: 'provider 归一（chat 一律 openai-compatible、image 旧别名 → minimax-image）+ contextWindow / extraParams 兜底',
       when: () => true,
       apply: ({ out }) => {
         out.chat.provider = 'openai-compatible';
@@ -519,7 +521,6 @@ import { APP_VERSION } from './version.ts';
         // 其它值原样保留。
         const IMAGE_PROVIDER_ALIAS = { mock: 'openai-images', minimax: 'minimax-image', 'minimax-images': 'minimax-image' };
         if (IMAGE_PROVIDER_ALIAS[out.image.provider]) out.image.provider = IMAGE_PROVIDER_ALIAS[out.image.provider];
-        out.chat.thinking = (typeof out.chat.thinking === 'string' && out.chat.thinking) ? out.chat.thinking : 'default';
         out.chat.contextWindow = (+out.chat.contextWindow > 0) ? Math.floor(+out.chat.contextWindow) : 0;
         if (typeof out.chat.extraParams !== 'string' && !(out.chat.extraParams && typeof out.chat.extraParams === 'object')) out.chat.extraParams = '';
         if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
@@ -799,8 +800,14 @@ import { APP_VERSION } from './version.ts';
     return report;
   }
 
+  // 「被另一个标签页挡住」是瞬时状态（对方升级完就解除），与「库坏了 / 浏览器不支持」要分开：
+  // 前者仍可重试，后者才该安静地降级。
+  function isBlockedError(e) {
+    return !!(e && ((e as any).blocked === true || (e as any).code === 'IDB_BLOCKED'));
+  }
+
   async function boot() {
-    const out = { backend: 'localstorage', migrated: null, error: null };
+    const out: any = { backend: 'localstorage', migrated: null, error: null, blocked: false };
     if (!hasIDB) return out;                       // Node / 老浏览器：与 v0.2 行为一致
 
     try {
@@ -808,14 +815,18 @@ import { APP_VERSION } from './version.ts';
     } catch (e) {
       useIDB = false;                              // 迁移失败：退回 localStorage，数据一处不动
       out.error = String((e && e.message) || e);
+      out.blocked = isBlockedError(e);
       bootError = out.error;
+      bootBlocked = out.blocked;
       console.warn('IndexedDB 迁移失败，已退回 localStorage 模式（原数据未改动）：', e);
       return out;
     }
 
-    // 读一次 IndexedDB 进内存；失败先重试一次（打开瞬断 / 版本切换都可能只是暂时的）
-    let lastErr = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // 读一次 IndexedDB 进内存；失败先重试（打开瞬断 / 版本切换都可能只是暂时的）。
+    // 「被别的标签页挡住」多给一次更长的等待：对方升级完就恢复，不值得直接判死整个会话。
+    const RETRY_MS = [300, 1200];
+    let lastErr: any = null;
+    for (let attempt = 0; attempt <= RETRY_MS.length; attempt++) {
       try {
         const [settings, index, current, profile, flag, storyPairs] = await Promise.all([
           Storage.get('kv', KEYS.settings),
@@ -833,18 +844,26 @@ import { APP_VERSION } from './version.ts';
         MEM.stories.clear();
         for (const [id, raw] of storyPairs) MEM.stories.set(id, raw);
         out.backend = 'indexeddb';
+        bootBlocked = false;
         return out;
       } catch (e) {
         // 记下错误，循环外统一退回 localStorage 并 console.warn（失败不静默）
         lastErr = e;
-        if (attempt === 0) await new Promise(r => setTimeout(r, 300));
+        // 真错误（库坏了 / 这台浏览器用不了）重试也不会变好：立刻退回，别让启动白等；
+        // 只有「被别的标签页挡住」值得再等一轮。
+        if (!isBlockedError(e)) break;
+        if (attempt < RETRY_MS.length) await new Promise(r => setTimeout(r, RETRY_MS[attempt]));
       }
     }
     useIDB = false;
     out.backend = 'localstorage';
     out.error = String((lastErr && lastErr.message) || lastErr);
+    out.blocked = isBlockedError(lastErr);
     bootError = out.error;
-    console.warn('IndexedDB 读取失败，已退回 localStorage 模式：', lastErr);
+    bootBlocked = out.blocked;
+    console.warn(out.blocked
+      ? 'IndexedDB 被其它标签页占用，已退回 localStorage 模式（关掉其它标签页后刷新即可恢复）：'
+      : 'IndexedDB 读取失败，已退回 localStorage 模式：', lastErr);
     return out;
   }
 
@@ -860,6 +879,7 @@ import { APP_VERSION } from './version.ts';
       available: hasIDB,
       pending: pending,
       bootError: bootError,
+      blocked: bootBlocked,                         // 退回的原因只是「别的标签页占着库」，关掉后刷新即可
       lastError: lastPersistError,
     };
   }
@@ -1028,11 +1048,9 @@ import { APP_VERSION } from './version.ts';
 
   /* ---------------- 索引条目：snippet 与旧索引迁移 ---------------- */
 
-  // 助手回复纯文本：唯一实现在 tree 的 plainReply，
-  // 与 search 索引共用同一口径——「JSON 旁白提取」不再有第二份实现
-  const plainReplyText = plainReply;
-
-  // 最近一条消息摘要（≤60 字，码点）：当前路径末条旁白 / 回复的纯文本，剥掉 JSON 与标记
+  // 最近一条消息摘要（≤60 字，码点）：当前路径末条旁白 / 回复的纯文本，剥掉 JSON 与标记。
+  // 剥 JSON 走 tree 的 plainReply（与 search 索引、自动标题、分支页标签同一份实现）；
+  // 这里另外只做摘要自己的两件事：剥 [设定] / [玩家行动] 标记、折叠成单行。
   function storySnippet(story) {
     if (!story) return '';
     let text = '';
@@ -1045,7 +1063,7 @@ import { APP_VERSION } from './version.ts';
         const e = entries[i];
         if (e && e.type === 'narration' && e.text) text = String(e.text);
       }
-      if (!text && n.assistantMsg && n.assistantMsg.content != null) text = plainReplyText(n.assistantMsg.content);
+      if (!text && n.assistantMsg && n.assistantMsg.content != null) text = plainReply(n.assistantMsg.content);
       if (!text && n.action && n.action.text) text = String(n.action.text);
     }
     if (!text) {

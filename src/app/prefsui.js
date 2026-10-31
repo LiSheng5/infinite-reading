@@ -223,7 +223,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       $('#mp-model').value = src.model || '';
       $('#mp-temp').value = src.temperature != null ? src.temperature : '';
       $('#mp-ctx').value = src.contextWindow || '';
-      $('#mp-thinking').value = src.thinking || 'default';
       $('#mp-params').value = typeof src.extraParams === 'string' ? src.extraParams : '';
       if (wrapCopy) wrapCopy.classList.remove('hidden');
       if (keyInput) { keyInput.value = ''; keyInput.placeholder = '留空 = 不带 Key（沿用默认主模型的 Key）'; }
@@ -240,7 +239,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       $('#mp-model').value = p.model || '';
       $('#mp-temp').value = p.temperature != null ? p.temperature : '';
       $('#mp-ctx').value = p.contextWindow || '';
-      $('#mp-thinking').value = p.thinking || 'default';
       $('#mp-params').value = typeof p.extraParams === 'string' ? p.extraParams : '';
       if (wrapCopy) wrapCopy.classList.add('hidden');
       if (keyInput) { keyInput.value = ''; keyInput.placeholder = p.apiKey ? '已设置（留空表示不改动）' : '还没有 Key（留空 = 沿用默认主模型）'; }
@@ -251,7 +249,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       mpEditingId = null;
       $('#mp-title').textContent = '新增模型（字段与「剧情对话模型」一致；留空项沿用默认主模型）';
       ['#mp-name', '#mp-base', '#mp-model', '#mp-temp', '#mp-ctx', '#mp-params'].forEach(s => { $(s).value = ''; });
-      $('#mp-thinking').value = 'default';
       if (wrapCopy) wrapCopy.classList.add('hidden');
       if (keyInput) { keyInput.value = ''; keyInput.placeholder = 'sk-…（留空 = 沿用默认主模型的 Key）'; }
       if (keyState) keyState.textContent = 'API Key 只保存在本地；对话存档 / 导出不会带上它。';
@@ -278,7 +275,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       baseUrl: $('#mp-base').value.trim(),
       model: model,
       temperature: parseFloat($('#mp-temp').value),
-      thinking: $('#mp-thinking').value.trim() || 'default',
       contextWindow: Math.max(0, parseInt($('#mp-ctx').value, 10) || 0),
       extraParams: $('#mp-params').value.trim(),
     };

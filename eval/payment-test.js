@@ -15,6 +15,8 @@
  * 用法：node eval/payment-test.js
  */
 const { check, run, loadEsm, localMs } = require('./_harness.js');
+const fs = require('fs');
+const path = require('path');
 
 async function main() {
   const { evaluatePolicy, PAYMENT_CODES } = await loadEsm('payment-policy.mjs');
@@ -336,6 +338,73 @@ async function main() {
       !threw && !!miss && miss.ok === false && miss.code === 'BAD_AMOUNT', threw ? String(threw) : JSON.stringify(miss));
     check('D21：非法金额不落台账（坏值不进 INTEGER 列）',
       pay.listTransactions().length === 0, JSON.stringify(pay.listTransactions()));
+  }
+
+  /* 授权按有效期（periodStart / periodEnd）判定——不是终身累计。
+   * 界面每月签一份（额度=设置里的每月上限、有效期=本月），到期由策略拒绝、
+   * 下个月的第一次购买前续签新的一份；没签窗口（period 全 0）保持旧档的终身口径。 */
+  {
+    const ps = localMs(2026, 1, 1, 0, 0), pe = localMs(2026, 2, 1, 0, 0);
+    const mdWin = { totalLimitCents: 9999, spent: 0, categories: [], periodStart: ps, periodEnd: pe };
+
+    VNOW = localMs(2026, 1, 5, 12, 0);
+    check('D26 策略：有效期覆盖当前 → 正常裁决（不因有效期拒绝）',
+      evalWith(policyCfg(), { amountCents: 100 }, { mandate: mdWin }).decision !== 'deny');
+    VNOW = localMs(2026, 2, 5, 12, 0);
+    check('D26 策略：授权已过期 → MANDATE_EXPIRED（旧实现忽略窗口、照常往下裁）',
+      evalWith(policyCfg(), { amountCents: 100 }, { mandate: mdWin }).code === 'MANDATE_EXPIRED');
+    check('D26 策略：授权未开始 → MANDATE_EXPIRED',
+      evalWith(policyCfg(), { amountCents: 100 }, { mandate: Object.assign({}, mdWin, { periodStart: localMs(2026, 3, 1, 0, 0), periodEnd: localMs(2026, 4, 1, 0, 0) }) }).code === 'MANDATE_EXPIRED');
+    check('D26 策略：没签有效期（period 全 0，旧档口径）→ 不做有效期判定',
+      evalWith(policyCfg(), { amountCents: 100 }, { mandate: { totalLimitCents: 9999, spent: 0, categories: [] } }).decision !== 'deny');
+    check('D26：错误码表里有 MANDATE_EXPIRED', PAYMENT_CODES.indexOf('MANDATE_EXPIRED') >= 0);
+  }
+
+  {
+    // 网关：一月的授权一月内花满 → 窗口内累计超限照旧拒绝；过了有效期再用同一授权 →
+    // MANDATE_EXPIRED；按月续签一份新授权（二月窗口）→ 同样的购买放行，一月的花费不占新额度
+    VNOW = localMs(2026, 1, 5, 12, 0);
+    const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 100000, autoApprove: 10000 });
+    const jan = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [], periodStart: localMs(2026, 1, 1, 0, 0), periodEnd: localMs(2026, 2, 1, 0, 0) });
+    const r1 = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: jan.id });
+    check('D26 网关：窗口内花满授权额度（窗口内累计口径不变）', r1.ok === true, JSON.stringify(r1).slice(0, 160));
+    const r2 = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: jan.id });
+    check('D26 网关：窗口内累计超总额 → MANDATE_EXCEEDED', r2.ok === false && r2.code === 'MANDATE_EXCEEDED', JSON.stringify(r2).slice(0, 160));
+    VNOW = localMs(2026, 2, 5, 12, 0);
+    const r3 = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: jan.id });
+    check('D26 网关：过了有效期的授权 → MANDATE_EXPIRED（旧实现是终身累计的 MANDATE_EXCEEDED）',
+      r3.ok === false && r3.code === 'MANDATE_EXPIRED', JSON.stringify(r3).slice(0, 160));
+    const feb = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [], periodStart: localMs(2026, 2, 1, 0, 0), periodEnd: localMs(2026, 3, 1, 0, 0) });
+    const r4 = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: feb.id });
+    check('D26 网关：续签新授权（二月窗口）→ 一月的花费不占新额度，放行', r4.ok === true, JSON.stringify(r4).slice(0, 160));
+    check('D26 网关：台账挂在各自的 mandate 上（一月四笔、续签单带新授权 id）',
+      pay.getTx(r4.intentId).mandateId === feb.id && pay.listTransactions({ agent: 'a' }).length === 4);
+  }
+
+  {
+    // 窗口外的旧账不计入这份授权的额度（mandateSpent 按 period 过滤）：
+    // 手动造一笔窗口开始之前的已扣款台账，窗口内的购买不该被它占掉额度
+    VNOW = localMs(2026, 2, 5, 12, 0);
+    const { db, pay } = fresh({ perTx: 10000, daily: 10000, monthly: 100000, autoApprove: 10000 });
+    const md = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [], periodStart: localMs(2026, 1, 1, 0, 0), periodEnd: localMs(2026, 3, 1, 0, 0) });
+    db.prepare(
+      'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, provider_ref, mandate_id, created_at, approved_at, charged_at) '
+      + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run('tx-old', 'pi-old', 'a', 5000, 'CNY', 'M', 'C', '[]', 'charged', '', '', md.id, localMs(2025, 12, 15, 12, 0), null, null);
+    const r = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: md.id });
+    check('D26 网关：窗口外的旧账不计入授权额度（按 period 过滤统计，旧实现终身累计会拒）',
+      r.ok === true, JSON.stringify(r).slice(0, 200));
+  }
+
+  /* 回归（前端侧，静态）：签发带本月窗口、复用前核有效期、文案说「本月额度」 */
+  {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'features.js'), 'utf8');
+    check('D26 前端：签发授权带本月窗口（periodStart / periodEnd 随单下发）',
+      src.indexOf('periodStart: b0.getTime()') >= 0 && src.indexOf('periodEnd: b1.getTime()') >= 0);
+    check('D26 前端：复用授权先核有效期（过期的签新的一份，不再终身复用最新一份）',
+      src.indexOf('m.periodEnd > t && m.periodStart <= t') >= 0 && src.indexOf('mds[0].id') === -1);
+    check('D26 前端：确认文案说「本月额度」与续签，不再把每月上限说成总额度',
+      src.indexOf('本月额度') >= 0 && src.indexOf('有效期：到 ') >= 0 && src.indexOf('总额度：') === -1);
   }
 
 }

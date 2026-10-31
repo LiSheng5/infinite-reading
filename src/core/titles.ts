@@ -13,6 +13,7 @@
 
 /* ↑ 阶段 2 搬迁自 src/core/titles.ts（IIFE → ES module，函数体逐字未动）。
  * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
+import { plainReply } from './tree.ts';
 
   /* ---------------- 码点安全的小工具 ---------------- */
 
@@ -34,24 +35,8 @@
   }
 
   // 助手回复：剧情模式是 JSON（narration / 旁白），chat / rp 是纯文本。
-  // 解析失败就当纯文本；解析成功优先取旁白，没有旁白字段也退回原文。
-  function assistantText(raw) {
-    const s = String(raw == null ? '' : raw);
-    const t = s.trim();
-    if (t.charAt(0) === '{') {
-      try {
-        const o = JSON.parse(t);
-        if (o && typeof o === 'object' && !Array.isArray(o)) {
-          const n = o.narration || o.旁白 || o.text || '';
-          if (n) return String(n).trim();
-          if (Array.isArray(o.choices) && o.choices.length) {
-            return o.choices.map(function (c) { return String(c); }).join(' ');
-          }
-        }
-      } catch (_) { /* 坏 JSON：当纯文本 */ }
-    }
-    return s.trim();
-  }
+  // 「回复 → 纯文本」只有 tree.ts 的 plainReply 一份实现；这里传 trim，因为提示词逐条
+  // 拼进 messages，多余空白会白占 600 字的截断额度（见 buildPrompt）。
 
   /* ---------------- 3.3 系统提示 ---------------- */
 
@@ -62,16 +47,18 @@
 
   /* ---------------- needsTitle：触发点 ----------------
    * titleAuto 为真，且：
-   *   turn===1 且还没生成过      → 起第一次
-   *   turn===6 且还没二次生成    → 起第二次
-   * 其余回合一律不触发（titleGen 记已生成次数，失败不计次）。
+   *   turn>=1 且还没生成过      → 起第一次
+   *   turn>=6 且还没二次生成    → 起第二次
+   * 用 >= 而不是 ===：重试 / 切分支 / 导入都会让 turn 跳号，钉死 1 和 6 会让
+   * 那几次恰好跳过的对话永远停在「新对话」。titleGen 记已生成次数（失败不计次），
+   * 所以补跑最多各一次，同一回合不会重复触发。
    */
   function needsTitle(story) {
     if (!story || story.titleAuto !== true) return false;
     var turn = +story.turn || 0;
     var gen = +story.titleGen || 0;
-    if (turn === 1 && gen < 1) return true;
-    if (turn === 6 && gen < 2) return true;
+    if (turn >= 1 && gen < 1) return true;
+    if (turn >= 6 && gen < 2) return true;
     return false;
   }
 
@@ -88,7 +75,7 @@
       if (m.role !== 'user' && m.role !== 'assistant') continue;   // system / tool 一律不带
       valid.push({
         role: m.role,
-        content: m.role === 'user' ? userText(m.content) : (assistantText as any)(m.content, mode),
+        content: m.role === 'user' ? userText(m.content) : plainReply(m.content, { trim: true }),
       });
     }
     var slice = valid.slice(-6);   // 最近 3 轮 = 最多 6 条（用户话 + 助手回复）

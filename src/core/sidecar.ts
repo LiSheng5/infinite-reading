@@ -5,7 +5,8 @@
  *   1. 探测 http://127.0.0.1:<port>/health，探测不到就进入「离线」态（三功能在 UI 上禁用并提示）；
  *   2. 保存连接信息（端口 + token，存在 settings.sidecar，仅用于连本机服务）；
  *   3. 提供带 token 的 api() 客户端；
- *   4. 用 EventSource 订阅 SSE（到点触发 / 待确认变化），断线指数退避 + 重探。
+ *   4. 用 EventSource 订阅 SSE（到点触发 / 待确认变化），断线指数退避 + 重探——
+ *      重连与复探共用一条退避链（计时器只有 probeTimer 一个，stop() 必清）。
  *
  * 注意：安全项（额度 / 白名单 / 每日上限 / 免打扰时段）**不在**这里，它们唯一真源在侧车的
  * config.json，本文件只经 API 读写，不落地到前端本地。
@@ -34,7 +35,7 @@ const global = globalThis as any;
   let probing = null;
   let sse = null;
   let sseRetry = 0;
-  let probeTimer = null;
+  let probeTimer = null;                 // 重连链的唯一计时器：复探与 SSE 重连都排在这里
   let probeFailStep = 0;
   let stopped = true;
   const listeners = {};
@@ -155,15 +156,22 @@ const global = globalThis as any;
     }
   }
 
+  function sseBackoffDelay() {
+    // SSE 层的退避口径：「服务探得通、但 SSE 建不起来 / 连上即断」这种失败按 1.5s 翻倍放慢，
+    // 真正连上（onopen）即归零。探测退避（probeFailStep）记的是另一种失败（服务根本探不通），
+    // 两者各记各的账、共用同一条链，谁也别把谁的节奏带乱。
+    const d = Math.min(SSE_BASE_MS * Math.pow(2, sseRetry), SSE_MAX_MS);
+    sseRetry = Math.min(sseRetry + 1, 6);
+    return d;
+  }
+
   function scheduleReconnect() {
     stopSSE();
     if (stopped) return;
-    const delay = Math.min(SSE_BASE_MS * Math.pow(2, sseRetry), SSE_MAX_MS);
-    sseRetry = Math.min(sseRetry + 1, 6);
-    setTimeout(() => {
-      if (stopped) return;
-      probe().then(ok => { if (ok) startSSE(); });
-    }, delay);
+    // 重连与复探共用一条链：这里不再自己 setTimeout，只算「这次等多久」交给
+    // scheduleNextProbe——重连计时器就是 probeTimer 本身，stop() 一定能清掉；
+    // 重连那次探测若失败，也会顺着探测退避继续走，不再原地断链（旧实现只赌一次）。
+    scheduleNextProbe(sseBackoffDelay());
   }
 
   let sseConnecting = false;
@@ -260,6 +268,7 @@ const global = globalThis as any;
 
   function stop() {
     stopped = true;
+    // probeTimer 是重连链的唯一计时器（复探与 SSE 重连都在这条链上），清它一处就够
     if (probeTimer) { clearTimeout(probeTimer); probeTimer = null; }
     stopSSE();
   }
@@ -295,7 +304,6 @@ const global = globalThis as any;
   function emailSentDrafts() { return api('GET', '/api/email/drafts').then(r => (r && r.drafts) || []); }
   function emailSendDraft(id) { return api('POST', '/api/email/drafts/' + encodeURIComponent(id) + '/send'); }
   function emailDiscardDraft(id) { return api('DELETE', '/api/email/drafts/' + encodeURIComponent(id)); }
-  function emailInbox(limit) { return api('GET', '/api/email/inbox' + (limit ? '?limit=' + encodeURIComponent(limit) : '')); }
   function emailAudit(limit) { return api('GET', '/api/email/audit' + (limit ? '?limit=' + encodeURIComponent(limit) : '')); }
 
   // 购物支付（模型拿不到凭证；策略由侧车强制）
@@ -340,7 +348,6 @@ const global = globalThis as any;
       emailSentDrafts: emailSentDrafts,
       emailSendDraft: emailSendDraft,
       emailDiscardDraft: emailDiscardDraft,
-      emailInbox: emailInbox,
       emailAudit: emailAudit,
       // 购物支付
       paymentSummary: paymentSummary,

@@ -13,11 +13,11 @@
 /* ↑ 阶段 2 搬迁自 src/core/prefs.ts（IIFE → ES module，函数体逐字未动）。
  * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
-  /* ---------------- 白名单 ---------------- */
+  /* ---------------- 白名单（规则表 = 唯一真源） ---------------- */
 
-  // story.prefs 的顶层键只有 profileId / profileLabel / choices / showReasoning / tools / ui，
-  // 页面布局键只有 layout / splitRatio / imageCollapsed / fontScale / width / density。
-  // 逐键收窄写在 sanitizePrefs / sanitizeUi 里，不另设键名数组：数组与实现分家时谁也不会报错。
+  // story.prefs 的顶层键与页面布局键各有一张规则表，清洗（sanitizePrefs / sanitizeUi）、
+  // 全局默认（globalValue）、本对话覆盖（storyOverride）、合并（effectiveInfo）全部从表里取。
+  // 加一个键 = 往表里加一行，四处判定自动跟上——不再维护「键名数组 + 四个 switch 清单」两套东西。
   // trigger（出图时机）已下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错。
   // 工具开关键（仅智能体用；true = 跟随全局可用性，false = 本对话关掉）
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
@@ -30,6 +30,43 @@
 
   // 凭证形字段名（大小写不敏感，任意嵌套层级一律剥掉）：安全红线
   const SECRET_KEY_RE = /^(api[-_]?key|key|token|base[-_]?url|password|secret|authorization|access[-_]?token|refresh[-_]?token)$/i;
+
+  /* ---------------- 取值判定（规则表用的小工具） ---------------- */
+
+  // 取值器约定：合法 → 收窄后的值；非法 / 缺失 → undefined（调用方据此丢弃或回退默认）
+  function oneOf(values) {
+    return (v) => (values.indexOf(v) >= 0 ? v : undefined);
+  }
+  function boolOf(v) {
+    return typeof v === 'boolean' ? v : undefined;
+  }
+  function ratioOf(v) {
+    const r = +v;
+    return (Number.isFinite(r) && r > 0) ? Math.max(0.28, Math.min(0.72, r)) : undefined;
+  }
+
+  /* 页面布局键（story.prefs.ui 与 settings.ui 共用）：
+   *   take     —— 校验 + 收窄；undefined = 非法值丢弃（不猜、不兜底）
+   *   fallback —— 「跟随全局」时的值（settings.ui 缺这个键时用） */
+  const UI_RULES = {
+    layout: { take: oneOf(LAYOUT_VALUES), fallback: () => 'auto' },
+    splitRatio: { take: ratioOf, fallback: () => 0.5 },
+    imageCollapsed: { take: boolOf, fallback: () => false },
+    fontScale: { take: oneOf(FONT_VALUES), fallback: () => 'md' },
+    width: { take: oneOf(WIDTH_VALUES), fallback: () => 'standard' },
+    density: { take: oneOf(DENSITY_VALUES), fallback: () => 'standard' },
+  };
+  const UI_KEYS = Object.keys(UI_RULES);
+
+  /* story.prefs 顶层键：只留不透明 id / 显示用标签 / 本对话开关 / 嵌套的 tools 与 ui */
+  const PREF_RULES = {
+    profileId: { take: (v) => (typeof v === 'string' && v.trim()) ? v.trim().slice(0, 64) : undefined },
+    profileLabel: { take: (v) => (typeof v === 'string' && v.trim()) ? v.trim().slice(0, 120) : undefined },   // 仅作显示，不含密钥
+    choices: { take: oneOf(CHOICES_VALUES) },
+    showReasoning: { take: boolOf },
+    tools: { take: (v) => sanitizeTools(v) },
+    ui: { take: (v) => sanitizeUi(v) },
+  };
 
   /* ---------------- 工具分类（prefs.tools 的五个开关 ↔ 工具名） ---------------- */
 
@@ -74,34 +111,26 @@
   function sanitizeUi(raw) {
     const out: any = {};
     if (!isPlainObject(raw)) return out;
-    if (LAYOUT_VALUES.indexOf(raw.layout) >= 0) out.layout = raw.layout;
-    const r = +raw.splitRatio;
-    if (Number.isFinite(r) && r > 0) out.splitRatio = Math.max(0.28, Math.min(0.72, r));
-    if (typeof raw.imageCollapsed === 'boolean') out.imageCollapsed = raw.imageCollapsed;
-    if (FONT_VALUES.indexOf(raw.fontScale) >= 0) out.fontScale = raw.fontScale;
-    if (WIDTH_VALUES.indexOf(raw.width) >= 0) out.width = raw.width;
-    if (DENSITY_VALUES.indexOf(raw.density) >= 0) out.density = raw.density;
+    for (const k of UI_KEYS) {
+      const v = UI_RULES[k].take(raw[k]);
+      if (v !== undefined) out[k] = v;
+    }
     return out;
   }
 
   // 迁移 / 导入时清洗本对话偏好：
-  // ① 丢弃未知键；② 任何形似凭证的字段（任意嵌套）剥掉；③ profileId 非字符串丢弃。
+  // ① 按 PREF_RULES 逐键收窄（未知键丢弃，嵌套的 tools / ui 各自再收一遍）；
+  // ② 任何形似凭证的字段（任意嵌套）先剥掉；③ 收窄后为空的 tools / ui 不落地。
   function sanitizePrefs(raw) {
     if (!isPlainObject(raw)) return {};
     const src = stripSecrets(raw);          // 先剥凭证，再按白名单收窄
     const out: any = {};
-    if (typeof src.profileId === 'string' && src.profileId.trim()) {
-      out.profileId = src.profileId.trim().slice(0, 64);
+    for (const k of Object.keys(PREF_RULES)) {
+      const v = PREF_RULES[k].take(src[k]);
+      if (v === undefined) continue;
+      if (v && typeof v === 'object' && !Object.keys(v).length) continue;   // 空的 tools / ui
+      out[k] = v;
     }
-    if (typeof src.profileLabel === 'string' && src.profileLabel.trim()) {
-      out.profileLabel = src.profileLabel.trim().slice(0, 120);   // 仅作显示，不含密钥
-    }
-    if (CHOICES_VALUES.indexOf(src.choices) >= 0) out.choices = src.choices;
-    if (typeof src.showReasoning === 'boolean') out.showReasoning = src.showReasoning;
-    const tools = sanitizeTools(src.tools);
-    if (Object.keys(tools).length) out.tools = tools;
-    const ui = sanitizeUi(src.ui);
-    if (Object.keys(ui).length) out.ui = ui;
     return out;
   }
 
@@ -110,6 +139,12 @@
   function globalValue(settings, key) {
     const s = settings || {};
     const ui = (s.ui && isPlainObject(s.ui)) ? s.ui : {};
+    if (key.indexOf('ui.') === 0) {
+      const rule = UI_RULES[key.slice(3)];
+      if (!rule) return undefined;
+      const v = rule.take(ui[key.slice(3)]);
+      return v !== undefined ? v : rule.fallback();
+    }
     switch (key) {
       case 'choices': return s.ui && s.ui.choices === 'always' ? 'always' : 'tray';
       case 'showReasoning': return s.showReasoning !== false;
@@ -118,21 +153,16 @@
         TOOL_KEYS.forEach((k) => { out[k] = true; });   // 跟随全局可用性（sidecar / feature 由运行时求交）
         return out;
       }
-      case 'ui.layout': return LAYOUT_VALUES.indexOf(ui.layout) >= 0 ? ui.layout : 'auto';
-      case 'ui.splitRatio': {
-        const r = +ui.splitRatio;
-        return Number.isFinite(r) && r > 0 ? Math.max(0.28, Math.min(0.72, r)) : 0.5;
-      }
-      case 'ui.imageCollapsed': return !!ui.imageCollapsed;
-      case 'ui.fontScale': return FONT_VALUES.indexOf(ui.fontScale) >= 0 ? ui.fontScale : 'md';
-      case 'ui.width': return WIDTH_VALUES.indexOf(ui.width) >= 0 ? ui.width : 'standard';
-      case 'ui.density': return DENSITY_VALUES.indexOf(ui.density) >= 0 ? ui.density : 'standard';
       default: return undefined;
     }
   }
 
   function storyOverride(story, key) {
     const p = (story && isPlainObject(story.prefs)) ? story.prefs : {};
+    if (key.indexOf('ui.') === 0) {
+      const rule = UI_RULES[key.slice(3)];
+      return rule ? rule.take(p.ui && p.ui[key.slice(3)]) : undefined;
+    }
     switch (key) {
       case 'profileId': return (typeof p.profileId === 'string' && p.profileId) ? p.profileId : undefined;
       case 'choices': return CHOICES_VALUES.indexOf(p.choices) >= 0 ? p.choices : undefined;
@@ -145,15 +175,6 @@
         const u = sanitizeUi(p.ui);
         return Object.keys(u).length ? u : undefined;
       }
-      case 'ui.layout': return LAYOUT_VALUES.indexOf(p.ui && p.ui.layout) >= 0 ? p.ui.layout : undefined;
-      case 'ui.splitRatio': {
-        const r = +(p.ui && p.ui.splitRatio);
-        return Number.isFinite(r) && r > 0 ? r : undefined;
-      }
-      case 'ui.imageCollapsed': return (p.ui && typeof p.ui.imageCollapsed === 'boolean') ? p.ui.imageCollapsed : undefined;
-      case 'ui.fontScale': return FONT_VALUES.indexOf(p.ui && p.ui.fontScale) >= 0 ? p.ui.fontScale : undefined;
-      case 'ui.width': return WIDTH_VALUES.indexOf(p.ui && p.ui.width) >= 0 ? p.ui.width : undefined;
-      case 'ui.density': return DENSITY_VALUES.indexOf(p.ui && p.ui.density) >= 0 ? p.ui.density : undefined;
       default: return undefined;
     }
   }
@@ -185,14 +206,8 @@
     }
     if (key === 'ui') {
       const over = storyOverride(story, 'ui') || {};
-      const out = {
-        layout: globalValue(settings, 'ui.layout'),
-        splitRatio: globalValue(settings, 'ui.splitRatio'),
-        imageCollapsed: globalValue(settings, 'ui.imageCollapsed'),
-        fontScale: globalValue(settings, 'ui.fontScale'),
-        width: globalValue(settings, 'ui.width'),
-        density: globalValue(settings, 'ui.density'),
-      };
+      const out: any = {};
+      for (const k of UI_KEYS) out[k] = globalValue(settings, 'ui.' + k);
       Object.assign(out, over);
       return { value: out, source: Object.keys(over).length ? 'story' : 'default', missing: false };
     }
@@ -207,8 +222,9 @@
 
   /* ---------------- 主模型配置 ---------------- */
 
-  const CHAT_FIELDS = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'thinking', 'contextWindow', 'extraParams'];
-
+  // 一条主模型配置的字段形状（profile 与 settings.chat 共用）：
+  // provider / baseUrl / apiKey / model / temperature / contextWindow / extraParams。
+  // 厂商独有的形参（思考档位等）不进这个形状——它们写在 extraParams 里，原样并入请求体。
   function chatShape(src, base, id, name) {
     src = isPlainObject(src) ? src : {};
     base = isPlainObject(base) ? base : {};
@@ -226,7 +242,6 @@
       apiKey: pick('apiKey') || '',
       model: pick('model') || '',
       temperature: Number.isFinite(+src.temperature) ? +src.temperature : (Number.isFinite(+base.temperature) ? +base.temperature : 0.9),
-      thinking: (typeof src.thinking === 'string' && src.thinking) ? src.thinking : 'default',
       contextWindow: (+src.contextWindow > 0) ? Math.floor(+src.contextWindow) : ((+base.contextWindow > 0) ? Math.floor(+base.contextWindow) : 0),
       extraParams: (src.extraParams != null && src.extraParams !== '') ? src.extraParams : (base.extraParams || ''),
     };

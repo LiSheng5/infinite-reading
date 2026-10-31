@@ -10,7 +10,7 @@
  * 不实现任何对支付 App 的自动化或绕过，也不保存任何支付密码。
  */
 import { evaluatePolicy, PAYMENT_CODES } from './payment-policy.mjs';
-import { genId, safeJSON, dayRange, monthRange, num, fail } from './util.mjs';
+import { genId, safeJSON, dayRange, monthRange, num, clampInt, fail } from './util.mjs';
 import { TX, COMMITTED_TX, sqlIn } from './statuses.mjs';
 
 export function createPaymentProviders() {
@@ -159,11 +159,16 @@ export function createPayment(deps) {
 
   // 授权范围内已用额度：按 mandate_id 关联统计（此前按 agent+周期近似，
   // 同一 agent 开两份授权会互相串额度，改名还能换池）。
-  // 口径是「终身累计」：授权的 periodStart / periodEnd 不参与过滤，额度不做月度重置。
+  // 额度窗口与策略层的有效期判据同一口径：签了窗口的授权（periodStart / periodEnd
+  // 都 > 0）只统计窗口内的已扣款，到期后由策略按 MANDATE_EXPIRED 拒绝、界面按月续签
+  // 新的一份——额度不做终身累计；没签窗口（两个字段全 0，旧档 / 手动签发）保持终身累计。
   function mandateSpent(mandate) {
-    const rows = db.prepare(
-      'SELECT amount_cents, mandate_id FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND mandate_id = ?'
-    ).all(String(mandate.id));
+    const windowed = mandate && mandate.periodStart > 0 && mandate.periodEnd > 0;
+    const sql = 'SELECT amount_cents FROM payment_transactions WHERE status IN ' + COMMITTED + ' AND mandate_id = ?'
+      + (windowed ? ' AND created_at >= ? AND created_at < ?' : '');
+    const rows = windowed
+      ? db.prepare(sql).all(String(mandate.id), mandate.periodStart, mandate.periodEnd)
+      : db.prepare(sql).all(String(mandate.id));
     let sumCents = 0;
     for (const r of rows) sumCents += Number(r.amount_cents);
     return sumCents;
@@ -406,7 +411,7 @@ export function createPayment(deps) {
 
   function listTransactions(opts) {
     const o = opts || {};
-    const limit = Math.max(1, Math.min(500, Math.floor(Number(o.limit) || 100)));
+    const limit = clampInt(o.limit, 100, 500);
     const rows = o.agent
       ? db.prepare('SELECT * FROM payment_transactions WHERE agent = ? ORDER BY created_at DESC LIMIT ?').all(String(o.agent), limit)
       : db.prepare('SELECT * FROM payment_transactions ORDER BY created_at DESC LIMIT ?').all(limit);

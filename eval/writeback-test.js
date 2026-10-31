@@ -7,7 +7,8 @@
  *   ① 契约纯逻辑（src/core/writeBack.ts）——换档 / 换任务后写回必须被丢弃或归位到发起时的目标，
  *      断言闸失败要留 console 警告（可归因）；切走再切回（新对象同 id）要认回当前对象。
  *   ② 静态回归——回合 / 重试 / 书记员 / 压缩 / 画师 / 导入整理的续体都过契约收口；
- *      书记员失败不再被空 catch 吞掉（console.warn + tool 留痕带 error），界面区分未启用 / 失败。
+ *      书记员失败不再被空 catch 吞掉（console.warn + tool 留痕带 error），界面区分未启用 / 失败；
+ *      画师工作台的两个重画入口共用一份实现（只有取词方式不同）。
  *
  * 用法：node eval/writeback-test.js
  */
@@ -103,6 +104,14 @@ const read = (p) => fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
   // 画师归位、面板任务、导入任务都过闸门式契约
   ok(painter.indexOf('WriteBack.writeBackToStory(') >= 0, 'painter.js 回包归位过 writeBackToStory');
   ok((painter.match(/WriteBack\.(writeBackIfSameJob|isSameJob)\(/g) || []).length >= 4, 'painter.js 面板写回过 job 闸（≥4 处）');
+
+  // 两个重画入口共用一份实现：只有取词方式不同，下单 / 写回 / 收尾不许再各写一遍
+  ok(painter.indexOf('async function redraw(opts)') >= 0, 'painter.js 重画只有一份实现 redraw(opts)');
+  ok(/function redrawFromWorkbench\(\)\s*\{\s*return redraw\(\{ byCard: false \}\);\s*\}/.test(painter),
+    '「按此重画」是 redraw({ byCard: false }) 的薄入口');
+  ok(/function forceRedrawByCard\(\)\s*\{\s*return redraw\(\{ byCard: true \}\);\s*\}/.test(painter),
+    '「按设定卡强制重画」是 redraw({ byCard: true }) 的薄入口');
+  eq((painter.match(/await enqueuePaint\(/g) || []).length, 1, 'painter.js 只有一处 enqueuePaint 调用（两个入口不再各写一遍）');
   ok(importer.indexOf('WriteBack.writeBackIfSameJob(') >= 0, 'importer.js 整理续体最终写回过 writeBackIfSameJob');
   ok(importer.indexOf('WriteBack.isSameJob(') >= 0, 'importer.js 中途早退按 isSameJob 认任务');
   ok(importer.indexOf('cancelImportJob') >= 0 && /\.abort\(\)/.test(importer), 'importer.js 关闭任务标记 cancelled 并 abort 在途请求');

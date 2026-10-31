@@ -61,7 +61,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     ? '[已提交，待用户确认] ' + detail + '；用户确认前不会触发。'
     : '[已存在，内容未变] ' + detail + '；这个安排已经在生效，无需再次确认。';
 
-  // 执行调度工具：一律提交给侧车、由用户确认——模型可以安排，但不能让主动行为自己生效
+  // 执行调度工具：一律提交给侧车、由用户确认——模型可以安排，但不能让主动行为自己生效。
+  // 这里不传 source：请求体里的 source 不被采信，HTTP 侧一律按模型处理（新建待确认、改不动已确认的行）。
   async function runScheduleTool(name, args) {
     const SC = Sidecar;
     const a = args || {};
@@ -74,7 +75,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         if (!at) return '[调度失败] at 需要 ISO 8601 时间，例如 2026-10-11T09:00:00+08:00。';
         const t = await SC.upsertTrigger({
           name: a.name, type: 'once', spec: { at: at },
-          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '', source: 'model',
+          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '',
         });
         return submitted(t, '一次性安排「' + t.name + '」定在 ' + fmtTime(at));
       }
@@ -82,14 +83,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
         const mins = Math.max(1, Math.floor(Number(a.everyMinutes) || 0));
         const t = await SC.upsertTrigger({
           name: a.name, type: 'interval', spec: { everyMs: mins * 60000 },
-          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '', source: 'model',
+          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '',
         });
         return submitted(t, '每隔 ' + mins + ' 分钟的安排「' + t.name + '」');
       }
       if (name === 'schedule_cron') {
         const t = await SC.upsertTrigger({
           name: a.name, type: 'cron', spec: { expr: a.expr, tz: a.tz || '' },
-          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '', source: 'model',
+          prompt: a.prompt, reason: a.reason, channel: S.story ? S.story.id : '',
         });
         return submitted(t, '日历安排「' + t.name + '」：' + a.expr + '（' + (a.tz || 'UTC') + '）');
       }
@@ -506,23 +507,33 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   // 三层授权第一层（长期授权范围）：下单必须挂在用户签发的 mandate 上，
   // agent 身份与币种由本地服务按 mandate / 配置映射，请求体自报无效。
-  // 没有授权时先问用户要不要签发一份（发起方 agent、总额度=每月上限、不限品类）——不静默代签。
+  // 授权按「月」签发并续签：额度=设置里的每月上限，有效期=本月（窗口由本地服务按
+  // periodStart / periodEnd 强制，过期的授权策略层直接拒绝）。每次下单先找一份「有效期
+  // 覆盖现在」的授权（列表按签发时间倒序，取最新的一份）；没有（首次 / 跨月 / 旧档
+  // 没签过窗口）就先问用户要不要签发本月的一份——不静默代签。
   async function ensurePaymentMandate() {
     try {
       const list = await Sidecar.paymentMandates();
       const mds = (list && list.mandates) || [];
-      if (mds.length) return mds[0].id;
+      const t = Date.now();
+      const cur = mds.find(m => m && m.periodEnd > t && m.periodStart <= t);
+      if (cur) return cur.id;
       const sum = await Sidecar.paymentSummary();
       const monthly = (sum && sum.summary && sum.summary.monthlyCents) || 0;
+      const b0 = new Date(); b0.setDate(1); b0.setHours(0, 0, 0, 0);   // 本月 1 号 0 点（侧车在本机，同一套本地时区）
+      const b1 = new Date(b0); b1.setMonth(b1.getMonth() + 1);         // 下月 1 号 0 点
+      const day = d => (d.getMonth() + 1) + '月' + d.getDate() + '日';
       const ok = await irConfirm(
-        '下单要先有「长期授权范围」。现在按当前配置签发一份吗？\n\n'
-        + '发起方：agent（由本地服务记账）\n总额度：' + A.yuan(monthly) + '（= 设置里的每月上限）\n品类：不限\n\n'
+        '下单要先有「长期授权范围」。现在按当前配置签发本月的一份吗？\n\n'
+        + '发起方：agent（由本地服务记账）\n本月额度：' + A.yuan(monthly) + '（= 设置里的每月上限）\n品类：不限\n'
+        + '有效期：到 ' + day(b1) + '；下个月的第一次购买会先向你确认续签\n\n'
         + '之后每一笔仍要逐笔确认；额度与策略始终由本地服务在代码层强制。',
         { title: '签发长期授权', okText: '签发授权' }
       );
       if (!ok) return '';
       const md = await Sidecar.paymentCreateMandate({
         agent: 'agent', totalLimitCents: monthly, categories: [],
+        periodStart: b0.getTime(), periodEnd: b1.getTime(),
       });
       return (md && md.id) || '';
     } catch (e) {

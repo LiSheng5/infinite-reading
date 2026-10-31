@@ -1,6 +1,6 @@
 # 贡献指南
 
-先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（34 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
+先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（39 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
 
 感谢你愿意花时间。本文包含四部分：**贡献流程（一~八）**、**行为准则（九）**、**安全说明（十）**、**第三方资源与许可（十一）**；后三部分按需查阅。
 
@@ -15,7 +15,7 @@ npm ci          # 只装构建 / 测试依赖（Vite、Svelte、TypeScript、Pla
 npm run dev     # 开发服务器（热更新）
 ```
 
-需要 **Node ≥ 22.5**（侧车用内置 `node:sqlite`；`package.json` 的 `engines` 有记录）。
+需要 **Node ≥ 24**（与 CI 同版本：`eval/*` 直接 `require` `.ts` 靠内置类型剥离、侧车用内置 `node:sqlite`；`package.json` 的 `engines` 有记录）。
 
 发布前请用**构建产物**验收（dev server 与产物行为可能不同，Service Worker、单文件内联都只在产物里）：
 
@@ -39,16 +39,16 @@ src/app/                界面行为层（21 个 ES module + 组合根 main.js�
 src/core/               核心逻辑（TS，Node 可 require）：providers / context / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / version
 src/ui/                 基础组件库（Svelte 5）+ 动效 / 切屏 / 弹窗栈 / 视图过渡内核
 src/screens/            7 个屏幕的组件与 $state 模块：home / settings / storyPrefs / shelf / read / branch / modal
-css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角）；:root 之外不写颜色字面量
+css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角 / 表单字号 --fs-field）；:root 之外不写颜色字面量
 css/style.css           屏幕样式入口（只有 @import + 设计原则 / 断点标尺 / 按钮词汇）
 css/{base,home,shelf,read,overlays,responsive,settings,branch,icons}.css   9 个分片：import 顺序 = 层叠顺序（M4）；某个屏的样式就改它那一片
 css/motion.css          动效档位收口 + @keyframes 唯一定义点 + 暂停规则
 eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
 eval/_harness.js        门禁共用脚手架：check / finish / run / loadEsm / localMs（不单独跑，不算门禁）
-eval/*-test.js          34 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / schema / tree / prefs / backup-pack / store-images / proposals / writeback / features / ui-state / zip / 侧车 …
+eval/*-test.js          39 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / capability-scope / schema / tree / prefs / backup-pack / store-images / platform / proposals / writeback / features / ui-state / reply-text / zip / 生视频转发 / 客户端重连 / 侧车 …
 sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events
-manifest.webmanifest / sw.js / src/pwa.js   PWA：清单、Service Worker、注册
+manifest.webmanifest / sw.js / src/pwa.js   PWA：清单（颜色字段是 __IR_THEME_COLOR__ 占位，构建期从 --bg 展开）、Service Worker、注册
 icons/                  应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx 托管 dist/site）
 启动.bat                Windows 一键启动（构建 + 本地服务）
@@ -60,7 +60,7 @@ tools/                  构建与验收脚本（版本号同步、单文件打�
 ## 三、动手前请先跑一遍自检
 
 ```bash
-npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 34 个 eval 门禁 + 结构门禁 + tsc
+npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 39 个 eval 门禁 + 结构门禁 + tsc
 ```
 
 它的组成与用途：
@@ -70,8 +70,10 @@ npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 34 个 eva
 - `node eval/css-structure-test.js`：样式分片与入口 `@import` 一一对应且顺序固定、断点只用标尺（480 / 640 / 720 / 721 / 900 / `hover: none`）、按钮只有 `.ui-btn` 一套词汇（旧类名一律拦下）。改 CSS 前先看它。
 - `node eval/comments-test.js`：注释里不许出现仓库外的编号（任务书章节号、审查条目号、阶段号、轮次号）；要引用就引仓内文档（`ARCHITECTURE.md §4.2`）。约定见 §四「注释写什么」。
 - `node eval/error-policy-test.js`：网络 / 模型 / 存储这类真实失败的 catch 不许静默吞掉（必须有上报出口或说明性注释）；同时单测 `errorText` / `shortError` / `failureEntry`。约定见 `ARCHITECTURE.md §2.2` 与 §四「失败处理」。
-- `node eval/settings-ids-test.js`：155 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）。
+- `node eval/settings-ids-test.js`：148 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）；已下线的能力位控件（思考档位 / 尺寸档位 / 质量）不许回来。
+- `node eval/capability-scope-test.js`：模型参考表只登记上下文窗口——`providers.ts` 不许按表塑形请求体（温度 / 尺寸照发，厂商形参走「自定义请求参数」），表里也不许再出现 image / video / thinking / sizes / quality。
 - `node eval/app-structure-test.js`：入口 import 顺序、模块行数上限、`A.reg` 键唯一、顶层解构白名单、高频入口（`renderChat` / `saveAll` / `toast`）必须是 `core.js` 的命名导出（调用方不再写 `A.xxx`）。
+- `node eval/platform-test.js`：浏览器能力的两处边界——IndexedDB 开库被**别的标签页挡住**（`blocked`）是瞬时状态，必须能重试且不把会话判死，只有真错误才降级；Service Worker 的 `activate` 只清带 `ir-v` 前缀的旧缓存（同源还挂着别的项目）。
 - `node eval/features-test.js`：主动消息编排（同 `fireId` 只送一次 / 忙时排队 / 条件满足按序投递）；`clear()` 撤回待送时连去重记忆一起清——只清队列会让被撤掉的触达在下次补跑时被静默丢弃。见 `ARCHITECTURE.md §2` 的 `src/core/features.ts` 行。
 - 侧车相关的门禁（`scheduler-test` / `email-test` / `payment-test` / `sidecar-smoke` / `frontend-smoke`）共用 `eval/_harness.js`：断言、汇总、退出码、`loadEsm()`（动态 import 侧车模块）、`localMs()`（本地时区的日期构造）。新写门禁直接 `require('./_harness.js')` + `run('标题', main)`，不要再抄一份 `check()` 与汇总循环。
 - `tsc --noEmit`：`src/core/*.ts` 的类型检查。
@@ -210,7 +212,7 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 |---|---|---|
 | 只绑回环地址 | 服务只监听 `127.0.0.1:4319`，局域网 / 外网都访问不到 | 不要把绑定地址改成 `0.0.0.0`——那是另一个风险等级，本项目不做 |
 | 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json`，**导出备份时无条件剥离**（即使勾选带上 API Key 也不带它） | 防的是「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。别把 token 贴到公开地方 |
-| CORS 只回显本机来源 | 接口只对 `file://`（Origin 为 `null`）与 `localhost / 127.0.0.1 / [::1]` 回 `Access-Control-Allow-Origin`，其它来源不给 CORS 头 | 即使 token 泄漏，任意网页也读不到接口响应（token 之外的第二道防线）。机器名 / 局域网 IP 打开的页面用不了侧车三件套，请用 localhost 打开 |
+| 只认本机来源（Host + Origin） | 每个请求先校验 `Host` 只接受 `127.0.0.1 / localhost / [::1]`（否则 403 `BAD_HOST`），再校验 `Origin` 只接受本机页面（别的站点 403 `ORIGIN_NOT_ALLOWED`）；`file://` 的字面量 `null` 只对**带 token / SSE ticket** 的请求回显 CORS，`/health` 与预检例外 | Host 是 DNS rebinding 的**唯一识别点**：攻击页在浏览器侧与本机同源，连 CORS 都不触发，只靠 CORS 兜是兜不住的。`Origin: null` 与任意站点的沙箱 iframe 在浏览器侧完全一样（实测都是 `Origin: null` + `Sec-Fetch-Site: cross-site`），所以它不再「一律放行」——没有 token 的页面读不到任何响应。机器名 / 局域网 IP 打开的页面用不了侧车三件套，请用 localhost 打开 |
 | 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`（Windows 上 `mode:0o600` 无效，启动写盘时会用 `icacls` 把 `config.json` 收紧为仅当前用户可读写，失败不阻断），`sidecar/data/` 已加入 `.gitignore`；仓库自带的静态服务（`启动.bat` / `tools/serve.py` / `tools/serve.ps1`）对 `sidecar/data/` 与 `.git/` 统一拒绝 | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥；自己起别的静态服务时也要排除这两个目录 |
 | SSE 走短时效一次性 ticket | `EventSource` 不能自定义请求头，token 也**不进 URL**（会进代理 / 访问日志 / Referer）：先 `POST /api/events/ticket`（Bearer）换一张 30 秒有效、一次性 ticket，再以 `/api/events?ticket=…` 连接 | 服务端日志**不记录 token、不记录邮件正文**；ticket 用掉即删，连接数有上限（超限 429） |
 | 支付策略不是「防你自己」 | 策略在**代码层**强制执行（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、agent 预算隔离、**长期授权范围 mandate 强制**：下单必须挂在用户签发的授权上，agent 与币种由服务端按授权 / 配置映射，不采信请求体自报），且 AI 拿不到任何支付凭证 | 你拥有本机文件，理论上可以改配置或改代码绕过。它的价值是**防误操作 + 可审计**，不是防用户自己。**AI 可能出错，请设置合理额度** |
@@ -280,7 +282,7 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 | 用途 | 使用的东西 | 位置 |
 |---|---|---|
 | HTTP 服务 | `node:http`（内置） | `sidecar/server.mjs` |
-| 存储 | `node:sqlite`（内置，Node ≥ 22.5） | `sidecar/db.mjs` |
+| 存储 | `node:sqlite`（内置，Node ≥ 24） | `sidecar/db.mjs` |
 | 文件 / 随机数 / 哈希比较 | `node:fs` / `node:crypto`（内置） | `sidecar/config.mjs` 等 |
 | 时区与夏令时 | `Intl.DateTimeFormat`（内置） | `sidecar/cron.mjs` |
 | 邮件渠道 | 本期只实现 `mock` 与 `resend`（用内置 `fetch` 调 Resend 的 HTTP API） | `sidecar/email.mjs` |

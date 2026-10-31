@@ -10,7 +10,6 @@
 /* ↑ 阶段 2 搬迁自 src/core/providers.ts（IIFE → ES module，函数体逐字未动）。
  * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
  * 导出即真实 API。 */
-import { ModelCapabilities } from './modelCapabilities.ts';
 import { sleep } from './tree.ts';
 
   async function readError(res) {
@@ -154,12 +153,6 @@ import { sleep } from './tree.ts';
     if (piece && hooks && hooks.onReasoning) hooks.onReasoning(piece);
   }
 
-  // 预填参考表（可选）：命中时用它填默认参数；未命中就不管，全部由 cfg 手填
-  function capOf(kind, cfg) {
-    const C = ModelCapabilities;
-    if (!C || !cfg || !cfg.model) return null;
-    try { return C.find(kind, cfg.model, cfg.provider); } catch (_) { return null; }
-  }
   // 路径段黑名单：a.b 形式的手填参数若不拦，"__proto__.x=1" 会把 x 写进 Object.prototype
   // （原型污染），经 .irbackup.json 导入恶意设置同样能触发
   const FORBIDDEN_PARAM_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -270,37 +263,18 @@ import { sleep } from './tree.ts';
         const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-        const cap = capOf('chat', cfg);
         const body: any = { model: cfg.model, messages };
-        // 采样温度：登记表声明不支持（如思考常开的推理模型）就不发
-        if (!cap || cap.temperature !== false) {
-          body.temperature = Number.isFinite(+cfg.temperature) ? +cfg.temperature : 0.8;
-        }
-        // 思考档位：按登记表换算成该厂商的参数（不支持则不查不发）
-        const think = cap && cap.thinking;
-        if (think && think.kind !== 'none' && cfg.thinking && cfg.thinking !== 'default') {
-          const want = String(cfg.thinking);
-          const yes = (want === 'on' || want === 'true' || want === 'enabled');
-          if (think.kind === 'toggle') {
-            const v = yes ? 'enabled' : 'disabled';
-            if ((think.values || []).indexOf(v) >= 0) {
-              setParam(body, think.param, (think.values.indexOf('true') >= 0) ? yes : v);
-            }
-          } else if (think.kind === 'levels') {
-            // 显式「关思考」：若模型支持关闭（toggleParam），发关闭；常开模型则忽略
-            if (!yes && want === 'off' && think.toggleParam) {
-              setParam(body, think.toggleParam, 'disabled');
-            } else if ((think.values || []).indexOf(want) >= 0) {
-              body[think.param] = want;
-            }
-          }
-        }
+        // 采样温度：一律发用户填的值（没填就是 0.8 这个通用默认）。
+        // 厂商独有的形参没有通用协议（思考档位的 reasoning_effort / thinking.type / enable_thinking、
+        // 各家自己的采样参数…），一律由「自定义请求参数」原样并入（下面的 mergeExtraParams，
+        // 优先级最高，同名键会覆盖这里的值）——适配器不再按模型查表换算。
+        body.temperature = Number.isFinite(+cfg.temperature) ? +cfg.temperature : 0.8;
         // 工具：结构化下发（OpenAI 格式）；调用时机写在系统提示词里
         if (Array.isArray(cfg.tools) && cfg.tools.length) {
           body.tools = cfg.tools;
           if (cfg.toolChoice) body.tool_choice = cfg.toolChoice;
         }
-        // 手填参数最后合并：用户说了算（预填表只是省事，不是限制）
+        // 手填参数最后合并：用户说了算
         mergeExtraParams(body, cfg.extraParams);
         const wantStream = !!(hooks && hooks.onDelta);
         if (wantStream) body.stream = true;
@@ -530,13 +504,9 @@ import { sleep } from './tree.ts';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
         const body: any = { model: cfg.model, prompt, n: 1 };
-        // 尺寸：预填表命中的模型默认只发列表内的档位；用户选了「自定义尺寸」则强制下发
-        const cap = capOf('image', cfg);
-        const sizes = cap && cap.image && Array.isArray(cap.image.sizes) ? cap.image.sizes : null;
-        const sizeOk = !sizes || !sizes.length || sizes.indexOf(cfg.size) >= 0 || cfg.customSize;
-        if (cfg.size && cfg.size !== 'auto' && sizeOk) body.size = cfg.size;
-        const qualities = cap && cap.image && Array.isArray(cap.image.quality) ? cap.image.quality : null;
-        if (cfg.quality && qualities && qualities.indexOf(cfg.quality) >= 0) body.quality = cfg.quality;
+        // 尺寸：直接发调用方折好的字面量（core.js 的 imageCfg 按「比例 + 宽高」拼成 "1280x720"），
+        // 'auto' = 交给服务商默认，不下发。质量档位没有通用取值，要就写进「自定义请求参数」（quality=hd）。
+        if (cfg.size && cfg.size !== 'auto') body.size = cfg.size;
         // 手填参数最后合并（如 steps=30、negative_prompt=…）
         mergeExtraParams(body, cfg.extraParams);
 

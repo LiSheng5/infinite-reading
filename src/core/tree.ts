@@ -74,8 +74,11 @@ import type { Story, StoryTree } from './schema.ts';
   }
 
   // 助手回复 → 纯文本的唯一口径：剧情模式是 JSON（narration / 旁白），
-  // 解析失败 / 无旁白字段时当纯文本。search.ts 索引与 store.ts 书架摘要共用这一份。
-  function plainReply(raw) {
+  // 解析失败 / 无旁白字段时当纯文本。search 索引、书架摘要、自动标题提示词、
+  // 分支页标签与面板预览全部调用这一份，别再各写一份「JSON.parse + 取旁白」。
+  //   opts.trim —— 返回值去两侧空白（标题提示词要的形态；书架摘要 / 标签自己还会再裁）
+  function plainReply(raw, opts?) {
+    const trim = !!(opts && opts.trim);
     const s = String(raw == null ? '' : raw);
     const t = s.trim();
     if (t.charAt(0) === '{') {
@@ -83,14 +86,14 @@ import type { Story, StoryTree } from './schema.ts';
         const o = JSON.parse(t);
         if (o && typeof o === 'object' && !Array.isArray(o)) {
           const n = o.narration || o['旁白'] || o.text || '';
-          if (n) return String(n);
+          if (n) return trim ? String(n).trim() : String(n);
           if (Array.isArray(o.choices) && o.choices.length) {
             return o.choices.map(function (c) { return String(c); }).join(' ');
           }
         }
       } catch (_) { /* 坏 JSON：当纯文本 */ }
     }
-    return s;
+    return trim ? s.trim() : s;
   }
 
   /* ---------------- 基础形状 ---------------- */
@@ -443,7 +446,9 @@ import type { Story, StoryTree } from './schema.ts';
       entries: entries,
       sealed: false,
       turn: +story.turn || 0,
-      meta: opts.meta || {},   // meta.model 记本回合模型名（无密钥 / URL）
+      // meta.model 记本回合模型名（无密钥 / URL）；meta.logFrom 记本回合 entries 在 log 里的
+      // 起点，seal 用它再切片（log 被 120 条窗口裁过之后 indexOf 已经找不回这个起点）
+      meta: Object.assign({}, opts.meta || {}, { logFrom: opts.logMark }),
     });
     node.scenes = scenesFor(story, node.entries);
     // narration 条目写上 nid：UI 靠它找兄弟
@@ -463,9 +468,31 @@ import type { Story, StoryTree } from './schema.ts';
     if (!node) { console.warn('Tree.seal：节点不存在', nodeId); return null; }
     if (node.sealed) return node;      // 幂等
 
-    // entries / scenes 再切一遍片：收进 postTurn 追加的 tool 条目与迟到的图
-    const from = node.entries.length ? (story.log || []).indexOf(node.entries[0]) : -1;
-    if (from >= 0) node.entries = story.log.slice(from);
+    // entries / scenes 再切一遍片：收进 postTurn 追加的 tool 条目与迟到的图。
+    // 起点优先用 commit 记下的 meta.logFrom（同一回合内 log 只追加，位置稳定；log 被 120 条
+    // 窗口裁过之后，indexOf(entries[0]) 会直接返回 -1，那样尾巴会静默丢掉）。
+    // 对不上时退回按条目身份反查：先找首条；首条已被裁掉就按末条倒推（条目在 log 里始终连续）。
+    // 全都找不到 = log 已经是别的路径的投影，保留原 entries 并留一条警告，不再猜着切片。
+    const log: any[] = Array.isArray(story.log) ? story.log : [];
+    const meta: any = node.meta || (node.meta = {});
+    const mark = Number(meta.logFrom);
+    const first = node.entries[0] || null;
+    let from = -1;
+    if (Number.isFinite(mark) && mark >= 0 && first && log[mark] === first) {
+      from = mark;
+    } else if (first) {
+      from = log.indexOf(first);
+    }
+    if (from >= 0) {
+      node.entries = log.slice(from);
+    } else if (node.entries.length) {
+      const i = log.lastIndexOf(node.entries[node.entries.length - 1]);
+      const keep = node.entries.length - (i + 1);   // 被裁掉的那段前缀留在 node.entries 里
+      if (i >= 0 && keep >= 0) node.entries = node.entries.slice(0, keep).concat(log);
+      else console.warn('Tree.seal：当前 log 里找不到本回合条目，entries 保持原样（node=' + node.id + '）');
+    } else if (Number.isFinite(mark) && mark >= 0 && mark < log.length) {
+      node.entries = log.slice(mark);   // 提交时这一回合没有条目，postTurn 的尾巴从起点收
+    }
     node.scenes = scenesFor(story, node.entries);
     for (const e of node.entries) if (e && e.type === 'narration' && e.nid == null) e.nid = node.id;
 

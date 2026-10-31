@@ -36,10 +36,10 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/store.ts` | 存档层（**唯一出口**）：内存优先 + 异步落盘，API 全同步；旧档迁移 | `Store.boot` / `flush`、`newStory`、`loadStory` / `saveStory`、`listStories`、`serializeStory`、`migrateStory`、`loadSettings` / `saveSettings`、`putImage` / `imageURL` / `releaseImage` |
 | `src/core/schema.ts` | 档案形状的类型真源 + 运行时校验（`eval/schema-test.js` 固定） | `Schema.checkStory`、`Schema.checkStoryPack`、`Schema.checkBackupPack`、`Schema.checkTree` |
 | `src/core/prefs.ts` | 本对话偏好（设置分层，**纯逻辑**）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析、导出剥凭证 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
-| `src/core/modelCapabilities.ts` | 模型参数参考表（默认**全空**，不预置厂商数据） | `find`、`contextWindowOf`、`summarize` |
+| `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认**全空**，不预置厂商数据；厂商形参不进表） | `find`、`contextWindowOf`、`summarize`、`formatWindow` |
 | `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
 | `src/core/zip.ts` | 极简 ZIP 读写（**零依赖、手写**）：带原图备份打包 / 解包 | `build`、`read`、`crc32` |
-| `src/core/sidecar.ts` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连 | `probe`、`api`、`on`、`status`、`configure` |
+| `src/core/sidecar.ts` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连（重连与复探共用一条退避链，计时器只有 `probeTimer` 一个、`stop()` 必清，见 `eval/sidecar-client-test.js`） | `probe`、`api`、`on`、`status`、`configure` |
 | `src/core/features.ts` | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`size`、`clear`、`resetSeen` |
 | `src/core/paintQueue.ts` | 作画串行队列（**纯逻辑**）：时机 / 工具 / 手动 / 重画共用一条 FIFO，画师构思也在队列里；带兜底超时与取消（`run(signal)` / `timeoutMs`），任务体挂死也不会堵死队列 | `create`、`enqueue`、`has`、`size`、`cancel` |
 | `src/core/proposals.ts` | 提案（**纯逻辑**）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；状态机（pending / awaiting_confirm / executing / 四个终态）以 `p.status` 为唯一真源 | `create`、`reconcile`、`isActionable`、`confirm`、`approveSecond`、`deny` |
@@ -58,7 +58,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **两张产物**（`vite.config.mjs`）：
 
-- `dist/site/`：多文件，资产带内容 hash；`sw.js` 的预缓存清单与缓存名在构建期注入，index.html 的 meta 版本戳（`__IR_VERSION__` 占位）也在构建期替换。GitHub Pages / Docker 用它。
+- `dist/site/`：多文件，资产带内容 hash；`sw.js` 的预缓存清单与缓存名在构建期注入，index.html 的 meta 版本戳（`__IR_VERSION__` 占位）也在构建期替换；`theme-color` 与 manifest 的 `theme_color` / `background_color` 同属占位（`__IR_THEME_COLOR__`），构建期从 `css/tokens.css` 的 `--bg` 展开（manifest 不收 `var()`，只能取值展开；dev 由同一份口径的中间件提供）。GitHub Pages / Docker 用它。
 - `dist/single/index.html`：单文件，JS / CSS / 图片全部内联（`vite-plugin-singlefile`），图标另以 data URL 内联、manifest 链接在构建收尾时摘掉（file:// 无 PWA 诉求），产物目录只剩这一个 HTML，`file://` 双击可开。
 
 同一个插件的 `transformIndexHtml` 还负责首页无 JS 兜底的字符画：`index.html` 里只留 `<!--IR_HOME_ART-->` 占位，字符画由唯一真源 `src/screens/home/art.js` 拼成 `<pre class="inf">` 注入（组件与兜底不各写一份；占位没被替换，构建收尾就报错）。`eval/ui-state-test.js` 盯着「字符画只在 art.js 里出现一次」。
@@ -86,7 +86,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/round.js` | 回合编排：`callAI1` / 玩家行动 / 开场 / 工具执行 / 旁白收尾 | `callAI1`、`sendPlayerAction`、`runOpening`、`finishNarration`、`pushLog` |
 | `src/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
 | `src/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
-| `src/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench` |
+| `src/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench`、`forceRedrawByCard`（后两个是同一实现 `redraw({ byCard })` 的薄入口） |
 | `src/app/video.js` | 生视频（MiniMax V2）：`videoQ` 独立串行队列、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB → 写回 story | `enqueueVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`videoSrc` |
 | `src/app/styleanchor.js` | 画风锚定 | `openAnchor`、`runAnchorBatch`、`anchorLock` |
 | `src/app/render.js` | 聊天记录视图模型推进、画面面板、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`closeLightbox` |
@@ -191,11 +191,11 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], pendingVideos[], lastBg, lastSceneSummary, tree{}`。
 
-- `titleAuto` / `titleGen`：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn === 1`（第一次）与 `turn === 6`（第二次），失败不计次。
+- `titleAuto` / `titleGen`：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn >= 1`（第一次）与 `turn >= 6`（第二次）**配 `titleGen` 判重**——用 `<`/`>=` 而不是 `===`：重试 / 切分支 / 导入会让 turn 跳号，钉死 1 和 6 会让恰好跳过的对话永远停在「新对话」；两种补跑各最多一次，失败不计次。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
 - `ui`（随故事记住的界面状态）：只写 `kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）。旧档里遗留的 `split / showImage / immersive` 读档时由 `Object.assign(defaultUi(), raw.ui)` 原样带过、不读取也不删除（新档不再写）；布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
-- `prefs`（本对话偏好，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`trigger`、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。
+- `prefs`（本对话偏好，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。`trigger`（出图时机）v0.11.0 起已不在白名单里：旧档 / 旧包里残留的值按未知键丢弃、不报错，也不回写。
 - `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `Tree.ensure` 幂等迁移成线性链（末条旁白 `versions > 1` 展开成兄弟、旧存档点按 `sp.turn` 映射 `nodeId`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 `Tree.LOG_WINDOW`（120）条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 `Tree.SCENE_WINDOW`（12）张、`savepoints` 只保留末 `Tree.SAVEPOINT_KEEP`（5）个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。裁剪窗口的唯一口径在 `src/core/tree.ts` 顶部常量（store 与书架导出一律引用导出值），**不要在别处写字面量**。落盘快照**深拷贝**、`migrateStory` 入口同样先深拷贝——「已保存」内存快照不会被现场就地修改带脏，异步 put 也不会写进未 save 的现场。
 - `pendingVideos[]`（生视频，v0.12.0）：已提交、未出结果的异步任务（`taskId` 等）；切档 / 刷新后由 `src/app/video.js` 据此**续轮询同一任务**（不重复提交），完成 / 取消 / 过期后从数组移除。
@@ -207,7 +207,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 |---|---|---|
 | `.irstory.json` | `buildExportPack` / `doExport` | `{format:'ir-story', schema:2, kind:'full'\|'premise', title, premise, mode, styleTone, world, styleCard, rollingStyle, characterCard, images[], …}` |
 | `.irbackup.json` | `buildBackupPack` / `doBackupAll` | `{format:'ir-backup', schema:1, app, exportedAt, settings, userProfile, stories[]}`，默认剥掉 API Key |
-| `.irbackup.zip` | `buildBackupZip` / `doBackupAll`（勾选「带上原图」） | 同一个包里两样东西：`ir-backup.json`（同上，`schema:2` 多一份 `images:[{id, path, type, size}]` 清单）+ `images/0001.png…`（原图按二进制原样存放，**不转 base64**） |
+| `.irbackup.zip` | `buildBackupZip` / `doBackupAll`（勾选「带上原图」） | 同一个包里两样东西：`ir-backup.json`（同上，`schema:2` 多一份 `images:[{id, path, type, size}]` 清单）+ `images/0001.png…`（原图按二进制原样存放，**不转 base64**）。原图 4 路并发读取，但清单顺序恒按 `ids`（`mapLimit` 按下标归位），文件名编号与串行时逐字一致 |
 
 导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。`.zip` 由 `handleImportFile` 先判扩展名 → `importZipFile` 解包取 `ir-backup.json`，再走同一条 `applyBackupImport(obj, entries)`，原图按清单写回 IndexedDB。
 
@@ -215,10 +215,10 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, thinking, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。）
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。`chat.thinking`（思考档位）v0.13.0 起同样下线：`defaultSettings` 不再写它，旧档里的值原样带过、不读不删，厂商形参写进 `extraParams`。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
-**主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`thinking` / `extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
+**主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
 
 **工具集**：下发 = 全局可用性（`toolsEnabled` / `noTools` / 侧车 feature）∩ `.effective(settings, story, 'tools')`（按 `.toolCategory` 把工具名映射到 `image / memory / schedule / email / payment` 五个开关，缺省跟随全局）。
 
@@ -260,12 +260,12 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | **「停止」只中断聊天回合** | `S.chatAbortCtrl`（`A.state`）只有 `src/app/turn.js` 的 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `src/app/turn.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
 | **画像三条纪律**：存储不设上限 / 注入有预算 / 常驻仅一行摘要 | `src/core/context.ts`：`profileBlock`、`PROFILE_TOP_N`、`PROFILE_MAX_CHARS` | 画像不能吃光预算 |
-| **不预置模型名与厂商参数** | `src/core/modelCapabilities.ts`（表默认空）、`src/core/store.ts` 默认 provider | 参数随厂商变动，宁可留空让用户填 |
+| **不预置模型名与厂商参数** | `src/core/modelCapabilities.ts`（只登记上下文窗口，表默认空）、`src/core/store.ts` 默认 provider | 参数随厂商变动，宁可留空让用户填；厂商独有的形参（思考档位 / 质量 / 画风…）没有通用协议，一律写「自定义请求参数」（`extraParams`，最后并入请求体），适配器不按表换算 |
 | **换档保护** | `src/app/painter.js` / `src/app/turn.js`：生图 / 书记员结果写回前核对 `storyId`；`src/app/video.js` 的轮询循环同样每次核对 | 切换故事时不污染新档，也不再等旧任务（视频任务转入 `pendingVideos` 待恢复，见下一行） |
 | **视频不进作画队列** | `src/app/video.js`：`videoQ = .create()`（第二个实例）、`#video-status` 独立胶囊 | 视频 1~3 分钟且 run() 内整段轮询，绝不能堵出图；提交成功立刻写 `story.pendingVideos[]`，切档 / 刷新只停本地等待，回到该故事用 `poll` 续同一 `task_id`（不重复提交）；下载被拦走 `remoteUrl` 限时降级 |
-| **AI 文本一律 `textContent` 渲染** | `src/app/render.js` 渲染函数 | 模型输出与导入内容不可信，禁止拼 `innerHTML` |
+| **AI 文本一律按纯文本渲染** | `src/screens/read/*.svelte`（Svelte 文本插值，主聊天流 / 气泡 / 面板预览）+ `src/app/render.js`（流式临时 DOM 的 `fillLiveDom` / `reasonLiveInto`，`textContent` 回填） | 模型输出与导入内容不可信，禁止拼 `innerHTML` / `{@html}`；缩略图另过 `safeThumb` 白名单 |
 | **树是唯一真源，其余字段是投影** | `src/core/tree.ts`：`project` / `stateOf`；`src/app/*` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
-| **`seal` 必须在 `postTurn` 之后** | `src/app/round.js`：`sendPlayerAction`、`src/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态 |
+| **`seal` 必须在 `postTurn` 之后** | `src/app/round.js`：`sendPlayerAction`、`src/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态。seal 再切 entries 的起点来自 `commit` 记进 `node.meta.logFrom` 的 `logMark`（`eval/tree-test.js` 19.7 / 19.8 固定）：log 被 120 条窗口裁过之后 `indexOf(entries[0])` 会返回 -1，尾巴就静默丢了；对不上时按末条倒推，全都找不到才保留原 entries 并 `console.warn` |
 | **全树图集必须含非当前分支** | `src/core/tree.ts`：`imageIdsOf`（树遍历**唯一实现**）；`src/core/store.ts`：`imageIdsOf`（扫 log / scenes 后委托树遍历）、`knownImageIds` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径；树遍历只留一份实现，两处漂移过就是删档级事故） |
 | **晚到条目 / 画面带 `nodeId` 校验** | `src/app/painter.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`src/core/tree.ts`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
 | **模型发起的有副作用动作一律走提案** | `src/core/proposals.ts`：`STATUS` / `reconcile` / `confirm` / `approveSecond` / `deny`；`src/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作。状态机以 `p.status` 为唯一真源（0.13.0 收口）：`pending → executing → done`，sidecar 要求二次确认时转 `awaiting_confirm`（与 pending 共用同一份 TTL，卡片给「继续确认」，`confirm` 对它可重入、绝不自动批准），关窗即拒绝并清理 intent；读档时不在在途集合里的 `executing` 一律由 `reconcile` 收敛为 `failed`（上次执行随页面关闭中断，结果未知、不自动重试）；发信失败保留 `draftId` 并尽力丢弃残留草稿，清不掉时卡片给「清理草稿」。`isWaitingSecond` / `reconcile` 是唯一判定与收敛入口 |
@@ -273,10 +273,11 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | **颜色只从令牌来** | `css/tokens.css` 的 `:root`（唯一改色的地方，阶段 3 起独立成文件）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
 | **自动标题写回护栏** | `src/core/titles.ts`：`applyTitle(story, id, title)`；触发在 `src/app/round.js` / `src/app/turn.js` 的 `seal` 之后、编排在 `src/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
 | **搜索输出零 HTML、高亮只走 ranges** | `src/core/search.ts`：`query`（片段 + ranges）；`src/screens/shelf/ShelfScreen.svelte`（`<mark>` + 文本插值） | 查询结果只有纯文本与 `[start,end]` 下标；UI 高亮不得拼 `innerHTML`（对抗内容如 `<script>` 原样保留为文本）。搜索文档遍历**全部分支节点**；内存索引不持久化，首次聚焦搜索框惰性构建（分批 ~5 个故事让出主线程），`saveStory` 防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除 |
+| **助手回复只有一种纯文本口径** | `src/core/tree.ts`：`plainReply(raw, { trim })`；消费方 `src/core/titles.ts`（buildPrompt）、`src/core/treeLayout.ts`（`replyText`，标签与分支页面板预览共用）、`src/core/search.ts`（`buildDoc`）、`src/core/store.ts`（`storySnippet`） | 剧情模式的 `{"narration":"…"}` 与 chat 的纯文本在同一处拍平：坏 JSON / 无旁白字段一律当纯文本，中文键「旁白」兼容旧档；`trim` 只在标题提示词显式开启，摘要 / 标签按自己的用途再裁。全仓「`JSON.parse` + 取旁白」只允许 `tree.ts` 本体与两处特例（书记员压缩输入另要 `scene_change`、`context.ts` 零 import），`eval/reply-text-test.js` 有可执行检查 |
 | **书架只读索引** | `src/core/store.ts`：索引条目 `{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`、`ensureIndexComplete`；`src/app/shelf.js`：`renderShelf` | `renderShelf` 不再对每个故事 `loadStory`；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `ensureIndexComplete` 按需补齐并整体回写一次（幂等）；空标题只显示兜底文案、**不回写存档** |
 
 | **故事与导出里绝不带密钥** | `src/core/prefs.ts`：`sanitizePrefs` / `stripSecrets` / `exportPrefs`；`src/core/store.ts`：`migrateStory` / `serializeStory` / `buildStoryPack` | 故事会被导出 / 分享 / 备份：`story.prefs` 只存 `profileId`（不透明引用）与 `profileLabel`（显示用）；导出包整包剥 `apiKey / key / token / baseUrl`（任意嵌套层级），`eval/prefs-test.js` 有可执行断言 |
-| **主模型配置走 `resolveChatCfg`** | `src/core/prefs.ts`：`resolveChatCfg`；`src/app/models.js`：`chatCfg` / `chatContextWindow`；`src/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / thinking / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
+| **主模型配置走 `resolveChatCfg`** | `src/core/prefs.ts`：`resolveChatCfg`；`src/app/models.js`：`chatCfg` / `chatContextWindow`；`src/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
 | **工具集 = 全局可用性 ∩ `prefs.tools`** | `src/app/round.js`：`callAI1` 的 `toolAllowed` 过滤；`src/core/prefs.ts`：`toolCategory` | 对话里可单独关掉「下单 / 邮件 / …」，默认跟随全局；其它对话不受影响 |
 | **手改派生数据后 `resyncState`** | `src/core/tree.ts`：`resyncState`；`src/app/settings.js`：`saveWorldFromForm` | 树是真源、`project` 会用 head 的内联状态覆盖 `world / summaries / …`——手改世界卡后必须把 head 的状态换成当前值，否则下次进故事 / 切分支会把编辑回滚掉 |
 | **打开分支页只读树** | `src/app/branch.js`：`openBranch` | 分支页渲染**不得** `ensure` 写盘 / 改 `active` / `project`——只有面板操作经 `Tree.switchTo` / `forkBefore` 改树 |
@@ -293,9 +294,9 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 ### 5.2 设计令牌与动效等级
 
-**颜色**：全站只从 `css/tokens.css` 的 `:root` 令牌取色（阶段 3 起独立成文件）——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
+**颜色**：全站只从 `css/tokens.css` 的 `:root` 令牌取色（阶段 3 起独立成文件）——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。**页面之外的颜色也归令牌**：地址栏 `theme-color` 与 manifest 的 `theme_color` / `background_color` 在源码里是 `__IR_THEME_COLOR__` 占位，构建期由 `vite.config.mjs` 从 `--bg` 展开——各写一份白底值，换主题时必然漏一处。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、index.html / manifest 的颜色占位、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
 
-**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与档位参数 `--dur-off/shift/flash/none`。圆角统一 `--radius: 8px`（阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。
+**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与档位参数 `--dur-off/shift/flash/none`。**表单字号** `--fs-field: 14px` / `--fs-field-mono: 12px`（等宽提示词编辑器）：`input / select / textarea` 只读它们，≤720px 由 `css/responsive.css` 在 `:root` 上一起抬到 16px（iOS Safari 聚焦小于 16px 的输入框会自动放大页面；把 16px 直接写在控件选择器上是 0,0,1 特异性，会被 `#player-input` / `.shelf-search-input` / `label input` / 组件里的 `input.svelte-*` 整条盖掉），`eval/css-structure-test.js` 对账「表单控件的 font-size 一律 `var(--fs-field)` / `var(--fs-field-mono)`」。**主圆角** `--radius: 8px`（卡片 / 按钮 / 输入框 / 舞台与灯箱大图；阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。圆角不是全站一个值——例外按用途登记在 `css/style.css` 的「圆角标尺」里：胶囊（状态 / 模式标签、计数徽标、作画提示、进度线）用 `999px`，面板内次级卡片与大图预览用 `10px`，缩略图与行内小件用 `6px`，行内 `code` 用 `4px`，`<mark>` 与视频角标用 `3px`，窄屏底部抽屉用 `14px 14px 0 0` / `var(--radius) var(--radius) 0 0`，贴边用 `0`；`eval/css-structure-test.js` 对账「分片里的每个圆角取值都在标尺上」，新数值先登记再写。
 
 **动效强度（阶段 3 统一 motion 模块）**：语义真源 `src/core/motion.ts`（`resolve` / `TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画三档声明 / `TRANSITIONS` 逐过渡动作三档声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 档位收口变量 `--m-*` + 动画名表 `--an-*` + `::view-transition-*` 时长收口 + 暂停规则），DOM 端 `src/ui/motion.js`（`applyMotion` / `applyPaused` / `suspendLoops` 子树挂起 / `holdLoops` 过渡期冻结）。`<html data-motion="off|standard|rich">` 由 `.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`src/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入；**首帧**由 `index.html` 的 `<head>` 内联脚本先写一遍（按同一套 `resolve` 口径：先读 `store` 落盘的 `ir:motion` 镜像，没有镜像时按 `prefers-reduced-motion` 选 `off` / `rich`）——CSS 的 `:root` 默认是 rich，不先写的话「减少动态效果」的用户会先看到一帧完整动效，启动后 `applyMotion` 再复核一次；每个动画的三档行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
 
@@ -319,7 +320,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 `view-transition-name` 只在过渡期挂、收尾立即撤；同一时刻必须唯一：舞台用固定的 `stage-art`（一次只给一张图）、弹窗用 `id` / `id-card` 两层、弹窗过渡期间根节点临时 `view-transition-name: none`（否则根快照会曝光固定层与弹窗内部滚动）。连续触发先 `skipTransition()` 收掉上一段，避免快照残留。
 
-**过渡期的循环**（`holdLoops`）：视图过渡的快照会盖住 live DOM，但循环并没有停——220ms 后撤快照那一下，Ken Burns / 环境光 / 流光 / 呼吸会从「快照里的相位」跳到「已推进的相位」。所以 `runTransition` 在 VT 的 update 回调里（新快照拍摄之前）把**正在跑的真实 DOM 循环**用 WAAPI `pause()` 住（跳过 `::view-transition-*` 自己的动画；本来因 `data-paused` / `data-loops-paused` 停着的不碰），`finished`（含被 `skipTransition` 顶掉）计数式 `play()` 回来。`?vt=0` / 不支持 VT / `off` 没有快照，不冻结也不干预。验收：`acceptance/phase5/8/loop-freeze-smoke.mjs`（8 场景 75 条断言）。
+**过渡期的循环**（`holdLoops`）：视图过渡的快照会盖住 live DOM，但循环并没有停——220ms 后撤快照那一下，Ken Burns / 环境光 / 流光 / 呼吸会从「快照里的相位」跳到「已推进的相位」。所以 `runTransition` 在 VT 的 update 回调里（新快照拍摄之前）把**正在跑的真实 DOM 循环**用 WAAPI `pause()` 住（跳过 `::view-transition-*` 自己的动画；本来因 `data-paused` / `data-loops-paused` 停着的不碰），`finished`（含被 `skipTransition` 顶掉）计数式 `play()` 回来。`?vt=0` / 不支持 VT / `off` 没有快照，不冻结也不干预。验收：阶段 5 的 `loop-freeze-smoke.mjs`（8 场景 75 条断言）按 `.gitignore` 只留本地工作副本、不入库；需要复跑时从历史提交取回，或参考 `acceptance/tools/motion-probe.mjs` 的循环测量口径。
 
 **本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断；阶段 5 起主路径改走 `runTransition`，旧 WAAPI 位移留作降级）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。阶段 5 的五个过渡动作（切屏 / 舞台换画 / 切兄弟 / 分支页开合 / 弹窗开合）统一走 `runTransition`，三档与降级见下节。
 
@@ -369,12 +370,12 @@ PWA 是「装个帽子」，不是「换条路」：`src/pwa.js` 在 https / `lo
 | 跨域（对话 / 生图 API、字体 CDN） | 不拦截、不缓存 | **API Key 与剧情文本绝不进缓存** |
 | 非 GET | 不拦截 | 上传/导入走原路 |
 
-预缓存清单**在构建期生成**（`vite.config.mjs` 的 `irShell` 按 `dist/site` 磁盘真实文件名注入 `PRECACHE`）：接入 Vite 后产物名带内容 hash，运行时用正则从 `index.html` 解析资源的旧做法已经失效（踩过的坑）。`CACHE` 名（`ir-v<版本>`）同样在构建期由 `VERSION` 注入：版本一变就换缓存、`activate` 时清掉旧的，等价于「跟着发布节奏清缓存」。**改前端资源后如果本地看到旧文件，先怀疑 Service Worker**（DevTools → Application → Service Workers → Unregister）。
+预缓存清单**在构建期生成**（`vite.config.mjs` 的 `irShell` 按 `dist/site` 磁盘真实文件名注入 `PRECACHE`）：接入 Vite 后产物名带内容 hash，运行时用正则从 `index.html` 解析资源的旧做法已经失效（踩过的坑）。`CACHE` 名（`ir-v<版本>`）同样在构建期由 `VERSION` 注入：版本一变就换缓存、`activate` 时清掉旧的，等价于「跟着发布节奏清缓存」。清理**带前缀过滤**（`startsWith('ir-v')`）：站点常挂在 `LiSheng5.github.io/infinite-reading/` 这类共享域名下，同源还有别人的项目，一次激活不能把它们的缓存一起删掉（`eval/platform-test.js` 有可执行检查）。**改前端资源后如果本地看到旧文件，先怀疑 Service Worker**（DevTools → Application → Service Workers → Unregister）。
 
 ## 9. 想扩展的话
 
 - **接新的模型服务**：在 `src/core/providers.ts` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `src/app/*` 的业务逻辑。
-- **视频**：`['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`src/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。
+- **视频**：`['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`src/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。启动参数支持「只给上游 URL」（`node tools/video-proxy.mjs https://api.minimaxi.com`），端口 / 上游不合法与端口被占用都给可读报错、不裸崩；转发带上游空闲超时（5 分钟）与断开清理——客户端先断即掐掉在途请求、上游断流回 5xx 而不是崩进程，门禁 `eval/video-proxy-test.js` 用桩上游对账。
 - **主题**：`css/tokens.css` 的 `:root` 就是主题入口（颜色 / 时长 / 缓动全走令牌）。当前是白底蓝强调浅色主题；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `src/core/store.ts` 与 `src/core/roleCard.ts`，新增字段请同步 `migrateStory` 与 `src/core/schema.ts`。
 
@@ -404,12 +405,13 @@ node sidecar/server.mjs --show-token
 
 - 只绑 `127.0.0.1`（局域网不可达），端口默认 `4319`（可用 `IR_SIDECAR_PORT` / `IR_SIDECAR_DATA_DIR` 环境变量覆盖，单测就是这么隔离的）。
 - 除 `/health` 外所有接口都要 `Authorization: Bearer <token>`；`/health` 只回能力布尔位，前端靠它决定「在线 / 离线」。
+- **请求来源两道闸在鉴权之前**：`Host` 只接受 `127.0.0.1 / localhost / [::1]`（否则 403 `BAD_HOST`）——DNS rebinding 的攻击页在浏览器侧与本机同源，连 CORS 都不触发，Host 头是唯一识别点；`Origin` 只接受本机页面（别的站点 403 `ORIGIN_NOT_ALLOWED`），`file://` 的字面量 `null` 不再无条件放行：它与任意站点的沙箱 iframe 在浏览器侧完全一致（实测两边都是 `Origin: null` + `Sec-Fetch-Site: cross-site`），所以改成「带 token / SSE ticket 才回显 CORS，`/health` 与预检例外」。`eval/sidecar-smoke.js` 有反向用例（伪造 Host / 外部 Origin / 无凭据的 null 来源）。
 - 前端探测失败即降级：三个功能显示「需要启动本地服务」并禁用（设置里三个分区整体灰显），其余功能不受影响。
 - **单进程**：启动时用锁文件 + 端口占用双重检测，重复启动会被拒绝（避免定时触发被跑两遍）。
 
-**存储与真源**：侧车用 `node:sqlite`（`sidecar/data/ir-sidecar.db`）持久化触发器、触发记录、邮件审计与草稿、支付台账与授权范围。**安全项（额度 / 白名单 / 每日上限 / 免打扰时段 / token）的唯一真源是 `sidecar/data/config.json`**，前端设置页只是它的编辑界面（经 `GET/PUT /api/config`），前端本地不保存这些值，模型也没有任何写入通道——这与 SillyTavern（`config.yaml` + `secrets.json`）、Open WebUI（环境变量 + Admin Panel）、LibreChat（`.env` > `yaml` > 面板）三家一致。
+**存储与真源**：侧车用 `node:sqlite`（`sidecar/data/ir-sidecar.db`）持久化触发器、触发记录、邮件审计与草稿、支付台账与授权范围。**安全项（额度 / 白名单 / 每日上限 / 免打扰时段 / token）的唯一真源是 `sidecar/data/config.json`**，前端设置页只是它的编辑界面（经 `GET/PUT /api/config`），前端本地不保存这些值，模型也没有任何写入通道——这与 SillyTavern（`config.yaml` + `secrets.json`）、Open WebUI（环境变量 + Admin Panel）、LibreChat（`.env` > `yaml` > 面板）三家一致。长期授权范围（mandate）按「月」签发与续签：额度 = 设置里的每月上限、有效期 = 本月（`period_start` / `period_end`），签了窗口的授权过期 / 未开始由策略层直接拒绝（`MANDATE_EXPIRED`）、已用额度只按窗口内统计，前端在下一次购买前确认续签一份新的；没签窗口的旧档保持终身累计口径（`eval/payment-test.js` 对账）。
 
-**工具通道的取舍（v0.6.0 起）**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），**只在 `chat`（智能体）/ `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效；模型对**已生效的同名触发器**做实质修改（prompt / 规格 / 频道 / 启用位）同样退回 `pending_confirm`，内容完全没变则保留 `active`、也不推迟 `next_at`。邮件与支付也做成了模型工具（`email_propose` / `payment_propose`），但**只是提案制**：模型发起的一律停在提案卡上，执行必须由用户点「确认」触发（`src/core/proposals.ts` 状态机 + 侧车双层把关）；工具**只在 `chat` 模式 + 侧车在线 + 对应 feature 开启且有 token 时下发**（rp / choice 即便能力齐备也不给）。用户显式发起的手写邮件 / 下单表单仍是「界面按钮 → 确认弹窗 → 执行」的老路径。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
+**工具通道的取舍（v0.6.0 起）**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），**只在 `chat`（智能体）/ `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效；模型对**已生效的同名触发器**做实质修改（prompt / 规格 / 频道 / 启用位）**直接拒绝**（`TRIGGER_LOCKED`，库里那行一个字段都不动；不改「先覆盖再退回待确认」，否则批准过的 prompt 在用户确认前就已经没了），内容完全没变则保留 `active`、也不推迟 `next_at`。**`source` 不是请求体字段**：`upsertTrigger(input, opts)` 只认进程内 `opts.asUser`，HTTP 路由拿不到「用户在场」的证据、一律按模型处理——否则请求体里写 `source:'user'` 就等于自带一把绕过确认闸门的钥匙（`eval/sidecar-smoke.js` 有 HTTP 级反向用例）。邮件与支付也做成了模型工具（`email_propose` / `payment_propose`），但**只是提案制**：模型发起的一律停在提案卡上，执行必须由用户点「确认」触发（`src/core/proposals.ts` 状态机 + 侧车双层把关）；工具**只在 `chat` 模式 + 侧车在线 + 对应 feature 开启且有 token 时下发**（rp / choice 即便能力齐备也不给）。用户显式发起的手写邮件 / 下单表单仍是「界面按钮 → 确认弹窗 → 执行」的老路径。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
 
 **页面关闭时**：侧车到点只把触发**写入待处理队列**（不打扰、不猜）；前端下次打开时按 `SKIP / RUN_ONCE / RUN_ALL` 补跑，补跑时走的是与真实用户消息完全相同的回合链路（合成一条入站消息 → `sendPlayerAction`）。「页面开着」则由 SSE 实时推送 `trigger.fire`。这一处做成了可替换的策略点（见 `scheduler.mjs` 的 `missedPolicy`）。
 

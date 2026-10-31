@@ -341,25 +341,23 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
       apiKey: sub.apiKey || c.apiKey,
       model: sub.model || c.model,
       temperature: Number.isFinite(+sub.temperature) ? +sub.temperature : 0.7,
-      thinking: 'default',
     };
   }
 
-  // 生图配置：预填档位优先；'__custom__' 或未登记时按比例 + 宽高算 size
+  // 生图配置：按「比例 + 宽高」折成 size（旧档遗留的 size 字面量优先，'__custom__' 直接用宽高）
   // override 供画师工作台传入本图的出图参数（比例 / 宽高）
   function imageCfg(override) {
     const im = Object.assign({}, S.settings.image, override || {});
-    let w = +im.width || 1280, h = +im.height || 720, size = '', customSize = false;
+    let w = +im.width || 1280, h = +im.height || 720, size = '';
     if (im.size && im.size !== '__custom__') {
       size = String(im.size);
       const m = size.match(/^(\d+)\s*[x×]\s*(\d+)$/);
       if (m) { w = +m[1]; h = +m[2]; }
     } else {
-      if (im.size === '__custom__') customSize = true;
-      else if (IMAGE_ASPECTS[im.aspect]) { w = IMAGE_ASPECTS[im.aspect][0]; h = IMAGE_ASPECTS[im.aspect][1]; }
+      if (im.size !== '__custom__' && IMAGE_ASPECTS[im.aspect]) { w = IMAGE_ASPECTS[im.aspect][0]; h = IMAGE_ASPECTS[im.aspect][1]; }
       size = w + 'x' + h;
     }
-    return Object.assign({}, im, { size: size, width: w, height: h, customSize: customSize });
+    return Object.assign({}, im, { size: size, width: w, height: h });
   }
 
   /* 图标：sprite 在 index.html 顶部（#ir-icons）。iconEl() 返回元素（不用 innerHTML 拼字符串，

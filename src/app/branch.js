@@ -88,20 +88,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.js）
   const codeSlice = TreeLayout.codeSlice;
 
-  // 面板预览文本（textContent 用）：玩家行动原话；AI 回复取旁白（坏 JSON 当纯文本）
-  function replyPreview(node) {
-    const m = node && node.assistantMsg;
-    const c = m && m.content;
-    if (typeof c !== 'string' || !c) return '';
-    try {
-      const j = JSON.parse(c);
-      if (j && typeof j === 'object' && !Array.isArray(j)) {
-        const n = j.narration != null ? j.narration : (j['旁白'] != null ? j['旁白'] : null);
-        if (n != null) return String(n);
-      }
-    } catch (_) { /* 坏 JSON 当纯文本 */ }
-    return c;
-  }
+  // 面板预览文本（textContent 用）：AI 回复取旁白（坏 JSON 当纯文本）。
+  // 「回复 → 纯文本」只有 TreeLayout.replyText 一份实现（内部走 tree 的 plainReply）。
+  const replyPreview = TreeLayout.replyText;
   function actionText(node) {
     const a = node && node.action;
     return (a && a.text) ? String(a.text) : '';

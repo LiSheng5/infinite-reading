@@ -30,7 +30,9 @@
 
 <!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#FFFFFF">
+<!-- 地址栏主题色：构建期由 vite.config.mjs 从 css/tokens.css 的 --bg 注入（与版本戳同一处）。
+     这里不许写死颜色——页面底改令牌，这两处必须跟着变；manifest 里的同名颜色同一口径。 -->
+<meta name="theme-color" content="__IR_THEME_COLOR__">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">

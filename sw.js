@@ -20,8 +20,12 @@
  *
  * CACHE 名里的版本号在**构建期**由 vite.config.mjs 从根目录 VERSION 注入（__IR_VERSION__ 占位，别手改）：
  * 版本一变 → 新缓存 → 旧的整批删掉，等价于「跟着发布节奏清缓存」。
+ *
+ * CACHE 前缀 `ir-v` 是**同源边界的唯一标识**：站点常被放在 `LiSheng5.github.io/infinite-reading/`
+ * 这类共享域名下，同源还有别人的项目缓存。`activate` 只清带这个前缀的旧版本，别的一概不碰。
  */
 const CACHE = 'ir-v' + '__IR_VERSION__';
+const CACHE_PREFIX = 'ir-v';
 
 const CORE = ['./', './index.html', './manifest.webmanifest'];
 
@@ -45,7 +49,9 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    // 只删「本项目更早版本」的缓存：同源其它项目的缓存名不带 ir-v 前缀，一律保留
+    const stale = keys.filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE);
+    await Promise.all(stale.map(k => caches.delete(k)));
     await self.clients.claim();                      // 已打开的页面也归新 SW 管
   })());
 });

@@ -42,22 +42,53 @@ function buildBackupPack(settings: any, userProfile: any[], stories: any[], stri
   };
 }
 
+/* 原图读取的并发上限。
+ * 读原图是异步 I/O（IndexedDB），串行等于把 N 次往返排成一队；4 路并发在这类「多读一写」的
+ * 导出里提速明显，又不会把连接 / 内存打满（每路只持有一张图的 Blob，字节仍随 Zip.build 逐张过）。
+ * 顺序不受影响：mapLimit 的返回值按入参下标归位，manifest 编号与串行时逐字一致。 */
+const ZIP_IMAGE_CONCURRENCY = 4;
+
+// 带并发上限的 map：结果顺序 = 入参顺序（不因完成先后乱序）。
+// 某一路抛错时整批按失败返回（其余在途读取自行收尾，不做强制取消）；调用方（doBackupAll）
+// 只会 toast「打包失败：原因」，按钮随即还原，产不出半份清单文件。
+async function mapLimit(list: any[], limit: number, fn: (item: any, index: number) => Promise<any>) {
+  const out: any[] = new Array(list.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= list.length) return;
+      out[i] = await fn(list[i], i);
+    }
+  };
+  const n = Math.max(1, Math.min(limit, list.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return out;
+}
+
 async function buildBackupZip(pack: any, onProgress?: (done: number, total: number, bytes: number) => void) {
   // 只打包「还有故事引用着」的原图：孤儿图（引用已被删）本来就要靠「清理孤儿原图」清掉，不进备份。
   // 视频本体不进备份（体积），只留封面——封面在 scene / log 的 thumb 里随 json 走。
   const ids: any[] = Array.from(Store.knownImageIds()).filter((id: any) => !/^vid:/.test(String(id)));
+  const total = ids.length;
+  let done = 0;
+  let bytes = 0;
+  // 并发读取，进度按完成先后报（done / bytes 都只增不减）；空图 / 视频占位照旧不进清单
+  const loaded = await mapLimit(ids, ZIP_IMAGE_CONCURRENCY, async (id: any) => {
+    const blob = await Store.getImage(id);
+    done++;
+    if (blob && blob.size) bytes += blob.size;
+    if (onProgress) onProgress(done, total, bytes);
+    return { id: id, blob: blob };
+  });
   const files: any[] = [];
   const manifest: any[] = [];
-  let bytes = 0;
-  for (let i = 0; i < ids.length; i++) {
-    const blob = await Store.getImage(ids[i]);
-    if (blob && blob.size) {
-      const path = 'images/' + String(manifest.length + 1).padStart(4, '0') + '.' + (IMAGE_EXT[blob.type] || 'bin');
-      files.push({ name: path, data: blob });
-      manifest.push({ id: ids[i], path: path, type: blob.type || 'application/octet-stream', size: blob.size });
-      bytes += blob.size;
-    }
-    if (onProgress) onProgress(i + 1, ids.length, bytes);
+  for (const item of loaded) {
+    const blob = item.blob;
+    if (!blob || !blob.size) continue;
+    const path = 'images/' + String(manifest.length + 1).padStart(4, '0') + '.' + (IMAGE_EXT[blob.type] || 'bin');
+    files.push({ name: path, data: blob });
+    manifest.push({ id: item.id, path: path, type: blob.type || 'application/octet-stream', size: blob.size });
   }
   const body = Object.assign({}, pack, { schema: 2, images: manifest });
   files.unshift({ name: 'ir-backup.json', data: JSON.stringify(body, null, 1) });

@@ -520,6 +520,41 @@ for (const f of svelteFiles) {
 }
 check('CSS content: 与 Svelte 模板无 emoji / 符号字符当图标', glyphHits.length === 0, glyphHits.join(' | '));
 
+/* ---------- 13. [新] 主题色 / PWA 颜色走令牌真源 ---------- */
+// 地址栏主题色与 manifest 的两个颜色只能从 --bg 构建期展开：
+// 各写一份白底值，改主题时必然漏一处（页面换底色、地址栏还是白的就是这么来的）。
+{
+  const BG = ((rootDecl.match(/--bg:\s*([^;]+);/) || [])[1] || '').trim();
+  check('--bg 是可展开的具体颜色（manifest 不收 var()）',
+    /^(#[0-9a-f]{3,8}|rgba?\(|hsla?\()/i.test(BG), BG);
+
+  const htmlSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const themeMeta = (htmlSrc.match(/<meta name="theme-color" content="([^"]*)">/) || [])[1];
+  check('index.html 的 theme-color 走占位符（不写死颜色）',
+    themeMeta === '__IR_THEME_COLOR__', String(themeMeta));
+
+  // 颜色纪律延伸到 HTML：index.html 里的颜色同样只会绕开令牌（id / href 的 # 不算，
+  // 因为 #i-x / #app 这类名字不是 3~8 位十六进制）。
+  const htmlNoComment = htmlSrc.replace(/<!--[\s\S]*?-->/g, '');
+  const htmlColor = htmlNoComment.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+  check('index.html 里没有颜色字面量', !htmlColor, htmlColor && htmlColor[0]);
+
+  const mfSrc = fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8');
+  let mf = null;
+  try { mf = JSON.parse(mfSrc); } catch (e) { check('manifest.webmanifest 是合法 JSON', false, e.message); }
+  if (mf) {
+    check('manifest 的 theme_color / background_color 走占位符',
+      mf.theme_color === '__IR_THEME_COLOR__' && mf.background_color === '__IR_THEME_COLOR__',
+      JSON.stringify([mf.theme_color, mf.background_color]));
+  }
+
+  const conf = fs.readFileSync(path.join(ROOT, 'vite.config.mjs'), 'utf8');
+  check('vite.config.mjs 从 css/tokens.css 取 --bg',
+    /'css',\s*'tokens\.css'/.test(conf) && /--bg:/.test(conf));
+  check('vite.config.mjs 展开 __IR_THEME_COLOR__（HTML 与 manifest 同一口径）',
+    /replaceAll\('__IR_THEME_COLOR__',\s*THEME_COLOR\)/.test(conf) && /manifestText\(\)/.test(conf));
+}
+
 /* ---------- 汇总 ---------- */
 
 if (failed) {

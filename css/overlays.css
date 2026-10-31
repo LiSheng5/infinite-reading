@@ -84,7 +84,7 @@ label input, label select {
   display: block; width: 100%;
   margin-top: 6px;
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: var(--fs-field);
   letter-spacing: .01em;
   color: var(--ink);
   background: var(--field-bg);
@@ -101,7 +101,7 @@ label input:focus, label select:focus {
 label textarea {
   display: block; width: 100%; margin-top: 6px;
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: var(--fs-field);
   line-height: 1.85;
   letter-spacing: .01em;
   color: var(--ink);
@@ -117,7 +117,7 @@ label textarea:focus { border-color: var(--accent-line); box-shadow: var(--field
 label input:disabled { opacity: 0.45; }
 label input.inline-num {
   display: inline-block; width: 58px; margin: 0 4px;
-  font-size: 14px;
+  font-size: var(--fs-field);
   color: var(--ink);
   background: var(--field-bg);
   border: 1px solid var(--line-strong);
@@ -227,7 +227,7 @@ label input.inline-num {
 .pw-meta-col { flex: 1; min-width: 0; }
 .pw-meta-col label { margin-bottom: 0; }
 /* 提示词是可读可改的「源码」：等宽，避免中英混排时对齐跳来跳去 */
-#pw-prompt { font-family: var(--font-mono); font-size: 12px; line-height: 1.8; }
+#pw-prompt { font-family: var(--font-mono); font-size: var(--fs-field-mono); line-height: 1.8; }
 .pw-thread {
   max-height: 200px; overflow-y: auto; margin-bottom: 10px;
   display: flex; flex-direction: column; gap: 9px;

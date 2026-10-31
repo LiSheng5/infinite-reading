@@ -1,9 +1,11 @@
 /*
  * eval/prefs-test.js —— 设置分层纯逻辑测试（Node、不联网）
  * 覆盖：effective / resolveChatCfg / visibleFor / sanitizePrefs / 导出剥凭证 /
- *       migrateStory 透传清洗 / migrateSettings 补 profiles / 压缩阈值随有效配置走。
+ *       migrateStory 透传清洗 / migrateSettings 补 profiles / 压缩阈值随有效配置走 /
+ *       prefs 与 ui 键表（清洗 · 全局默认 · 本对话覆盖 · 合并同源，[11] 段）。
  */
 'use strict';
+const fs = require('fs');
 const path = require('path');
 
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
@@ -276,6 +278,33 @@ console.log('[10] 依赖装配（阶段 6：静态 import，加载顺序不再�
     && Store.serializeStory({ log: [], scenes: [], savepoints: [] }).scenes.length === 0,
   'store 依赖的 Tree 在位（裁剪窗口可用）');
   ok(Store.assertDeps === undefined, '加载顺序自检已随静态 import 删除');
+}
+
+console.log('[11] prefs / ui 键表是唯一真源（清洗 · 全局默认 · 覆盖 · 合并同源）');
+{
+  // 六个布局键：合法值透传
+  const ui = { layout: 'stack', splitRatio: 0.4, imageCollapsed: true, fontScale: 'lg', width: 'wide', density: 'compact' };
+  eq(P.sanitizePrefs({ ui: ui }).ui, ui, 'sanitizePrefs 六个布局键全通');
+  // 非法值逐个丢弃：判定统一在表里的 take，不再各写一条 if
+  const bad = P.sanitizePrefs({ ui: { layout: 'x', splitRatio: 0, imageCollapsed: 'yes', fontScale: 'xl', width: 'huge', density: 'dense' } });
+  ok(!bad.ui, '六个布局键的非法值全部丢弃（收窄后为空 → ui 不落地）');
+  // 全局默认来自表里的 fallback
+  const s = Store.migrateSettings({});
+  eq(P.effective(s, { prefs: {} }, 'ui'),
+    { layout: 'auto', splitRatio: 0.5, imageCollapsed: false, fontScale: 'md', width: 'standard', density: 'standard' },
+    '无覆盖时六个键的默认值来自键表');
+  // 本对话覆盖 + 合并
+  eq(P.effective(s, { prefs: { ui: ui } }, 'ui'), ui, '本对话覆盖合并后与写入值一致');
+  eq(P.effective(s, { prefs: { ui: { splitRatio: 0.95 } } }, 'ui.splitRatio'), 0.72,
+    '单键覆盖与清洗同口径（极端比例同样夹到 0.72）');
+  // 静态：判定点读同一张表，没有第二份清单
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'prefs.ts'), 'utf8');
+  ok(/const UI_RULES = \{/.test(src) && /const UI_KEYS = Object\.keys\(UI_RULES\)/.test(src),
+    'prefs.ts 有 UI_RULES 表与由它派生的 UI_KEYS');
+  ok(src.indexOf("case 'ui.") < 0, '不再有第二份 ui.* 的 switch 清单（键只写在表里）');
+  ok((src.match(/UI_RULES\[/g) || []).length >= 3, 'sanitizeUi / globalValue / storyOverride 都从表里取（≥3 处）');
+  ok(/const PREF_RULES = \{/.test(src) && (src.match(/PREF_RULES\[/g) || []).length >= 1,
+    'sanitizePrefs 由 PREF_RULES 驱动（顶层键也只有一份）');
 }
 
 if (failed) {

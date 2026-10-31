@@ -5,7 +5,7 @@
  * 表结构一次建全（触发器 / 触发记录 / 邮件审计 / 邮件草稿 / 支付授权 / 支付流水），
  * 后续功能按阶段启用，避免反复迁移。
  *
- * 要求 Node ≥ 22.5（node:sqlite 于 22.5 引入；22.5–23.3 需 --experimental-sqlite，≥ 23.4 无需）。
+ * 要求 Node ≥ 24（同根 `package.json` 的 engines；node:sqlite 于 22.5 引入、≥ 23.4 无需 --experimental-sqlite）。
  */
 import { DatabaseSync } from 'node:sqlite';
 import { DB_PATH, ensureDataDir } from './config.mjs';

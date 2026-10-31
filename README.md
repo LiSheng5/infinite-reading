@@ -31,7 +31,7 @@ git clone git@github.com:LiSheng5/infinite-reading.git   # 或 https://github.co
 cd infinite-reading
 ```
 
-1. 构建（需要 Node ≥ 22.5；源码是 ES module + Svelte，浏览器不能直接打开 `index.html`）：
+1. 构建（需要 Node ≥ 24，与 CI 同版本；源码是 ES module + Svelte，浏览器不能直接打开 `index.html`）：
 
    ```bash
    npm ci
@@ -111,7 +111,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 单文件 | `npm run bundle` → `dist/ir.html`（约 640 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
-| 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 22.5：内置 `node:sqlite`，见 `sidecar/README.md`） |
+| 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 24：内置 `node:sqlite`，见 `sidecar/README.md`） |
 
 **可安装（PWA）**：用 `https` 或 `localhost` 打开后，浏览器会出现「安装」入口；装完有桌面图标、可离线打开（Service Worker 只缓存本站静态资源，**跨域 API 请求与密钥一律不进缓存**）。
 
@@ -143,7 +143,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `src/core/store.ts` | 存档层（内存优先 + 异步落盘；schema v3、旧档迁移、书架、存档点） |
 | `src/core/zip.ts` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
 | `src/core/roleCard.ts` | 角色卡（SillyTavern PNG 解析） |
-| `src/core/modelCapabilities.ts` | 模型参数登记表（默认留空） |
+| `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认留空；厂商形参走「自定义请求参数」） |
 | `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 21 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
 | `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗卡片 / 视图过渡） |
 | `src/core/sidecar.ts` + `src/core/features.ts` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
@@ -189,7 +189,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 ## 参与与许可
 
-- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 34 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 39 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
 - **遇到问题**：安全相关请走私密渠道（见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「安全说明」），其余请提 Issue（有模板）。
 - **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「第三方资源与许可」。

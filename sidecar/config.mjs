@@ -17,6 +17,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { num } from './util.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,10 +42,6 @@ const PAYMENT_PROVIDERS = ['mock', 'manual-order'];
 
 /* ---------------- 归一化小工具（把任何脏输入夹回安全范围） ---------------- */
 
-function intOrZero(v) {
-  const n = Math.floor(Number(v));
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
 function strArray(v, max) {
   if (!Array.isArray(v)) return [];
   const out = [];
@@ -80,7 +77,7 @@ function boolOf(v, fallback) {
 export function defaultConfig(port) {
   return {
     token: crypto.randomBytes(32).toString('hex'),
-    port: intOrZero(port) || envPort() || DEFAULT_PORT,
+    port: num(port) || envPort() || DEFAULT_PORT,
     email: { enabled: false, provider: 'mock', allowlist: [], dailyLimit: 0, from: '', resendApiKey: '' },
     schedule: { enabled: false, paused: true, quietHours: [], dailyCap: 0, missedPolicy: 'SKIP' },
     payment: {
@@ -137,18 +134,18 @@ export function sanitizeConfig(raw, base) {
   const budgets = {};
   if (rPay.budgets && typeof rPay.budgets === 'object') {
     for (const k of Object.keys(rPay.budgets).slice(0, 50)) {
-      budgets[String(k).slice(0, 64)] = intOrZero(rPay.budgets[k]);
+      budgets[String(k).slice(0, 64)] = num(rPay.budgets[k]);
     }
   }
 
   return {
     token,
-    port: intOrZero(raw.port) || def.port,
+    port: num(raw.port) || def.port,
     email: {
       enabled: boolOf(rEmail.enabled, false),
       provider: enumOf(rEmail.provider, EMAIL_PROVIDERS, 'mock'),
       allowlist: strArray(rEmail.allowlist),
-      dailyLimit: intOrZero(rEmail.dailyLimit),
+      dailyLimit: num(rEmail.dailyLimit),
       from: String(rEmail.from || '').trim().slice(0, 200),
       resendApiKey: String(rEmail.resendApiKey || '').trim().slice(0, 400),
     },
@@ -156,18 +153,18 @@ export function sanitizeConfig(raw, base) {
       enabled: boolOf(rSched.enabled, false),
       paused: boolOf(rSched.paused, true),   // 默认「暂停」：没开就是暂停
       quietHours: quietHours(rSched.quietHours),
-      dailyCap: intOrZero(rSched.dailyCap),
+      dailyCap: num(rSched.dailyCap),
       missedPolicy: enumOf(rSched.missedPolicy, MISSED_POLICIES, 'SKIP'),
     },
     payment: {
       enabled: boolOf(rPay.enabled, false),
       provider: enumOf(rPay.provider, PAYMENT_PROVIDERS, 'mock'),
       currency: (String(rPay.currency || 'CNY').trim().slice(0, 8).toUpperCase() || 'CNY'),
-      perTx: intOrZero(rPay.perTx),
-      daily: intOrZero(rPay.daily),
-      monthly: intOrZero(rPay.monthly),
-      autoApprove: intOrZero(rPay.autoApprove),
-      cooldownMin: intOrZero(rPay.cooldownMin),
+      perTx: num(rPay.perTx),
+      daily: num(rPay.daily),
+      monthly: num(rPay.monthly),
+      autoApprove: num(rPay.autoApprove),
+      cooldownMin: num(rPay.cooldownMin),
       merchantAllowlist: strArray(rPay.merchantAllowlist),
       merchantBlocklist: strArray(rPay.merchantBlocklist),
       categoryAllowlist: strArray(rPay.categoryAllowlist),

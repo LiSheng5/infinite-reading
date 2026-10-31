@@ -25,7 +25,9 @@
  *  18. 迁移补测（用例 6）：末条旁白 versions>1 展开成兄弟（meta.approx）、
  *      旧存档点 sp.turn → nodeId 映射、幂等（连跑两次深相等）。
  *  19.  增补：站在非叶子继续 = 新分支（commit 以 head 为 parent）、
- *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏。
+ *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏、
+ *      seal 的 entries 起点（commit 记 meta.logFrom；log 被裁掉前缀后仍收进 postTurn 尾巴、
+ *      完全对不上时保留原 entries 并警告）。
  *
  * 用法：node eval/tree-test.js
  */
@@ -795,6 +797,58 @@ function headTo(story, nodeId) {
     && s.summaries.indexOf('旧摘要二') < 0 && s.summaries.indexOf('旧摘要三') < 0);
   check(' 旧分支节点仍在树上（q2 / q3 不丢）',
     !!s.tree.nodes[q2.id] && !!s.tree.nodes[q3.id] && s.tree.nodes[q2.id].parent === q1.id);
+}
+
+// 19.7 seal 的 entries 起点：commit 记 meta.logFrom，log 被裁掉前缀也照旧收进 postTurn 条目
+{
+  const s = newStory();
+  playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
+
+  const mark = T.begin(s);
+  s.log.push({ type: 'player', text: '行动 2', kind: 'do', ts: 10 });
+  const narration = { type: 'narration', text: '第 2 幕旁白', versions: ['第 2 幕旁白'], activeVersion: 0, ts: 11 };
+  s.log.push(narration);
+  const um = { role: 'user', content: '[玩家行动]（做）行动 2' };
+  const am = { role: 'assistant', content: JSON.stringify({ narration: '第 2 幕旁白', choices: [] }) };
+  s.turn += 1;
+  s.messages.push(um, am);
+  const node = T.commit(s, {
+    action: { type: 'player', text: '行动 2', kind: 'do', sent: '（做）行动 2' },
+    userMsg: um, assistantMsg: am, logMark: mark.logMark,
+  });
+  check(' seal：commit 把 entries 起点记进 meta.logFrom', node.meta.logFrom === mark.logMark, node.meta.logFrom);
+
+  // postTurn 追加一条 tool 条目；再把 log 裁到只剩本回合末两条（模拟 120 条窗口切在本回合中间）
+  s.log.push({ type: 'tool', tool: 'scribe', summary: '晚到的书记员条目', ts: 12 });
+  s.log = s.log.slice(-2);          // [narration, tool]：本回合首条（player）已被裁掉
+  T.seal(s, node.id);
+  check(' seal：首条被裁掉时按末条找回起点，收进 postTurn 条目',
+    node.entries.length === 3 && node.entries[0].text === '行动 2'
+    && node.entries[1] === narration && node.entries[2].tool === 'scribe',
+    node.entries.map(e => e.text || e.tool).join('|'));
+}
+
+// 19.8 seal：log 里完全找不到本回合条目（已是别的路径的投影）→ 保留原 entries 并警告
+{
+  const s = newStory();
+  playTurn(s, { text: '旧的', narration: '旧旁白' });
+  const mark = T.begin(s);
+  s.log.push({ type: 'player', text: '新的', kind: 'do', ts: 20 });
+  const node = T.commit(s, {
+    action: { type: 'player', text: '新的', kind: 'do', sent: '（做）新的' },
+    logMark: mark.logMark,
+  });
+  s.log = [{ type: 'tool', tool: 'foreign', summary: '别的分支的条目', ts: 21 }];
+
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  try { T.seal(s, node.id); } finally { console.warn = realWarn; }
+  check(' seal：log 完全对不上 → entries 保持原样',
+    node.entries.length === 1 && node.entries[0].text === '新的',
+    node.entries.map(e => e.text || e.tool).join('|'));
+  check(' seal：log 完全对不上 → 留一条 console.warn（不再静默）',
+    warns.some(x => x.indexOf('找不到本回合条目') >= 0), warns.join(' | '));
 }
 
 /* ---------------- 依赖装配（阶段 6：静态 import） ---------------- */

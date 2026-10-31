@@ -11,7 +11,7 @@
  * 注意：邮件不是「模型自己调用的工具」——发信是高风险副作用动作，
  * 一律由用户在界面显式发起 → 确认 → 执行（见 ARCHITECTURE.md）。
  */
-import { genId, dayRange } from './util.mjs';
+import { genId, dayRange, clampInt } from './util.mjs';
 import { AUDIT, DRAFT, sqlIn } from './statuses.mjs';
 
 export const EMAIL_CODES = [
@@ -21,7 +21,6 @@ export const EMAIL_CODES = [
   'DAILY_LIMIT_EXCEEDED',
   'PROVIDER_ERROR',
   'MISSING_RESEND_API_KEY',
-  'INBOX_NOT_SUPPORTED',
   'DRAFT_NOT_FOUND',
   'DRAFT_ALREADY_SENT',
 ];
@@ -43,7 +42,6 @@ export function createProviders() {
     mock: {
       label: '模拟（只记账，不真的发信）',
       async send() { return { id: genId('mock-'), status: 'ok' }; },
-      async list() { return { ok: true, messages: [] }; },
     },
 
     resend: {
@@ -66,8 +64,6 @@ export function createProviders() {
         try { data = await res.json(); } catch (_) {}
         return { id: data.id || '', status: 'ok' };
       },
-      // Resend 只负责发信，没有收件箱接口
-      async list() { return { ok: false, code: 'INBOX_NOT_SUPPORTED' }; },
     },
   };
 }
@@ -116,11 +112,16 @@ export function createEmail(deps) {
     return list.some(x => String(x).trim().toLowerCase() === a);
   }
 
-  function createDraft(input) {
+  /* 建草稿。建草稿本身也是一条要留痕的事实（界面点「存草稿」的直连路由同样走这里），
+   * 审计因此统一写在这一处：从「发送被拒、自动落草稿」进来的调用由 opts 带上 denied 与原因码，
+   * 一次建草稿仍然只有一条记录（调用侧不再重复记账）。 */
+  function createDraft(input, opts) {
     const addr = normalizeAddress(input && input.to);
+    const subject = String((input && input.subject) || '').slice(0, MAX_SUBJECT);
     const id = genId('d');
     db.prepare('INSERT INTO email_drafts (id, at, to_addr, subject, body, status) VALUES (?,?,?,?,?,?)')
-      .run(id, now(), addr, String((input && input.subject) || '').slice(0, MAX_SUBJECT), String((input && input.body) || '').slice(0, MAX_BODY), DRAFT.PENDING);
+      .run(id, now(), addr, subject, String((input && input.body) || '').slice(0, MAX_BODY), DRAFT.PENDING);
+    audit('draft', addr, subject, (opts && opts.status) || AUDIT.OK, (opts && opts.code) || '', (opts && opts.actor) || 'user');
     return getDraft(id);
   }
 
@@ -165,8 +166,8 @@ export function createEmail(deps) {
 
     // 白名单硬校验：不在名单里且用户还没确认 → 只落草稿
     if (!inAllowlist(cfg, addr) && !confirmed) {
-      const draft = createDraft({ to: addr, subject: subject, body: body });
-      audit('draft', addr, subject, AUDIT.DENIED, 'NEED_CONFIRMATION', actor);
+      const draft = createDraft({ to: addr, subject: subject, body: body },
+        { status: AUDIT.DENIED, code: 'NEED_CONFIRMATION', actor: actor });
       return {
         ok: false, code: 'NEED_CONFIRMATION', draftId: draft.id,
         message: '这个收件人不在白名单里，已存为草稿：需要你确认后才会发出。',
@@ -239,28 +240,8 @@ export function createEmail(deps) {
     return info.changes > 0;
   }
 
-  // limit 归一：Number('abc') 是 NaN，直接进 SQL LIMIT 会触发绑定异常——
-  // 非有限数 / 非正数一律回退默认值，再夹到上限内。
-  function clampLimit(v, dflt, max) {
-    const n = Math.floor(Number(v));
-    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : dflt;
-  }
-
-  async function inbox(opts) {
-    const cfg = getConfig();
-    if (!(cfg.email && cfg.email.enabled)) return { ok: false, code: 'EMAIL_DISABLED', message: '邮件功能未开启。' };
-    const limit = clampLimit(opts && opts.limit, 20, 50);
-    try {
-      const out = await providerOf(cfg).list(cfg, { folder: (opts && opts.folder) || 'inbox', limit: limit });
-      if (out && out.ok === false) return out;
-      return { ok: true, messages: (out && out.messages) || [] };
-    } catch (err) {
-      return { ok: false, code: 'PROVIDER_ERROR', message: String((err && err.message) || err) };
-    }
-  }
-
   function listAudit(opts) {
-    const limit = clampLimit(opts && opts.limit, 50, 200);
+    const limit = clampInt(opts && opts.limit, 50, 200);
     return db.prepare('SELECT * FROM email_audit ORDER BY at DESC LIMIT ?').all(limit)
       .map(r => ({
         id: r.id, at: Number(r.at), kind: r.kind, to: r.to_addr,
@@ -288,7 +269,6 @@ export function createEmail(deps) {
     getDraft,
     listDrafts,
     discardDraft,
-    inbox,
     listAudit,
     stats,
     normalizeAddress,

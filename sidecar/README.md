@@ -4,7 +4,7 @@
 
 | 功能 | 说明 |
 |---|---|
-| 邮件 | 代你写信 / 存草稿 / 发信（收件人白名单硬校验、每日上限、审计）；`GET /api/email/inbox` 已预留但界面未接：`mock` 渠道返回空列表，`resend` 不支持读信 |
+| 邮件 | 代你写信 / 存草稿 / 发信（收件人白名单硬校验、每日上限、审计）；只发不收——Resend 没有读信能力，本期不预留收件箱接口 |
 | 模型主动行动 | 定时写信、定时发消息（一次性 / 固定间隔 / cron 含时区），触发器持久保存 |
 | 购物支付 | 受限代下单（额度、白名单、冷静期、人工确认），**AI 永远拿不到支付凭证** |
 
@@ -39,6 +39,7 @@ node sidecar/server.mjs --show-token   # 再次查看 token
 - 配置文件 `config.json` 权限为 `600`（POSIX）；Windows 上 `mode:0o600` 无效，写盘时会用 `icacls` 尽力收紧为仅当前用户可读写。`sidecar/data/` 已加入 `.gitignore`，不会进版本库。
 - 除 `/health` 外所有接口都需要 `Authorization: Bearer <token>`；目的是防本机其它程序或网页乱调你的服务。SSE（`/api/events`）例外：`EventSource` 带不了请求头，token 也不进 URL，改为先 `POST /api/events/ticket` 用 Bearer 换一张 30 秒有效的一次性 ticket 再连接。
 - token 可自行改成本机口令：**任意非空字符串**（≤256 字符）都接受，改完即时生效（应用「设置 → 本地服务」里同步改）；只有缺失或置空才会重新生成，并在终端打一行提示。
+- **来源要过关**：请求的 `Host` 必须是本机回环（`127.0.0.1 / localhost / [::1]`，否则 403 `BAD_HOST`——DNS rebinding 正是靠 Host 认出来），`Origin` 只接受本机页面（别的站点 403 `ORIGIN_NOT_ALLOWED`）。`file://` 单文件产物的 `Origin` 是 `null`，而任意站点的沙箱 iframe 也是同一个值，所以这一档只在请求**带 token（SSE 为 ticket）**时才回 CORS 头，`/health` 与预检例外。
 - 邮件密钥（如 Resend API Key）只存本地配置文件；服务不代管任何人的钱或邮箱。
 - **邮件的行为保证**：每日上限按「已发出 + 发送中占位」计数——先占位再发信，并发的多封不会一起突破上限；同一封草稿的重复确认（双击 / 两个标签页）只会寄出一封（`pending → sending` 同步抢占，失败退回 `pending`）。进程被杀留下的临时态在下次启动时自动复位。
 
@@ -47,4 +48,4 @@ node sidecar/server.mjs --show-token   # 再次查看 token
 - **AI 可能出错，请设置合理额度。** 默认额度为 0、白名单为空 = 什么都不放行，必须由你手动开启。
 - 支付策略在**代码层**强制执行，但它是**防误操作与可审计**，不是"防你自己"——你拥有本机文件，理论上可以改配置或代码绕过。
 - 本服务**不接真实支付回调**，本期只有「模拟支付」与「仅生成订单、由你在微信 / 支付宝里手动付款」两种模式；不会自动操控任何支付 App，也不会保存支付密码。
-- Node 版本要求：见项目根 `package.json` 的 `engines`。`node:sqlite` 需要 Node ≥ 22.5；22.5–23.3 需加 `--experimental-sqlite`，≥ 23.4 无需。
+- Node 版本要求：**≥ 24**（与 CI 同版本，见项目根 `package.json` 的 `engines`）。`node:sqlite` 于 22.5 引入，≥ 23.4 起无需 `--experimental-sqlite`，在本项目要求的版本上开箱可用。

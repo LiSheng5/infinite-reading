@@ -98,9 +98,11 @@ import { A, toast } from './core.js';
           + (pct >= 70
             ? '接近写入上限，先「一键导出全部备份」，再删掉不用的故事腾空间。'
             : '每个站点约 5MB，到 70% 以上就该收拾一下了。')
-          + (info.bootError
-            ? '（升级到 IndexedDB 时出错，已安全退回：' + info.bootError + ' —— 数据没丢，但容量仍是约 5MB）'
-            : (info.available ? '' : '（这台浏览器用不了 IndexedDB，所以退回原来的存储方式）'));
+          + (info.blocked
+            ? '（另一个标签页正在使用本地库，这次先按原来的方式存：关掉其它标签页后刷新，就能换回 IndexedDB）'
+            : info.bootError
+              ? '（升级到 IndexedDB 时出错，已安全退回：' + info.bootError + ' —— 数据没丢，但容量仍是约 5MB）'
+              : (info.available ? '' : '（这台浏览器用不了 IndexedDB，所以退回原来的存储方式）'));
         st.classList.toggle('alert', pct >= 70);
       }
     }

@@ -35,16 +35,30 @@ const global = globalThis as any;
   })();
 
   let dbPromise = null;
-  let broken = false;                     // 开库失败后不再反复重试（避免每次写入都抛一遍）
+  let broken = false;                     // 真的打不开（不可用 / open 抛错）：本会话不再反复试
+  let blocked = false;                    // 上一次失败只是「被别的标签页挡住」——瞬时状态，可重试
+
+  const BLOCKED_MSG = '另一个标签页正在使用（或升级）本地库，暂时打不开；关掉其它标签页后刷新即可';
 
   function open() {
     if (!available || broken) return Promise.reject(new Error('IndexedDB 不可用'));
     if (dbPromise) return dbPromise;
 
-    dbPromise = new Promise((resolve, reject) => {
+    const p = new Promise<any>((resolve, reject) => {
+      let settled = false;
       let req;
+
+      // 失败只拒绝这一次尝试：blocked 是「另一个标签页正在升级」这种瞬时状态，
+      // 不能像真错误那样把整个会话锁进 localStorage（下次 open 必须能再试一遍）。
+      const fail = (err, hard) => {
+        if (settled) return;
+        settled = true;
+        if (hard) broken = true;
+        reject(err);
+      };
+
       try { req = global.indexedDB.open(DB_NAME, DB_VERSION); }
-      catch (e) { broken = true; reject(e); return; }
+      catch (e) { fail(e, true); return; }
 
       req.onupgradeneeded = () => {
         const db = req.result;
@@ -54,15 +68,28 @@ const global = globalThis as any;
       };
       req.onsuccess = () => {
         const db = req.result;
+        // 挡住之后迟到的成功：已经按失败交回去了，这里把连接关掉，别留着占住对方的升级
+        if (settled) { try { db.close(); } catch (_) {} return; }
+        settled = true;
+        blocked = false;
         // 别的标签页要升级版本时，主动让路，避免卡住对方（本项目暂不升级，但先把口子留好）
         db.onversionchange = () => { try { db.close(); } catch (_) {} dbPromise = null; };
         resolve(db);
       };
-      req.onerror = () => { broken = true; reject(req.error || new Error('打开 IndexedDB 失败')); };
-      req.onblocked = () => { broken = true; reject(new Error('IndexedDB 被其它标签页占用，暂时打不开')); };
+      req.onerror = () => { fail(req.error || new Error('打开 IndexedDB 失败'), true); };
+      req.onblocked = () => {
+        blocked = true;
+        const e: any = new Error(BLOCKED_MSG);
+        e.code = 'IDB_BLOCKED';         // 调用方据此区分「等一下再试」与「这台机器用不了」
+        e.blocked = true;
+        fail(e, false);
+      };
     });
 
-    return dbPromise;
+    dbPromise = p;
+    // 失败的尝试不进缓存（blocked 之后必须能重新 open）；成功的连接继续复用。
+    p.catch(() => { if (dbPromise === p) dbPromise = null; });
+    return p;
   }
 
   function store(name, mode, run) {
@@ -88,7 +115,8 @@ const global = globalThis as any;
     DB_NAME, DB_VERSION, KV, STORIES, IMAGES,
     available,
 
-    get isBroken() { return broken; },
+    get isBroken() { return broken; },        // 真的打不开（本会话不再试）
+    get isBlocked() { return blocked; },      // 只是被别的标签页挡住（关掉它就能重试）
 
     get(name, key) {
       return store(name, 'readonly', os => os.get(key));

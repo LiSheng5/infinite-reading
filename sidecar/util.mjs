@@ -2,7 +2,8 @@
  * 无限阅读 · sidecar 通用小工具（ID 生成 / 日期口径 / JSON 解析收敛）
  *
  * 此前 genId / dayKey / safeJSON 在 payment / email / scheduler 各一份拷贝、num 在
- * payment-policy 与 payment 各一份——「修日期口径要改多处」。这里收敛为单一实现，各模块 import。
+ * payment-policy / payment / config 各一份、列表条数（SQL LIMIT）在 email / payment 各夹一遍
+ * ——「修口径要改多处」。这里收敛为单一实现（num / clampInt），各模块 import。
  *
  * 错误风格唯一约定：
  *   - 业务失败（输入不合法 / 策略拒绝 / 资源不存在）→ 返回 fail(code) 的 { ok:false, code, message }，不 throw；
@@ -72,4 +73,13 @@ export function monthRange(ms) {
 export function num(v) {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// 列表条数归一（SQL LIMIT 的唯一口径）：非有限 / 非正数 → dflt，正数夹到 max。
+// 与 num 的区别是「有默认值 + 有上限」；dflt 只按 num 归一、不再夹 max
+// （各调用点的默认值本来就按自己的上限选过）。
+export function clampInt(v, dflt, max) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n <= 0) return num(dflt);
+  return Math.min(n, num(max) || 1);
 }

@@ -104,9 +104,10 @@ async function main() {
     return { db: db, cfg: cfg, events: events, s: sched };
   }
 
+  // 用户身份只经进程内 opts.asUser 传入（请求体里的 source 不被采信）
   const mk = (s, name, type, spec, extra) => s.upsertTrigger(Object.assign(
-    { name: name, type: type, spec: spec, source: 'user', prompt: 'p', reason: 'r' }, extra || {}
-  ));
+    { name: name, type: type, spec: spec, prompt: 'p', reason: 'r' }, extra || {}
+  ), { asUser: true });
 
   // 3.1 interval 基本推进
   {
@@ -136,7 +137,7 @@ async function main() {
   {
     VNOW = Date.UTC(2026, 0, 1, 0, 0, 0);
     const { s, events } = fresh({});
-    const t = s.upsertTrigger({ name: 'mdl', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: 'p', reason: 'r' });
+    const t = s.upsertTrigger({ name: 'mdl', type: 'interval', spec: { everyMs: M }, prompt: 'p', reason: 'r' });
     check('模型新建 = pending_confirm', t.status === 'pending_confirm', t.status);
     VNOW += M;
     s.tick();
@@ -216,7 +217,7 @@ async function main() {
   {
     VNOW = localMs(2026, 1, 1, 12, 0);
     const { s } = fresh({});
-    const t = s.upsertTrigger({ name: 'o', type: 'once', spec: { at: VNOW + M }, source: 'user', prompt: 'p', reason: 'r' });
+    const t = s.upsertTrigger({ name: 'o', type: 'once', spec: { at: VNOW + M }, prompt: 'p', reason: 'r' }, { asUser: true });
     check('once：nextAt = at', t.nextAt === VNOW + M);
     VNOW += M;
     check('once：触发一次', s.tick().fired === 1);
@@ -228,7 +229,7 @@ async function main() {
   {
     VNOW = Date.UTC(2026, 0, 1, 0, 0, 0);
     const { s, events } = fresh({});
-    const t = s.upsertTrigger({ name: 'c', type: 'cron', spec: { expr: '*/15 * * * *', tz: 'UTC' }, source: 'user', prompt: '写封信', reason: '每周问候' });
+    const t = s.upsertTrigger({ name: 'c', type: 'cron', spec: { expr: '*/15 * * * *', tz: 'UTC' }, prompt: '写封信', reason: '每周问候' }, { asUser: true });
     check('cron：nextAt = 00:15Z', t.nextAt === Date.UTC(2026, 0, 1, 0, 15, 0), new Date(t.nextAt).toISOString());
     VNOW = Date.UTC(2026, 0, 1, 0, 15, 0);
     check('cron：到点触发', s.tick().fired === 1);
@@ -263,7 +264,7 @@ async function main() {
     // 模型重报完全一样的内容：保留 active，也不推迟 next_at（否则每轮重报 = 永远不触发）
     const nextBefore = made.nextAt;
     const same = s.upsertTrigger({
-      name: 'guarded', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '原来的话', reason: 'r',
+      name: 'guarded', type: 'interval', spec: { everyMs: M }, prompt: '原来的话', reason: 'r',
     });
     check('upsert 安全：模型重报同内容仍是 active', same.status === 'active', same.status);
     check('upsert 安全：模型重报同内容不推迟 next_at', same.nextAt === nextBefore, same.nextAt + ' vs ' + nextBefore);
@@ -271,7 +272,7 @@ async function main() {
     // 模型改 prompt：直接拒绝，且库里那行一个字段都不动
     //（不采用「先覆盖内容再退回 pending_confirm」：那样用户点取消也拿不回批准过的 prompt）
     const changed = s.upsertTrigger({
-      name: 'guarded', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '被改写的话', reason: 'r',
+      name: 'guarded', type: 'interval', spec: { everyMs: M }, prompt: '被改写的话', reason: 'r',
     });
     check('upsert 安全：模型改 prompt → 拒绝（TRIGGER_LOCKED）',
       changed && changed.ok === false && changed.code === 'TRIGGER_LOCKED', JSON.stringify(changed));
@@ -289,26 +290,38 @@ async function main() {
 
     // 模型改排期：同样拒绝
     const resched = s.upsertTrigger({
-      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, source: 'model', prompt: '原来的话', reason: 'r',
+      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, prompt: '原来的话', reason: 'r',
     });
     check('upsert 安全：模型改排期 → 同样拒绝',
       resched && resched.ok === false && resched.code === 'TRIGGER_LOCKED', JSON.stringify(resched));
 
+    // 请求体里的 source 不是凭据：HTTP 路由把 body 原样交进来，塞 source:'user' 也照旧按模型处理
+    const spoofed = s.upsertTrigger({
+      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, source: 'user', prompt: '伪装成用户改写', reason: 'r',
+    });
+    check('upsert 安全：请求体 source=user 不能绕过闸门（仍是 TRIGGER_LOCKED）',
+      spoofed && spoofed.ok === false && spoofed.code === 'TRIGGER_LOCKED', JSON.stringify(spoofed));
+    const spoofNew = s.upsertTrigger({
+      name: 'spoof-new', type: 'interval', spec: { everyMs: M }, source: 'user', prompt: '伪装新建', reason: 'r',
+    });
+    check('upsert 安全：请求体 source=user 新建也仍是 pending_confirm',
+      spoofNew && spoofNew.status === 'pending_confirm', JSON.stringify(spoofNew));
+
     // 还没确认过的行不受闸门限制：模型在用户点确认前修正属正常修改
     const pend = s.upsertTrigger({
-      name: 'pending-one', type: 'interval', spec: { everyMs: M }, source: 'model', prompt: '初稿', reason: 'r',
+      name: 'pending-one', type: 'interval', spec: { everyMs: M }, prompt: '初稿', reason: 'r',
     });
     const edited = s.upsertTrigger({
-      name: 'pending-one', type: 'interval', spec: { everyMs: 2 * M }, source: 'model', prompt: '改过的初稿', reason: 'r',
+      name: 'pending-one', type: 'interval', spec: { everyMs: 2 * M }, prompt: '改过的初稿', reason: 'r',
     });
     check('upsert 安全：pending_confirm 允许模型修正（仍是待确认）',
       pend.status === 'pending_confirm' && edited.status === 'pending_confirm' && edited.prompt === '改过的初稿',
       JSON.stringify({ status: edited.status, prompt: edited.prompt }));
 
-    // 用户自己改（source='user'）：不受闸门限制，状态也不会被 upsert 顺手改掉
+    // 用户自己改（进程内 opts.asUser）：不受闸门限制，状态也不会被 upsert 顺手改掉
     const byUser = s.upsertTrigger({
-      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, source: 'user', prompt: '用户自己改', reason: 'r',
-    });
+      name: 'guarded', type: 'interval', spec: { everyMs: 5 * M }, prompt: '用户自己改', reason: 'r',
+    }, { asUser: true });
     check('upsert 安全：用户自己 upsert 可以改，状态保持 active',
       byUser.status === 'active' && byUser.prompt === '用户自己改',
       JSON.stringify({ status: byUser.status, prompt: byUser.prompt }));

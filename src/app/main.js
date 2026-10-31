@@ -376,22 +376,12 @@ import { A, renderChat, saveAll, toast } from './core.js';
       A.showStart();
       toast('已清空');
     };
-    // 模型名变化 → 按能力重排参数字段
+    // 模型名变化 → 按参考表刷新上下文窗口提示（表里只有窗口这一个数字）
     $('#s-chat-model').addEventListener('change', () => {
-      const cap = Cap.find('chat', $('#s-chat-model').value.trim());
+      const cap = Cap.find($('#s-chat-model').value.trim());
       S.settings.chat.model = $('#s-chat-model').value.trim();
-      if (cap && +cap.contextWindow > 0) S.settings.chat.contextWindow = 0; // 交回登记表自动值
-      if (!cap || !cap.thinking || cap.thinking.kind === 'none') S.settings.chat.thinking = 'default';
+      if (cap && +cap.contextWindow > 0) S.settings.chat.contextWindow = 0; // 交回参考表自动值
       A.renderCapabilityFields();
-    });
-    $('#s-image-model').addEventListener('change', () => {
-      S.settings.image.model = $('#s-image-model').value.trim();
-      A.renderCapabilityFields();
-    });
-    // 选了「自定义尺寸…」就亮出宽高输入（预填档位模式下隐藏）
-    $('#s-image-size').addEventListener('change', () => {
-      S.settings.image.size = $('#s-image-size').value;
-      A.showImageWh(S.settings.image.size === '__custom__');
     });
     // 自建确认弹窗（irConfirm）：确定 / 取消 / 关闭 / 回车
     $('#cf-ok').onclick = () => closeConfirm(confirmValue());
@@ -490,7 +480,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
       console.warn('存储初始化失败：', e);
     }
     init();
-    if (info && info.error) {
+    if (info && info.blocked) {
+      // 「另一个标签页占着库」不是坏了：给出可操作的下一步，别让用户以为存储出问题
+      toast('另一个标签页正在使用本地库（可能正在升级），这次先用原来的存储方式：关掉其它标签页后刷新，就能换回 IndexedDB；数据没丢。', true, true);
+    } else if (info && info.error) {
       toast('本地存储升级未完成（IndexedDB 用不了），已退回原来的存储方式：数据没丢，但容量仍是约 5MB。', true, true);
     } else if (info && info.backend === 'indexeddb' && info.migrated && !info.migrated.skipped && info.migrated.stories) {
       toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);

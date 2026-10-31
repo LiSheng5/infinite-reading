@@ -55,9 +55,16 @@
   --bg-glass:      rgba(255, 255, 255, .8);
 
   /* 控件 */
-  --radius:        8px;   /* 所有圆角统一 8px（阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角） */
+  --radius:        8px;   /* 主圆角：卡片 / 按钮 / 输入框 / 舞台与灯箱大图；胶囊（999px）与小控件（10 / 6 / 4 / 3px）是登记过的例外，见 css/style.css 的圆角标尺 */
   --field-bg:      var(--surface);
   --field-inset:   inset 0 1px 0 rgba(11, 15, 25, .03);
+  /* 表单控件字号：input / select / textarea 只读这一个值（组件与各屏分片都不许再写字号字面量）。
+     窄屏由 css/responsive.css 把它抬到 16px —— iOS Safari 聚焦小于 16px 的输入框会自动放大页面。
+     不能改成「再写一条 input 的 font-size: 16px」：那是 0,0,1 特异性，会被 #player-input、
+     .shelf-search-input、label input 这类更具体的规则整条盖掉（写了等于没写）。
+     --fs-field-mono 是同一口径的「等宽输入框」字号（提示词编辑器），窄屏同样抬到 16px。 */
+  --fs-field:      14px;
+  --fs-field-mono: 12px;
 
   /* 浅色底上的极淡灰染（悬停 / 分组底） */
   --hover-tint:    rgba(11, 15, 25, .04);

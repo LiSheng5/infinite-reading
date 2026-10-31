@@ -34,7 +34,7 @@ git clone git@github.com:LiSheng5/infinite-reading.git   # or https://github.com
 cd infinite-reading
 ```
 
-1. Build it (Node ≥ 22.5; the source is ES modules + Svelte, so the repository root cannot be opened directly):
+1. Build it (Node ≥ 24, the same major version CI runs; the source is ES modules + Svelte, so the repository root cannot be opened directly):
 
    ```bash
    npm ci
@@ -103,7 +103,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 | Single file | `npm run bundle` → `dist/ir.html` (~640 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
-| Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 22.5 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
+| Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 24 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
 
 **Installable (PWA)**: open it over `https` or `localhost` and the browser offers an install action — you get a desktop icon and offline launch. The Service Worker only caches same-origin static assets; **cross-origin API calls and your API key never enter any cache**.
 
@@ -134,7 +134,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `src/core/store.ts` | Persistence (memory-first + async flush; schema v3, legacy migration, shelf, save points) |
 | `src/core/zip.ts` | Dependency-free hand-written ZIP: pack / unpack the full backup with original images |
 | `src/core/roleCard.ts` | Character cards (SillyTavern PNG parsing) |
-| `src/core/modelCapabilities.ts` | Model parameter registry (empty by default) |
+| `src/core/modelCapabilities.ts` | Context-window reference table (empty by default; vendor-specific params go through "extra request params") |
 | `src/app/main.js` | Composition root: installs the modal shell, binds events, boots (business logic lives in the 21 modules under `src/app/` — see ARCHITECTURE.md §2.1) |
 | `src/screens/` + `src/ui/` | Svelte 5 screens and the base component library (icons / buttons / modal card / view transitions) |
 | `src/core/sidecar.ts` + `src/core/features.ts` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
@@ -180,7 +180,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 ## Contributing and license
 
-- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (34 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
+- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (39 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).

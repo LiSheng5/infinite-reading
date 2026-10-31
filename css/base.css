@@ -18,6 +18,10 @@ body {
   color-scheme: light;
 }
 
+/* 表单控件字号统一读令牌：默认值落在元素本身，不会被 label 的 12.5px 继承走；
+   各屏与组件只覆盖外观，字号一律 var(--fs-field)（窄屏抬到 16px 见 css/responsive.css） */
+input, select, textarea { font-size: var(--fs-field); }
+
 ::selection { background: var(--accent-soft); color: var(--ink); }
 
 .hidden { display: none !important; }
@@ -27,7 +31,7 @@ body {
 * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: var(--radius); border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-line); background-clip: content-box; }
 
 /* 全站唯一可见的焦点环（键盘可达性） */

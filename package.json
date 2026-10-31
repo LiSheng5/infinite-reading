@@ -26,8 +26,8 @@
     "sidecar": "node sidecar/server.mjs",
     "eval": "node eval/run.js",
     "check:types": "tsc --noEmit",
-    "test": "node tools/sync-version.mjs --check && node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/css-structure-test.js && node eval/comments-test.js && node eval/error-policy-test.js && node eval/motion-test.js && node eval/ui-lib-test.js && node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/ui-state-test.js && node eval/run.js && node eval/tree-test.js && node eval/treelayout-test.js && node eval/prefs-test.js && node eval/backup-pack-test.js && node eval/store-images-test.js && node eval/schema-test.js && node eval/settings-ids-test.js && node eval/painter-context-test.js && node eval/style-card-text-test.js && node eval/video-provider-test.js && node eval/minimax-image-test.js && node eval/videoqueue-test.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/writeback-test.js && node eval/features-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs && tsc --noEmit",
-    "test:shelf": "node eval/titles-test.js && node eval/search-test.js && node eval/shelf-index-test.js",
+    "test": "node tools/sync-version.mjs --check && node tools/contrast-check.mjs && node eval/tokens-test.js && node eval/css-structure-test.js && node eval/comments-test.js && node eval/error-policy-test.js && node eval/motion-test.js && node eval/ui-lib-test.js && node eval/titles-test.js && node eval/reply-text-test.js && node eval/search-test.js && node eval/shelf-index-test.js && node eval/ui-state-test.js && node eval/run.js && node eval/tree-test.js && node eval/treelayout-test.js && node eval/prefs-test.js && node eval/backup-pack-test.js && node eval/store-images-test.js && node eval/platform-test.js && node eval/schema-test.js && node eval/settings-ids-test.js && node eval/capability-scope-test.js && node eval/painter-context-test.js && node eval/style-card-text-test.js && node eval/video-provider-test.js && node eval/minimax-image-test.js && node eval/video-proxy-test.js && node eval/videoqueue-test.js && node eval/zip-smoke.js && node eval/scheduler-test.js && node eval/email-test.js && node eval/payment-test.js && node eval/sidecar-client-test.js && node eval/sidecar-smoke.js && node eval/paintqueue-test.js && node eval/proposals-test.js && node eval/writeback-test.js && node eval/features-test.js && node eval/frontend-smoke.js && node eval/app-structure-test.js && node tools/check-free-calls.mjs && tsc --noEmit",
+    "test:shelf": "node eval/titles-test.js && node eval/reply-text-test.js && node eval/search-test.js && node eval/shelf-index-test.js",
     "check:contrast": "node tools/contrast-check.mjs",
     "check:tokens": "node eval/tokens-test.js",
     "test:motion": "node eval/motion-test.js",
@@ -45,7 +45,7 @@
     "local-first"
   ],
   "engines": {
-    "node": ">=22.5"
+    "node": ">=24"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

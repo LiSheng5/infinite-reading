@@ -9,8 +9,8 @@
  * 节点类型（Node.svelte 按 k 分支渲染）：
  *   grid2 / row        —— 两列栅格 / 行内一排（row 可带 cls，如 danger-row）
  *   field              —— <label>文本<input|textarea></label>（type: text/password/number/textarea）；
- *                          label 省略 = 光杆控件；wrapId = 外层 <label> 带 id（能力位显隐用）
- *   select             —— <label>文本<select>…</select></label>（options 可空：由能力位逻辑回填）
+ *                          label 省略 = 光杆控件；wrapId = 外层 <label> 带 id（界面层显隐用）
+ *   select             —— <label>文本<select>…</select></label>（options 只写静态清单）
  *   check              —— <label class="check"><input type="checkbox"> 文本<span class="check-sub">…</span></label>
  *   text / box         —— <p>（可带 id，界面层回填）/ <div>（界面层回填的容器）
  *   btn / test         —— 按钮 / 「测试连接」一行（按钮在左、结果文字在右）
@@ -79,10 +79,7 @@ export const GROUPS = [
           testRow({ id: 'btn-test-chat', stateId: 'test-chat-state' }, '只探测，不生成内容。'),
           {
             k: 'adv', title: '高级参数', nodes: [
-              { k: 'grid2', items: [
-                { k: 'field', id: 's-chat-temp', label: '温度（0~2，越高越发散）', type: 'number', attrs: { step: '0.1', min: '0', max: '2' } },
-                { k: 'select', id: 's-chat-thinking', wrapId: 'wrap-chat-thinking', wrapHidden: true, label: '思考档位', options: [] },
-              ] },
+              { k: 'field', id: 's-chat-temp', label: '温度（0~2，越高越发散）', type: 'number', attrs: { step: '0.1', min: '0', max: '2' } },
               { k: 'field', id: 's-chat-ctx', label: '上下文窗口（token，压缩阈值按它算）', type: 'number', attrs: { min: '0', step: '1000' }, placeholder: '不知道就留空（回退按条数压缩）' },
               { k: 'field', id: 's-chat-params', label: '自定义请求参数（key=value，逗号分隔，并入请求体）', type: 'text', placeholder: 'reasoning_effort=high, top_p=0.95' },
               { k: 'text', id: 's-chat-cap', cls: 'hint' },
@@ -117,10 +114,7 @@ export const GROUPS = [
             { k: 'check', id: 'mp-copy-key', wrapId: 'mp-copy-key-wrap', wrapCls: 'hidden', checked: true, text: '复制时带上原模型的 API Key（不勾 = 只复制其它字段）' },
             {
               k: 'adv', title: '高级参数', nodes: [
-                { k: 'grid2', items: [
-                  { k: 'field', id: 'mp-temp', label: '温度（0~2）', type: 'number', attrs: { step: '0.1', min: '0', max: '2' }, placeholder: '0.9' },
-                  { k: 'field', id: 'mp-thinking', label: '思考档位', type: 'text', placeholder: 'default（不下发）' },
-                ] },
+                { k: 'field', id: 'mp-temp', label: '温度（0~2）', type: 'number', attrs: { step: '0.1', min: '0', max: '2' }, placeholder: '0.9' },
                 { k: 'field', id: 'mp-ctx', label: '上下文窗口（token，0 = 未填）', type: 'number', attrs: { min: '0', step: '1000' }, placeholder: '不知道就留空' },
                 { k: 'field', id: 'mp-params', label: '自定义请求参数（key=value，逗号分隔）', type: 'text', placeholder: 'reasoning_effort=high, top_p=0.95' },
               ],
@@ -208,12 +202,8 @@ export const GROUPS = [
             { k: 'field', id: 's-image-model', label: '模型', type: 'text', placeholder: '填你的生图模型名' },
           ] },
           { k: 'field', id: 's-image-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
-          { k: 'grid2', items: [
-            { k: 'select', id: 's-image-aspect', wrapId: 'wrap-image-aspect', label: '比例', options: [
-              ['16:9', '16:9 横屏'], ['9:16', '9:16 竖屏'], ['1:1', '1:1 方形'], ['custom', '自定义'],
-            ] },
-            { k: 'select', id: 's-image-size', wrapId: 'wrap-image-size', wrapHidden: true, label: '尺寸（该模型支持的档位）', options: [] },
-            { k: 'select', id: 's-image-quality', wrapId: 'wrap-image-quality', wrapHidden: true, label: '质量', options: [] },
+          { k: 'select', id: 's-image-aspect', label: '比例', options: [
+            ['16:9', '16:9 横屏'], ['9:16', '9:16 竖屏'], ['1:1', '1:1 方形'], ['custom', '自定义'],
           ] },
           { k: 'grid2', id: 'row-image-wh', items: [
             { k: 'field', id: 's-image-width', label: '宽', type: 'number', attrs: { min: '64', step: '16' }, placeholder: '1280' },

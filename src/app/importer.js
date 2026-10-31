@@ -25,9 +25,10 @@ import { A, renderChat, toast } from './core.js';
     if (S.importModelMode === 'draft') return resolveSub('draft');   // 起草模型（没单独配就是剧情模型）
     const c = S.settings.chat;                                       // 跟随剧情模型
     return {
-      provider: 'openai-compatible',
+      // provider 按配置取（剧情模型没写就沿用子模型的归一口径）；写死会在加第二个渠道时静默走错
+      provider: c.provider || resolveSub('draft').provider,
       baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
-      temperature: 0.7, thinking: 'default',
+      temperature: 0.7,
     };
   }
 

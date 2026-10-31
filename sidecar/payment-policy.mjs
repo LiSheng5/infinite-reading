@@ -27,6 +27,7 @@ export const PAYMENT_CODES = [
   'BUDGET_EXCEEDED',
   'MANDATE_REQUIRED',
   'MANDATE_NOT_FOUND',
+  'MANDATE_EXPIRED',
   'MANDATE_EXCEEDED',
   'CURRENCY_MISMATCH',
   'AGENT_REQUIRED',
@@ -63,7 +64,7 @@ function remainder(limit, spent) { return Math.max(0, limit - spent); }
  *   spentDaily, spentMonthly, spentAgent,
  *   lastChargeAt,      // 最近一次成功扣款时间（冷静期用）
  *   now,               // 当前时间
- *   mandate,           // 可选：长期授权范围 { totalLimitCents, categories, spent }
+ *   mandate,           // 可选：长期授权范围 { totalLimitCents, categories, spent, periodStart, periodEnd }
  * }
  */
 export function evaluatePolicy(input, ctx) {
@@ -141,9 +142,18 @@ export function evaluatePolicy(input, ctx) {
     }
   }
 
-  // ---- 长期授权范围（总量 / 品类） ----
+  // ---- 长期授权范围（有效期 / 总量 / 品类） ----
   if (c.mandate) {
     const m = c.mandate;
+    // 有效期：签了窗口的授权（periodStart / periodEnd 都 > 0，与 payment.mjs 的
+    // mandateSpent 同一判据）只在窗口内有效——到期 / 未开始都不放行，由界面在下一次
+    // 购买前续签新的一份；两个 period 全 0 = 没签有效期的旧口径，终身有效。窗口荒谬
+    // （end <= start）时窗口判定恒不成立，天然 fail-closed。
+    const mPs = Math.floor(Number(m.periodStart) || 0);
+    const mPe = Math.floor(Number(m.periodEnd) || 0);
+    if (mPs > 0 && mPe > 0 && !(now >= mPs && now < mPe)) {
+      return deny('MANDATE_EXPIRED', '这份长期授权不在有效期内，不能用它下单：请在支付面板重新签发一份。');
+    }
     if (m.totalLimitCents > 0) {
       const spent = num(m.spent);
       if (spent + amount > m.totalLimitCents) {

@@ -87,6 +87,9 @@ async function main() {
     const audit = mail.listAudit();
     check('非白名单未确认：审计标记 denied/NEED_CONFIRMATION',
       audit.some(a => a.kind === 'draft' && a.status === 'denied' && a.code === 'NEED_CONFIRMATION'));
+    check('非白名单未确认：草稿只记一条审计（不在调用侧重复记账）',
+      audit.filter(a => a.kind === 'draft').length === 1,
+      JSON.stringify(audit.map(a => a.kind + '/' + a.status)));
     check('非白名单未确认：没有产生「已发送」记录', !audit.some(a => a.kind === 'send' && a.status === 'ok'));
 
     // 用户在界面上确认 → 用草稿发送
@@ -155,29 +158,21 @@ async function main() {
     check('resend 被服务商拒绝：结构化 PROVIDER_ERROR', r3.ok === false && r3.code === 'PROVIDER_ERROR', JSON.stringify(r3));
   }
 
-  /* 9. 收件箱：mock 空列表；resend 明确不支持 */
-  {
-    const { mail } = fresh({ provider: 'mock' });
-    const inb = await mail.inbox({ limit: 5 });
-    check('收件箱（mock）：返回空列表', inb.ok === true && inb.messages.length === 0);
-    const inbBad = await mail.inbox({ limit: 'abc' });
-    check('收件箱 limit 非法值：夹回默认值（NaN 不进调用）', inbBad.ok === true && inbBad.messages.length === 0, JSON.stringify(inbBad));
-    const m2 = fresh({ provider: 'resend' });
-    const inb2 = await m2.mail.inbox({});
-    check('收件箱（resend）：明确返回 INBOX_NOT_SUPPORTED', inb2.ok === false && inb2.code === 'INBOX_NOT_SUPPORTED');
-  }
-
-  /* 10. 草稿：丢弃 */
+  /* 9. 草稿：创建即留审计；丢弃 */
   {
     const { mail } = fresh({ dailyLimit: 5 });
     const d = mail.createDraft({ to: 'a@b.com', subject: 's', body: 'b' });
     check('草稿：创建成功且可读回', !!d.id && mail.getDraft(d.id).subject === 's');
+    const a = mail.listAudit();
+    check('草稿：直连创建也写审计（draft / ok，不记正文）',
+      a.length === 1 && a[0].kind === 'draft' && a[0].status === 'ok' && a[0].actor === 'user' && !('body' in a[0]),
+      JSON.stringify(a));
     check('草稿：丢弃成功', mail.discardDraft(d.id) === true);
     check('草稿：丢弃后不在待处理列表', mail.listDrafts().length === 0);
     check('草稿：重复丢弃返回 false', mail.discardDraft(d.id) === false);
   }
 
-  /* 11. 审计 limit 非法值（?limit=abc）：NaN 不进 SQL LIMIT */
+  /* 10. 审计 limit 非法值（?limit=abc）：NaN 不进 SQL LIMIT */
   {
     const { mail } = fresh({ allowlist: ['a@b.com'], dailyLimit: 2 });
     await mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
@@ -188,7 +183,7 @@ async function main() {
     check('审计 limit 为负：夹回默认值', Array.isArray(neg) && neg.length === 1);
   }
 
-  /* 12. 并发突破每日上限：上限检查与 provider.send 之间必须「先占位再发送」 */
+  /* 11. 并发突破每日上限：上限检查与 provider.send 之间必须「先占位再发送」 */
   {
     const box = slowProviders();
     const { mail } = fresh({ provider: 'mock', allowlist: ['a@b.com'], dailyLimit: 2 }, box.providers);
@@ -202,7 +197,7 @@ async function main() {
     check('D22 并发：当日计数 = 上限（没有多发）', mail.stats().sentToday === 2, JSON.stringify(mail.stats()));
   }
 
-  /* 13. 草稿双击 / 并发确认：只有第一个能抢占 pending → sending */
+  /* 12. 草稿双击 / 并发确认：只有第一个能抢占 pending → sending */
   {
     const box = slowProviders();
     const { mail } = fresh({ provider: 'mock', allowlist: [], dailyLimit: 5 }, box.providers);
@@ -215,7 +210,7 @@ async function main() {
     check('D22 双击确认：草稿最终为 sent', mail.getDraft(d.id).status === 'sent', mail.getDraft(d.id).status);
   }
 
-  /* 14. 草稿发送失败要退回 pending（不能卡在 sending 里永远不可重试） */
+  /* 13. 草稿发送失败要退回 pending（不能卡在 sending 里永远不可重试） */
   {
     const { mail } = fresh({ allowlist: [], dailyLimit: 0 });
     const d = mail.createDraft({ to: 'x@y.com', subject: 's', body: 'b' });

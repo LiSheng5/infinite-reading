@@ -160,24 +160,59 @@ function releaseLock() {
   try { fs.unlinkSync(LOCK_PATH); } catch (_) {}
 }
 
-/* ---------------- HTTP 小工具 ---------------- */
-
-// 只回显本机来源（file:// 的 Origin 是字面量 "null"；本地页面是 localhost / 127.0.0.1 / [::1]）。
-// 其它来源不给 CORS 头，浏览器自然拦截——token 之外的第二道防线：
-// 即使 token 泄漏，任意网页也调不动本服务（配合「服务只绑 127.0.0.1」的边界）。
+/* ---------------- 请求来源边界（Host / Origin） ----------------
+ * 三层判据，都在路由与鉴权之前：
+ *   1. **Host 必须是本机回环**。DNS rebinding 的攻击页把 attack.example 解析到 127.0.0.1，
+ *      浏览器认为和自己同源（连 CORS 都不触发），只有 Host 头能把它认出来 → 403 BAD_HOST。
+ *   2. **Origin 只能是本机 http(s) 来源**，别的站点一律 403 ORIGIN_NOT_ALLOWED，连 CORS 头都不给。
+ *   3. `Origin: null` 单独处理：file:// 单文件产物的 Origin 就是这个字面量，但**任意站点的
+ *      沙箱 iframe 也是**（实测 Chrome 两边都是 `Origin: null` + `Sec-Fetch-Site: cross-site`，
+ *      浏览器没给任何可区分的信号）。所以这里不放「null 一律通过」，改成**只对带凭据的请求回显**：
+ *      本项目的 file:// 前端每个业务请求都带 Bearer token，SSE 带一次性 ticket，/health 不需要
+ *      凭据且只回布尔能力位。不带凭据的页面（含沙箱 iframe）拿不到 CORS 头，读不到任何响应。
+ */
+const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
-function applyCors(req, res) {
+// 不带 Host 的只有 HTTP/1.0 与手写客户端（浏览器一定带），不能因此把本机脚本挡住
+function hostAllowed(req) {
+  const host = req.headers.host;
+  if (!host) return true;
+  return LOCAL_HOST.test(String(host).trim());
+}
+
+/* Origin 分类：none（非浏览器 / 同源导航）/ local（本机页面）/ file（Origin: null）/ foreign（别的站点） */
+function originKind(req) {
   const origin = req.headers.origin;
-  if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', '*');   // 非浏览器客户端（curl / 脚本）
-  } else if (origin === 'null' || LOCAL_ORIGIN.test(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  if (!origin) return 'none';
+  if (LOCAL_ORIGIN.test(origin)) return 'local';
+  if (origin === 'null') return 'file';
+  return 'foreign';
+}
+
+// file:// 那边的凭据：普通请求走 Authorization（token），SSE 走 ?ticket=（EventSource 带不了请求头）。
+// 这里只要求「带上了凭据」而不是「凭据正确」：校验仍在 authorized()/ticket 那一步，
+// 这样 token 填错时前端还能读到 401 的说明，而不是只看到一句「连不上」。
+function fileClientCredentialed(req, url) {
+  if (req.headers.authorization) return true;
+  return !!url.searchParams.get('ticket');
+}
+
+function applyCors(res, origin) {
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
   res.setHeader('Access-Control-Max-Age', '600');
+}
+
+/* 被拒绝的来源只提示一次：恶意页面会反复重试，日志不能被它刷爆 */
+const warnedSources = new Set();
+function warnOnce(key, msg, extra) {
+  if (warnedSources.has(key)) return;
+  if (warnedSources.size > 50) warnedSources.clear();
+  warnedSources.add(key);
+  log('warn', msg, extra);
 }
 
 function sendJSON(res, code, obj, onSent) {
@@ -330,6 +365,8 @@ const ROUTES = [
   {
     method: 'POST', re: /^\/api\/triggers$/, body: true,
     run: (c) => {
+      // body 原样交给 upsertTrigger，但 source 不在里面读：HTTP 一律按模型处理（新建待确认、
+      // 改不动已确认的行），否则请求体里写 source:'user' 就等于自带一把绕过确认闸门的钥匙。
       const r = requireScheduler().upsertTrigger(c.body);
       return isFail(r) ? failTo400(r) : { status: 200, body: { ok: true, trigger: r } };
     },
@@ -396,12 +433,6 @@ const ROUTES = [
   {
     method: 'DELETE', re: /^\/api\/email\/drafts\/([^/]+)$/, body: false,
     run: (c) => ({ status: 200, body: { ok: true, discarded: requireEmail().discardDraft(c.params[0]) } }),
-  },
-  {
-    // inbox 是 async（要等 provider.list）：必须 await 后再喂给 okOr400，
-    // 否则拿到的是一个 Promise —— 恒 400 + 空对象。
-    method: 'GET', re: /^\/api\/email\/inbox$/, body: false,
-    run: async (c) => okOr400(await requireEmail().inbox({ limit: c.query.get('limit') })),
   },
   {
     method: 'GET', re: /^\/api\/email\/audit$/, body: false,
@@ -486,10 +517,45 @@ function matchRoute(method, pathname) {
 /* ---------------- 路由 ---------------- */
 
 async function handle(req, res) {
-  applyCors(req, res);
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  // ① Host：DNS rebinding 的唯一识别点（浏览器会把攻击者的域名原样带过来）
+  if (!hostAllowed(req)) {
+    const host = String(req.headers.host || '');
+    warnOnce('host:' + host, 'reject host', host);
+    return sendJSON(res, 403, {
+      ok: false, code: 'BAD_HOST',
+      message: '本服务只接受 127.0.0.1 / localhost 的请求（当前 Host：' + host + '）。',
+    });
+  }
 
   const url = new URL(req.url || '/', 'http://127.0.0.1');
+  const kind = originKind(req);
+
+  // ② 别的站点：不给 CORS 头，直接 403（浏览器读不到，但请求也不该被执行）
+  if (kind === 'foreign') {
+    const origin = String(req.headers.origin || '');
+    warnOnce('origin:' + origin, 'reject origin', origin);
+    return sendJSON(res, 403, {
+      ok: false, code: 'ORIGIN_NOT_ALLOWED',
+      message: '本服务只对本机页面（localhost / 127.0.0.1）与 file:// 单文件产物开放。',
+    });
+  }
+
+  // ③ Origin: null（file://）与沙箱 iframe 无法区分 → 只对带凭据的请求回显 CORS。
+  //    /health 是公开接口（只回布尔能力位，前端靠它判断「服务在不在」），不需要凭据也照常回显。
+  const isPreflight = req.method === 'OPTIONS';
+  const isPublicHealth = req.method === 'GET' && url.pathname === '/health';
+  const corsOk = kind !== 'file' || isPreflight || isPublicHealth || fileClientCredentialed(req, url);
+  applyCors(res, corsOk ? (req.headers.origin || null) : null);
+  if (!corsOk) {
+    warnOnce('null-origin:' + url.pathname, 'reject null origin without credential', req.method + ' ' + url.pathname);
+    return sendJSON(res, 403, {
+      ok: false, code: 'ORIGIN_NOT_ALLOWED',
+      message: 'file:// 页面需要带 Authorization（或 SSE 的 ticket）才能访问；不带凭据的页面不开放 CORS。',
+    });
+  }
+
+  if (isPreflight) { res.writeHead(204); res.end(); return; }
+
   const cfg = loadConfig();
 
   // /health 免鉴权：前端只靠它判断「本地服务在不在」，且只回布尔，不含任何敏感信息
@@ -619,7 +685,7 @@ function main() {
     payment = createPayment({ db, getConfig: loadConfig });
   } catch (e) {
     console.error('✖ 初始化本地库失败：' + ((e && e.message) || e));
-    console.error('  （node:sqlite 需要 Node ≥ 22.5；22.5–23.3 需加 --experimental-sqlite）');
+    console.error('  （本项目要求 Node ≥ 24；node:sqlite 于 22.5 引入、≥ 23.4 无需 --experimental-sqlite）');
     releaseLock();
     process.exit(1);
   }

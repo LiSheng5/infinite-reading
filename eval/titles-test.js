@@ -7,7 +7,7 @@
  *   1. sanitize：引号 / 书名号 / markdown / 换行 / 结尾标点 / 超长 / 空串 / 多行解释；
  *      按码点计长度（emoji 与生僻字不被截坏）；
  *   2. fallback：首条用户消息截断；无消息 → 「新对话」；
- *   3. needsTitle：titleAuto / turn===1 / turn===6 / 其余回合；
+ *   3. needsTitle：titleAuto / turn>=1 第一次 / turn>=6 第二次 / 跳号补跑 / 之后不再触发；
  *   4. buildPrompt：只含最近 3 轮、单条 ≤600 字、不含系统提示 / 世界卡 / 工具内容；
  *   5. applyTitle 写回护栏：titleAuto 已改假 → 不写；id 不一致 → 不写。
  *
@@ -113,10 +113,19 @@ check('needsTitle：turn===6 未二次生成 → 真',
   T.needsTitle({ titleAuto: true, turn: 6, titleGen: 1 }) === true);
 check('needsTitle：turn===6 已二次生成 → 假',
   T.needsTitle({ titleAuto: true, turn: 6, titleGen: 2 }) === false);
-check('needsTitle：其余回合 → 假',
-  T.needsTitle({ titleAuto: true, turn: 3, titleGen: 0 }) === false
-  && T.needsTitle({ titleAuto: true, turn: 2, titleGen: 1 }) === false
-  && T.needsTitle({ titleAuto: true, turn: 7, titleGen: 1 }) === false);
+// 跳号：重试 / 切分支 / 导入让 turn 跨过 1 或 6，补跑第一次 / 第二次（不能永久停在「新对话」）
+check('needsTitle：turn 跳过 1（turn=3）未生成 → 补跑第一次',
+  T.needsTitle({ titleAuto: true, turn: 3, titleGen: 0 }) === true);
+check('needsTitle：turn 跳过 6（turn=9）未二次生成 → 补跑第二次',
+  T.needsTitle({ titleAuto: true, turn: 9, titleGen: 1 }) === true);
+check('needsTitle：未到 6 且已生成第一次 → 假（不提前二次生成）',
+  T.needsTitle({ titleAuto: true, turn: 2, titleGen: 1 }) === false
+  && T.needsTitle({ titleAuto: true, turn: 5, titleGen: 1 }) === false);
+check('needsTitle：两次都生成过 → 之后一律假',
+  T.needsTitle({ titleAuto: true, turn: 7, titleGen: 2 }) === false
+  && T.needsTitle({ titleAuto: true, turn: 30, titleGen: 2 }) === false);
+check('needsTitle：turn=0（还没开局）→ 假',
+  T.needsTitle({ titleAuto: true, turn: 0, titleGen: 0 }) === false);
 
 /* ---------------- 4. buildPrompt ---------------- */
 

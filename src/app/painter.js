@@ -656,13 +656,34 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
   }
 
-  // 工作台「按此重画」：同 prompt 重画，旧图保留并标 supersededBy
-  async function redrawFromWorkbench() {
+  /* 工作台重画（唯一实现）：
+   *   byCard=false —— 「按此重画」：用面板里当下的 prompt（手改过就按手改的）同 prompt 重画；
+   *   byCard=true  —— 「按设定卡强制重画」：把视觉设定卡的画风 / 人物设定压进 prompt 再画，
+   *                   并回填面板，让用户看到真正发出去的原话。
+   * 两个按钮只有「取词方式」不同，取到词之后的下单 / 写回 / 收尾完全一致——
+   * 分开写两份曾让「回填面板」「toast 文案」这类细节各漂各的。旧图一律保留并标 supersededBy。 */
+  async function redraw(opts) {
+    const byCard = !!(opts && opts.byCard);
     if (!S.story || !S.pw || S.pw.busy) return;
     const jobPw = S.pw;   // 异步写回契约：等图期间面板可能被关掉 / 换掉，只认发起时那个
-    const prompt = $('#pw-prompt').value.trim();
-    const alt = $('#pw-alt').value.trim();
-    if (!prompt) { toast('prompt 不能为空', true); return; }
+    let prompt, promptRaw, alt;
+    if (byCard) {
+      const card = S.story.styleCard;
+      if (!card || card.locked === false) { toast('还没锚定视觉设定卡：先点「锚定画风」走一遍', true); return; }
+      const curPrompt = $('#pw-prompt').value.trim() || S.pw.prompt || '';
+      alt = $('#pw-alt').value.trim() || S.pw.alt || '';
+      const suffix = cardForceSuffix(card, alt + ' ' + curPrompt);
+      promptRaw = curPrompt;
+      const i = suffix ? promptRaw.toLowerCase().indexOf(suffix.toLowerCase()) : -1;
+      if (i >= 0) promptRaw = promptRaw.slice(0, i).replace(/[,，、]\s*$/, '').trim() || curPrompt;
+      prompt = composePrompt(promptRaw, suffix);
+      if (!prompt) { toast('这张图还没有可用的提示词', true); return; }
+    } else {
+      prompt = $('#pw-prompt').value.trim();
+      alt = $('#pw-alt').value.trim();
+      if (!prompt) { toast('prompt 不能为空', true); return; }
+      promptRaw = stripStyleSuffix(prompt);
+    }
     const key = 'redraw:' + jobPw.sceneId;   // 带 key 防连点（不需要 busy 保护，它改的是已有的图）
     if (paintQ.has(key)) { toast('这张图已在作画队列里'); return; }
     jobPw.busy = true;
@@ -670,12 +691,17 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#btn-pw-send').disabled = true;
     $('#btn-pw-force').disabled = true;
     pwParamsToSettings();
+    if (byCard) {
+      $('#pw-prompt').value = prompt;   // 透明：用户看到真正发出去的原话
+      jobPw.prompt = prompt;
+      jobPw.promptRaw = promptRaw;
+    }
     const scene = A.imageSceneById(jobPw.sceneId);
     const entry = findImageEntry(jobPw.sceneId);
     try {
       const newScene = await enqueuePaint({
         key: key,
-        prompt, promptRaw: stripStyleSuffix(prompt), alt: alt || (scene && scene.alt) || '',
+        prompt, promptRaw, alt: alt || (scene && scene.alt) || '',
         supersedesEntry: entry, supersedesScene: scene,
       });
       if (newScene) {
@@ -685,7 +711,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
           pw.promptRaw = newScene.promptRaw;
           pw.alt = newScene.alt;
         });
-        toast('已重画（旧图保留在记录里）');
+        toast(byCard ? '已按视觉设定卡重画（旧图保留在记录里）' : '已重画（旧图保留在记录里）');
       }
       if (WriteBack.isSameJob(S.pw, jobPw)) renderWorkbench();
     } finally {
@@ -715,58 +741,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return parts.join(', ');
   }
 
-  // 「按设定卡强制重画」（手动层 · 图片侧）：不重走画师自由发挥，直接把卡压进这张图
-  async function forceRedrawByCard() {
-    if (!S.story || !S.pw || S.pw.busy) return;
-    const card = S.story.styleCard;
-    if (!card || card.locked === false) { toast('还没锚定视觉设定卡：先点「锚定画风」走一遍', true); return; }
-    const curPrompt = $('#pw-prompt').value.trim() || S.pw.prompt || '';
-    const alt = $('#pw-alt').value.trim() || S.pw.alt || '';
-    const suffix = cardForceSuffix(card, alt + ' ' + curPrompt);
-    let raw = curPrompt;
-    const i = suffix ? raw.toLowerCase().indexOf(suffix.toLowerCase()) : -1;
-    if (i >= 0) raw = raw.slice(0, i).replace(/[,，、]\s*$/, '').trim() || curPrompt;
-    const prompt = composePrompt(raw, suffix);
-    if (!prompt) { toast('这张图还没有可用的提示词', true); return; }
-
-    const jobPw = S.pw;   // 异步写回契约：等图期间面板可能被关掉 / 换掉，只认发起时那个
-    const key = 'redraw:' + jobPw.sceneId;   // 带 key 防连点
-    if (paintQ.has(key)) { toast('这张图已在作画队列里'); return; }
-    jobPw.busy = true;
-    $('#btn-pw-force').disabled = true;
-    $('#btn-pw-redraw').disabled = true;
-    $('#btn-pw-send').disabled = true;
-    pwParamsToSettings();
-    $('#pw-prompt').value = prompt;   // 透明：用户看到真正发出去的原话
-    jobPw.prompt = prompt; jobPw.promptRaw = raw;
-    const scene = A.imageSceneById(jobPw.sceneId);
-    const entry = findImageEntry(jobPw.sceneId);
-    try {
-      const newScene = await enqueuePaint({
-        key: key,
-        prompt, promptRaw: raw, alt: alt || (scene && scene.alt) || '',
-        supersedesEntry: entry, supersedesScene: scene,
-      });
-      if (newScene) {
-        WriteBack.writeBackIfSameJob(S.pw, jobPw, (pw) => {
-          pw.sceneId = newScene.id;
-          pw.prompt = newScene.prompt;
-          pw.promptRaw = newScene.promptRaw;
-          pw.alt = newScene.alt;
-        });
-        toast('已按视觉设定卡重画（旧图保留在记录里）');
-      }
-      if (WriteBack.isSameJob(S.pw, jobPw)) renderWorkbench();
-    } finally {
-      WriteBack.writeBackIfSameJob(S.pw, jobPw, (pw) => {
-        pw.busy = false;
-        $('#btn-pw-force').disabled = false;
-        $('#btn-pw-redraw').disabled = false;
-        $('#btn-pw-send').disabled = false;
-      });
-      saveAll();
-    }
-  }
+  // 两个按钮入口（src/app/main.js 按 id 绑定）：同一实现的两种取词方式，不要再各写一份
+  function redrawFromWorkbench() { return redraw({ byCard: false }); }
+  function forceRedrawByCard() { return redraw({ byCard: true }); }
 
   A.reg({ paintQ, imageBrief, submitToolPaint, enqueueImage, styleSuffixText, composePrompt, painterVideoPrompt, openWorkbench, closeWorkbench, pwShowWh, painterThreadSend, redrawFromWorkbench, forceRedrawByCard });
 

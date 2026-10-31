@@ -127,11 +127,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.chat.apiKey = $('#s-chat-key').value.trim();
     S.settings.chat.temperature = parseFloat($('#s-chat-temp').value);
     if (!Number.isFinite(S.settings.chat.temperature)) S.settings.chat.temperature = 0.9;
-    if (!$('#wrap-chat-thinking').classList.contains('hidden')) {
-      S.settings.chat.thinking = $('#s-chat-thinking').value || 'default';
-    } else {
-      S.settings.chat.thinking = 'default';
-    }
     S.settings.chat.contextWindow = Math.max(0, parseInt($('#s-chat-ctx').value, 10) || 0);
     // 手填参数原样并入请求体（providers.ts 的 mergeExtraParams）
     S.settings.chat.extraParams = $('#s-chat-params').value.trim();
@@ -174,10 +169,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.video.resolution = $('#s-video-resolution').value || '768P';
     S.settings.video.ratio = $('#s-video-ratio').value || '16:9';
     S.settings.video.extraParams = $('#s-video-params').value.trim();
-    if (!$('#wrap-image-size').classList.contains('hidden')) S.settings.image.size = $('#s-image-size').value;
-    else delete S.settings.image.size;
-    if (!$('#wrap-image-quality').classList.contains('hidden')) S.settings.image.quality = $('#s-image-quality').value;
-    else delete S.settings.image.quality;
 
     // 用户画像：三个勾全开 = 'all'（等价写法，省得以后加模式还要改数据）
     const pChoice = $('#s-profile-choice').checked;

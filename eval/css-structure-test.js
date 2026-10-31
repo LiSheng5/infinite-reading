@@ -12,7 +12,11 @@
  *   4. 按钮词汇：唯一基座 .ui-btn（只准 base.css 定义一次），primary / ghost / danger / slim /
  *      mini / icon-only 只能当修饰类；历史类名 btn / hud-btn / mini-btn / icon-btn 全仓不得再出现
  *      （CSS 选择器与类名字符串都算）；
- *   5. 组件不再写第二份按钮视觉：Button / IconButton 的 <style> 只管结构（配色 / 描边 / 圆角归 .ui-btn）。
+ *   5. 组件不再写第二份按钮视觉：Button / IconButton 的 <style> 只管结构（配色 / 描边 / 圆角归 .ui-btn）；
+ *   6. 圆角标尺：border-radius 只用 var(--radius) 或 css/style.css 里登记的例外——新数值先登记再写，
+ *      否则「主圆角 8px」会在各分片里重新长出 5 / 7 / 12px。
+ *   7. 表单字号收口：input / select / textarea 的 font-size 只准 var(--fs-field)，窄屏由
+ *      responsive.css 在 :root 上抬到 16px——写在控件选择器上的 16px 会被更高特异性盖掉。
  *
  * 用法：node eval/css-structure-test.js（任一不过 → 退出码 1）
  */
@@ -173,6 +177,94 @@ console.log('[6] index.html 的样式三层顺序');
   const motion = at('css/motion.css');
   ok(tok >= 0 && screen > tok, '令牌在屏幕样式之前');
   ok(motion > screen, '动效模块最后加载（暂停 / 循环预算优先）');
+}
+
+/* ---------------- 7. 圆角标尺 ---------------- */
+console.log('[7] 圆角标尺：border-radius 只用 var(--radius) 或登记过的例外');
+{
+  // 标尺表就在入口文件里（与断点标尺同一处）：4 空格缩进的值 + 两个以上空格 + 说明
+  const entrySrc = read('css/style.css');
+  const start = entrySrc.indexOf('圆角标尺');
+  const end = entrySrc.indexOf('按钮词汇', start);
+  const block = start >= 0 && end > start ? entrySrc.slice(start, end) : '';
+  const scale = new Set();
+  for (const line of block.split('\n')) {
+    const m = line.match(/^ {4}(\S.*?)\s{2,}\S/);
+    if (m) scale.add(m[1].trim());
+  }
+  ok(scale.has('var(--radius)'), '标尺表以主圆角 var(--radius) 打底（共 ' + scale.size + ' 个取值）');
+  ok(scale.size >= 2, '标尺表解析出了例外（防表格式改坏后静默放行）');
+
+  const bad = [];
+  for (const name of screenFiles) {
+    const css = stripCss(read('css/' + name));
+    for (const m of css.matchAll(/border-radius:\s*([^;]+);/g)) {
+      const value = m[1].replace(/\s+/g, ' ').trim();
+      if (!scale.has(value)) bad.push(name + ' → border-radius: ' + value);
+    }
+  }
+  ok(bad.length === 0, '分片里的圆角都在标尺上' + (bad.length ? '：' + bad.slice(0, 6).join(' | ') : ''));
+  ok(read('css/tokens.css').includes('圆角标尺'), 'tokens.css 的 --radius 注释指向圆角标尺（改圆角先看表）');
+}
+
+/* ---------------- 8. 表单字号收口 ---------------- */
+console.log('[8] 表单字号只走 --fs-field（窄屏抬到 16px，防 iOS 聚焦放大）');
+{
+  const tok = read('css/tokens.css');
+  const tokenValue = (name) => ((tok.match(new RegExp('(?:^|\\s)' + name + ':\\s*([^;]+);')) || [])[1] || '').trim();
+  eq(tokenValue('--fs-field'), '14px', 'tokens.css 的 --fs-field 桌面值 = 14px');
+  eq(tokenValue('--fs-field-mono'), '12px', 'tokens.css 的 --fs-field-mono（等宽输入框）桌面值 = 12px');
+
+  // 窄屏抬升必须落在 :root 上。写在 input / select / textarea 上的规则只是 0,0,1，
+  // 会被 #player-input、.shelf-search-input、label input、组件里的 input.svelte-* 整条盖掉
+  // ——「写了 16px 但几乎没生效」正是这里要守住的回归。
+  const resp = stripCss(read('css/responsive.css'));
+  const raise = /:root\s*\{[^}]*--fs-field:\s*16px[^}]*\}/.exec(resp);
+  ok(!!raise, 'responsive.css 用 :root 把 --fs-field 抬到 16px');
+  ok(!!raise && /--fs-field-mono:\s*16px/.test(raise[0]), '同一个 :root 块里 --fs-field-mono 也抬到 16px');
+  if (raise) {
+    const head = resp.slice(0, raise.index);
+    const at = head.lastIndexOf('@media');
+    ok(at >= 0 && /max-width:\s*720px/.test(head.slice(at)),
+      '抬升写在 @media (max-width: 720px) 里');
+  }
+
+  // 命中表单控件的每条 font-size 都必须读其中一个字段字号令牌：字号只留一套口径，
+  // 不给「新控件又写回 14px、窄屏又漏一个」留口子。
+  // 元素选择器抓不到 #pw-prompt / #player-input 这类纯 ID 规则（正是它们盖掉了旧的兜底），
+  // 所以把「只靠 id / class 命中的字段」登记下来——改名或删控件时下面「都还在」会红。
+  const FIELD_TOKENS = /^var\(\s*--fs-field(?:-mono)?\s*\)$/;
+  const FIELD_SEL = /(?:^|[\s,>+~(])(?:input|select|textarea)(?![\w-])/;
+  const FIELD_NAMES = ['#player-input', '.shelf-search-input', '#pw-prompt'];
+  const sources = screenFiles.map((name) => ({ name: 'css/' + name, css: stripCss(read('css/' + name)) }));
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+    (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const f of walk(path.join(ROOT, 'src'))) {
+    if (!f.endsWith('.svelte')) continue;
+    const styleText = [...fs.readFileSync(f, 'utf8').matchAll(/<style>([\s\S]*?)<\/style>/g)]
+      .map((m) => m[1]).join('\n');
+    if (styleText.trim()) sources.push({ name: rel(f) + '#style', css: stripCss(styleText) });
+  }
+
+  const bad = [];
+  const seen = new Set();
+  for (const { name, css } of sources) {
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = rule[1].replace(/\s+/g, ' ').trim();
+      for (const n of FIELD_NAMES) if (selector.includes(n)) seen.add(n);
+      if (!FIELD_SEL.test(selector) && !FIELD_NAMES.some((n) => selector.includes(n))) continue;
+      for (const decl of rule[2].matchAll(/font-size\s*:\s*([^;]+)/g)) {
+        const value = decl[1].trim();
+        if (!FIELD_TOKENS.test(value)) {
+          bad.push(name + ' → ' + selector + ' { font-size: ' + value + ' }');
+        }
+      }
+    }
+  }
+  ok(bad.length === 0, '表单控件的 font-size 一律 var(--fs-field) / var(--fs-field-mono)'
+    + (bad.length ? '：' + bad.slice(0, 6).join(' | ') : ''));
+  ok(FIELD_NAMES.every((n) => seen.has(n)), '登记过的字段控件都还在（改名 / 删控件后同步 FIELD_NAMES）：'
+    + FIELD_NAMES.filter((n) => !seen.has(n)).join(' , '));
 }
 
 if (failed) {

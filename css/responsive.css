@@ -37,9 +37,12 @@
   .stage-btn, .stage-exit { width: 44px; height: 44px; }
   .composer-tools { min-height: 44px; }
 }
-/* 掐掉 iOS 上输入框聚焦时的自动放大 */
+/* 掐掉 iOS 上输入框聚焦时的自动放大：把表单字号令牌抬到 16px。
+   不在这里另写 input / select / textarea 规则——那是 0,0,1，会被 #player-input、
+   .shelf-search-input、label input、组件内的 input.svelte-* 全数盖掉（写了等于没写）。
+   令牌由元素自身的规则消费，特异性再高也绕不过去；新控件只要读 var(--fs-field) 就自动跟上。 */
 @media (max-width: 720px) {
-  input, select, textarea { font-size: 16px; }
+  :root { --fs-field: 16px; --fs-field-mono: 16px; }
 }
 
 /* 「＋ 新建」弹层：≤720px 底部弹层，其余居中弹窗（Esc / 点遮罩关闭走弹窗栈） */
