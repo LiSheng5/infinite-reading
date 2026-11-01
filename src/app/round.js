@@ -69,6 +69,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const resolved = Prefs.resolveChatCfg(S.settings, S.story);
     const cfg = resolved.cfg;
     S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
+    S.turnUsage = null;              // 本回合 token 用量从零累加（首发 + 工具反馈重发；重试也是新的一回合）
     const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
 
     S.turnAnchor = { nodeId: null, dead: false };   // 本回合锚点，工具出图任务提交时带上

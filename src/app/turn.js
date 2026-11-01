@@ -10,7 +10,7 @@
 import * as VT from '../../src/ui/viewTransition.js';
 
 import { Context } from '../core/context.ts';
-import { ChatProviders } from '../core/providers.ts';
+import { ChatProviders, mergeUsage } from '../core/providers.ts';
 import { Tree } from '../core/tree.ts';
 import { WriteBack } from '../core/writeBack.ts';
 import { A, renderChat, saveAll, toast } from './core.js';
@@ -321,7 +321,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
   // 旁白条目 / assistant 条目：唯一口径在 Context.narrationEntry / assistantEntry
   function pushNarrationEntry(text, reasoning) {
-    S.story.log.push(Context.narrationEntry(text, reasoning));
+    const entry = Context.narrationEntry(text, reasoning);
+    // 本回合的 token 用量随旁白条目存档（服务商没上报就没有这个字段）；
+    // 取走即清：同一份用量不会被下一条旁白再记一次
+    if (S.turnUsage) { entry.usage = S.turnUsage; S.turnUsage = null; }
+    S.story.log.push(entry);
   }
 
   function assistantMessage(reply, reasoning) {
@@ -491,6 +495,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         },
         onReasoning(piece) { if (hooks && hooks.onReasoning) hooks.onReasoning(piece); },
         onToolCalls(calls) { if (hooks && hooks.onToolCalls) hooks.onToolCalls(calls); },
+        onUsage(u) { S.turnUsage = mergeUsage(S.turnUsage, u); },   // 一回合多次请求逐项相加
         onAborter(ctrl) { S.chatAbortCtrl = ctrl; },   // 「停止」按钮中断当前请求
       });
     } catch (e) {
@@ -505,9 +510,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
         return streamAI1(adapter, cfg2, messages, hooks);
       }
       // 流式失败时兜底走一次非流式（思考链照常经 hooks 回传；中断能力照常接上）
+      const onUsage = (u) => { S.turnUsage = mergeUsage(S.turnUsage, u); };
       const fbHooks = (hooks && hooks.onReasoning)
-        ? { onReasoning: hooks.onReasoning, onAborter(ctrl) { S.chatAbortCtrl = ctrl; } }
-        : { onAborter(ctrl) { S.chatAbortCtrl = ctrl; } };
+        ? { onReasoning: hooks.onReasoning, onUsage, onAborter(ctrl) { S.chatAbortCtrl = ctrl; } }
+        : { onUsage, onAborter(ctrl) { S.chatAbortCtrl = ctrl; } };
       text = await adapter.chat(cfg, messages, fbHooks);
       streamed = false;
     }

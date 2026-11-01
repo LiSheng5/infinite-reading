@@ -246,6 +246,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 |---|---|---|
 | **不把 `tool_calls` 写进历史** | `src/app/turn.js`：`slimReply`、`assistantMessage` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
 | **`reasoning` 不进请求体** | `src/core/context.ts`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
+| **`usage` 只存不发** | 旁白条目可带 `usage { prompt, completion, total, cached?, reasoning? }`（`src/core/providers.ts` 的 `normalizeUsage`；一回合多次请求由 `mergeUsage` 相加，`turn.js` 的 `pushNarrationEntry` 写入）。服务商没上报就没有这个字段；不进请求体、不参与上下文预算，只用于气泡底部的用量小字。流式请求默认带 `stream_options.include_usage`，服务商 400 点名它时去掉重发一次 | 用量显示是附加信息，缺失不影响回合；旧档与 0.13.0 导出格式不受影响（新增可选字段） |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `src/core/context.ts`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `src/core/context.ts`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
 | **工具结果按语义分流** | `src/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（chat / rp）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |

@@ -45,6 +45,22 @@ import { A } from './core.js';
       reasoning: reasoning,
       showRetry: showRetry,
       nav: nav,
+      usage: e.type === 'narration' ? usageLabel(e.usage) : null,
+    };
+  }
+
+  // 每回合 token 用量：一行安静的小字；没有 usage（服务商没上报 / 旧档）就是 null，什么也不画
+  function usageLabel(u) {
+    if (!u || !(u.prompt >= 0) || !(u.completion >= 0)) return null;
+    const fmt = (n) => Number(n).toLocaleString('en-US');
+    const parts = ['输入 ' + fmt(u.prompt), '输出 ' + fmt(u.completion)];
+    const detail = [];
+    if (u.cached) detail.push('其中缓存命中 ' + fmt(u.cached));
+    if (u.reasoning) detail.push('输出里思考 ' + fmt(u.reasoning));
+    return {
+      text: parts.join(' · ') + ' tokens',
+      title: '本回合共 ' + fmt(u.total) + ' tokens' + (detail.length ? '（' + detail.join('，') + '）' : '')
+        + '；含工具反馈后的重发',
     };
   }
 

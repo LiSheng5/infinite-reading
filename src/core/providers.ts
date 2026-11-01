@@ -149,6 +149,43 @@ import { sleep } from './tree.ts';
     const r = obj.reasoning_content != null ? obj.reasoning_content : obj.reasoning;
     return typeof r === 'string' ? r : '';
   }
+  /* 用量归一：各家字段名不一（OpenAI 的 prompt_tokens / completion_tokens，部分兼容实现叫
+   * input_tokens / output_tokens）。只认非负数；输入和输出都没有 → null（该服务商没上报用量，
+   * 界面就什么都不显示，不拿 0 冒充）。cached / reasoning 只在服务商给了且 > 0 时才带。 */
+  function usageNum(v) {
+    if (v == null || v === '' || typeof v === 'boolean') return null;
+    const n = +v;
+    return (Number.isFinite(n) && n >= 0) ? Math.round(n) : null;
+  }
+  function normalizeUsage(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const prompt = usageNum(raw.prompt_tokens != null ? raw.prompt_tokens : raw.input_tokens);
+    const completion = usageNum(raw.completion_tokens != null ? raw.completion_tokens : raw.output_tokens);
+    if (prompt == null && completion == null) return null;
+    const out: any = { prompt: prompt || 0, completion: completion || 0, total: 0 };
+    const total = usageNum(raw.total_tokens);
+    out.total = total != null ? total : out.prompt + out.completion;
+    const pd = raw.prompt_tokens_details || raw.input_tokens_details || {};
+    const cached = usageNum(pd.cached_tokens != null ? pd.cached_tokens
+      : (raw.prompt_cache_hit_tokens != null ? raw.prompt_cache_hit_tokens : raw.cache_read_input_tokens));
+    if (cached) out.cached = cached;
+    const cd = raw.completion_tokens_details || raw.output_tokens_details || {};
+    const reasoning = usageNum(cd.reasoning_tokens);
+    if (reasoning) out.reasoning = reasoning;
+    return out;
+  }
+  // 一回合里可能有多次请求（首发 + 工具反馈重发）：逐项相加；任一方为空取另一方
+  function mergeUsage(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    const out: any = { prompt: a.prompt + b.prompt, completion: a.completion + b.completion, total: a.total + b.total };
+    const cached = (a.cached || 0) + (b.cached || 0);
+    const reasoning = (a.reasoning || 0) + (b.reasoning || 0);
+    if (cached) out.cached = cached;
+    if (reasoning) out.reasoning = reasoning;
+    return out;
+  }
+
   function emitReasoning(hooks, piece) {
     if (piece && hooks && hooks.onReasoning) hooks.onReasoning(piece);
   }
@@ -278,6 +315,13 @@ import { sleep } from './tree.ts';
         mergeExtraParams(body, cfg.extraParams);
         const wantStream = !!(hooks && hooks.onDelta);
         if (wantStream) body.stream = true;
+        // 流式默认不带用量，要显式要求才在末尾给一包 usage。用户在「自定义请求参数」里自己写了
+        // stream_options 就尊重他的；个别服务商不认这个参数（400 并点名它）→ 下面去掉后重发一次。
+        let askedUsage = false;
+        if (wantStream && body.stream_options === undefined) {
+          body.stream_options = { include_usage: true };
+          askedUsage = true;
+        }
 
         // （2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
         // AbortController 经 hooks.onAborter 交给调用方（app.js 的「停止」按钮）；
@@ -302,7 +346,17 @@ import { sleep } from './tree.ts';
             method: 'POST', headers, body: JSON.stringify(body),
             signal: ctrl ? ctrl.signal : undefined,
           });
-          if (!res.ok) throw new Error(await readError(res));
+          if (!res.ok) {
+            const detail = await readError(res);
+            if (!(askedUsage && /stream_options|include_usage/i.test(detail))) throw new Error(detail);
+            // 这家不认 stream_options：去掉再发一次（只是少了用量显示，回合照常）
+            delete body.stream_options;
+            res = await fetch(url, {
+              method: 'POST', headers, body: JSON.stringify(body),
+              signal: ctrl ? ctrl.signal : undefined,
+            });
+            if (!res.ok) throw new Error(await readError(res));
+          }
 
           // 流式请求却没响应体（空 200）：显式报「未返回流式响应」——
           // 别落进 res.json() 抛出费解的解析错误，被上层误报成网络故障
@@ -320,6 +374,8 @@ import { sleep } from './tree.ts';
             emitReasoning(hooks, reasoningOf(msg));   // 思考链：非流式一次性给全
             const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
             if (calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(calls);
+            const usage0 = normalizeUsage(data.usage);
+            if (usage0 && hooks && hooks.onUsage) hooks.onUsage(usage0);
             if (hooks && hooks.onDelta) hooks.onDelta(text);
             return text;
           }
@@ -327,6 +383,7 @@ import { sleep } from './tree.ts';
           // 流式（SSE）：思考链 delta.reasoning_content → 正文 delta.content → 工具 delta.tool_calls 依次显示
           let full = '';
           let gotAny = false;   // 流里是否解析出过任何 SSE 事件（空流要显式报错，见收尾）
+          let streamUsage = null;   // 末尾那一包 usage（choices 常为空数组）；取最后一次非空的
           const callBuf = [];
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -339,6 +396,7 @@ import { sleep } from './tree.ts';
             try {
               const j = JSON.parse(payload);
               if (j && (j.choices || j.error)) gotAny = true;   // 真正的 API 事件（[DONE] 除外）
+              if (j && j.usage) { const u = normalizeUsage(j.usage); if (u) streamUsage = u; }
               const delta = j.choices && j.choices[0] && j.choices[0].delta;
               const rpiece = reasoningOf(delta);
               if (rpiece) emitReasoning(hooks, rpiece);
@@ -372,6 +430,7 @@ import { sleep } from './tree.ts';
           if (buf.trim()) handleLine(buf);
           const done_calls = callBuf.filter(Boolean);
           if (done_calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(done_calls);
+          if (streamUsage && hooks && hooks.onUsage) hooks.onUsage(streamUsage);
           // 连接通了但流里一个事件都没有（代理把 SSE 吞成空体的典型症状）：显式报错，
           // 不把「空回复」冒充成功返回给调用方
           if (!full && !done_calls.length && !gotAny) {
@@ -935,4 +994,4 @@ import { sleep } from './tree.ts';
 
   /* fetchWithTimeout 一并导出：app 层（视频下载转存）也需要同一条「超时 + 可中断」口径，
    * 不要在别处再写第二份 AbortController 模板。 */
-  export { ChatProviders, ImageProviders, VideoProviders, fetchWithTimeout };
+  export { ChatProviders, ImageProviders, VideoProviders, fetchWithTimeout, normalizeUsage, mergeUsage };
