@@ -3,7 +3,7 @@
  * 单文件打包（阶段 1 起改走 Vite + vite-plugin-singlefile，本脚本只是契约不变的薄封装）
  *
  * 历史：这个文件原先是「正则把 <script src="js/…"> 内联进 HTML」的零构建打包器。
- * 阶段 1 接入 Vite 后脚本改成 ES module 入口（src/legacy.js），正则内联不再适用；
+ * 阶段 1 接入 Vite 后入口改成 ES module（src/main.js），正则内联不再适用；
  * 单文件产物改由 vite-plugin-singlefile 生成（全部内联、file:// 双击可开、图片也内联）。
  * 对外契约保持不变：`npm run bundle` / `node tools/bundle-single-file.mjs` 仍产出 dist/ir.html。
  *

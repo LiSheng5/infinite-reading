@@ -7,12 +7,10 @@
  *  - 与世界卡对接：卡 → world.characters 一条人物条目（personality / speech 对接）
  *
  * 合规：只兼容**格式**，不复制任何代码与内容；解析的是用户自己的卡。
- * 纯逻辑、零依赖；IIFE 挂 应用层注册表，Node 亦可加载（评测用）。
+ * 纯逻辑、零依赖；以 ES module 导出，Node 亦可 import（评测用）。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/roleCard.ts（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API。 */
+/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { Zip } from './zip.ts';
 
 const global = globalThis as any;

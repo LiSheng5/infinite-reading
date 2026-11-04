@@ -21,7 +21,7 @@
  *   任何一步失败都不写标记、不改动 localStorage，并让本次会话退回 localStorage 模式运行。
  *   成功后 localStorage 里的旧数据**原样保留**（作为回退快照，只增不减），所以不会丢档。
  *
- * 纯逻辑、零依赖；IIFE 挂 应用层注册表，Node 亦可加载（评测/迁移自测用：
+ * 纯逻辑、零依赖；以 ES module 导出，Node 亦可加载（评测 / 迁移自测用：
  * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与 v0.2 一致）。
  */
 const global = globalThis as any;

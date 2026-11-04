@@ -8,7 +8,7 @@
  *   fallback      本地兜底标题（不发请求）
  *   applyTitle    写回护栏（id 一致 + titleAuto 仍为真才写）
  *
- * 硬约束：零依赖、无 DOM、无网络；IIFE 挂 应用层注册表，Node 里 require 也能跑。
+ * 硬约束：零依赖、无 DOM、无网络；以 ES module 导出，Node 里可直接 import。
  */
 
 /* ↑ 阶段 2 搬迁自 src/core/titles.ts（IIFE → ES module，函数体逐字未动）。

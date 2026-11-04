@@ -7,7 +7,7 @@
  *   - 主模型配置解析（resolveChatCfg）：profileId 只是引用，绝不携带 apiKey / baseUrl；
  *   - 各模式下「本对话设置」应显示哪些控件（visibleFor）。
  *
- * 硬约束：不碰 DOM、不碰存储、无依赖；Node 里 require 后挂到 global.Prefs。
+ * 硬约束：不碰 DOM、不碰存储、无依赖；以 ES module 导出 Prefs，Node 里可直接 import。
  */
 
 /* ↑ 阶段 2 搬迁自 src/core/prefs.ts（IIFE → ES module，函数体逐字未动）。

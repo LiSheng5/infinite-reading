@@ -6,7 +6,7 @@
  * dirty：世界卡表单是否改动过——真源是 src/app/settings.js 的 worldFormChanged（判变账本），
  *  决定「保存世界卡」是否可点；输入事件与界面层 renderStoryPanels 重绘后都对账一次。
  *
- * 界面层（src/app/*）直接 import syncDirty / onOpen / esc（阶段 6 去掉了 应用层注册表 桥）。
+ * 界面层（src/app/*）直接 import syncDirty / onOpen / esc；跨模块调用仍走 src/app/core.js 的注册表 A。
  */
 import { A } from '../../app/core.js';
 

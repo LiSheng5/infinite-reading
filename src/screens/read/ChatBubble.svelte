@@ -1,5 +1,5 @@
 <script>
-  /* ChatBubble.svelte —— 聊天流一条消息（阶段 4 屏 4，src/app/render.js 的 bubbleFor 同构）
+  /* ChatBubble.svelte —— 聊天流一条消息（阶段 4 屏 4，src/app/readmodel.js 的视图模型同构）
    * 按 entry.kind 分派：text / note / image / video / agent / proposal；
    * DOM 与 0.12.1 各子渲染器（textBubble / toolNoteBubble / imageRowBubble / inlineImageBubble /
    * videoBubble / agentBubble / proposalBubble）逐节点同结构——类名、title、aria 全保留。

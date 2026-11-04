@@ -48,7 +48,7 @@
 </svg>
 
 <style>
-  /* 与 css/icons.css 的 .ic 同参数：描边随文字色（currentColor），尺寸由使用方用 class / style 调 */
+  /* 与 css/icons.css 的 .ic 同参数：描边随文字色（currentColor），尺寸与描边由本组件的 scoped 样式定（1.15em / 1.6） */
   svg {
     width: 1.15em;
     height: 1.15em;

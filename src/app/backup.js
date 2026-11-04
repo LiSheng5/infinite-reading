@@ -322,7 +322,7 @@ import { A, toast } from './core.js';
       return;
     }
     // 完整档案：原样续玩
-    // 阶段 2：story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack，与 0.12.1 逐字一致），
+    // 阶段 2：story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack），
     // 这里只留落盘与界面跳转
     const st = BackupPack.storyFromPack(obj);
     Store.saveStory(st);

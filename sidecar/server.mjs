@@ -3,12 +3,12 @@
  * 无限阅读 · 本地旁路服务（sidecar）· 入口
  *
  * 定位：**可选**的本地伴侣进程，不是「应用必须有后端」。
- *   - 前端核心保持纯前端（零构建 / 零依赖）；侧车没启动时，前端探测 /health 失败即降级，
+ *   - 前端核心保持纯前端（数据全在浏览器本地，前端经 Vite 构建）；侧车没启动时，前端探测 /health 失败即降级，
  *     三个功能在界面上显示「需要启动本地服务」并禁用，其余功能完全不受影响。
  *   - 只绑 127.0.0.1，不做局域网可达；除 /health 外所有接口都要 Bearer token。
  *     token 的目的是防「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。
  *
- * 本期零依赖：只用 node:http / node:fs / node:crypto（存储用 node:sqlite 在后续阶段接入）。
+ * 零第三方依赖：只用 Node 内置模块（含 node:sqlite 存储、node:path / node:url 等）。
  *
  * 启动：  node sidecar/server.mjs            # 首次启动会打印 token
  *        node sidecar/server.mjs --show-token # 再次查看 token

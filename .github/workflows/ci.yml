@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 # 阶段 1 起经 Vite 构建：CI 做五件事——语法检查、构建产物自检、版本号一致性、离线评测、功能单测。
-# Node 版本与 package.json 的 engines 对齐（>=22）：可选本地服务用 node:sqlite。
+# Node 版本与 package.json 的 engines 对齐（>=24）：可选本地服务用 node:sqlite。
 jobs:
   check:
     name: 语法 + 构建 + 版本号

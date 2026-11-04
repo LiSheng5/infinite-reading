@@ -2,7 +2,7 @@
  * src/core/backupPack.ts —— 全量备份的打包 / 解析纯逻辑（阶段 2 自 src/app/backup.js 抽出）
  *
  * 只搬数据变换，不碰界面（按钮态 / toast / 弹窗留在 src/app/backup.js，那里经 BackupPack 调用本模块）。
- * 函数体与 0.12.1 逐字一致（参数化了原先闭包里的 S.settings / Store 读取）；版本戳由
+ * 把原先闭包里的 S.settings / Store 读取改成参数注入；版本戳由
  * tools/sync-version.mjs 注入（本文件与 store.ts 各持一处）。
  *
  * 依赖：tree（clone）/ store / zip 都是静态 import——模块图是 DAG，不存在循环。

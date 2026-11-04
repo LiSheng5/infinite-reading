@@ -5,8 +5,8 @@
    * 样式全部来自 css/overlays.css 与 css/settings.css —— 组件只产标记，不写第二份配色，
    * 所以窄屏底部弹层规则（#modal-new / #modal-export）与设置页的定高卡片都原样生效。
    *
-   * 之前这套骨架有三份实现（各弹窗内部的 Card.svelte、设置屏手写的一份、以及
-   * src/ui/Modal.svelte 里从未被使用的非 shell 分支 + 120 行 scoped CSS），现在只剩这里。
+   * 之前这套骨架散在各弹窗内部的 Card.svelte 与设置屏里，
+   * 现在统一到这一份（含头 / 身 / 脚与关闭钮）。
    * 「遮罩 / 层级 / 焦点 / 开合过渡」不归本组件：那是 index.html 的 .modal 容器与
    * src/ui/modalHost.js 的弹窗栈。
    *

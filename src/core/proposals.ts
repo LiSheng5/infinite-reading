@@ -12,12 +12,10 @@
  *     **confirm（用户点击）之前绝不能调用 paymentPurchase**；
  *   - 确认是幂等的：confirm 同步抢占状态为 executing 再 await，并发再点不会二次执行。
  *
- * 纯函数、零外部依赖（ID 生成共用 src/core/tree.ts 的 genId）；UMD 兜底，浏览器挂 应用层注册表，Node 亦可加载。
+ * 纯函数、零外部依赖（ID 生成共用 src/core/tree.ts 的 genId）；以 ES module 导出，Node 里可直接 import。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/proposals.ts（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API。 */
+/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { genId as rootGenId } from './tree.ts';
 
   const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 提案有效期（默认 30 分钟，常量可调）

@@ -4,9 +4,9 @@
  * 职责：story.tree 是回合树的**唯一真源**；story.log / messages / scenes / world / …
  * 全是「根 → head」这条路径的派生物。
  *  - 纯逻辑：不碰 DOM、不碰 Storage、不联网；Node 里 require 就能测
- *  - 零依赖、零构建：IIFE 挂到全局 IR
+ *  - 零依赖：以 ES module 导出，调用方静态 import
  *
- * 另承载 IR 根级纯工具（genId / clone / sleep / plainReply，与）：
+ * 另承载全模块共用的纯工具（genId / clone / sleep / plainReply）：
  * 零依赖、全模块可引用的小函数收敛在这里一处实现，其它模块只调用、不再各写一份。
  *
  * API（本期）：

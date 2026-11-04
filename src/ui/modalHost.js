@@ -9,7 +9,7 @@
  *
  * 分工：
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
- *   · 外壳 = installShell() 就地建的一个 display:contents 层容器（只做「层」，不画任何像素）
+ *   · 外壳 = installShell() 就地建的两层 display:contents 容器（只做「层」，不画任何像素）
  *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；11 个弹窗共用同一份）
  *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
  *   · （弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
@@ -25,7 +25,7 @@
  *     叠层只来自这里的内联 z-index；CSS 的 .modal z-index 只是未开窗时的占位值，不参与叠层。
  *   · 互斥：FEATURE_MODALS（邮件 / 支付 / 设置）开一个先关掉其它功能类；确认弹窗不参与互斥。
  *   · Esc：只关最上层；确认弹窗必须走 closeConfirm（收掉 Promise），见 dismissModal。
- *   · 遮罩点击：规则仍写在 src/app/main.js 的绑定里（本步允许改的文件不含它），
+ *   · 遮罩点击：规则仍写在 src/app/main.js 的绑定里（绑定在 src/app/main.js，本文件不重复实现），
  *     它读的 modalStack 就是本文件导出的同一个数组实例。
  *   · 焦点还原：0.12.1 没有（关窗后焦点留在已隐藏的元素上）。6a 补上「开第一个弹窗前的那一帧」
  *     的还原，且 focus({ preventScroll:true })——不抢脚本新放的焦点、不触发滚动。

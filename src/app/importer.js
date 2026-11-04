@@ -107,7 +107,7 @@ import { A, renderChat, toast } from './core.js';
   }
 
   // 纯解析逻辑（模型回包 JSON / 本地兜底规则 / 人物行）已抽到 src/core/importText.ts，
-  // 这里只留界面流；阶段 2 起经 ImportText 调用，函数体与 0.12.1 逐字一致
+  // 这里只留界面流；纯解析交给 ImportText，这里只做转发
   function parseImportJson(raw) { return ImportText.parseImportJson(raw); }
   function parseImportSummary(raw) { return ImportText.parseImportSummary(raw); }
   function parseImportResult(raw) { return ImportText.parseImportResult(raw); }

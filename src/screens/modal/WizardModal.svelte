@@ -3,10 +3,10 @@
    * 行为仍在 src/app/wizard.js：openWizard 往里灌 prefill、draftWizard 起草、startFromWizard 建新档，
    * 全部按 id 读写；这里只把标记换成组件库（Field / TextInput / 本目录的 Textarea / Button）。
    * 人物行是唯一走状态桥的部分（见 CharRows.svelte / state.svelte.js）：
-   * wizard.js 的 wzChars() 在 Svelte 形态下取 ModalScreens.chars('wizard')。
-   * 取消 / 关闭额外挂一次 closeModal：0.12.1 这两个钮是直接 classList.add('hidden')，
-   * 会把记录留在弹窗栈里（6a 清单里的遗留），这里借重建顺手收口；app.js 的旧绑定
-   * 随后再执行一次 hidden 也无害（关过一次的弹窗 class 已经对了）。 */
+   * wizard.js 的 wzChars() 在 Svelte 形态下取 state.svelte.js 的 charApi('wizard')。
+   * 取消 / 关闭统一走 closeModal：旧实现直接 classList.add('hidden')，会把弹窗留在栈里；
+   * 这里借重建收口，界面层只绑开局与起草按钮，
+   * 不再有第二处 hidden 绑定。 */
   import Card from '../../ui/ModalCard.svelte';
   import Field from '../../ui/Field.svelte';
   import TextInput from '../../ui/TextInput.svelte';

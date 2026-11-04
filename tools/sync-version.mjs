@@ -2,9 +2,9 @@
 /**
  * 版本号同步：以根目录 VERSION 为唯一真源。
  *
- * 阶段 6 起**运行时版本号全部构建注入**，源码里不再有手写的 vX.Y.Z：
+ * 运行时版本号一律由构建注入，源码里不再有手写的 vX.Y.Z：
  *   - 首页版本文字：src/screens/home/HomeScreen.svelte 用 `__IR_VERSION__`（vite define）
- *   - 导出包 / 备份包的 app 戳：src/core/{store,backupPack}.ts 用 `__IR_VERSION__`
+ *   - 导出包 / 备份包的 app 戳：src/core/version.ts 统一提供 `__IR_VERSION__`
  *   - Service Worker 缓存名：sw.js 里 `'ir-v' + '__IR_VERSION__'`，构建期由 vite.config.mjs 替换
  * 本脚本只负责「构建管不到」的三处：
  *   - package.json 的 version（npm 元数据，必须与 VERSION 一致）

@@ -6,7 +6,7 @@
  *
  * 职责边界：
  *  - 纯逻辑：不碰 DOM、不碰 story、不联网；Node 里 require 就能测
- *  - 零依赖、零构建：IIFE 挂到全局 PaintQueue
+ *  - 零依赖：以 ES module 导出 PaintQueue，调用方静态 import
  *
  * API：
  *   const q = PaintQueue.create({ onChange(size) {}, timeoutMs });

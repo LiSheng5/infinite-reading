@@ -2,9 +2,8 @@
  * src/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
  * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
-// 阶段 5：切兄弟的过渡收编进过渡内核（runTransition）。本文件仍是 legacy IIFE，
-// 但经 src/main.js 以 ES module 装载（src/app/main.js 同款），顶层 import 合法；
-// 三档 kind / 时长的唯一声明处仍是 src/core/motion.ts 的 TRANSITIONS.sibling。
+// 切兄弟的过渡收编进过渡内核（runTransition）。本文件是 ES module，
+// 经 src/main.js 装载，顶层 import 合法；三档 kind / 时长的唯一声明处是 src/core/motion.ts 的 TRANSITIONS.sibling。
 // 命名空间导入 + VT.runTransition 点名调用：tools/check-free-calls.mjs 的裸调用启发式
 // （抓「搬家后忘改 A.xxx」）认得 import 绑定，跨模块调用与 A.xxx 同口径。
 import * as VT from '../../src/ui/viewTransition.js';

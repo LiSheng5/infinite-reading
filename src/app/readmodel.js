@@ -10,7 +10,7 @@
  * 每个条目模型带稳定 key：按 log 条目对象身份发号（project 按引用共享 → 同一条目
  * 跨 renderChat / 切分支共享前缀拿到同一个号），ReadScreen 的 each 据此做 keyed 更新——
  * 旧气泡与内联图不销毁、不重新解码、入场动画不重放。
- * 视图模型口径与 0.12.1 的 DOM 拼装逐字段一致（截图逐像素对齐）。
+ * 输出纯数据视图模型，DOM 由 Svelte 组件按字段渲染；字段名与旧拼装保持一致，供回归对照。
  */
 import { Tree } from '../core/tree.ts';
 import { Prefs } from '../core/prefs.ts';

@@ -79,7 +79,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   font-weight: 500;
 }
 
-/* ---- 基座：默认外观 = 扁平细边按钮（旧的 .btn，也是新代码唯一该写的类） ---- */
+/* ---- 基座：默认外观 = 扁平细边按钮（.ui-btn 是全站唯一基座，旧类名 btn / hud-btn / mini-btn / icon-btn 已迁完） ---- */
 .ui-btn {
   font-size: 14px;
   letter-spacing: .04em;

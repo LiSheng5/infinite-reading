@@ -18,7 +18,7 @@
  * 压缩（-B）：以 scene_change 为边界做事件级摘要；占满时递归合并最旧两幕。
  * 提供纯函数 + 可注入的 summarize（真实用书记员模型，失败兜底用 localSummarize）。
  *
- * 纯函数、零依赖；UMD 兜底，浏览器挂 应用层注册表，Node 亦可加载。
+ * 纯函数、零依赖；以 ES module 导出，被 src/app/turn.js 静态 import，Node 亦可加载。
  */
 
 /* ↑ 阶段 2 搬迁自 src/core/context.ts（IIFE → ES module，函数体逐字未动）。

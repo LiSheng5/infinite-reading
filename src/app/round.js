@@ -109,7 +109,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = A.activeProfileEntries();   // 画像按开关 / 范围注入（关则空数组，零成本）
     asmOpts.contextWindow = A.chatContextWindow();   // 组装窗口按 token 动态装（context.ts 的 fitWindow）
-    // （2026-10-14）：组装前先查预算，超了就地用本地摘要先压再组——此前是「先组后压」
+    // 组装时先按本次结果估 token，超预算才压一次并重组（估算直接用本次组装结果，不再另组一份）
     //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
     // 估算直接用本次组装结果（estimateTokensOf），不再「估一次、组一次、压缩时再估一次」；

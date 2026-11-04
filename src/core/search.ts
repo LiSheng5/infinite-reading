@@ -12,9 +12,7 @@
  * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/search.ts（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API。 */
+/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { plainReply as plainReplyOfTree } from './tree.ts';
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */

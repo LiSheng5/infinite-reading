@@ -1,7 +1,7 @@
 <script>
   /* 阶段 4 · 屏 3 书架（Svelte 5 重写）
    * 行列表（shelf-row-* / thumb / row-menu）、搜索结果（shelf-hit + mark 高亮）、空态的 DOM
-   * 与 0.12.1 的 src/app/shelf.js 拼装结果逐节点同结构——旧行为函数（openStory / rename /
+   * 沿用 src/app/shelf.js 拼装结果的 id / class，行列表改为 {#key} 重建——旧行为函数（openStory / rename /
    * regen / search / keyboard）零改动，靠 id / class 选择器继续工作（titleElOf、moveActive 等）。
    * 行菜单（.menu.row-menu）仍由 shelf.js 的 openRowMenu 原样 appendChild 到行上（组件不管它的 DOM）；
    * 标题打字机（typewriteTitle）直接改 .shelf-row-title 的 textContent——{#key} 每次推送整体重建行，
@@ -9,7 +9,7 @@
    * 安全红线：缩略图走 Store.safeThumb + JSON.stringify 转义进 url()；命中高亮只用 <mark>
    * 元素 + 文本插值，绝不用 {@html}（用户 / 模型产出一律文本渲染）。
    * 顶部按钮的动作直连应用层注册表（src/app/core.js 的 A）；
-   * 搜索框 / 键盘 / 空状态按钮不带 handler——由 src/app/shelf.js 的 initShelf 按 id 原样绑定。 */
+   * 顶部按钮与键盘事件由本组件处理；搜索框与清空钮仍由 src/app/shelf.js 的 initShelf 按 id 补绑。 */
   import Icon from '../../ui/Icon.svelte';
   import { shelf } from './shelf.svelte.js';
   import { A as appApi } from '../../app/core.js';

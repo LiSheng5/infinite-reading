@@ -7,9 +7,7 @@
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/providers.ts（IIFE → ES module，函数体逐字未动）。
- * 模块间现存的 global.IR 惰性互访按铁律保留（可选依赖语义，见 src/core/ir.ts 头注）；
- * 导出即真实 API。 */
+/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { sleep } from './tree.ts';
 
   async function readError(res) {
@@ -731,7 +729,7 @@ import { sleep } from './tree.ts';
    *     status ∈ queued | running | succeeded | failed | cancelled | expired
    *   generate(cfg, req, hooks)              → { url, taskId, params }
    *     = submit + 每 10 秒 poll；hooks.onTaskId(id)（提交成功立刻回调，用于落盘）、
-   *       hooks.onStatus(s)、hooks.signal（本地取消）。旧约定 generate(cfg, {prompt, image}) → {url} 保留。
+   *       hooks.onStatus(s)、hooks.signal（本地取消）。当前签名是 generate(cfg, req, hooks) → { url, taskId, params }。
    * V1 旧接口（Hailuo-02 / video-01，/v1/video_generation + files/retrieve）是本期非目标，不实现。 */
 
   const VIDEO_POLL_MS = 10000;                  // 官方示例轮询间隔 10 秒

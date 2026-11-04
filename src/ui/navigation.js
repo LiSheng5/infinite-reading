@@ -292,7 +292,7 @@ export function isTransitioning() {
   return vtActive();
 }
 
-/* ---------- 屏幕登记表（应用层直接 import；阶段 6 去掉了 Nav） ---------- */
+/* ---------- 屏幕登记表（应用层直接 import 本文件的 Nav） ---------- */
 export const Nav = {
   SCREENS,
   ORDER: ORDER.slice(),
