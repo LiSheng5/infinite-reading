@@ -20,7 +20,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function bind() {
     // 首页 / 书架的顶部按钮由各自组件自带 handler（src/screens/home、src/screens/shelf）；
-    // 搜索框 / 键盘 / 空状态按钮仍由 src/app/shelf.js 的 initShelf 按 id 绑定。
+    // 搜索框与清空钮由 src/app/shelf.js 的 initShelf 按 id 绑定。
     $('#btn-close-new').onclick = () => closeModal('modal-new');
     document.querySelectorAll('#modal-new .mode-card').forEach(b => {
       b.onclick = () => {
@@ -30,7 +30,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         else A.createStoryImmediate(mode);
       };
     });
-    A.initShelf();   // 搜索框 / 键盘 / 空状态按钮（src/app/shelf.js）
+    A.initShelf();   // 搜索框与清空钮（src/app/shelf.js）
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 
     // —— 剧情文本导入（路径②） ——

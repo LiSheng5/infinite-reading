@@ -11,7 +11,7 @@
  *  - v0.1 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
  *
  * 【内存优先】为什么这么写：
- *   localStorage 是同步的，IndexedDB 是异步的。若把 API 改成 async，app.js 里几十处
+ *   localStorage 是同步的，IndexedDB 是异步的。若把 API 改成 async，src/app/ 下几十处
  *   同步调用（saveAll / renderChat 前拿档）全都要改，风险极高。
  *   所以 boot() 时一次性把数据读进内存，之后所有 API **保持同步签名**：
  *   读 = 读内存；写 = 改内存 + 后台异步落盘（失败走 onPersistError 回调提示）。

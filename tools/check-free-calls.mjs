@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 // tools/check-free-calls.mjs —— 裸调用启发式检查（尽力而为，不是证明）
-//
 // 扫描范围**刻意**只覆盖 src/app/main.js 与 src/app/*.js（「确认意图」）：
 // 本检查抓的是「从 main.js 拆分搬家后忘改成 A.xxx(...)」，A.xxx 约定只存在于应用层；
 // src/core、src/ui、src/screens 走静态 import，没有这套约定，扩进来只会攒误报。
 // 若将来应用层之外也引入 A.reg 机制，再把 files 清单扩到全量。
-//
 // 对 src/app/main.js 与 src/app/*.js：剔除字符串 / 注释 / 正则 / 模板字面量后，
 // 找出形如 name( 且前面不是 . 的「裸调用」；每个裸调用名必须是以下之一：
 //   1) 本文件里声明过的名字（function / class / const / let / var / 形参 / 解构绑定 / 方法简写）；
 //   2) JS 内置与浏览器全局（下方 GLOBALS 白名单）；
 //   3) tools/free-calls-allow.json 里登记的名字（每条带一行理由）。
 // 未解析的名字 → 失败。这能抓住「搬家后忘了改成 A.xxx(...)」的大部分情况。
-//
 // 已知局限（靠允许名单消化，见 free-calls-allow.json 顶部说明）：
 // 正则字面量与模板字符串内的伪匹配、对象方法简写与「后跟 { 的调用」难以区分、
 // 多声明符（const a = 1, b = 2）只登记第一个名字等。

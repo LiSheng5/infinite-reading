@@ -149,7 +149,7 @@
           </div>
         </div>
       </div>
-      <!-- 顶栏忙碌进度线：busy 时由 app.js 显隐；样式见 css/base.css，三档动效见 css/motion.css -->
+      <!-- 顶栏忙碌进度线：busy 时由 src/app/core.js 的 state setter 显隐；样式见 css/base.css，三档动效见 css/motion.css -->
       <div id="busy-line" class="hidden" aria-hidden="true"></div>
     </header>
 
@@ -200,7 +200,7 @@
 
     <!-- ========== 设置（模型 / 辅助模型 / 画面 / 工具与服务 / 数据 / 外观 / 当前故事） ==========
        版式原则：每个分组只露「必填 + 常改」的字段；高级参数、长说明、单独配置一律折进 <details>
-       （js/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。fieldset → 分组由 legend 文字归类。 -->
+       （src/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。分组由 settingsForm.js 的 GROUPS 直接渲染，不再按 legend 文字归类。 -->
   <div id="modal-settings" class="modal hidden">
     <!-- 内容由 src/screens/settings 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>

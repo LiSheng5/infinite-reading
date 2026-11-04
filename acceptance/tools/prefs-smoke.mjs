@@ -167,8 +167,6 @@ await run(browser, 'svelte: ', '', async (page, ok) => {
   ok('char row add/del', await page.evaluate(() => document.querySelectorAll('#w-characters .char-row.card').length) === rows1 - 1);
 });
 
-// ============ 阶段 6：?ui=legacy 已删，旧的「0.12.1 回退屏」场景不再保留 ============
-
 await browser.close();
 
 let fail = 0;

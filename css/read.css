@@ -4,7 +4,7 @@
  * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
 
 /* ==================== 阅读界面 ==================== */
-/*：祖先链每一层都要能收缩，聊天区才能拿到「剩余高度」并滚动 */
+/* 祖先链每一层都要能收缩，聊天区才能拿到「剩余高度」并滚动 */
 #screen-game {
   display: flex; flex-direction: column; min-height: 0;
   background: var(--bg);
@@ -51,7 +51,7 @@
 .menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 .menu-item {
   display: block; width: 100%;
-  min-height: 40px;   /*：可点区域 ≥ 40px（含「为当前场景作画」入口；触屏仍放大到 44px） */
+  min-height: 40px;   /* 可点区域 ≥ 40px（含「为当前场景作画」入口；触屏仍放大到 44px） */
   text-align: left;
   font-size: 13px;
   color: var(--ink);
@@ -90,7 +90,7 @@
   display: flex; flex-direction: column; gap: 22px;
   scroll-behavior: smooth;
 }
-/*：纵向 flex 容器里的气泡不许被压扁（旁白 overflow:hidden 时自动最小高度为 0）。 */
+/* 纵向 flex 容器里的气泡不许被压扁（旁白 overflow:hidden 时自动最小高度为 0）。 */
 .chat-scroll > * { flex-shrink: 0; }
 
 /* ---------- 左栏：安静的阅读面（只有文字，没有卡片） ---------- */
@@ -573,7 +573,7 @@ html[data-motion="rich"] .stage-empty {
 .stage-wrap:hover .stage-actions,
 .stage-wrap:focus-within .stage-actions { opacity: 1; }
 .stage-btn {
-  width: 40px; height: 40px;   /*：可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
+  width: 40px; height: 40px;   /* 可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 15px;
   color: var(--on-ink);   /* 底是深色半透明遮罩，线稿图标要用浅色 */

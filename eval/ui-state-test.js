@@ -164,7 +164,7 @@ async function main() {
   /* ---------------- 4. 覆盖层背景 / 键盘可达 / 首帧动效 ---------------- */
   console.log('[4] 背景惰性化 / 键盘可达 / 首帧动效');
   {
-    /* ：背景 inert + aria-hidden，且调用点在焦点进对话框之后 / 撤在还焦点之前 */
+    /* 背景 inert + aria-hidden，且调用点在焦点进对话框之后 / 撤在还焦点之前 */
     const backdrop = stripComments(read('src/ui/backdrop.js'));
     ok(/setAttribute\(\s*'inert'/.test(backdrop), 'backdrop.js 给背景加 inert');
     ok(/aria-hidden/.test(backdrop) && /setAttribute\(\s*'aria-hidden'/.test(backdrop),
@@ -194,7 +194,7 @@ async function main() {
        closeBranchBody.indexOf('setBranchBackdrop(false)') < closeBranchBody.indexOf('branchTrapRelease()'),
       'closeBranch 先撤 inert、再还焦点');
 
-    /* ：聊天图 / 缩略图带 onclick 的同时必须可聚焦、可键盘触发 */
+    /* 聊天图 / 缩略图带 onclick 的同时必须可聚焦、可键盘触发 */
     const imgs = [];
     for (const rel of ['src/screens/read/ChatBubble.svelte', 'src/screens/read/ReadScreen.svelte']) {
       // 到自闭合的 /> 为止（属性值里有 => 箭头，不能用 [^>]* 截断）
@@ -210,7 +210,7 @@ async function main() {
     ok(/Enter/.test(a11y) && /' '/.test(a11y) && /preventDefault\(\)/.test(a11y),
       'a11y.js 的 onActivate 认 Enter / Space 并拦掉 Space 的滚动');
 
-    /* ：滚动快照是普通变量，$effect 不再把它读成依赖 */
+    /* 滚动快照是普通变量，$effect 不再把它读成依赖 */
     const panelJs = stripComments(read('src/screens/storyPrefs/panel.svelte.js'));
     ok(/let listScroll = 0;/.test(panelJs) && !/\$state\(\{[^}]*listScroll/.test(panelJs),
       '滚动位置是普通模块变量（不是 $state）');
@@ -219,7 +219,7 @@ async function main() {
     ok(panelSvelte.indexOf('panel.listScroll') < 0 && /listScrollTop\(\)/.test(panelSvelte),
       '$effect 读 listScrollTop()，不再读 panel.listScroll');
 
-    /* ：head 内联脚本在样式生效前写 data-motion，档位有 localStorage 镜像 */
+    /* head 内联脚本在样式生效前写 data-motion，档位有 localStorage 镜像 */
     const html = read('index.html');
     const head = html.slice(0, html.indexOf('</head>'));
     const bootAt = head.indexOf("setAttribute('data-motion'");

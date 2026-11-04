@@ -365,7 +365,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   async function runOpening() {
     if (S.busy || !S.story) return;
     S.busy = true;
-    S.stopRequested = false; S.chatAbortCtrl = null;   //
+    S.stopRequested = false; S.chatAbortCtrl = null;
     setSendButtonsBusy(true);
     const mark = Tree.begin(S.story);             // 记 logMark
     const sid = S.story.id;                       // 异步写回契约：这次开局属于哪本故事
@@ -388,7 +388,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       const node = Tree.commit(S.story, {
         action: { type: 'opening', text: OPENING_ACTION, kind: null, sent: OPENING_ACTION },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
-        meta: { model: S.turnModel || '' },   //
+        meta: { model: S.turnModel || '' },
       });
       S.turnAnchor.nodeId = node.id;                 // 锚点补 nodeId
       await A.postTurn();

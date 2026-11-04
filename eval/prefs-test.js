@@ -270,8 +270,7 @@ console.log('[9] 生视频三参数唯一源 = 面板控件（双数据源）');
 
 console.log('[10] 依赖装配（阶段 6：静态 import，加载顺序不再是约束）');
 {
-  // 原来靠「删掉 global.IR.Prefs 看 assertDeps 是否报错」守住加载顺序；
-  // 现在 store 静态 import tree / prefs，缺位路径在结构上不可能出现——改成验证两条依赖真的在位。
+  // store 静态 import tree / prefs，缺位路径在结构上不可能出现；这里验证两条依赖真的在位。
   const clean = Store.sanitizePrefsSafe({ profileId: 'p1', unknownKey: 1 });
   ok(clean.profileId === 'p1' && clean.unknownKey === undefined, 'store 依赖的 Prefs 在位（未知键被丢弃）');
   ok(Store.serializeStory({ log: [], scenes: [], savepoints: [] }).log.length === 0

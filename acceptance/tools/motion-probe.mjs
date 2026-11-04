@@ -1,5 +1,5 @@
 /*
- * acceptance/tools/motion-probe.mjs —— 阶段 5 ·  · 动效测量工具
+ * acceptance/tools/motion-probe.mjs —— 动效测量工具
  *
  * 干什么：按 --tier=off|standard|rich 打开 file:// 的 dist/single/index.html（双击的真实形态），
  * 播种一局最小故事（含一次真分叉、两张图），然后跑一组固定动作：

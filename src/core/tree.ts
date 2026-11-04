@@ -188,7 +188,7 @@ import type { Story, StoryTree } from './schema.ts';
   const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
   const KIND_MARK_RE = /^（(做|说|导演)）/;
 
-  // user 消息 → 实际发给 AI 的串（含 do/say/direct 标记）；与 app.js buildCompressInput 同口径
+  // user 消息 → 实际发给 AI 的串（含 do/say/direct 标记）；与 src/app/turn.js 的 buildCompressInput 同口径
   function stripUserContent(s) {
     return String(s == null ? '' : s).replace(/^\[设定\][\s\S]*?\n\n/, '').replace(/^\[玩家行动\]\s*/, '');
   }

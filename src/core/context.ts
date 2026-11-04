@@ -38,7 +38,7 @@
   const WINDOW_MAX_MESSAGES = 40;         // 动态组装窗口上限
   const WINDOW_TOKEN_RATIO = 0.5;         // 最近消息最多吃窗口的一半（另一半给系统块/注入/输出）
 
-  /*：画师 scene 模式的「最近剧情」窗口——只带最近 N 回合的「玩家行动 + 旁白」，
+  /* 画师 scene 模式的「最近剧情」窗口——只带最近 N 回合的「玩家行动 + 旁白」，
    * 单条截断 200 字；更早的对话 / 世界卡 / 摘要栈 / 画像一律不进画师上下文（用完即弃）。 */
   const PAINTER_RECENT_TURNS = 3;
   const PAINTER_RECENT_LINE_CHARS = 200;
@@ -68,7 +68,7 @@
 
   /* 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出（2026-10-07 用户定案）。
    * 这两个模式不再走 JSON 契约——世界卡由 update_memory 工具 + 书记员定时校对维护，
-   * 画面参考取旁白原文（app.js 的 parseAIReply / absorbReply 有对应兜底）；
+   * 画面参考取旁白原文（src/app/ 下的 parseAIReply / absorbReply 有对应兜底）；
    * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
 
   // 智能体模式（原「对话」，v0.6.0）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
@@ -787,7 +787,7 @@
   /**
    * 组装画师子代理本轮请求的 messages（锚定）。
    * 每个 mode 一个 builder，本函数只做分发（此前 5 个分支挤在同一个 100 行函数里，改一处要扫全篇）。
-   * @param {object} story
+   * @param {object} story 当前故事状态（只读输入）
    * @param {PainterAssembleOpts} [opts]
    */
   function assemblePainter(story, opts?: PainterAssembleOpts) {
@@ -1094,7 +1094,7 @@
    * 触发条件：
    *   ① 积压条数 > maxMessages（兜底，容量未知时也保证有界）；
    *   ② 组装后的 token 估算 > contextWindow × 0.7（容量来自能力登记表或用户手填）。
-   * @param {object} story
+   * @param {object} story 当前故事状态（只读输入）
    * @param {object} [opts] { keepMessages, maxMessages, maxSummaries, summarize, contextWindow }
    * @returns {null|{compressedTurns, messagesRemoved, summaries}}
    */
@@ -1107,9 +1107,9 @@
   }
 
   // 压缩判定与切分（纯函数，同步）：返回 { candidate, groups } 或 null。
-  // 运行时（app.js）用它决定「交给书记员模型压」还是「本地兜底压」，评测也走它，避免两份判定。
+  // 运行时（src/app/round.js）用它决定「交给书记员模型压」还是「本地兜底压」，评测也走它，避免两份判定。
   // opts.estimatedTokens：调用方手上已有「组装结果的 token 估算」时直接传入
-  // 此前这里会再组装一次全量上下文只为估算，每回合 2~3 次组装）；不传则自己组装估算。
+  // 不传则自己组装一份上下文来估算，避免每回合多次全量组装。
   function planCompression(story, opts) {
     opts = opts || {};
     if (!story || !Array.isArray(story.messages)) return null;
@@ -1750,7 +1750,7 @@
 
   /**
    * 组装 AI1 本轮请求的 messages（块的顺序即注入优先级，见文件头）。
-   * @param {object} story
+   * @param {object} story 当前故事状态（只读输入）
    * @param {string} playerAction
    * @param {AssembleOpts} [opts]
    */

@@ -175,7 +175,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return {
       summaries: Array.isArray(o.summaries) ? o.summaries.filter(Boolean).map(String) : [],
       world: (o.world && typeof o.world === 'object') ? o.world : null,
-      profile: Array.isArray(o.profile) ? o.profile : [],   //
+      profile: Array.isArray(o.profile) ? o.profile : [],
       diff: Array.isArray(o.diff) ? o.diff.map(String) : [],
     };
   }
@@ -217,7 +217,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       story.messages = story.messages.slice(plan.candidate.length);
       Context.trimSummaries(story.summaries, Context.DEFAULT_MAX_SUMMARIES);
       if (parsed.world) Context.mergeWorld(story.world, parsed.world, { allowEmpty: true });
-      if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);   //
+      if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);
       story.world.scribeAt = Date.now();
       story.log.push({
         type: 'tool', tool: 'scribe',
@@ -588,7 +588,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.currentChoices = [];
 
     S.busy = true;
-    S.stopRequested = false; S.chatAbortCtrl = null;   //
+    S.stopRequested = false; S.chatAbortCtrl = null;
     setSendButtonsBusy(true);
     renderChat();
     const sid = S.story.id;   // 异步写回契约：本次重试属于哪本故事，回包前核 id

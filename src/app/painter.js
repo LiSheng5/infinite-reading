@@ -298,7 +298,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       },
       // 画师构思 / 生图不再写全局 chatAbortCtrl——「停止」只管聊天回合，
       // 后台作画不受它中断（超时沿用适配器自己的；本期不为作画再造取消按钮）
-      //
       // 但作画队列自己有取消信号（q.cancel / 队列超时），它必须能中断构思，
       // 否则一个挂死的对话请求照样堵住整条作画队列。这里把队列信号接到这条请求的 controller 上。
       onAborter(ctrl) {

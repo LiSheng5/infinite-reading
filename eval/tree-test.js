@@ -53,7 +53,7 @@ function check(name, ok, detail) {
 }
 function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
-/* ---------------- 测试脚手架（模拟 app.js 的一回合编排） ---------------- */
+/* ---------------- 测试脚手架（模拟 src/app/round.js 的一回合编排） ---------------- */
 
 function newStory() {
   return {
@@ -91,7 +91,7 @@ function playTurn(story, o) {
   return node;
 }
 
-// 模拟「重试出兄弟」：回到父节点下再走一回合（app.js 的 retryLast 会先 project 到父节点）
+// 模拟「重试出兄弟」：回到父节点下再走一回合（src/app/turn.js 的 retryLast 会先 project 到父节点）
 function retryTurn(story, o) {
   const head = story.tree.nodes[story.tree.head];
   story.tree.head = head.parent;

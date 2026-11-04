@@ -182,7 +182,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ---------------- 下载 / 空间 ---------------- */
 
-  /*：下载也要有上限——裸 fetch 挂住同样会把 videoQ 堵死（队列串行）。
+  /* 下载也要有上限——裸 fetch 挂住同样会把 videoQ 堵死（队列串行）。
    * signal 传进来时（取消 / 切故事）一并中断；超时按「转存失败」降级到在线链接。 */
   async function fetchBlob(url, signal) {
     const res = await fetchWithTimeout(url, { signal: signal || undefined }, VIDEO_DOWNLOAD_TIMEOUT_MS);

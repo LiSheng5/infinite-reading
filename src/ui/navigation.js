@@ -1,5 +1,5 @@
 /*
- * src/ui/navigation.js —— 切屏的唯一入口（阶段 5 ·）
+ * src/ui/navigation.js —— 切屏的唯一入口
  *
  * 为什么要有这个文件：0.12.1 起「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
  * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），

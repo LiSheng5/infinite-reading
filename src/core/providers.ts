@@ -322,7 +322,7 @@ import { sleep } from './tree.ts';
         }
 
         // （2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
-        // AbortController 经 hooks.onAborter 交给调用方（app.js 的「停止」按钮）；
+        // AbortController 经 hooks.onAborter 交给调用方（src/app/turn.js 的「停止」按钮）；
         // 流式每收到一个 chunk 重置空闲计时；两种形态都有总上限兜底。
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         if (ctrl && hooks && typeof hooks.onAborter === 'function') {
@@ -736,7 +736,7 @@ import { sleep } from './tree.ts';
   const VIDEO_TOTAL_TIMEOUT_MS = 15 * 60 * 1000; // 总超时（一处可调）：默认 15 分钟
   const VIDEO_POLL_MAX_NETFAIL = 3;             // 轮询连续网络错误上限（单次容忍）
   const VIDEO_PROMPT_MAX = 7000;                // 提示词长度上限（字符）
-  /*：单次请求也要有上限，否则「总超时」的检查（在两个 await 之间）永远轮不到——
+  /* 单次请求也要有上限，否则「总超时」的检查（在两个 await 之间）永远轮不到——
    * 提交挂住就整段卡死。提交是短请求给 60 秒；轮询更短（30 秒），超了按网络错误容忍重试。 */
   const VIDEO_SUBMIT_TIMEOUT_MS = 60000;
   const VIDEO_POLL_TIMEOUT_MS = 30000;
@@ -940,7 +940,7 @@ import { sleep } from './tree.ts';
       const started = Date.now();
       const aborted = () => !!(hooks.signal && hooks.signal.aborted);
 
-      /*：submit / poll 都带 signal 与单次上限——
+      /* submit / poll 都带 signal 与单次上限——
        * 提交或某一次轮询挂住时，totalMs 的检查才有机会轮到；本地取消也能立刻切断在途请求。 */
       const { taskId } = await this.submit(cfg, req, hooks.signal);   // 提交失败不重试（TypeError 已带 CORS 提示）
       if (hooks.onTaskId) { try { hooks.onTaskId(taskId); } catch (_) {} }

@@ -4,8 +4,8 @@
    * 取代旧的 legend 文字正则归类（GROUP_BY_LEGEND）；控件 id 与读写函数保持不变：
    * syncSettingsToForm / applyFormToSettings / syncAdvPanels / openSettingsGroup … 仍按 id 读写，
    * 因此这里只产标记、不建响应式值绑定（legacy 界面层直接改 value / classList）。
-   * 分组面板（section.set-panel）按配置直接落位，src/app/prefsui.js 的 initSettingsNav
-   * 分组面板由本组件按字段配置直接渲染（不再按 legend 归类搬 DOM）。
+   * 分组面板（section.set-panel）由本组件按字段配置直接渲染，
+   * 不再像旧实现那样按 legend 文字归类后再搬 DOM。
    *
    * 卡片外壳走 src/ui/ModalCard.svelte：头 / 身 / 脚与关闭钮全站只维护这一份，
    * 这里只交标题、关闭钮 id 和一段脚注（保存）。#btn-close-settings / #btn-save-settings

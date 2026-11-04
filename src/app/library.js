@@ -296,7 +296,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     Nav.showScreen('home', () => {
       A.closeMenus();
       A.closeWorkbench();
-      A.closeStoryPrefs();   //
+      A.closeStoryPrefs();
       // 有存档才出现「继续上次」，并带上最近那个故事的名字
       const recent = Store.listStories()[0];
       const label = recent && recent.title ? '《' + recent.title + '》' : '';

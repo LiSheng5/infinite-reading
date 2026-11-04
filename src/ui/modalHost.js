@@ -94,9 +94,8 @@ export function installShell() {
   nodes[0].parentNode.insertBefore(anchor, nodes[0]);
 
   /* 壳层根：外壳这件事就是一个 display:contents 的 div。
-   * 之前这里 mount 的是 src/ui/Modal.svelte —— 同一份组件里除了外壳还藏着一份
-   * 「画卡片的」分支（唯一使用点永远 shell:true，那份分支 + 120 行 scoped CSS 从未生效）；
-   * 卡片分支已删（卡片只剩 src/ui/ModalCard.svelte），外壳也就没有理由再包一层组件。 */
+   * 卡片部分统一由 src/ui/ModalCard.svelte 产出；
+   * 本文件只做「层」，不画任何像素，也不接管弹窗栈。 */
   const host = document.createElement('div');
   host.id = SHELL_HOST_ID;
   host.style.display = 'contents';
@@ -184,7 +183,7 @@ function restack() {
   });
 }
 
-/* ---------- 开合过渡（阶段 5 ·）----------
+/* ---------- 开合过渡 ----------
  * 形态（三档验收矩阵「弹窗开合」一行，声明表 = src/core/motion.ts 的 TRANSITIONS.modal）：
  *   off       即时：改 DOM 同步做，焦点与滚动位置都不动；不挂名字、不开快照
  *   standard  遮罩层整体交叉淡入 / 淡出（≤160ms）：背景随遮罩一起渐隐，卡片不位移

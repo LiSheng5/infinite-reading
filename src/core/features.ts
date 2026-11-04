@@ -5,9 +5,9 @@
  *   - 去重：同一条触发（fireId）只会被送一次（SSE 与「打开页面补跑」可能同时捞到同一条）；
  *   - 排队：agent 正忙 / 没打开故事 / 当前是剧情模式 → 先攒着，条件满足再送；
  *   - 撤回：clear() 把队列与去重记忆一起清——撤掉的触达相当于没来过，下次补跑还能收；
- *   - 条件判断交给 app.js 注册的 canDeliver（只有它知道 busy 与 story.mode）。
+ *   - 条件判断交给 src/app/sidecar.js 注册的 canDeliver（只有它知道 busy 与 story.mode）。
  *
- * app.js 拥有唯一的回合链路（sendPlayerAction），所以这里不自己调模型，
+ * src/app/round.js 拥有唯一的回合链路（sendPlayerAction），所以这里不自己调模型，
  * 只负责「什么时候把消息递过去」。
  */
 
@@ -48,7 +48,7 @@
     draining = true;
     try {
       while (queue.length) {
-        if (!hooks.canDeliver()) return;          // 条件不满足：留在队里，等 app.js 再叫
+        if (!hooks.canDeliver()) return;          // 条件不满足：留在队里，等 src/app/sidecar.js 再叫
         const item = queue[0];
         try { await hooks.deliver(item); } catch (_) {}
         queue.shift();

@@ -277,7 +277,7 @@ export function createScheduler(deps) {
 
     const saved = getTrigger(findByName(name).id);
     emit('trigger.changed', { id: saved.id, name: saved.name, status: saved.status, action: existing ? 'updated' : 'created' });
-    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
+    try { arm(); } catch (_) { /* 排程失败不阻断主流程；后续重排或配置变更会再布防 */ }
     return saved;
   }
 
@@ -290,7 +290,7 @@ export function createScheduler(deps) {
       .run(TRIGGER.ACTIVE, next, t0, trg.id);
     const saved = getTrigger(trg.id);
     emit('trigger.changed', { id: saved.id, name: saved.name, status: saved.status, action: 'confirmed' });
-    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
+    try { arm(); } catch (_) { /* 排程失败不阻断主流程；后续重排或配置变更会再布防 */ }
     return saved;
   }
 
@@ -299,7 +299,7 @@ export function createScheduler(deps) {
     if (!trg) return false;
     db.prepare('DELETE FROM triggers WHERE id = ?').run(trg.id);
     emit('trigger.changed', { id: trg.id, name: trg.name, status: 'cancelled', action: 'cancelled' });
-    try { arm(); } catch (_) { /* 排程失败不影响已保存的触发器；下一次 upsert/start 再布防 */ }
+    try { arm(); } catch (_) { /* 排程失败不阻断主流程；后续重排或配置变更会再布防 */ }
     return true;
   }
 
