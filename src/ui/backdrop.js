@@ -94,7 +94,7 @@ function sync() {
 
 /**
  * 弹窗层开合（src/ui/modalHost.js 调；bool 与该层是否还有弹窗等价）。
- * @param {boolean} open
+ * @param {boolean} open 弹窗层是否仍有打开的弹窗
  */
 export function setModalBackdrop(open) {
   layers.modal = !!open;
@@ -103,7 +103,7 @@ export function setModalBackdrop(open) {
 
 /**
  * 分支页开合（src/app/branch.js 调；调用时机见文件头「焦点顺序」）。
- * @param {boolean} open
+ * @param {boolean} open 分支页是否打开
  */
 export function setBranchBackdrop(open) {
   layers.branch = !!open;

@@ -50,7 +50,7 @@
 .menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 .menu-item {
   display: block; width: 100%;
-  min-height: 40px;   /* 可点区域 ≥ 40px（含「为当前场景作画」入口；触屏仍放大到 44px） */
+  min-height: 40px;   /* 含「为当前场景作画」入口；触屏仍放大到 44px */
   text-align: left;
   font-size: 13px;
   color: var(--ink);
@@ -572,7 +572,7 @@ html[data-motion="rich"] .stage-empty {
 .stage-wrap:hover .stage-actions,
 .stage-wrap:focus-within .stage-actions { opacity: 1; }
 .stage-btn {
-  width: 40px; height: 40px;   /* 可点区域 ≥ 40px（触屏仍由 (hover:none) / ≤900px 放大到 44px） */
+  width: 40px; height: 40px;   /* 触屏仍由 (hover:none) / ≤900px 放大到 44px */
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 15px;
   color: var(--on-ink);   /* 底是深色半透明遮罩，线稿图标要用浅色 */

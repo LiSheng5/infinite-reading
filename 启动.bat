@@ -1,5 +1,4 @@
 @echo off
-rem ============================================================
 rem  Infinite Reading  -  one-click portable launcher (Windows)
 rem
 rem  Builds dist\site if needed, starts a small local static
@@ -15,7 +14,6 @@ rem  otherwise the built-in PowerShell server (tools\serve.ps1). Both
 rem  refuse to serve sidecar\data and .git (token & keys live there).
 rem
 rem  Keep this file ASCII-only (cmd.exe may decode it as ANSI).
-rem ============================================================
 setlocal
 cd /d "%~dp0"
 set "PORT=8000"

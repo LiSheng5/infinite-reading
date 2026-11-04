@@ -7,7 +7,6 @@
  * 汇总循环、exitCode，以及 localMs() 与动态 import 的 pathToFileURL 包装。
  * 这里只收敛样板，不收敛用例——用例、标题、进程收尾仍归各脚本自己。
  *
- * 用法：
  *   const H = require('./_harness.js');
  *   H.check('同名覆盖 → 400', r.status === 400, r.status);   // 第三参只在该条失败时打印
  *   H.run('调度器单测', main);                                // main 抛异常也记一条失败并汇总

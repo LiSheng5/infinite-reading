@@ -7,7 +7,6 @@
  * 屏 6 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
- * 分工：
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
  *   · 外壳 = installShell() 就地建的两层 display:contents 容器（只做「层」，不画任何像素）
  *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；11 个弹窗共用同一份）
@@ -462,7 +461,7 @@ export function openModal(id) {
  * 关弹窗（只改显隐与层级；需要清状态 / 收 Promise 的走 dismissModal）。
  * 栈在调用当下就撤（Esc / 遮罩点击 / 焦点判定读的是同一个数组实例），
  * View Transition 时只有「DOM 隐藏那一帧」被推到 update 回调里。
- * @param {string} id
+ * @param {string} id 要关闭的弹窗 id
  */
 export function closeModal(id) {
   const el = modalEl(id);
@@ -517,7 +516,7 @@ export function closeModal(id) {
 
 /**
  * Esc / 点遮罩：按弹窗自己的关闭函数收尾（有的要清状态、有的要 resolve Promise）。
- * @param {string} id
+ * @param {string} id 要收尾的弹窗 id
  */
 export function dismissModal(id) {
   const A = appApi;

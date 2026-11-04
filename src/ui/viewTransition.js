@@ -1,7 +1,6 @@
 /*
  * src/ui/viewTransition.js —— 过渡内核（阶段 5）
  *
- * 分工：
  *   · src/core/motion.ts 的 TRANSITIONS = 每个过渡动作（切屏 / 舞台换画 / 分支切换 / 分支页开合 /
  *     弹窗开合）三档 kind 与时长的**唯一声明处**；TIERS = 三档上限。
  *   · css/motion.css 的 ::view-transition-* = 快照动画本身的时长 / 缓动收口（--m-dur-vt-*）。

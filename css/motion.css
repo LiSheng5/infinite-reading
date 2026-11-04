@@ -1,5 +1,4 @@
 /* ==================== 动效模块（统一 motion 模块 · CSS 端） ====================
-分工：
    · 档位语义与逐动画三档行为声明 → src/core/motion.ts（ANIMATIONS 是真源）
    · 档位政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
    · DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js

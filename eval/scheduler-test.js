@@ -7,7 +7,6 @@
  * 错过触发怎么补、免打扰怎么拦、每日上限怎么算、cron 的时区与夏令时怎么落。
  * 靠真实 sleep 去等，既慢又不稳；这里把 now() 换成可推进的变量，一次性覆盖边界。
  *
- * 覆盖：
  *   - cron：5 字段校验、宏、时区（Asia/Shanghai）、夏令时跳变（America/New_York 春季跳变 / 秋季回拨）
  *   - 触发器：interval / once / cron、(user_id,name) upsert 幂等、模型新建需确认
  *   - 错过策略：SKIP / RUN_ONCE / RUN_ALL

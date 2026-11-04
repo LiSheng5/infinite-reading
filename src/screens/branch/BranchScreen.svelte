@@ -3,7 +3,6 @@
    * 功能与交互不变，视觉套新组件库；分支页的布局算法（TreeLayout）与
    * SVG 构造方式（createElementNS、绝不用 innerHTML）**保持**。
    *
-   * 分工：
    *   - 静态骨架（顶栏 / 画布容器 / 面板外壳）→ 本组件，id 与迁移前的 #branch-page 子树逐个保留，
    *     旧逻辑（src/app/branch.js 的 openBranch / render / bindCanvas / initBranch）按 id 照常命中，
    *     行为零改动；

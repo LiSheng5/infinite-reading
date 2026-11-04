@@ -1,7 +1,6 @@
 /*
  * src/core/prefs.ts —— 本对话偏好（设置分层）· 纯逻辑层
  *
- * 职责：
  *   - story.prefs 的清洗（sanitizePrefs）：丢未知键、剥凭证形字段、校验取值；
  *   - 「本对话覆盖 → 全局默认」的解析（effective / effectiveInfo）；
  *   - 主模型配置解析（resolveChatCfg）：profileId 只是引用，绝不携带 apiKey / baseUrl；

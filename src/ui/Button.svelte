@@ -41,7 +41,7 @@
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 40px;           /* 触屏可点目标 ≥ 40px */
+    min-height: 40px;
   }
   button.slim { min-height: 32px; }
 </style>

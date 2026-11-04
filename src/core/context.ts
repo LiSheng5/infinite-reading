@@ -786,7 +786,7 @@
    * 组装画师子代理本轮请求的 messages（锚定）。
    * 每个 mode 一个 builder，本函数只做分发（此前 5 个分支挤在同一个 100 行函数里，改一处要扫全篇）。
    * @param {object} story 当前故事状态（只读输入）
-   * @param {PainterAssembleOpts} [opts]
+   * @param {PainterAssembleOpts} [opts] 画师组装选项（mode / 最近剧情 / 参考图等）
    */
   function assemblePainter(story, opts?: PainterAssembleOpts) {
     const o = opts || {};
@@ -889,7 +889,7 @@
 
   /**
    * 整理计划（长文处理）：默认一次调用；只有「已知窗口且装不下」才 map-reduce。
-   * @param {string} text
+   * @param {string} text 待整理的原文
    * @param {number} contextWindow 整理模型的有效窗口（0 / 未知 → 一次调用）
    * @returns {{needsMap:boolean, chunks:string[], budget:number, window:number}}
    */
@@ -1749,8 +1749,8 @@
   /**
    * 组装 AI1 本轮请求的 messages（块的顺序即注入优先级，见文件头）。
    * @param {object} story 当前故事状态（只读输入）
-   * @param {string} playerAction
-   * @param {AssembleOpts} [opts]
+   * @param {string} playerAction 玩家本轮行动文本
+   * @param {AssembleOpts} [opts] 组装选项（保留条数 / 强制注入等）
    */
   function assembleAI1(story, playerAction, opts?: AssembleOpts) {
     const ctx = assembleCtx(story, playerAction, opts);

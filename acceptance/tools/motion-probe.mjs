@@ -21,7 +21,6 @@
  *   {out}/{tier}/{tier}-{动作}-{序}-{pre|mid|end}.png   动作前 / 动作中 / 动作后的画面
  *   {out}/manifest.json                                三档可累积（跑一档只替换这一档）
  *
- * 用法：
  *   node acceptance/tools/motion-probe.mjs --tier=off|standard|rich
  *        [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal]
  *        [--width=1280|390] [--strict]
@@ -32,7 +31,6 @@
  * --strict：额外要求「零违规」（违规 = 超出该档上限）。默认不 strict：
  *          当前多数动作还没有过渡（属正常），测量结果里的 violations 是后续步骤的待办清单。
  *
- * 约定：
  *  - 只新增文件，不改产品代码；页面一律 file:// 打开，不联网（本地服务探测被本地路由接住）。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
  *  - 档位靠 settings.ui.motion + __IR_TEST__.App.applyMotion() 显式落定，并校验 html[data-motion]，

@@ -12,12 +12,10 @@
  *   fixture-seed.json               播种清单 + 各产物 sha256 + 易变字段口径
  *   roundtrip-report.json           roundtrip 逐字段比对报告（roundtrip 命令写）
  *
- * 用法：
  *   node acceptance/tools/fixture.mjs build      # 播种真实形态数据 → 真实 UI 导出三种格式
  *   node acceptance/tools/fixture.mjs roundtrip  # 干净上下文：导入夹具 → 还原 → 再导出 → 逐字段比对
  *   node acceptance/tools/fixture.mjs all        # build + roundtrip
  *
- * 约定：
  *  - 只新增文件，不改任何应用源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
  *  - 阶段 6 起应用不再有全局 IR：脚本给产物 URL 加 ?ir-test=1，经 src/main.js 的验收钩子

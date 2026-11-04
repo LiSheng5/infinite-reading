@@ -1,7 +1,6 @@
 /*
  * 无限阅读 · 角色卡
  *
- * 职责：
  *  - SillyTavern V2 / V3 角色卡解析（PNG 内嵌 JSON：tEXt/iTXt 的 `chara` / `ccv3`）
  *  - 字段映射（description→外貌 / scenario→场景 / first_mes→开场白 / mes_example→示例对话 / system_prompt→系统提示）
  *  - 与世界卡对接：卡 → world.characters 一条人物条目（personality / speech 对接）

@@ -7,7 +7,6 @@
  * 单文件产物改由 vite-plugin-singlefile 生成（全部内联、file:// 双击可开、图片也内联）。
  * 对外契约保持不变：`npm run bundle` / `node tools/bundle-single-file.mjs` 仍产出 dist/ir.html。
  *
- * 用法：
  *   node tools/bundle-single-file.mjs                  # 输出 dist/ir.html
  *   node tools/bundle-single-file.mjs --out dist/x.html
  */

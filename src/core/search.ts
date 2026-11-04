@@ -1,7 +1,6 @@
 /*
  * 无限阅读 · 全文搜索（Search，纯逻辑，Node 可测）
  *
- * 职责：
  *   buildDoc(story)      故事 → 搜索文档（含全部分支节点；文本已规整）
  *   query(docs, q, opts) 子串匹配 + AND 多词 + 评分排序；命中片段带 ranges（不是 HTML）
  *   createIndex()        内存索引（增量重建 / 删除），默认单例 Search.index

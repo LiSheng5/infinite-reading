@@ -13,7 +13,6 @@
  *   Motion.TRANSITIONS —— 每个「过渡动作」三档 kind / 时长（阶段 5：切屏 / 舞台换画 / 分支切换 /
  *     分支页开合 / 弹窗开合的唯一声明处；DOM 端接线见 src/ui/viewTransition.js）
  *
- * 分工：
  *   · 本文件 = 纯逻辑与声明（Node 可 require，eval/motion-test.js / tokens-test.js 对账）
  *   · css/motion.css = 档位政策变量（--m-*）与动画名表（--an-*）的 CSS 镜像 + @keyframes 唯一定义点
  *     + ::view-transition-* 的时长收口

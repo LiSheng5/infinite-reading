@@ -26,7 +26,6 @@
  *   pushLate(story, nodeId, entry|scene)  晚到条目 / 画面：写节点；在路径上再同步进投影
  *   imageIdsOf(tree)         全树（含非当前分支）引用到的原图 id
  *
- * 约定：
  *   - 条目与消息对象**按引用共享**（project 不 clone 它们）：log 条目的就地修改
  *     （reasoning 补写等）自动落在树上；**State 才 clone**。
  *   - msgFloor = 路径 turn 节点序列的下标（0 = 第一个 turn 节点）：

@@ -10,7 +10,6 @@
  *   plainReply(raw)              —— 原样（不 trim；摘要 / 标签自己会再裁）
  *   plainReply(raw, {trim:true}) —— 去两侧空白（标题提示词要的形态）
  *
- * 覆盖：
  *   1. 拍平规则：narration / 中文键「旁白」/ text / choices / 坏 JSON / 非对象 JSON / 空值
  *   2. trim 选项：与旧的 titles 版逐字一致（choices 不 trim 也照旧）
  *   3. 消费方同口径：titles / treeLayout / search / store 四条链路对同一份内容给同一段文本
