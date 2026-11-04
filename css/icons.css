@@ -1,7 +1,6 @@
 /* ==================== 图标（手绘 SVG sprite） ====================
  * 图标基类 .ic 与各处的尺寸修饰（颜色一律 currentColor）。
- * 屏幕样式的一个分片：由 css/style.css 按固定顺序 @import（顺序 = 层叠顺序，勿随意调整）。
- * 令牌真源 css/tokens.css，动效档位与 @keyframes 在 css/motion.css——本文件只消费 var(--*)。 */
+ * 屏幕样式的一个分片：图标（手绘 SVG sprite）；@import 顺序即层叠顺序，勿随意调整。 */
 
 /* ==================== 图标（手绘 SVG sprite，见 index.html 顶部 #ir-icons） ====================
    描边风格统一写在这里：24 网格、1.6 描边、圆头圆角、颜色跟随文字色（currentColor）。

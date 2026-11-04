@@ -1,4 +1,4 @@
-/* 基础组件库回归检查（阶段 3）——不开浏览器、不联网（svelte/compiler 只编译不执行）。
+/* 基础组件库回归检查（svelte/compiler 只编译不执行）。
  *
  * 1. src/ 下所有 .svelte 组件都能被 Svelte 5 编译（语法 / runes 用法门禁）；
  * 2. 图标逐字对账：Icon.svelte 每个分支的图形与 index.html 的 <symbol id="i-名字"> 完全一致

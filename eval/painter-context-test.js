@@ -124,7 +124,7 @@ console.log('[2] assemblePainter（scene）：块齐全，[最近剧情] 只含�
     '[画风锚] 用设定卡（含人物设定）');
   ok(all.indexOf('IMG1ALT') >= 0 && all.indexOf('IMG2PROMPT') >= 0, '[最近两张图] 带 alt + prompt');
 
-  // 差分基底（v0.12.1）：上一次出图的完整 prompt 单独成块，且只给最近那一张
+  // 差分基底：上一次出图的完整 prompt 单独成块，且只给最近那一张
   const baseBlk = blockOf(msgs, '[基底 prompt]');
   ok(!!baseBlk, '有 [基底 prompt] 块（差分基底）');
   ok(baseBlk.indexOf('IMG2PROMPT') >= 0 && baseBlk.indexOf('IMG1PROMPT') < 0,

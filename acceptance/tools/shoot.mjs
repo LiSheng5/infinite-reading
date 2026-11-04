@@ -1,5 +1,5 @@
 /*
- * acceptance/tools/shoot.mjs —— 「无限阅读」迁移基线截图（阶段 0 / 0.12.1）
+ * acceptance/tools/shoot.mjs —— 「无限阅读」迁移基线截图工具
  *
  * 产出：
  *   acceptance/0.12.1/shots/{序号}-{状态}-{屏幕}-{宽度}.png
@@ -28,7 +28,7 @@ const { chromium } = require('playwright');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
-// 产出目录默认是 0.12.1 基线；--out=<相对 ROOT 的目录> 可改写（阶段 4 逐屏前后截图用）
+// 产出目录默认是迁移基线；--out=<相对 ROOT 的目录> 可改写
 let OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
 let ONLY = null;   // --only=<PLAN.key>：只拍这个 key 的图（其余步骤照走，只是不落图）
 // 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，

@@ -39,7 +39,7 @@ function baseSettings() {
 console.log('[1] effective：覆盖 / 跟随 / 各键独立');
 {
   const s = baseSettings();
-  // 缺省跟随全局（v0.11.0：trigger（出图时机）已下线，effective 不再有该键）
+  // 缺省跟随全局（trigger（出图时机）已下线，effective 不再有该键）
   eq(P.effective(s, { prefs: {} }, 'choices'), 'tray', '无 prefs 时 choices 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'showReasoning'), true, '无 prefs 时 showReasoning 跟随全局');
   eq(P.effective(s, { prefs: {} }, 'ui.fontScale'), 'md', '无 prefs 时字号跟随全局默认');
@@ -134,7 +134,7 @@ console.log('[4] sanitizePrefs：丢未知键 / 剥凭证 / profileId 校验');
   ok(!('evil' in clean.ui), 'ui 深层未知键丢弃（连同其中的 baseUrl / key）');
   ok(!('fontScale' in clean.ui) || clean.ui.fontScale !== 'huge', 'ui.fontScale 非法值丢弃');
   eq(clean.ui.splitRatio, 0.72, 'ui.splitRatio 夹到 0.72');
-  // v0.11.0：trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
+  // trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
   ok(!('trigger' in clean), 'trigger 不在白名单 → 被丢弃（旧包导入不报错）');
   {
     let threw = false;

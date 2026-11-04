@@ -1,4 +1,4 @@
-/*  动效强度解析 + 三档声明表单测（阶段 3）——纯逻辑、不开浏览器、不联网。
+/*  动效强度解析 + 三档声明表单测——纯逻辑。
  *
  * IR.Motion.resolve(pref, prefersReduced)：
  *   auto → prefersReduced ? 'off' : 'rich'
@@ -41,7 +41,7 @@ function ok(name, cond, detail) {
   console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
 }
 
-/* ---------- resolve（0.12.1 语义，逐字保留） ---------- */
+/* ---------- resolve（迁移前语义，逐字保留） ---------- */
 
 eq("resolve('auto', false)", Motion.resolve('auto', false), 'rich');
 eq("resolve('auto', true)", Motion.resolve('auto', true), 'off');

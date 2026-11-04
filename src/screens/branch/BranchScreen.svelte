@@ -4,7 +4,7 @@
    * SVG 构造方式（createElementNS、绝不用 innerHTML）**保持**。
    *
    * 分工：
-   *   - 静态骨架（顶栏 / 画布容器 / 面板外壳）→ 本组件，id 与 0.12.1 的 #branch-page 子树逐个保留，
+   *   - 静态骨架（顶栏 / 画布容器 / 面板外壳）→ 本组件，id 与迁移前的 #branch-page 子树逐个保留，
    *     旧逻辑（src/app/branch.js 的 openBranch / render / bindCanvas / initBranch）按 id 照常命中，
    *     行为零改动；
    *   - 节点详情面板（六个文本字段 + 三个按钮的 disabled）→ 状态桥 BranchScreen（branch.svelte.js），

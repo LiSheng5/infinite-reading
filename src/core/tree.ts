@@ -35,8 +35,6 @@
  */
 import type { Story, StoryTree } from './schema.ts';
 
-/* ↑ 阶段 2 搬迁自 src/core/tree.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const TREE_V = 1;
   // story 裁剪窗口的唯一口径：store.ts 的 serializeStory 与书架导出一律引用这里的导出，

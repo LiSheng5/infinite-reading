@@ -10,7 +10,7 @@
  * 流式与打字机沿用旧实现：span.delta / typewrite 照旧往 .bubble-live 空壳里写（interior 由
  * render.js 的 fillLiveDom 回填）；syncKindSwitch / setSendButtonsBusy / updateHistoryBar /
  * renderFeatureBar / renderStage 等仍按 id 选择器直接读写组件产出的静态元素。
- * 视图模型口径与 0.12.1 的 DOM 拼装逐字段一致。
+ * 视图模型口径与迁移前的 DOM 拼装逐字段一致。
  */
 import { flushSync } from 'svelte';
 

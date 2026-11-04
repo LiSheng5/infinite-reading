@@ -12,14 +12,12 @@
  * 三条不变量：
  *   ① 这个文件不碰 localStorage，也不懂 story schema —— 迁移策略全部由 store.ts 决定
  *   ② 任何一步用不了 IndexedDB（Node / 无痕 / 老浏览器 / 打开失败），
- *      available 就是 false，store.ts 立刻退回 v0.2 的 localStorage 路径，功能不降级只降容量
+ *      available 就是 false，store.ts 立刻退回旧版 localStorage 路径，功能不降级只降容量
  *   ③ 只做「开库 + 增删改查」，不做业务判断；写失败一律 reject，由调用方决定怎么办
  *
  * 零依赖；Node 下加载也不会报错（available = false）。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/storage.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 const global = globalThis as any;
 
   const DB_NAME = 'ir-db';

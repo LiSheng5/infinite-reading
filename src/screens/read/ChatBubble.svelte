@@ -1,7 +1,7 @@
 <script>
   /* ChatBubble.svelte —— 聊天流一条消息（阶段 4 屏 4，src/app/readmodel.js 的视图模型同构）
    * 按 entry.kind 分派：text / note / image / video / agent / proposal；
-   * DOM 与 0.12.1 各子渲染器（textBubble / toolNoteBubble / imageRowBubble / inlineImageBubble /
+   * DOM 与迁移前各子渲染器（textBubble / toolNoteBubble / imageRowBubble / inlineImageBubble /
    * videoBubble / agentBubble / proposalBubble）逐节点同结构——类名、title、aria 全保留。
    * 安全红线：用户 / 模型产出一律文本插值（≡ textContent），绝不 {@html}。
    * 思考链开合是组件本地状态：条目按 key 常驻（不再随 renderChat 整条重建）——
@@ -51,7 +51,7 @@
 <!-- 场景标记行：56px 缩略图 + alt（点击 = 舞台选中）；「工作台」悬停才出现 -->
 <div class="bubble bubble-image">{#if e.src}<img src={e.src} alt={e.alt} title="在右侧舞台看这张" role="button" tabindex="0" onclick={selectScene} onkeydown={onActivate(selectScene)} />{/if}<div class="img-alt-row"><span class="img-alt" title="点击在右侧舞台查看" onclick={selectScene}>{e.cap}</span><button class="ui-btn mini" type="button" title="看 / 改完整 prompt、跟画师说着改、按此重画" onclick={openWorkbench}>工作台</button></div></div>
 {:else if e.kind === 'image'}
-<!-- chat / rp 内联图（v0.6.0）：图直接排在聊天流里，点开是灯箱 -->
+<!-- chat / rp 内联图：图直接排在聊天流里，点开是灯箱 -->
 <div class="bubble bubble-image bubble-image-inline">{#if e.src}<img src={e.src} alt={e.alt} loading="lazy" role="button" tabindex="0" onclick={openLightbox} onkeydown={onActivate(openLightbox)} />{/if}<div class="img-alt" onclick={openLightbox}>{e.cap}</div></div>
 {:else if e.kind === 'video'}
 <!-- 视频：封面 + alt + ▶，点一下在舞台选中；无 videoId 只有外链时给降级入口 -->

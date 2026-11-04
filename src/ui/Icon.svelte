@@ -1,5 +1,5 @@
 <script>
-  /* Icon.svelte —— 0.12.1 手绘图标 sprite 的组件化（阶段 3）
+  /* Icon.svelte —— 迁移前的手绘图标 sprite 的组件化
    * 图标本身保持不变：24 网格、1.6 描边、圆头圆角、currentColor；
    * 实心圆点保留元素上的 fill="currentColor"（历史坑：<use> 内部元素吃不到外部 CSS 选择器）。
    * 每个分支的图形与 index.html 的 <symbol id="i-名字"> 逐字一致，由 eval/ui-lib-test.js 对账。

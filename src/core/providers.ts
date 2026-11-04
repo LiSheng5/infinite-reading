@@ -7,7 +7,6 @@
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
  */
 
-/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { sleep } from './tree.ts';
 
   async function readError(res) {
@@ -24,7 +23,7 @@ import { sleep } from './tree.ts';
 
   const PROBE_TIMEOUT_MS = 15000;
 
-  /* （2026-10-14 评审）：正式对话请求的超时参数。
+  /* 正式对话请求的超时参数。
    * 此前只有「测试连接」有 15s 超时，正式请求无 signal——SSE 挂起（服务端僵死、
    * 代理断流不关连接）会把上游的 busy 标志永久卡死，玩家只能刷新丢回合。
    * ① 流式：空闲超时，两个 chunk 之间最多 CHAT_IDLE_TIMEOUT_MS；
@@ -321,7 +320,7 @@ import { sleep } from './tree.ts';
           askedUsage = true;
         }
 
-        // （2026-10-14）：正式请求的超时与中断（参数注释见文件顶部）。
+        // 正式请求的超时与中断（参数注释见文件顶部）。
         // AbortController 经 hooks.onAborter 交给调用方（src/app/turn.js 的「停止」按钮）；
         // 流式每收到一个 chunk 重置空闲计时；两种形态都有总上限兜底。
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -590,7 +589,7 @@ import { sleep } from './tree.ts';
       },
     },
 
-    /* MiniMax 原生生图（image-01 / image-01-live）—— 2026-10-22 按官方文档核对
+    /* MiniMax 原生生图（image-01 / image-01-live）—— 按官方文档核对
      *   （platform.minimax.cn/docs/api-reference/image-generation-t2i）：
      *   POST {Base URL}/v1/image_generation
      *   body  model（image-01 | image-01-live）/ prompt（≤1500 字）/ aspect_ratio /

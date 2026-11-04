@@ -1,7 +1,7 @@
 <script>
   /* ModalCard.svelte —— 弹窗卡片骨架：头 / 身 / 脚 + 关闭（全站只此一份）
    *
-   * 结构刻意与 0.12.1 的 .modal-card 一致（modal-head / modal-body / modal-foot 三个全局类），
+   * 结构刻意与迁移前的 .modal-card 一致（modal-head / modal-body / modal-foot 三个全局类），
    * 样式全部来自 css/overlays.css 与 css/settings.css —— 组件只产标记，不写第二份配色，
    * 所以窄屏底部弹层规则（#modal-new / #modal-export）与设置页的定高卡片都原样生效。
    *

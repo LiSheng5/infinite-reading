@@ -8,7 +8,7 @@
  *   - 与运行时同源地跑 v2 组装（IR.Context.assembleAI1）与压缩链（IR.Context.compressStory）
  *   - 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 里是否含探针事实
  *   - 只测组装/压缩逻辑本身，不调用任何 API
- *   - 输出 5 类探针命中率 + 总分，并对比记录的 v0.1 基线（60.0%）
+ *   - 输出 5 类探针命中率 + 总分，并对比记录的早期基线（60.0%）
  *
  * 用法：node eval/run.js   [--json] [--no-fail]
  *   --json     追加机器可读的 JSON 结果（CI 解析用）
@@ -30,7 +30,7 @@ if (!Context || !MockStory) {
 
 const CATEGORIES = ['角色名', '时间设定', '伏笔原话', '地点细节', '玩家自己说过的事'];
 
-// 记录的 v0.1 基线分（system + 最近 20 条 messages + premise），用于回归对比
+// 记录的早期基线分（system + 最近 20 条 messages + premise），用于回归对比
 const BASELINE_V1 = 60.0;
 
 /* ---------- 复刻运行时的一回合归档（与 src/app/turn.js 落 log / messages 的口径一致） ---------- */
@@ -310,7 +310,7 @@ function checkCardProfile() {
   push('宽容解析：纯散文返回 null（走 fail-open 展示原文）',
     Context.tolerantJSONParse('这只是一段普通的散文，没有 JSON。') === null, 'ok');
 
-  /* —— 剧情模式 v0.3 中文键契约：解析归一化 + 历史组装一致性 —— */
+  /* —— 剧情模式 中文键契约：解析归一化 + 历史组装一致性 —— */
   const cn = Context.normalizeAIReply(Context.tolerantJSONParse(
     '{"旁白":"雨停了。","人物":[{"名字":"周叙","在场":"在场","性格":"克制","说话方式":"简短"}],"地点":"便利店","时间":"凌晨三点","伏笔":["挑便宜的就走"],"画面":"暖光货架","场景切换":true,"选项":["出门","继续等"]}'));
   push('中文键契约：旁白 / 选项 / 场景切换 / 画面归一化',
@@ -551,7 +551,7 @@ function report(out) {
 const summary = report(evaluate());
 
 /* ---------- 退出码（供 CI 拦截回归） ----------
- * 总分低于 v0.1 基线，或 启发式注入 / 角色卡校验未全中 → 退出 1。
+ * 总分低于早期基线，或 启发式注入 / 角色卡校验未全中 → 退出 1。
  * 只想看报告、不在意退出码时加 --no-fail。 */
 const failed = [];
 if (summary.score < BASELINE_V1) failed.push('总分 ' + summary.score + '% 低于基线 ' + BASELINE_V1 + '%');

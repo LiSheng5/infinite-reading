@@ -76,7 +76,7 @@ import { A } from './core.js';
     };
   }
 
-  // 场景标记行（剧情模式）/ 内联图（chat / rp，v0.6.0 无舞台）：imageBubble 的两条分支
+  // 场景标记行（剧情模式）/ 内联图（chat / rp，无舞台）：imageBubble 的两条分支
   function imageModel(e) {
     const inline = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
     const sc = A.imageSceneById(e.id);

@@ -134,7 +134,7 @@ function pickBackupJson(entries: Map<string, any>) {
 }
 
 /* .irstory.json 完整档案 → story（阶段 2 自 src/app/backup.js 的 applyImport 数据段抽出，
- * 函数体与 0.12.1 逐字一致；界面侧（showShelf / 换键异步段）留在 src/app/backup.js）。
+ * 函数体与迁移前逐字一致；界面侧（showShelf / 换键异步段）留在 src/app/backup.js）。
  * 产物：newStory 形状 + 包字段回填 + scenes 重建 + prefs 清洗 + tree 透传并 ensure。 */
 function storyFromPack(obj: any) {
   const st = Store.newStory({

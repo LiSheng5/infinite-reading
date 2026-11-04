@@ -1,6 +1,5 @@
 /*
  * src/app/features.js —— 调度工具 / 安全项读写 / 主动联系安排 / 邮件 / 购物支付 / 提案卡
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Sidecar } from '../core/sidecar.ts';
 import { Proposals } from '../core/proposals.ts';
@@ -372,7 +371,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   function openEmailModal() {
-    // v0.6.0：「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    // 「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
     if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();
@@ -491,7 +490,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   function openPaymentModal() {
-    // v0.6.0：「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    // 「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
     if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();

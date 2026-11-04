@@ -220,7 +220,7 @@ async function main() {
       rc.status === 'failed' && S7e.calls.length === 0, rc.status + ' / ' + S7e.names().join(','));
   }
 
-  /* 7d. 旧档迁移：0.13.0 之前 awaiting 曾被写成 executing + result.needsSecondConfirm */
+  /* 7d. 旧档迁移：迁移前的 awaiting 曾被写成 executing + result.needsSecondConfirm */
   {
     const legacyWait = {
       kind: 'payment', status: 'executing', createdAt: T0, expiresAt: T0 + TTL, args: { amountCents: 100 },

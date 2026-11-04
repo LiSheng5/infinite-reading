@@ -1,6 +1,5 @@
 /*
  * src/app/painter.js —— 画师子代理 + 生图 / 画师工作台
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { PaintQueue } from '../core/paintQueue.ts';
 import { Tree, genId } from '../core/tree.ts';
@@ -15,9 +14,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   /* ================= 画师子代理 + 生图 =================
-   * v0.5.1：出图全走同一条串行队列 PaintQueue，画师构思也在队列里跑
+   * 出图全走同一条串行队列 PaintQueue，画师构思也在队列里跑
    *（不与队列外的构思并发）；request_image 已异步化、不卡回合。
-   * v0.11.0：时机出图已删除——剧情模式只剩手动 🎨 / 工作台重画，外加 chat / rp 的工具直出。 */
+   * 时机出图已删除——剧情模式只剩手动 🎨 / 工作台重画，外加 chat / rp 的工具直出。 */
 
   /* 队列兜底超时：正常情况下每一段都有自己的上限（画师构思 CHAT_TOTAL_TIMEOUT_MS
    * 10 分钟、生图 IMAGE_GEN_TIMEOUT_MS 3 分钟，含带工具重发的那一次），这里的 20 分钟只用来

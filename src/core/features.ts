@@ -11,8 +11,6 @@
  * 只负责「什么时候把消息递过去」。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/features.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   const SEEN_MAX = 500;
   let hooks: any = { canDeliver: function () { return false; }, deliver: async function () {} };

@@ -121,7 +121,6 @@
 
   <!-- ========== 书架：会话列表 + 搜索 + 新建弹层 ========== -->
   <section id="screen-shelf" class="screen hidden">
-    <!-- 内容由 src/screens/shelf 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </section>
 
   <!-- ========== 阅读界面：左文右图，各管各的
@@ -154,69 +153,57 @@
     </header>
 
     <div id="game-layout" class="game-layout">
-    <!-- 内容由 src/screens/read 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
   </section>
 
   <!-- ========== 分支页：整页分支树 + 从任意节点继续 / 改我说的分叉 ========== -->
   <div id="branch-page" class="branch-page hidden" role="dialog" aria-modal="true" aria-label="分支视图">
-    <!-- 内容由 src/screens/branch 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 新故事 · 选模式 ========== -->
   <div id="modal-new" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 开局设定向导（剧情模式） ========== -->
   <div id="modal-wizard" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 剧情文本导入（路径②） ========== -->
   <div id="modal-import-text" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 导出 ========== -->
   <div id="modal-export" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 画师工作台 ========== -->
   <div id="modal-painter" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 画风锚定 ========== -->
   <div id="modal-anchor" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 角色卡：统一编辑器 = 自建空白表单 / 导入后可编辑 ========== -->
   <div id="modal-card" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
     <!-- ========== 设置（模型 / 辅助模型 / 画面 / 工具与服务 / 数据 / 外观 / 当前故事） ==========
        版式原则：每个分组只露「必填 + 常改」的字段；高级参数、长说明、单独配置一律折进 <details>
        （src/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。分组由 settingsForm.js 的 GROUPS 直接渲染，不再按 legend 文字归类。 -->
   <div id="modal-settings" class="modal hidden">
-    <!-- 内容由 src/screens/settings 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
 <!-- ========== 本对话设置：桌面右侧停靠 / 窄屏底部弹层；内容按模式渲染 ==========
      阶段 4 屏 2 起：「当前故事」组（推进模式 / 存档点 / 世界状态卡）自全局设置迁入本面板——
      它们依赖当前打开的故事，全局设置不再保留入口。 -->
   <aside id="story-prefs" class="story-prefs hidden" aria-label="本对话设置">
-    <!-- 内容由 src/screens/storyPrefs 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </aside>
 
   <!-- ========== 通用确认 / 输入弹窗 ==========
        替代原生 confirm / prompt：内嵌预览（沙箱 iframe）会静默忽略原生弹窗、
        直接返回 false / null，表现为「点了没反应」，因此一律走这个自建弹窗。 -->
   <div id="modal-confirm" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <input id="file-import" type="file" accept=".json,.irstory.json,.irbackup.json,.zip,application/json,application/zip" class="hidden">
@@ -231,12 +218,10 @@
 
   <!-- ========== 写邮件（可选本地服务） ========== -->
   <div id="modal-email" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
   <!-- ========== 代为下单（可选本地服务；策略由网关强制） ========== -->
   <div id="modal-payment" class="modal hidden">
-    <!-- 内容由 src/screens/modal 挂载：阶段 6 已删除 0.12.1 的旧 DOM -->
   </div>
 
 <!-- 图片灯箱（chat / rp 内联图点开看大图）：固定遮罩，点遮罩 / Esc 关闭 -->

@@ -4,7 +4,7 @@
  * 5 个轻弹窗里只有「人物行」是真正的动态面（可增删行）；其余字段都是「打开时灌一次值、
  * 提交时读一次值」，继续由 src/app/wizard.js / importer.js 直接写 input.value（零改动）。
  *
- * 为什么人物行必须搬进状态桥：0.12.1 的 A.charEditor 是命令式 DOM 注入（往容器里 createElement）。
+ * 为什么人物行必须搬进状态桥：迁移前的 A.charEditor 是命令式 DOM 注入（往容器里 createElement）。
  * 容器一旦归 Svelte 管，两层写同一棵子树迟早打架（重渲染会清掉注入的行）；而且注入的
  * <input> 只有浏览器默认样式。这里把「行」变成 $state 数组，组件用 TextInput 渲染，
  * 对外仍暴露与 charEditor 同形的 { set, get, add } 三个方法（见 charApi）。

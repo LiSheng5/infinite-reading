@@ -1,6 +1,5 @@
 /*
  * src/app/importer.js —— 剧情文本导入（路径②）
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Context } from '../core/context.ts';
 import { ChatProviders } from '../core/providers.ts';

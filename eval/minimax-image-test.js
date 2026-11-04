@@ -3,7 +3,7 @@
 /*
  * eval/minimax-image-test.js —— MiniMax 生图适配器单测（src/core/providers.ts 的 ImageProviders['minimax-image']）
  *
- * 不开浏览器、不联网：用「假 fetch」验请求形状与回包解析（按 2026-10-22 官方文档）：
+ * 用「假 fetch」验请求形状与回包解析（按官方文档）：
  *   - 接口地址：Base URL 带不带 /v1 都拼成 {base}/v1/image_generation；
  *   - body：model / prompt（截断 1500）/ aspect_ratio / response_format=base64 / n=1；
  *   - image-01-live：不认自定义宽高（下发也会被删），自定义宽高折成最接近的比例；

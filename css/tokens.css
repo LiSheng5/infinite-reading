@@ -92,7 +92,7 @@
   --dur-shift: 160ms;    /* standard 档：短位移的时长上限 */
   --dur-flash: 1.1s;     /* 搜索命中高亮的消退时长 */
   --dur-none: .001s;     /* 无 JS 兜底：prefers-reduced-motion 里把一切压到接近 0 */
-  --ease-io: ease-in-out;  /* 0.12.1 起 head-ring 呼吸沿用的关键字缓动（数值上不等于 --ease-inout，保留原手感） */
+  --ease-io: ease-in-out;  /* 旧版 head-ring 呼吸沿用的关键字缓动（数值上不等于 --ease-inout，保留原手感） */
   --ease-linear: linear;
   /* 循环动画周期（与交互时长分开调） */
   --loop-busy: 1.4s;

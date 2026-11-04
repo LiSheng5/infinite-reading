@@ -563,7 +563,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   /* ================= 节点面板 ================= */
 
   /* 面板由 Svelte 组件渲染：文本与 disabled 走 branch.svelte.js 的视图模型。
-   * 视图模型口径与 0.12.1 逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
+   * 视图模型口径与迁移前逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
   function setPanelOpen(open) {
     V.panelOpen = !!open;
     setBranchPanelOpen(V.panelOpen);

@@ -22,8 +22,6 @@
  * 由 eval/tokens-test.js 交叉对账：@keyframes 一条不多一条不少、--an-* 逐档可推导、
  * ::view-transition-* 的时长只走 --m-dur-vt-*。 */
 
-/* ↑ 阶段 2 搬迁自 src/core/motion.ts（IIFE → ES module），阶段 3 扩展出声明表；
- * 函数体 resolve 逐字未动。阶段 6：模块间依赖改为静态 import。 */
 
   var LEVELS = ['off', 'standard', 'rich'];
 

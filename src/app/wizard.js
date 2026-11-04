@@ -1,6 +1,5 @@
 /*
  * src/app/wizard.js —— 开局向导
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { ChatProviders } from '../core/providers.ts';
 import { charApi } from '../screens/modal/state.svelte.js';

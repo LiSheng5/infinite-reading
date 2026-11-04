@@ -1,12 +1,12 @@
 // 搬家回归护栏（阶段 4 屏 2）：设置控件 id 清单。
-// 两份冻结清单（v0.8.0 冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
+// 两份冻结清单（冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
 //   GLOBAL_SETTINGS_IDS —— #modal-settings 里的全局设置控件；
 //   STORY_PANEL_IDS     —— 「本对话设置」面板 #prefs-story 里的当前故事控件
 //     （阶段 4 屏 2 自全局设置「当前故事」组迁入，见当时的迁移方案；
 //      其中 btn-w-char-add 是迁移时随行卡控件一并补进清单的）。
 // 取样边界按两个容器各自收紧（旧口径到「通用确认」才截断，#prefs-story 恰好落在区间里，
 // 搬不搬家测试都绿——所以必须双向断言：在自己的段里出现、在对方的段里不出现）。
-// v0.13.0：能力位控件（思考档位 / 尺寸档位 / 质量）随参考表收窄下线，清单同步收缩（130 → 123），
+// 能力位控件（思考档位 / 尺寸档位 / 质量）随参考表收窄下线，清单同步收缩（130 → 123），
 // 下线的 7 个 id 进 RETIRED_SETTINGS_IDS，回来即红。
 // 用法：node eval/settings-ids-test.js        // 校验
 //       node eval/settings-ids-test.js --dump // 打印两个段里当前的 id（用于更新清单）
@@ -32,16 +32,16 @@ const GLOBAL_SETTINGS_IDS = [
   's-draft-base', 's-draft-model', 's-draft-key', 'btn-test-draft', 'test-draft-state',
   's-image-aspect', 'row-image-wh', 's-image-width', 's-image-height',
   's-image-base', 's-image-model', 's-image-key', 's-image-params',
-  // v0.12.1：生图适配器（OpenAI 兼容 / MiniMax 原生）与参考图（subject_reference）开关
+  // 生图适配器（OpenAI 兼容 / MiniMax 原生）与参考图（subject_reference）开关
   's-image-provider', 's-image-ref',
   'btn-test-image', 'test-image-state',
-  // v0.12.0：生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
+  // 生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
   // 后补：时长 / 分辨率 / 比例的独立控件（用户要求加回；自定义参数改为高级覆盖）
   's-video-base', 's-video-model', 's-video-key', 's-video-params',
   's-video-duration', 's-video-resolution', 's-video-ratio',
   'btn-test-video', 'test-video-state',
   's-style-preset', 's-style-custom', 'style-card-state', 'style-card-view', 'style-card-text',
-  // v0.12.1：画风备注就地改（不必重画 4 张候选）
+  // 画风备注就地改（不必重画 4 张候选）
   's-card-note', 'btn-save-card-note',
   'btn-anchor-rerun', 'rolling-style-text',
   's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',
@@ -72,12 +72,12 @@ const STORY_PANEL_IDS = [
 ];
 
 // radio 组用 name 标识（不是 id）；同样冻结。
-// v0.11.0：出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除，
+// 出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除，
 // 清单里不再有它——剧情模式作画只剩 🎨 按钮触发，这里同步冻结清单变化。
 const REQUIRED_NAMES = [];
 
 // === 已下线的能力位控件（只许消失，不许回来） ===
-// v0.13.0：参考表不再塑形请求体 —— 表里只有上下文窗口，思考档位 / 尺寸档位 / 质量
+// 参考表不再塑形请求体 —— 表里只有上下文窗口，思考档位 / 尺寸档位 / 质量
 // 这些「按厂商能力显隐」的控件随之删除（厂商形参改走「自定义请求参数」）。
 // 这几个 id 若又出现在设置屏源码里，说明有人给恒空的表重新接了一套假能力：此处直接红。
 const RETIRED_SETTINGS_IDS = [

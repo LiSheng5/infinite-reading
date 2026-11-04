@@ -4,7 +4,7 @@
  * 这里是「AI1 每轮发给模型的 messages 怎么拼、旧回合怎么压」的唯一实现：
  * 运行时（src/app/main.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
  *
- * 组装（-C，2026-10-14 评审后）：
+ * 组装（常驻注入与动态窗口）：
  *   [system]  AI1 系统提示词（按 mode：choice / chat / rp；rp 无卡时用降级提示）
  *   [system]  [风格基调]（≤120 字）+ [故事设定（常驻）]（≤400 字）——此前 styleTone 只影响画面、
  *             premise 只在开局一回合在场，地基信息随摘要合并流失
@@ -21,8 +21,6 @@
  * 纯函数、零依赖；以 ES module 导出，被 src/app/turn.js 静态 import，Node 亦可加载。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/context.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   /* 上下文预算：每个块的上限就是它自己的 *_MAX_CHARS（中文 1 字 ≈ 1 token，
    * 字符数即近似 token 数），改哪块只改那一处，不再另存一份预算表。 */
@@ -31,7 +29,7 @@
   const DEFAULT_MAX_MESSAGES = 16;       // 积压超过即压缩（保留 8 + 消化积压）
   const DEFAULT_MAX_SUMMARIES = 6;        // 摘要栈上限，满了合并最旧两幕
 
-  /* 2026-10-14 评审新增：常驻注入与动态窗口的预算参数 */
+  /* 常驻注入与动态窗口的预算参数 */
   const TONE_MAX_CHARS = 120;             // 风格基调注入上限（文本侧，此前只影响画面）
   const PREMISE_MAX_CHARS = 400;          // 常驻故事设定摘要上限（此前只在开局一回合在场）
   const WINDOW_MIN_MESSAGES = 4;          // 动态组装窗口下限
@@ -44,8 +42,8 @@
   const PAINTER_RECENT_LINE_CHARS = 200;
 
   /* ---------------- 系统提示词（按模式） ----------------
-   * 剧情模式（choice）：中文字段 JSON 契约（v0.3）；
-   * 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出（2026-10-07 定案，见下）。 */
+   * 剧情模式（choice）：中文字段 JSON 契约；
+   * 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出。 */
 
   const COMMON_OPEN = '你是这部视觉小说的旁白，同时扮演故事世界里除玩家以外的所有角色。玩家的输入自由度极高，必须顺着玩家的任何行动把故事讲下去，不要拒绝、不要出戏、不要建议「该做什么」。玩家可能随时表达对后续发展的期望，顺着编织、保持合理，不必生硬照办。';
 
@@ -66,12 +64,12 @@
     '- 保持前后剧情连贯，记住之前发生的事；只输出 JSON。',
   ].join('\n');
 
-  /* 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出（2026-10-07 用户定案）。
+  /* 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出。
    * 这两个模式不再走 JSON 契约——世界卡由 update_memory 工具 + 书记员定时校对维护，
    * 画面参考取旁白原文（src/app/ 下的 parseAIReply / absorbReply 有对应兜底）；
    * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
 
-  // 智能体模式（原「对话」，v0.6.0）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
+  // 智能体模式（原「对话」）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
   // 发邮件与花钱只是「提案」：用户在界面上确认前不得声称已完成（红线在 src/core/proposals.ts 落地）。
   const CHAT_SYSTEM = '你是用户的智能助手。回答直接、简洁，用中文。需要时可以使用你拥有的能力（画图、记事、定时提醒、写邮件、下单），但不要在回复里提「工具」「函数」。发邮件和花钱只是向用户提出请求：先用一两句话说明你要做什么，由用户在界面上确认；在用户确认之前，不要说已经发出或已经付款。';
 
@@ -82,7 +80,7 @@
   const RP_SYSTEM_FALLBACK = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：这部作品还没有角色卡，请按故事设定自拟你要扮演的角色，之后每一轮都保持这个角色不变，也不要替玩家说话或行动；每次回应 2~6 句中文。';
 
   // 对话 / 扮演的提示词保持极简：只补一句输入类型说明（与剧情模式同一条规则的短版）。
-  // v0.6.0：chat（智能体）不再下发做 / 说 / 导演，因此 chat 的系统提示不附这条说明（防模型复述标记）。
+  // chat（智能体）不再下发做 / 说 / 导演，因此 chat 的系统提示不附这条说明（防模型复述标记）。
   const KIND_MARK_HINT_SHORT = '输入前的（做）/（说）/（导演）是输入类型标记（分别是行动 / 说的话 / 世界里的既成事实），不要复述标记本身。';
 
   // 切换兼容：rp 存档切成 chat 后，历史用户消息里可能带着内层标记，而 chat 的系统提示
@@ -213,7 +211,7 @@
   };
 
   // 对话 / 扮演的直出变体：模型自己写生图提示词，不转画师子代理。
-  // v0.11.0：剧情模式不再下发 request_image（作画只能点按钮），画师变体 REQUEST_IMAGE_TOOL 已删除；
+  // 剧情模式不再下发 request_image（作画只能点按钮），画师变体 REQUEST_IMAGE_TOOL 已删除；
   // chat / rp 的直出变体保持不变（工具名仍是 request_image，frontend-smoke 对工具名集合的断言继续成立）。
   const REQUEST_IMAGE_DIRECT_TOOL = {
     type: 'function',
@@ -262,7 +260,7 @@
   const TOOL_NAMES_RECALL = TOOLS_RECALL.map(t => t.function.name);
 
   // AI1 全量工具（召回 + 写记忆），一起下发。
-  // v0.11.0：剧情模式不再有 request_image——作画只能由用户点 🎨 触发；
+  // 剧情模式不再有 request_image——作画只能由用户点 🎨 触发；
   // 对话 / 扮演走直出变体（prompt），工具名不变
   const TOOLS_AI1 = TOOLS_RECALL.concat([UPDATE_MEMORY_TOOL]);
   const TOOLS_AI1_DIRECT = TOOLS_RECALL.concat([REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL]);
@@ -367,7 +365,7 @@
     '不要在回复里说「工具」「触发器」，用自然的话告诉他你已经安排好了、等他确认。',
   ].join('');
 
-  /* ---------------- 邮件 / 下单工具（提案制，v0.6.0） ----------------
+  /* ---------------- 邮件 / 下单工具（提案制） ----------------
    * 模型发起的邮件 / 下单只能产生「提案」：执行必须由用户在界面上点确认触发
    * （状态机与执行在 src/core/proposals.ts，红线见该文件头注释）。 */
 
@@ -427,7 +425,7 @@
   ].join('');
 
   // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度 / 邮件 / 下单 / 作画工具）。
-  // v0.11.0：choice 不含 request_image（剧情作画只能点按钮）；
+  // choice 不含 request_image（剧情作画只能点按钮）；
   // chat / rp 的 request_image 用直出变体（模型自己写提示词、不请画师）。
   // 邮件 / 下单是高风险副作用动作：只在 chat（智能体）下发——rp / choice 即便传了 true 也不给。
   function toolsForMode(mode, opts) {
@@ -927,7 +925,7 @@
   /* ---------------- token 估算 ---------------- */
 
   // token 估算：中文 1 字 ≈ 1 token；ASCII（英文/数字/符号）≈ 4 字符 / token。
-  // （2026-10-14）：此前按字符全长计，英文输入会把 70% 压缩阈值高估约 4 倍、压缩晚触发。
+  // 此前按字符全长计，英文输入会把 70% 压缩阈值高估约 4 倍、压缩晚触发。
   function estimateTokens(text) {
     const s = String(text == null ? '' : text);
     const ascii = (s.match(/[\x00-\x7F]/g) || []).length;
@@ -1071,7 +1069,7 @@
     return idx;
   }
 
-  // 动态组装窗口（2026-10-14）：已知 contextWindow 时按 token 从最近往前装，
+  // 动态组装窗口已知 contextWindow 时按 token 从最近往前装，
   // 装到窗口一半为止，条数 ∈ [4, 40]；未知容量退回 fallback（评测与旧档口径不变）。
   // 组装（assembleAI1）与压缩保留（planCompression）共用同一函数，保证「压多少 / 留多少」同口径。
   function fitWindow(msgs, contextWindow, fallback?) {
@@ -1126,7 +1124,7 @@
     }
     if (story.messages.length <= max && !overBudget) return null;
 
-    // （2026-10-14）：超预算但常规保留条数下无可压（小窗口 + 长旁白）时，
+    // 超预算但常规保留条数下无可压（小窗口 + 长旁白）时，
     // 降级保留窗口（×0.75 → ×0.5 → ×0.25，下限 2 条）再压，别每轮超发；
     // 纯条数触发（未超预算）时维持原 keep（slice 不会误伤最近消息）。
     let keep = keep0;
@@ -1488,7 +1486,7 @@
     return null;
   }
 
-  /* ---------------- 剧情模式中文字段契约（v0.3）→ 内部英文结构归一化
+  /* ---------------- 剧情模式中文字段契约→ 内部英文结构归一化
    * 模型按中文键回包（旁白 / 人物 / 地点 / 时间 / 伏笔 / 画面 / 场景切换 / 选项），
    * 这里映射回 narration / world / scene_summary / scene_change / choices，
    * 压缩、书记员、世界卡合并等下游链路一律不用改。
@@ -1527,7 +1525,7 @@
 
   /* ---------------- 组装 ---------------- */
 
-  // 剧情模式 v0.3：存档里的 assistant 消息是英文键 JSON（slimReply），组装进请求体时
+  // 剧情模式 存档里的 assistant 消息是英文键 JSON（slimReply），组装进请求体时
   // 转回中文键，让模型看到的历史与本轮契约一致；存档本身不动（压缩 / 书记员链路不受影响）
   function toChineseHistory(content) {
     let j = null;
@@ -1553,7 +1551,7 @@
     return JSON.stringify(out);
   }
 
-  // chat / rp 纯文本契约（2026-10-07）：存档里的 assistant 消息仍是 {"narration":"…"} 包装，
+  // chat / rp 纯文本契约：存档里的 assistant 消息仍是 {"narration":"…"} 包装，
   // 组装进请求体前拍平成正文——否则模型看到历史里全是 JSON，会照着继续输出 JSON
   function toPlainHistory(content) {
     let j = null;
@@ -1653,10 +1651,10 @@
   // 常驻层（每轮都在）：风格基调 / 故事设定 / 角色卡 / 关系记忆 / 用户画像 / 世界卡
   function appendPersistentBlocks(parts, ctx: AssembleCtx) {
     const story = ctx.story;
-    // （2026-10-14）：风格基调此前只影响画面，现在也进文本侧（三模式通用，≤120 字）
+    // 风格基调此前只影响画面，现在也进文本侧（三模式通用，≤120 字）
     const tone = String(story.styleTone || '').trim();
     if (tone) parts.push({ role: 'system', content: '[风格基调] ' + clip(tone, TONE_MAX_CHARS) });
-    // （2026-10-14）：premise 此前只在开局一回合在场，地基设定随摘要合并流失——改为常驻摘要
+    // premise 此前只在开局一回合在场，地基设定随摘要合并流失——改为常驻摘要
     const premise = String(story.premise || '').trim();
     if (premise) parts.push({ role: 'system', content: '[故事设定（常驻）]\n' + clip(premise, PREMISE_MAX_CHARS) });
     // rp 角色卡常驻；chat / rp 关系记忆常驻（choice 靠召回工具，不占常驻预算）
@@ -1717,14 +1715,14 @@
         if (ctx.mode === 'choice') content = toChineseHistory(content);
         else if (ctx.mode === 'chat' || ctx.mode === 'rp') content = toPlainHistory(content);
       } else if (m.role === 'user' && ctx.mode === 'chat') {
-        // 切换兼容（v0.6.0）：rp 存档切成 chat 后，历史用户消息里的内层标记要剥掉
+        // 切换兼容：rp 存档切成 chat 后，历史用户消息里的内层标记要剥掉
         content = stripKindMarker(content);
       }
       out.push({ role: m.role, content });
     }
   }
 
-  // 单次注入层（召回 / 工具回传 / 启发式 / 强制注入）都并入本轮 user 消息前缀（2026-10-14）。
+  // 单次注入层（召回 / 工具回传 / 启发式 / 强制注入）都并入本轮 user 消息前缀。
   // 此前是插在历史与 user 之间的 role:'system' 块——部分兼容层（Gemini 的 OpenAI 端点、
   // 某些网关）会合并或忽略中段 system，注入会静默失效；并入 user 前缀语义不丢、兼容面最广。
   function appendInjectedBlocks(parts, ctx: AssembleCtx) {

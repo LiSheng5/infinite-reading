@@ -56,7 +56,7 @@ import { A, saveAll } from './core.js';
   }
 
   function effectiveLayout() {
-    // v0.6.0：chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
+    // chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
     if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return 'chat';
     const ui = effectiveUi();
     if (ui.layout === 'immersive') return 'immersive';

@@ -163,7 +163,7 @@ const REQUIRED = [
   '--bg', '--surface', '--surface-2', '--line', '--line-strong', '--ink', '--ink-dim',
   '--accent', '--accent-soft', '--on-accent', '--on-ink', '--danger',
   '--shadow-1', '--shadow-2', '--bg-glass',
-  // 圆角（阶段 3 补定义：0.12.1 漏定义导致全站方角）
+  // 圆角（旧版漏定义，后补上）
   '--radius',
   // 动效
   '--dur-fast', '--dur-base', '--dur-slow', '--dur-off', '--dur-shift', '--dur-flash', '--dur-none',

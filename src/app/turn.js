@@ -1,6 +1,5 @@
 /*
  * src/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 // 切兄弟的过渡收编进过渡内核（runTransition）。本文件是 ES module，
 // 经 src/main.js 装载，顶层 import 合法；三档 kind / 时长的唯一声明处是 src/core/motion.ts 的 TRANSITIONS.sibling。
@@ -20,7 +19,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function parseAIReply(raw) {
     const text = String(raw || '').trim();
-    // 宽容解析（裸换行 / 截断 / 围栏都能救）：剧情模式中文键契约（v0.3）经
+    // 宽容解析（裸换行 / 截断 / 围栏都能救）：剧情模式中文键契约经
     // normalizeAIReply 映射回内部英文结构；坏包不直接展示给玩家
     const j = Context.normalizeAIReply(Context.tolerantJSONParse(text));
     if (j) {
@@ -33,7 +32,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         tool_calls: Array.isArray(j.tool_calls) ? j.tool_calls : [],
       };
     }
-    // chat / rp：纯文本契约（2026-10-07 定案）——正文本身就是回复，不做「像 JSON 却坏了」的判错，
+    // chat / rp：纯文本契约——正文本身就是回复，不做「像 JSON 却坏了」的判错，
     // 否则正文里出现一个「{」就会被误判成坏包（这两个模式已不再要求模型输出 JSON）
     if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) {
       return { narration: text, choices: [], scene_change: false, scene_summary: '', world: null, tool_calls: [], plainText: true };
@@ -647,7 +646,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!S.story || !nid) return;
     if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法
     // 阶段 5：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
-    // 顺带保住 0.12.1「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
+    // 顺带保住「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
     // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
     const head = Tree.switchSibling(S.story, nid, dir);
     if (!head) return;

@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 提案（模型发起的有副作用动作，v0.6.0）
+ * 无限阅读 · 提案（模型发起的有副作用动作）
  *
  * 模型发起的邮件 / 下单**只能产生提案**，执行必须由用户在界面上点「确认」触发。
  * 本模块是纯逻辑层：不碰 DOM、不碰 story、不直接依赖 Sidecar（sidecar 以参数注入 S），
@@ -15,7 +15,6 @@
  * 纯函数、零外部依赖（ID 生成共用 src/core/tree.ts 的 genId）；以 ES module 导出，Node 里可直接 import。
  */
 
-/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { genId as rootGenId } from './tree.ts';
 
   const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 提案有效期（默认 30 分钟，常量可调）
@@ -127,7 +126,7 @@ import { genId as rootGenId } from './tree.ts';
   }
 
   /* ---------------- 状态机 ----------------
-   * p.status 是唯一真源（0.13.0 起不再用 result.resolved 这类旁路标记）：
+   * p.status 是唯一真源（现已不再用 result.resolved 这类旁路标记）：
    *
    *   create ─▶ pending ─confirm(用户点确认)─▶ executing ─┬─ 成功 ────────────▶ done
    *             │                                          ├─ needsApproval ─▶ awaiting_confirm
@@ -164,7 +163,7 @@ import { genId as rootGenId } from './tree.ts';
     return Number.isFinite(Number(now)) ? Number(now) : Date.now();
   }
 
-  /* 旧档迁移（0.13.0 之前）：二次确认等待态曾写成 executing + result.needsSecondConfirm。
+  /* 旧档迁移（迁移前）：二次确认等待态曾写成 executing + result.needsSecondConfirm。
    *   resolved=false → awaiting_confirm（用户还没点）；
    *   resolved=true  → failed（点过了、请求在途中进程没了：结果未知，既不能算成功也不能算待确认）。 */
   function normalize(p) {

@@ -1,6 +1,5 @@
 /*
  * src/app/round.js —— 回合编排：callAI1 / 玩家行动 / 开场 / 工具执行 / 旁白收尾
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Context } from '../core/context.ts';
 import { Proposals } from '../core/proposals.ts';
@@ -159,7 +158,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     let calls = streamedCalls.concat(A.toolList(reply1.tool_calls));
     // 同名同参去重（流式与回包可能重复上报），再按每轮上限裁剪
     calls = calls.filter((c, i) => calls.findIndex(x => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args)) === i);
-    // （2026-10-14）：超出上限的调用不再静默丢弃——留痕让玩家可见，重发时也告知模型
+    // 超出上限的调用不再静默丢弃——留痕让玩家可见，重发时也告知模型
     const droppedCalls = calls.slice(Context.MAX_TOOL_CALLS_PER_TURN);
     if (droppedCalls.length) {
       pushLog({ type: 'tool', tool: 'limit', summary: '已达本轮工具上限，未执行：' + droppedCalls.map(c => c.name).join('、') });
@@ -169,7 +168,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
     const effect = calls.length ? await handleToolCalls(calls) : { recallScopes: [], feedback: [], toolUnavailable: false };
 
-    /* （2026-10-14）：「写了正文 + 调了工具」不再是工具结果的死角。
+    /* 「写了正文 + 调了工具」不再是工具结果的死角。
      * 此前仅当 noProse 才重发注入——流式下 content 与 tool_calls 同包出现完全可能：
      * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）。
      * 按工具语义分流：
@@ -233,7 +232,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return (k === 'say' || k === 'direct') ? k : 'do';
   }
   // 外层前缀 [玩家行动] 保持不变，类型标记作为内层前缀。
-  // v0.6.0：chat（智能体）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
+  // chat（智能体）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
   function withKindMarker(text, kind) {
     const raw = String(text == null ? '' : text);
     if (S.story && S.story.mode === 'chat') return raw;
@@ -359,7 +358,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 开局第一幕：让 AI1 主动给出开场旁白与选项（不记录为玩家行动）
-  // （2026-10-14）：实际请求与存档此前是两句不同的话，retryLast 会以存档版重发、与首发不一致——统一成常量
+  // 实际请求与存档此前是两句不同的话，retryLast 会以存档版重发、与首发不一致——统一成常量
   const OPENING_ACTION = '（故事开场。请描写第一幕，把玩家带进场景。）';
 
   async function runOpening() {

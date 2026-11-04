@@ -50,7 +50,7 @@ jobs:
       - name: 安装构建依赖
         run: npm ci
 
-      # 阶段 2：src/core/*.ts 是 TS（Node 24 原生剥类型执行），静态检查走 tsc --noEmit
+      # src/core/*.ts 是 TS（Node 24 原生剥类型执行），静态检查走 tsc --noEmit
       - name: 核心类型检查（tsc --noEmit）
         run: npx tsc --noEmit
 
@@ -98,7 +98,7 @@ jobs:
       - name: node eval/run.js
         run: node eval/run.js
 
-      # 分支树数据层（src/core/tree.ts + store 集成）：纯逻辑单测，不开浏览器、不联网
+      # 分支树数据层（src/core/tree.ts + store 集成）：纯逻辑单测
       - name: 分支树数据层（node eval/tree-test.js）
         run: node eval/tree-test.js
 
@@ -112,7 +112,7 @@ jobs:
           node eval/prefs-test.js
           node eval/settings-ids-test.js
 
-      # 阶段 2 验收：schema 回归（真实夹具过检 + 导入→还原→导出逐字段一致 + 0.11 及更早存档迁移）
+      # 验收：schema 回归（真实夹具过检 + 导入→还原→导出逐字段一致 + 旧版本存档迁移）
       - name: schema 回归（node eval/schema-test.js）
         run: node eval/schema-test.js
 

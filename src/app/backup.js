@@ -1,6 +1,5 @@
 /*
  * src/app/backup.js —— 本地存储与备份（数据安全）
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Storage } from '../core/storage.ts';
 import { BackupPack } from '../core/backupPack.ts';
@@ -164,7 +163,7 @@ import { A, toast } from './core.js';
         if (btn) btn.textContent = '正在打包原图 ' + done + '/' + total + '（' + fmtMB(bytes) + '）…';
       });
       if (!zip.count) {
-        // 一张原图都没取到：多半是 v0.2 时代的老故事只存了缩略图（那时原图还没有单独存放）
+        // 一张原图都没取到：多半是 早期的老故事只存了缩略图（那时原图还没有单独存放）
         A.download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
         markBackedUp();
         renderStoragePanel();

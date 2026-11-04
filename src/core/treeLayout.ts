@@ -23,9 +23,7 @@
  *   - 确定性：同一棵树同一参数 → 输出完全相同。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/treeLayout.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。
- * v0.13.0：分层拆成 buildKids / assignRows / tracePath / packLanes 四段
+/* 分层拆成 buildKids / assignRows / tracePath / packLanes 四段
  *   （只挪职责与闭包，几何公式与合并口径未动）。 */
 import { plainReply } from './tree.ts';
 

@@ -3,7 +3,7 @@
 /*
  * tools/video-proxy.mjs —— MiniMax 的最小本地转发（零依赖，只监听 127.0.0.1）
  *
- * 背景（2026-10-22 实测）：MiniMax 两个域名的响应都不带 Access-Control-Allow-*，
+ * 背景（实测）：MiniMax 两个域名的响应都不带 Access-Control-Allow-*，
  * 浏览器直连被 CORS 拦（预检与查询都不通过）。这是用户拍板的最小绕行方案：
  *   浏览器把「设置 → 生视频模型 / 生图模型 → 接口地址」填成本机地址（默认 http://127.0.0.1:4320），
  *   请求经这里原样转发到 MiniMax，回包补上 CORS 头。

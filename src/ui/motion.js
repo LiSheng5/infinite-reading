@@ -9,7 +9,7 @@
  *   suspendLoops(el)         子树挂起（分支页打开 / 舞台换画时暂停底下循环），返回恢复函数
  *   holdLoops()              过渡期循环冻结（阶段 5）：暂停所有正在跑的真实 DOM 循环，返回解冻函数
  *
- * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（0.12.1 起的机制，原样保留）。
+ * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（旧版的机制，原样保留）。
  * 阶段 6：应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
 import { Motion } from '../core/motion.ts';
 

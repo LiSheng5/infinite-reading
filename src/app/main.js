@@ -450,7 +450,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     // 原图是 Blob、异步取的：取到后把画面与缩略图重画一遍
     Store.setImageReadyHandler(() => { A.renderStage(); A.renderThumbs(); });
 
-    Store.migrateLegacy();            // v0.1 旧档 → v0.2（幂等）
+    Store.migrateLegacy();            // 旧档 → （幂等）
     S.settings = Store.loadSettings();  // 迁移后重新读取
     // 动效强度：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
     applyMotion();
@@ -464,7 +464,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
     A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
-    A.showStart();                      // 入口 = 开始页（v0.1 原样）
+    A.showStart();                      // 入口 = 开始页（沿用旧实现）
     A.renderShelf();
     A.initStorageGuard().then(A.renderStoragePanel);   // 申请持久化 + 刷新存储面板
     A.remindBackupIfNeeded();                        // 7 天没备份就提醒一次

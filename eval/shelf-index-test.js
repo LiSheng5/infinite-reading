@@ -3,7 +3,6 @@
 /*
  * 无限阅读 · 书架索引条目测试（src/core/store.ts）
  *
- * 不开浏览器、不联网：
  *   1. saveStory 写出的索引条目含 mode / turn / titleAuto / snippet；
  *   2. 旧索引条目（缺字段 / 空标题 / 坏条目）补齐后再运行为空操作（幂等）；
  *   3. deleteStory 同步清理索引与搜索文档；
@@ -159,7 +158,7 @@ const KEYS = Store.KEYS;
   const st = Store.newStory({ title: '用模型的对话', mode: 'chat' });
   st.prefs = { profileId: 'p_beta', profileLabel: 'Beta' };
   Store.saveStory(st);
-  // 造一份「0.13.0 线之前的完整条目」：展示字段都在，唯独没有 profileId 这一列
+  // 造一份「迁移前的完整条目」：展示字段都在，唯独没有 profileId 这一列
   const idx = Store.listIndex().map(it => {
     const o = Object.assign({}, it);
     if (o.id === st.id) delete o.profileId;

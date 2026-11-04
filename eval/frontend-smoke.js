@@ -3,7 +3,7 @@
 /*
  * 无限阅读 · 前端 sidecar 客户端冒烟测试（src/core/sidecar.ts）
  *
- * 不开浏览器、不联网：用「假 fetch」模拟本地服务在 / 不在两种状态，验：
+ * 用「假 fetch」模拟本地服务在 / 不在两种状态，验：
  *   - 探测失败 → 离线降级（能力位全关 + 可读原因），不影响前端其它功能；
  *   - 探测成功 → 在线，能力位按 /health 解析；
  *   - api() 自动带 Bearer token、401 抛结构化错误码；
@@ -163,7 +163,7 @@ async function main() {
       Ctx.systemForMode('choice').indexOf('请画师') < 0 && Ctx.systemForMode('choice').indexOf('画师作画') < 0, 'ok');
   }
 
-  /* 7b. 智能体（chat）工具集 / 系统提示 / stripKindMarker（增补，v0.6.0） */
+  /* 7b. 智能体（chat）工具集 / 系统提示 / stripKindMarker（增补） */
   if (!Ctx) {
     check('IR.Context 可用（7b）', false);
   } else {

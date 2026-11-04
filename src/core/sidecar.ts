@@ -14,8 +14,6 @@
  * 零依赖，纯浏览器原生；在 Node 下也能加载（看不到 EventSource 就跳过订阅），便于单测。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/sidecar.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 const global = globalThis as any;
 
   const DEFAULT_PORT = 4319;

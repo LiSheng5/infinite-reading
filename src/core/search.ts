@@ -12,7 +12,6 @@
  * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
 
-/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { plainReply as plainReplyOfTree } from './tree.ts';
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */

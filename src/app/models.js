@@ -1,6 +1,5 @@
 /*
  * src/app/models.js —— 模型能力
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Prefs } from '../core/prefs.ts';
 import { Nav } from '../ui/navigation.js';

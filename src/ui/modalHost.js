@@ -1,7 +1,7 @@
 /*
  * src/ui/modalHost.js —— 弹窗的唯一入口（阶段 4 · 屏 6a「外壳与通用出入」）
  *
- * 为什么要有这个文件：0.12.1 起「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
+ * 为什么要有这个文件：旧版「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
  *   · src/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
  *   · src/app/main.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
  * 屏 6 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
@@ -20,18 +20,18 @@
  * 弹窗仍是 `position:absolute; inset:0` 相对 #app，尺寸与绘制顺序与搬之前逐字节一致。
  * 11 个弹窗的顺序保持 index.html 里的原顺序（MODAL_IDS 就是这个顺序），内部 DOM 一行不改。
  *
- * 原样保留的语义（逐条对齐 0.12.1）：
+ * 原样保留的语义（逐条对齐迁移前实现）：
  *   · 层级：打开时 z-index = 30 + 栈深（首层 31）；关闭时清空并重排剩下几层（30 + i + 1）。
  *     叠层只来自这里的内联 z-index；CSS 的 .modal z-index 只是未开窗时的占位值，不参与叠层。
  *   · 互斥：FEATURE_MODALS（邮件 / 支付 / 设置）开一个先关掉其它功能类；确认弹窗不参与互斥。
  *   · Esc：只关最上层；确认弹窗必须走 closeConfirm（收掉 Promise），见 dismissModal。
  *   · 遮罩点击：规则仍写在 src/app/main.js 的绑定里（绑定在 src/app/main.js，本文件不重复实现），
  *     它读的 modalStack 就是本文件导出的同一个数组实例。
- *   · 焦点还原：0.12.1 没有（关窗后焦点留在已隐藏的元素上）。6a 补上「开第一个弹窗前的那一帧」
+ *   · 焦点还原：迁移前没有（关窗后焦点留在已隐藏的元素上）。后来补上「开第一个弹窗前的那一帧」
  *     的还原，且 focus({ preventScroll:true })——不抢脚本新放的焦点、不触发滚动。
- *   · 背景惰性化：0.12.1 没有，补上——弹窗开着时各屏 / 灯箱加 inert + aria-hidden
+ *   · 背景惰性化：迁移前没有，补上——弹窗开着时各屏 / 灯箱加 inert + aria-hidden
  *     （只在焦点已经进弹窗之后加，关窗时先撤再还焦点，见 src/ui/backdrop.js 文件头）。
- *   · 滚动锁：0.12.1 没有，也不需要——body 已 overflow:hidden、#app 定高，
+ *   · 滚动锁：迁移前没有，也不需要——body 已 overflow:hidden、#app 定高，
  *     滚动都在屏幕 / 弹窗内部的滚动容器里；6a 不新增（新增会改动 iOS Safari 的手势链）。
  */
 
@@ -204,7 +204,7 @@ function restack() {
  * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按「off 档不许 await 后再改 DOM」
  * 的同一条理由选同步，只在真有 View Transition 时才演出退场。
  *
- * 开窗那一侧（0.12.1 的同步语义不能破）：
+ * 开窗那一侧（迁移前的同步语义不能破）：
  *   · 显示、层级、焦点基准全部在调用当帧做完；旧快照里用 opacity:0 把这层挡掉（旧态是一张全透明图，
  *     淡出等于什么都不发生），新快照照常淡入。
  *   · 为什么不能把显示推迟到 update 回调：`openModal` 之后同步 focus / 量布局 / scrollIntoView 的
@@ -380,7 +380,7 @@ function instantResult(id) {
 }
 
 /**
- * 开弹窗（语义与 0.12.1 的 core.js 完全一致；只把「改 DOM 那一帧」交给过渡内核）。
+ * 开弹窗（语义与迁移前的 core.js 完全一致；只把「改 DOM 那一帧」交给过渡内核）。
  * @param {string} id MODAL_IDS 里的 id
  * @returns {{modal: string, tier: string, kind: string, ms: number, mode: string, finished: Promise<any>}}
  */
@@ -432,7 +432,7 @@ export function openModal(id) {
     return { modal: id, tier: r.tier, kind: r.kind, ms: r.ms, mode: r.mode, finished: r.finished };
   }
 
-  /* 真走 View Transition 时**开窗这一侧仍然同步改 DOM**（与 0.12.1 同一时序），
+  /* 真走 View Transition 时**开窗这一侧仍然同步改 DOM**（与迁移前同一时序），
    * 只在旧快照里用 opacity:0 把它挡住 —— 否则「开完立刻聚焦输入框 / 滚到某个字段 / 量尺寸」
    * 这一批调用点全会落空（实测：irConfirm 的输入框、文本导入的 #it-text、
    * 「定时主动」入口的 scrollIntoView 都依赖当帧可见）。

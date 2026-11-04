@@ -1,5 +1,5 @@
 /*
- * acceptance/tools/fixture.mjs —— 回归夹具（阶段 0 / 0.12.1）
+ * acceptance/tools/fixture.mjs —— 回归夹具（迁移基线）
  *
  *  阶段 0：「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
  * 用户画像），后续每阶段都要能导入、还原、再导出，并与原文件逐字段比对。」
@@ -22,7 +22,7 @@
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
  *  - 阶段 6 起应用不再有全局 IR：脚本给产物 URL 加 ?ir-test=1，经 src/main.js 的验收钩子
  *    （window.__IR_TEST__）访问与旧 IR 同名的真实模块导出；不带参数时产物没有这个对象。
- *  - 播种数据的形状以 0.12.1 真实写入路径为准：
+ *  - 播种数据的形状以迁移前的真实写入路径为准：
  *      回合       → __IR_TEST__.Tree.begin / commit / seal（与 src/app/round.js·turn.js 同口径）
  *      日志条目   → __IR_TEST__.Context.narrationEntry / assistantEntry / absorbToolCalls / mergeWorld / compressStory
  *      晚到的图   → __IR_TEST__.Tree.pushLate（sealed 节点后补图，painter.js 的真实路径）

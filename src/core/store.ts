@@ -8,7 +8,7 @@
  *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 src/core/tree.ts）
  *  - 主库 = IndexedDB（见 src/core/storage.ts）：解除 localStorage 约 5MB 的天花板，
  *    原图以 Blob 存 images store，不再转成 base64 塞进文本
- *  - v0.1 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
+ *  - 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
  *
  * 【内存优先】为什么这么写：
  *   localStorage 是同步的，IndexedDB 是异步的。若把 API 改成 async，src/app/ 下几十处
@@ -22,7 +22,7 @@
  *   成功后 localStorage 里的旧数据**原样保留**（作为回退快照，只增不减），所以不会丢档。
  *
  * 纯逻辑、零依赖；以 ES module 导出，Node 亦可加载（评测 / 迁移自测用：
- * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与 v0.2 一致）。
+ * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与旧版一致）。
  */
 const global = globalThis as any;
 
@@ -33,8 +33,6 @@ import { Prefs } from './prefs.ts';
 import { Search } from './search.ts';
 import { APP_VERSION } from './version.ts';
 
-/* ↑ 阶段 2 搬迁自 src/core/store.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：依赖改为静态 import（模块图是 DAG）——不再有「加载顺序错了才发现」的缺位路径。 */
 
   // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 Tree.ensure
   const SCHEMA = 3;
@@ -55,7 +53,7 @@ import { APP_VERSION } from './version.ts';
   // 「减少动态效果」的用户就不会先看到一帧 rich 动效。真源仍是 settings.ui.motion。
   const MOTION_MIRROR = 'ir:motion';
 
-  // v0.1 的旧键，只读、不删（迁移失败还能退回旧版本）
+  // 旧键，只读、不删（迁移失败还能退回旧版本）
   const LEGACY = {
     settings: 'infinite-reading-v1:settings',
     story: 'infinite-reading-v1:story',
@@ -274,7 +272,7 @@ import { APP_VERSION } from './version.ts';
 
   // 界面状态（随存档记住）：输入类型（做 / 说 / 导演）。
   // 布局状态已统一到 settings.ui（layout / splitRatio / imageCollapsed），这里只写 kind。
-  // v0.3 的 split / showImage / immersive 三个字段不再写进新档；读档时 Object.assign 会把
+  // 的 split / showImage / immersive 三个字段不再写进新档；读档时 Object.assign 会把
   // 旧档里的它们原样带过（不读、不删），所以老档不需要迁移、也不会因为这里少写而丢数据。
   function defaultUi() {
     return { kind: 'do' };
@@ -292,7 +290,7 @@ import { APP_VERSION } from './version.ts';
         provider: 'openai-compatible', baseUrl: '', apiKey: '', model: '', temperature: 0.9,
         contextWindow: 0,      // 上下文窗口（0 = 未填；参考表命中时自动；70% 压缩阈值按它算）
         extraParams: '',       // 任意厂商参数（"a=b, c.d=e" 或对象），原样并入请求体
-        // 思考档位（thinking）v0.13.0 起下线：不再写入，旧档里的值原样带过、不读不删；
+        // 思考档位（thinking）现已下线：不再写入，旧档里的值原样带过、不读不删；
         // 厂商形参（reasoning_effort / thinking.type…）写进 extraParams，原样并入请求体
       },
       painter: defaultSubModel(),                              // 画师子代理（写绘画提示词）
@@ -329,7 +327,7 @@ import { APP_VERSION } from './version.ts';
       noTools: [],            // 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
       stylePreset: 'anime',   // 视觉设定卡之前的兜底画风
       styleCustom: '',
-      // v0.11.0：出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
+      // 出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
       // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
       // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
       sidecar: { port: 4319, token: '' },
@@ -407,7 +405,7 @@ import { APP_VERSION } from './version.ts';
   type SettingsCtx = { d: any; raw: any; out: any };
 
   const SETTINGS_STEPS: Array<MigrateStep<SettingsCtx>> = [
-    // v0.2 基线：各分节「默认值 ← 旧值」逐键合并。后面的步只在这份结果上做归一 / 夹值。
+    // 旧版基线：各分节「默认值 ← 旧值」逐键合并。后面的步只在这份结果上做归一 / 夹值。
     {
       since: 'v0.2',
       what: '各分节铺默认值（chat / painter / scribe / draft / image / video / userProfile + 顶层键）',
@@ -435,7 +433,7 @@ import { APP_VERSION } from './version.ts';
         out.styleCustom = raw.styleCustom || '';
       },
     },
-    // v0.11.0：trigger（出图时机）停止读写——defaultSettings 不再写它，
+    // trigger（出图时机）停止读写——defaultSettings 不再写它，
     // 旧值原样留在存档里（不读、不删），与 split / showImage 旧字段同一处理方式
     {
       since: 'v0.11.0',
@@ -526,7 +524,7 @@ import { APP_VERSION } from './version.ts';
         if (typeof out.image.extraParams !== 'string' && !(out.image.extraParams && typeof out.image.extraParams === 'object')) out.image.extraParams = '';
       },
     },
-    // 参考图开关（v0.12.1）：只认 'prev'，其余一律 'off'（旧档没有这个字段 → 关闭）
+    // 参考图开关：只认 'prev'，其余一律 'off'（旧档没有这个字段 → 关闭）
     {
       since: 'v0.12.1',
       what: '生图参考图开关 image.refMode（只认 prev，其余 off）',
@@ -560,7 +558,7 @@ import { APP_VERSION } from './version.ts';
         if (['16:9', '9:16', '1:1'].indexOf(out.video.ratio) < 0) out.video.ratio = '16:9';
       },
     },
-    // v0.1 的 image.size 字符串 → aspect/width/height。旧键一律删除（已在 aspect 上的也不留）
+    // 旧档的 image.size 字符串 → aspect/width/height。旧键一律删除（已在 aspect 上的也不留）
     {
       since: 'v0.1',
       what: 'image.size（512x768）→ aspect / width / height，并删掉旧键',
@@ -575,7 +573,7 @@ import { APP_VERSION } from './version.ts';
     },
   ];
 
-  // v0.1 / 任意旧设置 → 当前形状（幂等）：逐条执行 SETTINGS_STEPS
+  // 任意旧设置 → 当前形状（幂等）：逐条执行 SETTINGS_STEPS
   function migrateSettings(raw) {
     return runSteps(SETTINGS_STEPS, {
       d: defaultSettings(),
@@ -631,7 +629,7 @@ import { APP_VERSION } from './version.ts';
   type StoryCtx = { raw: any; out: any };
 
   const STORY_STEPS: Array<MigrateStep<StoryCtx>> = [
-    // v0.2 基线：newStory 打底 + 各字段「默认值 ← 旧值」，log / scenes 条目就地归一
+    // 旧版基线：newStory 打底 + 各字段「默认值 ← 旧值」，log / scenes 条目就地归一
     {
       since: 'v0.2',
       what: '字段铺默认值（newStory 打底）；log 走 migrateLogEntry、scenes 走 normVideoFields',
@@ -808,7 +806,7 @@ import { APP_VERSION } from './version.ts';
 
   async function boot() {
     const out: any = { backend: 'localstorage', migrated: null, error: null, blocked: false };
-    if (!hasIDB) return out;                       // Node / 老浏览器：与 v0.2 行为一致
+    if (!hasIDB) return out;                       // Node / 老浏览器：与旧版行为一致
 
     try {
       out.migrated = await migrateLocalStorageToIDB();
@@ -1125,7 +1123,7 @@ import { APP_VERSION } from './version.ts';
 
   /* ---------------- 原图（Blob） ----------------
    * 大图一律以 Blob 存 IndexedDB，绝不转 base64 塞进普通文本存储。
-   * 没有 IndexedDB 时返回 false，调用方退回 dataURL（行为与 v0.2 一致）。 */
+   * 没有 IndexedDB 时返回 false，调用方退回 dataURL（行为与旧版一致）。 */
 
   function imageIdsOf(rawStory) {
     const out = [];
@@ -1306,13 +1304,13 @@ import { APP_VERSION } from './version.ts';
   }
   function loadCurrent() { return loadStory(getCurrentId()); }
 
-  /* ---------------- v0.1 旧档迁移 ---------------- */
+  /* ---------------- 旧档迁移 ---------------- */
 
   function migrateLegacy() {
     if (readFlag(KEYS.migrated)) return null;
     const result = { storyId: null, settings: false };
 
-    const legacyStory = readLSJSON(LEGACY.story);   // v0.1 的旧键只在 localStorage 里
+    const legacyStory = readLSJSON(LEGACY.story);   // 旧键只在 localStorage 里
     if (legacyStory) {
       const st = migrateStory(legacyStory);
       if (st) {

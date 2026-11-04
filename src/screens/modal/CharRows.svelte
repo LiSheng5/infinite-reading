@@ -1,5 +1,5 @@
 <script>
-  /* CharRows.svelte —— 人物设定行编辑器（屏 6b：接管 0.12.1 的 A.charEditor 的两个用例）
+  /* CharRows.svelte —— 人物设定行编辑器（接管迁移前的 A.charEditor 的两个用例）
    * 开局向导（姓名 / 性格 / 说话方式）与文本导入确认页（多一列「在场 / 离场」）。
    * 行存在 state.svelte.js 的 charRows 里，界面层经 state.svelte.js 的 charApi(kind) 读写，
    * 因此 startFromWizard / startFromImport 取到的是同一份数据（不再从 DOM 里捞输入框）。

@@ -3,7 +3,7 @@
 /*
  * 无限阅读 · 失败处理策略门禁
  *
- * 不开浏览器、不联网。守的是三种失败口径（说明见 ARCHITECTURE.md §2.2）：
+ * 守的是三种失败口径（说明见 ARCHITECTURE.md §2.2）：
  *   ① 用户可行动的失败 → toast 7 秒 + 调用方保留重试入口（src/app/core.js 的 reportUserFailure）；
  *   ② 纯后台降级 → console.warn 留原因，需要故事内归因时由 failureEntry 落一条 tool 留痕；
  *   ③ 清理 / 探测 / 解析兜底 → 允许吞，但必须写清为什么（注释），真实失败绝不允许静默。

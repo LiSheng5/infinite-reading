@@ -10,8 +10,6 @@
  * 硬约束：不碰 DOM、不碰存储、无依赖；以 ES module 导出 Prefs，Node 里可直接 import。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/prefs.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
   /* ---------------- 白名单（规则表 = 唯一真源） ---------------- */
 
@@ -288,7 +286,7 @@
   //   schedule      定时主动开关（仅扮演：单开关，不是工具组）
   //   characterCard 角色卡入口（仅扮演）
   //   layout        页面布局（剧情：四布局 + 比例 + 舞台收起；扮演 / 智能体：字号 / 宽度 / 密度）
-  // v0.11.0：trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
+  // trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
   const VISIBLE_FOR = {
     choice: ['model', 'style', 'mode', 'choices', 'showReasoning', 'layout'],
     rp: ['model', 'characterCard', 'showReasoning', 'schedule', 'layout'],

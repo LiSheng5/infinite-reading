@@ -1,7 +1,7 @@
 /*
  * src/ui/navigation.js —— 切屏的唯一入口
  *
- * 为什么要有这个文件：0.12.1 起「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
+ * 为什么要有这个文件：旧版「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
  * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），
  * 「分支页是否盖在上面」又是直接写 documentElement.dataset.branch（src/app/branch.js）。
  * 阶段 5 要给切屏接视图过渡，就必须先有**一个地方**知道「屏幕有哪几块、当前在哪块」，

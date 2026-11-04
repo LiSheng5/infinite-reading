@@ -54,7 +54,7 @@ const TARGETS = [
     replace: () => 'badge/version-' + version + '-blue',
   },
   {
-    // 徽章下方那行「当前版本 vX」文字（曾因不在同步范围停在 v0.3）
+    // 徽章下方那行「当前版本 vX」文字（曾因不在同步范围停在旧版本号）
     file: 'README.md',
     find: () => /\*\*当前版本 v[0-9A-Za-z.\-]+\*\*/g,
     replace: () => '**当前版本 v' + version + '**',

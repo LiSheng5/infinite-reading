@@ -1,6 +1,5 @@
 /*
  * src/app/render.js —— 聊天记录窗口 / 画面面板 / 布局状态 / 进入离开故事（含灯箱与内联图气泡）
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Prefs } from '../core/prefs.ts';
 import { Tree } from '../core/tree.ts';

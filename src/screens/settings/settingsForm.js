@@ -2,7 +2,7 @@
  * src/screens/settings/settingsForm.js —— 设置屏的字段配置真源
  *
  * 一份字段配置（id / 标签 / 类型 / 所属分组 / 是否高级 / 自动展开规则）生成整块设置界面，
- * 取代 0.12.1 靠 legend 文字正则归类（src/app/prefsui.js 的 GROUP_BY_LEGEND）的做法。
+ * 取代迁移前靠 legend 文字正则归类（src/app/prefsui.js 的 GROUP_BY_LEGEND）的做法。
  * 界面 DOM 由 SettingsScreen.svelte + Node.svelte 照这份配置渲染；行为仍在 src/app/*
  *（按 id 取元素：syncSettingsToForm / applyFormToSettings / syncAdvPanels …），id 一个不改。
  *

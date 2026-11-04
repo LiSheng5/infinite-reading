@@ -1,6 +1,5 @@
 /*
  * src/app/cards.js —— 角色卡 / 用户画像（数据与导入）
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { RoleCard } from '../core/roleCard.ts';
 import { Context } from '../core/context.ts';

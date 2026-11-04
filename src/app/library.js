@@ -1,6 +1,5 @@
 /*
  * src/app/library.js —— 原图（Blob）/ 存档点 / 书架 / 导入导出
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { genId, Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
@@ -76,7 +75,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return url || (sc && (sc.src || sc.thumb)) || (entry && (entry.thumb || entry.src)) || '';
   }
 
-  /* ---------- 生图参考图（v0.12.1，subject_reference 的输入） ----------
+  /* ---------- 生图参考图（subject_reference 的输入） ----------
    * 把「上一张图」变成能发给接口的 dataURL：优先 IndexedDB 里的原图，缩到长边 ≤ maxEdge 的
    * JPEG（体积可控、人物特征还够清楚）；没有原图（IndexedDB 不可用 / 只存了缩略图）就退回缩略图。
    * 拿不到图返回 ''，调用方按纯文生图继续跑，不拦这次作画。 */

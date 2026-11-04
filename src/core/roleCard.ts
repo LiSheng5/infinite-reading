@@ -10,7 +10,6 @@
  * 纯逻辑、零依赖；以 ES module 导出，Node 亦可 import（评测用）。
  */
 
-/* 模块间依赖一律顶层静态 import，导出即真实 API。 */
 import { Zip } from './zip.ts';
 
 const global = globalThis as any;

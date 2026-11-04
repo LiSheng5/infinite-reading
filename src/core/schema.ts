@@ -10,7 +10,7 @@
  * 【消费方式】
  *   - store.ts / tree.ts / providers.ts 的公开 API 用这些 interface 约束签名（TS 类型）；
  *   - eval/schema-test.js 用下面的 check* 运行时校验器跑夹具回归（schema 回归测试）：
- *     ① 三份真实夹具全部过检；② 导入 → 还原 → 导出逐字段一致；③ 0.11 及更早存档能迁移。
+ *     ① 三份真实夹具全部过检；② 导入 → 还原 → 导出逐字段一致；③ 旧版本存档能迁移。
  */
 
 /* ============================ 世界 / 风格 / 角色 ============================ */
@@ -108,7 +108,7 @@ export interface ImageEntry {
   src?: string;           // 仅内存态（落盘前被 serializeStory 剥掉）
   imageId?: string;       // 原图 Blob 键
   model?: string;
-  size?: string;          // v0.1 遗留
+  size?: string;          // 旧档遗留字段
   aspect?: string;
   width?: number;
   height?: number;

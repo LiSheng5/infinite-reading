@@ -1,6 +1,5 @@
 /*
  * src/app/styleanchor.js —— 画风锚定
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { ImageProviders, ChatProviders } from '../core/providers.ts';
 import { genId } from '../core/tree.ts';

@@ -3,14 +3,14 @@
 /* eval/schema-test.js —— schema 回归测试（阶段 2 验收门禁）
  *
  *  阶段 2 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
- * 旧版本（0.11 及更早）的存档仍能迁移」。这里跑**数据层**的同一口径：
+ * 旧版本存档仍能迁移」。这里跑**数据层**的同一口径：
  *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 IR.Schema 校验
  *      ——类型以真实档案形状为准的可执行证明，档案绝不反过来迁就类型；
  *   ② 导入 → 还原 → 导出逐字段一致：夹具 .irstory.json → storyFromPack（真实导入路径）
  *      → saveStory / loadStory（真实存盘往返）→ buildStoryPack（真实导出）→ 与原包逐字段比对
  *      （只忽略 fixture.mjs RULES_STORY 里同一份「注定会变」清单）；
  *   ③ 全量备份往返：backup-plain 的每个 story 迁移 / 序列化稳定、重打包逐字段一致；
- *   ④ 0.11 及更早：v0.1 旧键迁移（migrateLegacy）、schema v2 旧字段（ai2Thread / poster /
+ *   ④ 旧档：旧键迁移（migrateLegacy）、schema v2 旧字段（ai2Thread / poster /
  *      videoUrl / image.size / prefs.trigger+apiKey）与旧 provider 别名全部能迁。
  *
  * 用法：node eval/schema-test.js（任一不过 → 退出码 1）
@@ -181,7 +181,7 @@ function part3() {
   part4();
 }
 
-/* ================= ④ 0.11 及更早存档仍能迁移 ================= */
+/* ================= ④ 旧版本存档仍能迁移 ================= */
 function part4() {
   console.log('[4] 0.11 及更早存档迁移');
   // —— 4.1 schema v2 旧字段：ai2Thread→painterThread、poster→thumb、videoUrl→remoteUrl、
@@ -239,7 +239,7 @@ function part4() {
     ms.video.duration === 8 && ms.video.resolution === '1080P' && ms.video.ratio === '9:16'
     && !/duration/.test(ms.video.extraParams) && /bar/.test(ms.video.extraParams),
     JSON.stringify(ms.video));
-  // v0.11.0：trigger（出图时机）停止读写——defaultSettings 不再写它，
+  // trigger（出图时机）停止读写——defaultSettings 不再写它，
   // 旧档里的值**原样留在存档**（不读、不删）：迁移后仍可见，但默认包里永远没有
   check('trigger 不读不删（旧档值原样留存，默认包不再写）',
     ms.trigger === 'turn' && !('trigger' in Store.defaultSettings()),
@@ -252,7 +252,7 @@ function part4() {
   const msIdem = diffFields(ms, msAgain, 'settings');
   check('设置迁移整表幂等（再迁一次逐字段不变）', msIdem.length === 0, msIdem.slice(0, 3).join(' || '));
 
-  // —— 4.3 v0.1 旧键（infinite-reading-v1:*）→ migrateLegacy ——
+  // —— 4.3 旧键（infinite-reading-v1:*）→ migrateLegacy ——
   const mem = new Map();
   global.localStorage = {
     getItem: k => (mem.has(k) ? mem.get(k) : null),
@@ -269,7 +269,7 @@ function part4() {
   mem.set('infinite-reading-v1:settings', JSON.stringify({
     chat: { provider: 'openai-compatible', baseUrl: 'https://y', apiKey: 'sk-v1', model: 'old' },
   }));
-  // v0.1 迁移依赖内存态 store：先 boot 再迁（幂等标记未写过就一定迁）
+  // 旧档迁移依赖内存态 store：先 boot 再迁（幂等标记未写过就一定迁）
   Store.boot().then(() => {
     const res = Store.migrateLegacy();
     check('v0.1 旧键迁移返回 storyId', !!(res && res.storyId), JSON.stringify(res));

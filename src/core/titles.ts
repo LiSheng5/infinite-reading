@@ -11,8 +11,6 @@
  * 硬约束：零依赖、无 DOM、无网络；以 ES module 导出，Node 里可直接 import。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/titles.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 import { plainReply } from './tree.ts';
 
   /* ---------------- 码点安全的小工具 ---------------- */

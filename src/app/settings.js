@@ -1,6 +1,5 @@
 /*
  * src/app/settings.js —— 设置界面 / 故事记忆面板 / 注入记忆 / 用户画像面板
- * 从 src/app/main.js 拆出（只搬家，不改行为）。
  */
 import { Sidecar } from '../core/sidecar.ts';
 import { ImageProviders, VideoProviders, ChatProviders } from '../core/providers.ts';

@@ -18,8 +18,6 @@
  * Node 下 require 不会报错：只是没有 Blob 时 build/read 会抛人话错误，离线评测用不到它。
  */
 
-/* ↑ 阶段 2 搬迁自 src/core/zip.ts（IIFE → ES module，函数体逐字未动）。
- * 阶段 6：模块间依赖改为静态 import（全局 IR 兼容层已删除）。 */
 
  const LOC_SIG = 0x04034b50;   // 本地文件头
  const CD_SIG = 0x02014b50;    // 中央目录条目

@@ -3,7 +3,7 @@
 /*
  * eval/video-provider-test.js —— 生视频适配器单测（src/core/providers.ts 的 VideoProviders['minimax-video']）
  *
- * 不开浏览器、不联网：用「假 fetch」验 MiniMax V2 的请求形状与状态机：
+ * 用「假 fetch」验 MiniMax V2 的请求形状与状态机：
  *   - t2v / i2v 的 body 组装：ratio 规则（文生必填非 adaptive；图生一律 adaptive）、
  *     first_frame 角色、duration 以整数下发；时长 / 分辨率 / 比例以面板控件为唯一源，
  *     extraParams 只补其它键、同名这三键被控件覆盖；
