@@ -70,6 +70,7 @@ const RULES_BACKUP = {
     ['app'],                         // 版本串随发版变（sync-version.mjs 注入）
     ['stories', '*', 'updatedAt'],   // saveStory 会把 updatedAt 刷成导入落盘时刻
     ['images', '*', 'path'],         // zip 里图片按收集顺序编号，键对不上是顺序差异不是数据差异（按 id 对齐后逐字节比）
+    ['settings', 'sidecar', 'token'], // 本机侧车凭据：导出无条件剥空、导入沿用本机值（见 src/core/backupPack.ts），不随备份往返
   ],
   normalize: [],
 };

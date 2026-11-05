@@ -425,7 +425,8 @@ const ACTION_RUNNERS = {
     await ensureGame(page);
     const nav = page.locator('#chat-scroll .version-nav').first();
     if (!(await nav.count())) throw new Error('聊天流里没有分支导航（‹ n/m ›），切兄弟测不了');
-    const btns = nav.locator('.mini-btn');
+    // Svelte 重写后按钮走组件库的 ui-btn mini，按 button 取不绑死 class
+    const btns = nav.locator('button');
     if ((await btns.count()) < 2) throw new Error('分支导航按钮不足 2 个');
 
     await step('sibling-next');
@@ -436,7 +437,7 @@ const ACTION_RUNNERS = {
     const nav2 = page.locator('#chat-scroll .version-nav').first();
     if (await nav2.count()) {
       await step('sibling-prev');
-      await nav2.locator('.mini-btn').nth(0).click();
+      await nav2.locator('button').nth(0).click();
       await shot('2-mid');
       await sleep(380);
     }
