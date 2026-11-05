@@ -209,8 +209,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
-    // 阶段 4 屏 2：主「保存」只管全局设置。原「顺带落盘世界卡 / 推进模式」的收口随
-    // 「当前故事」组迁入本对话设置面板而移除（阶段 4 屏 2 迁移方案）：
+ // 主「保存」只管全局设置。原「顺带落盘世界卡 / 推进模式」的收口随
+ // 「当前故事」组迁入本对话设置面板而移除：
     // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
     saveAll();
     if (S.story) { A.applyLayout(); renderChat(); }   // 布局 / 选项显示即时生效
@@ -338,11 +338,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     $('#memory-empty').classList.toggle('hidden', has);
     $('#memory-panels').classList.toggle('hidden', !has);
-    syncStoryPanel();   // 阶段 4 屏 2：Svelte 面板对账「判变」（保存钮禁用态）
+ syncStoryPanel(); // Svelte 面板对账「判变」（保存钮禁用态）
     if (!has) return;
     const w = S.story.world || {};
     // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉
-    //（阶段 4 屏 2 迁移方案）。换故事（表单记账的 story id 变了）照常整画。
+ // 换故事（表单记账的 story id 变了）照常整画。
     const worldDirty = worldFormStoryId === S.story.id && worldFormChanged(w);
     if (!worldDirty) {
       worldFormStoryId = S.story.id;
@@ -355,7 +355,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
       $('#w-rel-notes').value = (w.relationship || {}).notes || '';
     }
-    // 世界状态卡摘要行（阶段 4 屏 2 一级视图：地点 · 时间 · 人物 n 位 · 摘要 n 幕）
+ // 世界状态卡摘要行（一级视图：地点 · 时间 · 人物 n 位 · 摘要 n 幕）
     const sum = $('#world-summary');
     if (sum) {
       const chars = (w.characters || []).filter(c => c && c.name).length;
@@ -402,7 +402,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
-  // 阶段 4 屏 2：新面板里改「行卡」形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
+ // 新面板里改「行卡」形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
   // 向导 / 文本导入两处仍是表格形态；本对话面板用行卡形态。
   let wCharEdInst = null;
   function wCharEd() {

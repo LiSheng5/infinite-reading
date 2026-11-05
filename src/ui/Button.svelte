@@ -1,5 +1,5 @@
 <script>
-  /* Button.svelte —— 通用按钮（阶段 3 组件库）
+ /* Button.svelte —— 通用按钮（组件库）
    * 视觉语言统一在 css/base.css 的 .ui-btn：扁平细边、唯一实心是黑底主按钮（蓝不填主按钮）；
    * variant: default | primary | ghost | danger；size: md | slim —— 都只是修饰类名，不在这里写第二份样式。
    * 本组件只保留「结构」：图标 + 文字一行居中、40px 触屏下限。

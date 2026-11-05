@@ -1,5 +1,5 @@
 <script>
-  /* ConfirmModal.svelte —— #modal-confirm「通用确认 / 输入弹窗」（屏 6b 重建）
+ /* ConfirmModal.svelte —— #modal-confirm「通用确认 / 输入弹窗」
    * 替代原生 confirm / prompt（沙箱 iframe 里原生弹窗会被静默忽略）。
    * 内容全部由 src/app/core.js 的 irConfirm 在打开前写入（按 id），这里只保留稳定的骨架：
    *   #cf-title / #cf-message / #cf-input-wrap(.hidden) / #cf-input / #cf-check-wrap(.hidden)

@@ -4,7 +4,7 @@
  * 为什么要有这个文件：旧版「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
  * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），
  * 「分支页是否盖在上面」又是直接写 documentElement.dataset.branch（src/app/branch.js）。
- * 阶段 5 要给切屏接视图过渡，就必须先有**一个地方**知道「屏幕有哪几块、当前在哪块」，
+ * 要给切屏接视图过渡，就必须先有**一个地方**知道「屏幕有哪几块、当前在哪块」，
  * 否则过渡内核没有稳定的收口点。
  *
  *   · 本文件 = 屏幕登记表 + 显隐开关 + 分支页标记的唯一写入点（界面层只准从这里切屏）
@@ -153,7 +153,7 @@ function shiftNewSnapshot(key, ms, fromY) {
   try { anim.finished.then(done, done); } catch (_) { done(); }
 }
 
-/* ---------- 舞台换画（阶段 5）----------
+/* ---------- 舞台换画 ----------
  * 舞台的「图」有两层：上层 #stage-img（清晰图，换画时自己走 fade-swap / blur-up），
  * 下层 #stage-backdrop（同一张图的模糊放大副本，CSS 负责模糊与压暗）。换画的**共享元素**取下层：
  * 它是同一个元素、新旧图同名 stage-art，rich 档由 ::view-transition-group(stage-art) 补间。
@@ -231,7 +231,7 @@ export function isBranchOpen() {
   return document.documentElement.dataset.branch === 'open';
 }
 
-/* ---------- 分支页开合（阶段 5）----------
+/* ---------- 分支页开合 ----------
  * 与 showScreen 同构：过渡形态 / 时长全由 TRANSITIONS.branchPage 决定
  *   off      → 同步切（焦点与滚动位置都不动）
  *   standard → root 交叉淡入（分支页不命名，整屏换页）

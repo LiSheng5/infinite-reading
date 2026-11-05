@@ -1,5 +1,5 @@
 <script>
-  /* PaymentModal.svelte —— #modal-payment「代为下单」（屏 6c 重建）
+ /* PaymentModal.svelte —— #modal-payment「代为下单」
    * 只展示本地服务策略，前端不做金额 / 额度校验：额度、冷静期、商户与品类黑白名单
    * 全部由 sidecar 在代码层强制（src/app/features.js 的 openPaymentModal / doPaymentSubmit）。
    * 结果行（#pm-result）由 doPaymentSubmit 写 textContent；提交钮 handler 在 src/app/main.js，不重复挂。

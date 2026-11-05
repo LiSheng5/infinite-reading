@@ -1,5 +1,5 @@
 <script>
-  /* Textarea.svelte —— 多行输入（屏 6b 就地补齐；组件库只有单行的 TextInput）
+ /* Textarea.svelte —— 多行输入（就地补齐；组件库只有单行的 TextInput）
    * 视觉与 src/ui/TextInput.svelte 同一套令牌，但尺寸独立：只多 resize:vertical / line-height，没有 TextInput 的 min-height。
    * 值同样支持 bind:value；legacy 直接写 .value 也不会被覆盖（组件没有别的响应式来源）。 */
   let {

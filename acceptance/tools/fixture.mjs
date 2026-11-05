@@ -1,7 +1,7 @@
 /*
  * acceptance/tools/fixture.mjs —— 回归夹具（迁移基线）
  *
- *  阶段 0：「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
+ * 「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
  * 用户画像），后续每阶段都要能导入、还原、再导出，并与原文件逐字段比对。」
  *
  * 产物（acceptance/0.12.1/fixture/）：
@@ -18,7 +18,7 @@
  *
  *  - 只新增文件，不改任何应用源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
- *  - 阶段 6 起应用不再有全局 IR：脚本给产物 URL 加 ?ir-test=1，经 src/main.js 的验收钩子
+ * - 应用不再有全局 IR：脚本给产物 URL 加 ?ir-test=1，经 src/main.js 的验收钩子
  *    （window.__IR_TEST__）访问与旧 IR 同名的真实模块导出；不带参数时产物没有这个对象。
  *  - 播种数据的形状以迁移前的真实写入路径为准：
  *      回合       → __IR_TEST__.Tree.begin / commit / seal（与 src/app/round.js·turn.js 同口径）
@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'fixture');
-// 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
+// 「双击 index.html 的真实形态」 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 const APP_VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
@@ -191,7 +191,7 @@ const STORY_A_PREMISE = [
 /* ================= 小工具：真实 UI 的入口动作 ================= */
 
 async function openApp(page, query) {
-  // 阶段 6：应用不再有全局 IR。测试面统一走 ?ir-test=1（src/main.js 末尾的验收钩子）。
+ // 应用不再有全局 IR。测试面统一走 ?ir-test=1（src/main.js 末尾的验收钩子）。
   const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
   await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
   await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store), null, { timeout: 15000 });

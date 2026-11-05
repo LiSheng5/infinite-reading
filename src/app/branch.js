@@ -98,7 +98,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ================= 打开 / 关闭 ================= */
 
-  /* 阶段 5：开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
+ /* 开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
    * 时序要点：
    *   · 渲染整块放进 mutate —— 视图过渡在 update 回调之后才拍新快照，先渲染，快照里才有树；
    *   · rich 的入场动画（边描边 / 节点弹出）不在 mutate 里开跑：快照会把它拍成空白首帧，
@@ -626,7 +626,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       return;
     }
     if (!Tree.switchTo(S.story, node.id)) return;
-    // 阶段 5：先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
+ // 先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
     // 快照会盖着旧内容跑 220ms，结算后才换成新内容（「最终内容不闪回旧分支」的同款坑）。
     afterSwitch();
     closeBranch();

@@ -1,5 +1,5 @@
 /*
- * src/app/readmodel.js —— 阅读页视图模型（阶段 4 屏 4：ReadScreen 状态桥的弹药）
+ * src/app/readmodel.js —— 阅读页视图模型（ReadScreen 状态桥的弹药）
  *
  * render.js 的 renderChat / renderThumbs 在 Svelte 屏（src/screens/read）在位时取这里的
  * 纯数据模型推给组件；切分 / 分派口径与旧拼装路径（bubbleFor / renderOpeningHint /

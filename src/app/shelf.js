@@ -63,7 +63,7 @@ import { A, saveAll, toast } from './core.js';
     return 'older';
   }
 
-  // 阶段 5：屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
+ // 屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
   function shelfVisible() {
     return Nav.screenVisible('shelf');
   }
@@ -87,7 +87,7 @@ import { A, saveAll, toast } from './core.js';
     shelf.groups = shelfModel(index);
   }
 
-  /* ============ 视图模型（阶段 4 屏 3：ShelfScreen 状态桥） ============
+ /* ============ 视图模型（ShelfScreen 状态桥） ============
    * Svelte 组件按这些数据渲染出与 rowOf / resultRowOf 同结构的 DOM；
    * 切分 / 分组 / 截断口径与旧拼装路径共用上面的常量与工具函数，不另起一套。 */
 
@@ -570,7 +570,7 @@ import { A, saveAll, toast } from './core.js';
     maybeAutoTitle,
     regenTitle,
     initShelf,
-    // 阶段 4 屏 3：Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断——
+ // Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断——
     // 两个入口登记给 A（函数体零改动 / 与旧按钮同语义），组件经 A() 调用
     openRowMenu,
     showAllEarlier,

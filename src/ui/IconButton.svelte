@@ -1,5 +1,5 @@
 <script>
-  /* IconButton.svelte —— 纯图标按钮（阶段 3 组件库）
+ /* IconButton.svelte —— 纯图标按钮（组件库）
    * label 必填：既当 aria-label / title，也当无障碍兜底；可点目标 40×40（触屏下限）。
    * 外观是 .ui-btn 的 .icon-only 修饰类（css/base.css），组件内不再写第二份样式。 */
   import Icon from './Icon.svelte';

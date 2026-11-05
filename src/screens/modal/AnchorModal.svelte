@@ -1,5 +1,5 @@
 <script>
-  /* AnchorModal.svelte —— #modal-anchor「锚定画风」（屏 6c 重建）
+ /* AnchorModal.svelte —— #modal-anchor「锚定画风」
    * 两步：挑候选（#anchor-step-pick）→ 改设定卡（#anchor-step-card）。
    * 步骤显隐、候选网格内容、卡表单回填 / 读取都由 src/app/styleanchor.js 直接操作：
    *   #anchor-grid 是候选卡容器（legacy 逐个 createElement + onclick），组件只给空容器；

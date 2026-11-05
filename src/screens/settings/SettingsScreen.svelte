@@ -1,5 +1,5 @@
 <script>
-  /* 阶段 4 屏 2 · 设置屏（Svelte 5 重写）
+ /* 设置屏（Svelte 5 重写）
    * 界面由 settingsForm.js 的字段配置生成（id / 标签 / 类型 / 分组 / 是否高级 / 自动展开规则），
    * 取代旧的 legend 文字正则归类（GROUP_BY_LEGEND）；控件 id 与读写函数保持不变：
    * syncSettingsToForm / applyFormToSettings / syncAdvPanels / openSettingsGroup … 仍按 id 读写，

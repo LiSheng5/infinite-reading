@@ -41,7 +41,7 @@ import { A, saveAll, toast } from './core.js';
     return btn;
   }
 
-  // 思考窗 interior（按钮 + 面板）：旧整节点拼装与 Svelte 空壳（阶段 4 屏 4 的 fillLiveDom）共用
+ // 思考窗 interior（按钮 + 面板）：旧整节点拼装与 Svelte 空壳（fillLiveDom）共用
   function reasonLiveInto(wrap, text) {
     const btn = reasonToggleBtn('思考中…');
     const panel = document.createElement('div');
@@ -58,7 +58,7 @@ import { A, saveAll, toast } from './core.js';
     wrap.replaceChildren(btn, panel);   // 幂等：空壳跨 renderChat 常驻，重复回填不叠加
   }
 
-  // 阶段 4 屏 4：流式 / 打字机临时旁白挂进组件渲染的两个空壳（与旧 DOM 同位置同结构）。
+ // 流式 / 打字机临时旁白挂进组件渲染的两个空壳（与旧 DOM 同位置同结构）。
   // 空壳的显隐由视图模型的 live / liveReason 决定；interior 与 class 状态照旧命令式回填，
   // S.liveEl / S.liveReasonEl 的同步语义与流式 span 追踪零改动（round.js / turn.js 不用改）。
   // 幂等：{#key} 整体重建已删，同一 live 窗口内空壳跨 renderChat 常驻——只回填空壳，
@@ -287,7 +287,7 @@ import { A, saveAll, toast } from './core.js';
   function enterGame(fresh, opts) {
     opts = opts || {};
     if (!S.story) return;
-    // 过渡的 update 回调要下一帧才跑（阶段 5）：先把故事抓在闭包里，
+ // 过渡的 update 回调要下一帧才跑：先把故事抓在闭包里，
     // 免得等待期间被别的入口（返回首页 / 换故事）把 S.story 置空。
     const story = S.story;
     // 分支树：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
@@ -297,7 +297,7 @@ import { A, saveAll, toast } from './core.js';
     } catch (e) { console.warn('Tree 初始化失败（按存档原样继续）：', e); }
     story.ui = Object.assign(Store.defaultUi(), story.ui || {});
     A.renderStoryPrefs();   // 切换对话整体重绘本对话设置面板（不残留上一个对话的值）
-    // 切屏收口到 Nav（阶段 5）：原「三处 classList 写 .hidden」由 showScreen 统一改，
+ // 切屏收口到 Nav：原「三处 classList 写 .hidden」由 showScreen 统一改，
     // 换画 / 聊天 / 布局这些 DOM 变更全部放进 mutate —— 过渡的新快照拿到的就是渲染完的阅读页。
     Nav.showScreen('read', () => {
       $('#screen-game').classList.remove('stage-strip', 'text-hidden');

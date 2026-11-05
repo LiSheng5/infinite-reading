@@ -1,5 +1,5 @@
 <script>
-  /* 阶段 4 · 屏 3 书架（Svelte 5 重写）
+ /* 书架（Svelte 5 重写）
    * 行列表（shelf-row-* / thumb / row-menu）、搜索结果（shelf-hit + mark 高亮）、空态的 DOM
    * 沿用 src/app/shelf.js 拼装结果的 id / class，行列表改为 {#key} 重建——旧行为函数（openStory / rename /
    * regen / search / keyboard）零改动，靠 id / class 选择器继续工作（titleElOf、moveActive 等）。

@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · Service Worker（开源路线图 W3 / L2「可安装」）
+ * 无限阅读 · Service Worker（可安装）
  *
  * 只做「离线可用 + 可安装」，不改写任何请求：
  *   - install 时预缓存「外壳」：CORE（入口三件套）+ PRECACHE（构建期注入的产物清单）

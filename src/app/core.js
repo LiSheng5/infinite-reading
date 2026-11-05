@@ -1,7 +1,7 @@
 /*
  * src/app/core.js —— 默认值与提示词 / 共享状态 / 动效基座 / 小工具 / 弹窗栈
  *
- * 阶段 6：这是应用层的内核模块。它建立注册表 A（共享状态 + 晚绑定函数表）并把 core 的
+ * 这是应用层的内核模块。它建立注册表 A（共享状态 + 晚绑定函数表）并把 core 的
  * 真实导出转接进 A；其余 app 模块 `import { A } from './core.js'`，不再碰全局 IR。
  */
 import { Store } from '../core/store.ts';
@@ -243,13 +243,13 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     return true;
   }
 
-  /* ---------- 弹窗栈（→ 阶段 4 屏 6a 收口） ----------
+ /* ---------- 弹窗栈（→ 收口到 src/ui/modalHost.js） ----------
    * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起，所以有一个最小统一入口：
    *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
    *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
    *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
    *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
-   * 屏 6a 起这套语义搬到 src/ui/modalHost.js（弹窗的唯一入口，卡片见 src/ui/ModalCard.svelte），
+ * 这套语义搬到 src/ui/modalHost.js（弹窗的唯一入口，卡片见 src/ui/ModalCard.svelte），
    * 这里只转发：A.modalStack 仍是同一个数组实例（src/app/main.js 的遮罩点击按引用读它），
    * 现有 id 与 DOM 全部保持不变。 */
   function netErrHint(e) {
@@ -385,8 +385,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
    * fields: [{ key, label?, placeholder? }]，每行每字段一个输入框。
    * opts.variant：'row'（默认，表格形态：一行五字段 + 表头，向导 / 文本导入用）
    *              'card'（行卡形态：首行「名字 + 在场/离场」各占一半、下方三个全宽输入、
-   *                      右上角 40px 删除钮、不出表头——本对话设置的世界卡编辑器用，
-   *                      阶段 4 屏 2 迁移方案）。
+   *                      右上角 40px 删除钮、不出表头——本对话设置的世界卡编辑器用）
    * 返回 { set(list), get(), add(vals) }：get() 滤掉全空行、不造字段外的值。 */
   function charEditor(container, fields, addBtn, opts) {
     fields = fields || [];

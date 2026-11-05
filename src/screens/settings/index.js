@@ -1,5 +1,5 @@
 /*
- * src/screens/settings/index.js —— 设置屏挂载（阶段 4 · 屏 2）
+ * src/screens/settings/index.js —— 设置屏挂载
  *
  * 挂载只替换 #modal-settings 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）；
  * 容器本身（含 hidden 开关、遮罩点击、modalStack）不动，事件仍由 src/app/* 按 id 绑定。

@@ -1,10 +1,10 @@
 /*
- * src/ui/modalHost.js —— 弹窗的唯一入口（阶段 4 · 屏 6a「外壳与通用出入」）
+ * src/ui/modalHost.js —— 弹窗的唯一入口（「外壳与通用出入」）
  *
  * 为什么要有这个文件：旧版「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
  *   · src/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
  *   · src/app/main.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
- * 屏 6 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
+ * 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
@@ -13,7 +13,7 @@
  *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
  *   · （弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *
- * 6a 的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
+ * 弹窗外壳改造的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
  *   #app > #app-modals(display:contents) > #modal-shell-host(display:contents) > #modal-*
  * 两层 display:contents 都不生成盒子 → 不产生新的包含块 / 层叠上下文 / 布局盒，
  * 弹窗仍是 `position:absolute; inset:0` 相对 #app，尺寸与绘制顺序与搬之前逐字节一致。
@@ -31,7 +31,7 @@
  *   · 背景惰性化：迁移前没有，补上——弹窗开着时各屏 / 灯箱加 inert + aria-hidden
  *     （只在焦点已经进弹窗之后加，关窗时先撤再还焦点，见 src/ui/backdrop.js 文件头）。
  *   · 滚动锁：迁移前没有，也不需要——body 已 overflow:hidden、#app 定高，
- *     滚动都在屏幕 / 弹窗内部的滚动容器里；6a 不新增（新增会改动 iOS Safari 的手势链）。
+ *     滚动都在屏幕 / 弹窗内部的滚动容器里；这里不新增（新增会改动 iOS Safari 的手势链）。
  */
 
 import { trapFocus } from './focusTrap.js';
@@ -539,5 +539,5 @@ export function closeTopModal() {
   return true;
 }
 
-/* 阶段 6：不再导出 ModalHost 兼容对象 / 不再挂 应用层注册表——
+/* 不再导出 ModalHost 兼容对象 / 不再挂 应用层注册表——
  * 应用层直接 import 上面的函数（core.js 一次取齐），外壳由组合根安装。 */

@@ -1,5 +1,5 @@
 <script>
-  /* Select.svelte —— 下拉选择（阶段 3 组件库）
+ /* Select.svelte —— 下拉选择（组件库）
    * options: [{ value, label }]；值双向绑定：bind:value。 */
   let {
     value = $bindable(''),

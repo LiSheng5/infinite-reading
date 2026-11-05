@@ -1,5 +1,5 @@
 <script>
-  /* EmailModal.svelte —— #modal-email「写邮件」（屏 6c 重建）
+ /* EmailModal.svelte —— #modal-email「写邮件」
    * 只展示本地服务策略，前端不做收件人 / 白名单校验：白名单、每日上限、审计都由
    * sidecar 在代码层强制（src/app/features.js 的 openEmailModal / doEmailSend）。
    * 状态行（#email-status）与待确认草稿（#email-drafts，legacy 逐条 append 并带「确认发送 / 丢弃」）

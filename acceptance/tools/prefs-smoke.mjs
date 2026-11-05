@@ -1,9 +1,9 @@
 /*
- * acceptance/tools/prefs-smoke.mjs —— 屏 2（设置屏 + 本对话设置面板）的行为冒烟
+ * acceptance/tools/prefs-smoke.mjs —— 设置屏 + 本对话设置面板的行为冒烟
  *
  * 跑法：先 npm run build:single，再 node acceptance/tools/prefs-smoke.mjs
  * 目标：dist/single/index.html（file:// 双击的真实形态），页面内播种一个故事（不调用任何模型）。
- * 阶段 6 起 ?ui=legacy 旧屏逃生口已删，只跑 Svelte 新屏这一轮。
+ * ?ui=legacy 旧屏逃生口已删，只跑 Svelte 新屏这一轮。
  * 覆盖：设置屏挂载 / id 就位 / 保存读回 / 折叠块自动展开两条规则 / 分组切换；
  *       本对话面板下钻（滚动 / 焦点 / Esc 层级）/ 人物行卡 / sticky 保存栏 / 判变禁用。
  */
@@ -53,7 +53,7 @@ async function run(browser, label, suffix, fn) {
   }));
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
-  // 阶段 6：应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
+ // 应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
   const extra = suffix ? '&' + String(suffix).replace(/^[?&]/, '') : '';
   await page.goto(APP + '?ir-test=1' + extra);
   await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 15000 });

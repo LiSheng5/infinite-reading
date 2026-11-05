@@ -1,5 +1,5 @@
 <script>
-  /* BranchScreen.svelte —— 阶段 4 · 屏 5 分支页重写（整页分支树 + 节点详情面板）
+ /* BranchScreen.svelte —— 分支页重写（整页分支树 + 节点详情面板）
    * 功能与交互不变，视觉套新组件库；分支页的布局算法（TreeLayout）与
    * SVG 构造方式（createElementNS、绝不用 innerHTML）**保持**。
    *

@@ -213,7 +213,7 @@ function splitTopCommas(s) {
   return out;
 }
 
-// JS 内置与浏览器全局（阶段 6 起项目不再有全局 IR 命名空间）
+// JS 内置与浏览器全局（项目不再有全局 IR 命名空间）
 const GLOBALS = new Set(`
 arguments
 console Math JSON Object Array String Number Boolean Symbol Promise Map Set WeakMap WeakSet Date RegExp
@@ -245,7 +245,7 @@ function checkFile(file) {
   const code = codeOnlyView(text);
   const declared = declaredNames(code);
 
-  // 阶段 6：应用层改成 ESM 后，import 绑定就是本地声明（默认导入 / 命名导入 / 别名）
+ // 应用层改成 ESM 后，import 绑定就是本地声明（默认导入 / 命名导入 / 别名）
   const importRe = /import\s+(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"][^'"]+['"]/g;
   for (const im of text.matchAll(importRe)) {
     if (im[1]) declared.add(im[1]);

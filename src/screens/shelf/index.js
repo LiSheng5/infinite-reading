@@ -1,5 +1,5 @@
 /*
- * src/screens/shelf/index.js —— 书架挂载（阶段 4 · 屏 3）
+ * src/screens/shelf/index.js —— 书架挂载
  *
  * 挂载只替换 #screen-shelf 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）：
  *   - 搜索框与清空钮由 src/app/shelf.js 的 initShelf 按 id 补绑，顶部按钮与键盘由组件处理；

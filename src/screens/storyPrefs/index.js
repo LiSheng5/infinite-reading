@@ -1,5 +1,5 @@
 /*
- * src/screens/storyPrefs/index.js —— 「本对话设置」面板挂载（阶段 4 · 屏 2）
+ * src/screens/storyPrefs/index.js —— 「本对话设置」面板挂载
  *
  * 挂载只替换 #story-prefs 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）。
  * 面板状态在 panel.svelte.js：

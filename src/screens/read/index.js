@@ -1,5 +1,5 @@
 /*
- * src/screens/read/index.js —— 阅读页挂载（阶段 4 · 屏 4）
+ * src/screens/read/index.js —— 阅读页挂载
  *
  * 挂载只替换 #game-layout 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）：
  * 组件产出 chat-pane + splitter + image-pane，事件绑定一个都不少 —— 输入 / 发送 /

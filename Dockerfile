@@ -1,6 +1,6 @@
-# 无限阅读 · 自托管镜像（开源路线图 W3 / L5：Docker / NAS）
+# 无限阅读 · 自托管镜像（Docker / NAS）
 #
-# 阶段 1 起源码经 Vite 构建，镜像改两段式：先构建 dist/site，再由 nginx 直接托管产物。
+# 源码经 Vite 构建，镜像改两段式：先构建 dist/site，再由 nginx 直接托管产物。
 #   docker build -t infinite-reading .
 #   docker run --rm -p 8080:80 infinite-reading      # → http://localhost:8080/
 #

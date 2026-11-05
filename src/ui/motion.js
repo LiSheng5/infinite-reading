@@ -1,5 +1,5 @@
 /*
- * src/ui/motion.js —— 统一 motion 模块 · DOM 端（阶段 3）
+ * src/ui/motion.js —— 统一 motion 模块 · DOM 端
  *
  * 分工：档位语义与三档行为声明在 src/core/motion.ts（纯逻辑、Node 可测）；
  * 政策变量、@keyframes、暂停规则在 css/motion.css。本文件只做 DOM 接线：
@@ -7,10 +7,10 @@
  *   applyMotion(root, pref)  解析档位并写 html[data-motion]
  *   applyPaused(root, doc)   页面不可见 → html[data-paused]
  *   suspendLoops(el)         子树挂起（分支页打开 / 舞台换画时暂停底下循环），返回恢复函数
- *   holdLoops()              过渡期循环冻结（阶段 5）：暂停所有正在跑的真实 DOM 循环，返回解冻函数
+ * holdLoops() 过渡期循环冻结：暂停所有正在跑的真实 DOM 循环，返回解冻函数
  *
  * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（旧版的机制，原样保留）。
- * 阶段 6：应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
+ * 应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
 import { Motion } from '../core/motion.ts';
 
 const REDUCED_MQ = '(prefers-reduced-motion: reduce)';
@@ -67,7 +67,7 @@ export function suspendLoops(el) {
   };
 }
 
-/* ---------- 过渡期循环冻结（阶段 5） ----------
+/* ---------- 过渡期循环冻结 ----------
  * 为什么需要：视图过渡一开，页面被新旧两张快照盖住，但 live DOM 里的循环并没有停。
  * 过渡 220ms 后撤掉快照那一下，Ken Burns / 环境光 / 流光 / 呼吸已经从「快照里的相位」
  * 自己往前跑了 220ms —— 看起来就是跳一下。而且 ::view-transition-* 伪元素

@@ -1,8 +1,8 @@
-// 搬家回归护栏（阶段 4 屏 2）：设置控件 id 清单。
+// 搬家回归护栏：设置控件 id 清单。
 // 两份冻结清单（冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
 //   GLOBAL_SETTINGS_IDS —— #modal-settings 里的全局设置控件；
 //   STORY_PANEL_IDS     —— 「本对话设置」面板 #prefs-story 里的当前故事控件
-//     （阶段 4 屏 2 自全局设置「当前故事」组迁入，见当时的迁移方案；
+// （自全局设置「当前故事」组迁入；
 //      其中 btn-w-char-add 是迁移时随行卡控件一并补进清单的）。
 // 取样边界按两个容器各自收紧（旧口径到「通用确认」才截断，#prefs-story 恰好落在区间里，
 // 搬不搬家测试都绿——所以必须双向断言：在自己的段里出现、在对方的段里不出现）。
@@ -59,7 +59,7 @@ const GLOBAL_SETTINGS_IDS = [
   'btn-clear-save', 'btn-save-settings',
 ];
 
-// === 冻结清单 B：#story-prefs 的 #prefs-story「当前故事」组（阶段 4 屏 2 迁入） ===
+// === 冻结清单 B：#story-prefs 的 #prefs-story「当前故事」组（迁入） ===
 const STORY_PANEL_IDS = [
   's-story-mode',
   'sp-empty', 'sp-panel', 'btn-add-savepoint', 'sp-list',
@@ -67,7 +67,7 @@ const STORY_PANEL_IDS = [
   'w-place', 'w-time', 'w-scene', 'w-threads', 'w-characters',
   'w-rel-stage', 'w-rel-bonds', 'w-rel-notes', 'btn-save-world', 'world-scribe-at',
   'rc-status', 'btn-edit-card', 'sum-count', 'summary-list', 'tool-list',
-  // 阶段 4 屏 2 随迁移补进清单（人物行编辑的「+ 添加人物」）
+ // 随迁移补进清单（人物行编辑的「+ 添加人物」）
   'btn-w-char-add',
 ];
 
@@ -87,7 +87,7 @@ const RETIRED_SETTINGS_IDS = [
   'wrap-image-aspect',
 ];
 
-// 阶段 6：legacy 侧 DOM 已删，唯一真源 = Svelte 源码（字段配置 + 组件模板）。
+// legacy 侧 DOM 已删，唯一真源 = Svelte 源码（字段配置 + 组件模板）。
 // index.html 只保留两个挂载容器（modal-settings / story-prefs），这里校验容器还在。
 const MOUNT_IDS = ['modal-settings', 'story-prefs'];
 const html = fs.readFileSync(HTML_PATH, 'utf8');

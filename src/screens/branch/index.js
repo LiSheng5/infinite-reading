@@ -1,5 +1,5 @@
 /*
- * src/screens/branch/index.js —— 分支页挂载（阶段 4 · 屏 5）
+ * src/screens/branch/index.js —— 分支页挂载
  *
  * 挂载只替换 #branch-page 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）：
  *   - 外层 #branch-page 仍在 index.html（role="dialog" / aria-modal / .hidden 的开关由

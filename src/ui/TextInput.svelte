@@ -1,5 +1,5 @@
 <script>
-  /* TextInput.svelte —— 单行输入（阶段 3 组件库）
+ /* TextInput.svelte —— 单行输入（组件库）
    * 值双向绑定：bind:value。其余原生属性透传（type / name / placeholder / autocomplete …）。
    * 用户内容一律走 value 文本渲染，不经 {@html}（安全红线）。 */
   let {

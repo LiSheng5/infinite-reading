@@ -92,7 +92,7 @@ import { A, renderChat, toast } from './core.js';
   async function draftWizard() {
     const topic = $('#wz-draft-input').value.trim() || DEFAULT_TOPIC;
     const btn = $('#btn-wz-draft');
-    // 屏 6b：按钮由 Button 组件产出（图标是一个子节点），文案单独放在 #wz-draft-label，
+ // 按钮由 Button 组件产出（图标是一个子节点），文案单独放在 #wz-draft-label，
     // 只能改这个 span 的文字；旧 DOM 没有该 span，退回原来的 textContent / innerHTML 写法。
     const label = $('#wz-draft-label') || btn;
     btn.disabled = true; label.textContent = '起草中…';   // 结束后在 finally 里按「图标 + 起草」还原

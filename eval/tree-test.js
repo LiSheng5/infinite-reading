@@ -851,7 +851,7 @@ function headTo(story, nodeId) {
     warns.some(x => x.indexOf('找不到本回合条目') >= 0), warns.join(' | '));
 }
 
-/* ---------------- 依赖装配（阶段 6：静态 import） ---------------- */
+/* ---------------- 依赖装配（静态 import） ---------------- */
 {
   // 原来靠「只引 tree + store，再让 assertDeps 报缺 Prefs」守住加载顺序；
   // 现在 store 静态 import prefs，这条缺位路径在结构上不存在——改成验证清洗真的生效。

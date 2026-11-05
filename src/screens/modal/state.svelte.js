@@ -1,6 +1,6 @@
-/* src/screens/modal/state.svelte.js —— 屏 6b「轻弹窗」的状态桥（Svelte 5 runes）
+/* src/screens/modal/state.svelte.js —— 「轻弹窗」的状态桥（Svelte 5 runes）
  *
- * 分工与屏 4/5 一致：DOM 契约（按 id 读写）归 legacy 界面层，**动态面**归组件。
+ * 分工与其它状态桥一致：DOM 契约（按 id 读写）归界面层，**动态面**归组件。
  * 5 个轻弹窗里只有「人物行」是真正的动态面（可增删行）；其余字段都是「打开时灌一次值、
  * 提交时读一次值」，继续由 src/app/wizard.js / importer.js 直接写 input.value（零改动）。
  *
@@ -9,7 +9,7 @@
  * <input> 只有浏览器默认样式。这里把「行」变成 $state 数组，组件用 TextInput 渲染，
  * 对外仍暴露与 charEditor 同形的 { set, get, add } 三个方法（见 charApi）。
  *
- * 口径与 charEditor 逐条对齐（eval 无关，靠 6b 自检脚本对账）：
+ * 口径与 charEditor 逐条对齐（eval 无关，靠自检脚本对账）：
  *   · set(list) 至少留一行空行（看得见字段形状）；
  *   · get() 滤掉全空行，字段值 trim，不造 fields 之外的值；
  *   · add(vals) 追加一行（不抢焦点：调用方自己决定焦点，legacy 只用来补行）。

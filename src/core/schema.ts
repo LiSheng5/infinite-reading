@@ -1,5 +1,5 @@
 /*
- * src/core/schema.ts —— 档案形状的唯一口径（阶段 2：类型 + schema 回归测试的真源）
+ * src/core/schema.ts —— 档案形状的唯一口径（类型 + schema 回归测试的真源）
  *
  * 【类型以真实档案为准】下面的 interface 全部从 acceptance/0.12.1/fixture/ 的真实导出
  * （backup-plain.irbackup.json / story-choice-full.irstory.json / story-rp-full.irstory.json）

@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · PWA 注册（开源路线图 W3 / L2）
+ * 无限阅读 · PWA 注册
  *
  * 只做一件事：在 https / localhost 下注册 Service Worker（见根目录 sw.js）。
  * 由 src/main.js 静态 import：不依赖界面状态、不改任何界面状态，只是「装个帽子」。

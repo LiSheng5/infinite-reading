@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
-/* eval/schema-test.js —— schema 回归测试（阶段 2 验收门禁）
+/* eval/schema-test.js —— schema 回归测试（验收门禁）
  *
- *  阶段 2 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
+ * 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
  * 旧版本存档仍能迁移」。这里跑**数据层**的同一口径：
  *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 IR.Schema 校验
  *      ——类型以真实档案形状为准的可执行证明，档案绝不反过来迁就类型；

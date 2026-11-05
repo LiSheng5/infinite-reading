@@ -199,7 +199,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   margin-top: 8px;
 }
 
-/* ==================== 动效基座（阶段 3 起走统一 motion 模块） ====================
+/* ==================== 动效基座（走统一 motion 模块） ====================
    @keyframes、档位政策（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
    三档行为的真源声明在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。
    这里只写「哪个元素用哪个动画」：

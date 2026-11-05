@@ -1,5 +1,5 @@
 /*
- * src/core/importText.ts —— 剧情文本导入的纯解析逻辑（阶段 2 自 src/app/importer.js 抽出）
+ * src/core/importText.ts —— 剧情文本导入的纯解析逻辑（自 src/app/importer.js 抽出）
  *
  * 只搬纯文本 → 结构化数据的变换（模型回包解析 / 本地兜底规则 / 人物行解析），
  * 界面（粘贴框、向导表单、状态行）留在 src/app/importer.js，经 ImportText 调用本模块。

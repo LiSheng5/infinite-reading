@@ -1,5 +1,5 @@
 <script>
-  /* WizardModal.svelte —— #modal-wizard「开局设定」（屏 6b 重建，剧情模式的开局向导）
+ /* WizardModal.svelte —— #modal-wizard「开局设定」（剧情模式的开局向导）
    * 行为仍在 src/app/wizard.js：openWizard 往里灌 prefill、draftWizard 起草、startFromWizard 建新档，
    * 全部按 id 读写；这里只把标记换成组件库（Field / TextInput / 本目录的 Textarea / Button）。
    * 人物行是唯一走状态桥的部分（见 CharRows.svelte / state.svelte.js）：

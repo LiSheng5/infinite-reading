@@ -645,7 +645,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function switchSiblingFromBubble(nid, dir) {
     if (!S.story || !nid) return;
     if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法
-    // 阶段 5：数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
+ // 数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
     // 顺带保住「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
     // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
     const head = Tree.switchSibling(S.story, nid, dir);
@@ -657,7 +657,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
   }
 
-  /* 切兄弟过渡（阶段 5 收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
+ /* 切兄弟过渡（收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
    *   off      即时（runTransition 同步换 DOM：焦点与滚动位置都不动）
    *   standard 交叉淡入、无横向位移（VT 的 ::view-transition-*，或降级整块淡入）
    *   rich     方向性短位移（±24px 新快照滑入 ≈220ms；降级把旧 WAAPI 的位移段叠回淡入上）

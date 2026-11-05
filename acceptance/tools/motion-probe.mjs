@@ -200,7 +200,7 @@ async function settle(page) {
 }
 
 async function openApp(page) {
-  // 阶段 6：应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
+ // 应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
   await page.goto(APP_URL + '?ir-test=1', { waitUntil: 'load' });
   await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.Store), null, { timeout: 20000 });
   await page.waitForFunction(() => !!(__IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 20000 });

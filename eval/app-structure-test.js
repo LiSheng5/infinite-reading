@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// eval/app-structure-test.js —— 拆分结构门禁（阶段 6 起入口 = src/main.js）
+// eval/app-structure-test.js —— 拆分结构门禁（入口 = src/main.js）
 //   1. 唯一入口 src/main.js 中 src/app/*.js 的出现顺序：core.js 在所有其他 app 模块之前，
 //      main.js（组合根）在最后；磁盘上的每个 src/app/*.js 都被入口引用，反之亦然。
 //   2. 每个 src/app/*.js 行数 ≤ 800；main.js ≤ 600。

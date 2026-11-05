@@ -1,4 +1,4 @@
-/* 统一 motion 模块 · 纯逻辑端（阶段 3）
+/* 统一 motion 模块 · 纯逻辑端
  *
  * 这里是动效档位的**语义真源**：
  *
@@ -10,7 +10,7 @@
  *   Motion.TIERS —— 三档政策（off / standard / rich 各自允许什么，数字与 css/motion.css 收口一致）
  *   Motion.LOOP_BUDGET —— 同屏同时运行的循环动画上限（组数；错相多实例按 1 组计）
  *   Motion.ANIMATIONS —— 每个 @keyframes 三档行为的声明表（none | fade | shift | full | loop）
- *   Motion.TRANSITIONS —— 每个「过渡动作」三档 kind / 时长（阶段 5：切屏 / 舞台换画 / 分支切换 /
+ * Motion.TRANSITIONS —— 每个「过渡动作」三档 kind / 时长（切屏 / 舞台换画 / 分支切换 /
  *     分支页开合 / 弹窗开合的唯一声明处；DOM 端接线见 src/ui/viewTransition.js）
  *
  *   · 本文件 = 纯逻辑与声明（Node 可 require，eval/motion-test.js / tokens-test.js 对账）
@@ -75,7 +75,7 @@
     nodePulse:    { off: 'none',  standard: 'none',  rich: 'loop'  },  // 选中节点脉冲
   };
 
-  /* 过渡声明表（阶段 5；三档验收矩阵的可执行形态）：
+ /* 过渡声明表（三档验收矩阵的可执行形态）：
    *   kind 语义
    *     instant  立即换（off 档唯一形态：不位移、不淡入，焦点与滚动位置都不动）
    *     fade     交叉淡入（standard 的上限形态：无位移）

@@ -18,7 +18,7 @@
  *    与 ANIMATIONS 逐条推导一致（off/standard/rich 各一块）；
  * 10. [新] 暂停机制在位：data-paused / data-loops-paused / data-loop="wait" 都有
  *    animation-play-state: paused 规则（页面不可见、子树挂起、循环预算排队）；
- * 11. [新] 视图过渡（阶段 5）：::view-transition-group/old/new(*) 三条规则在位，
+ * 11. [新] 视图过渡：::view-transition-group/old/new(*) 三条规则在位，
  *    animation-duration 只准 var(--m-dur-vt-*)；TRANSITIONS 里用到的每个 kind 都有对应变量；
  * 12. [新] 图标 lint：CSS content: 值与 Svelte 模板不得出现 emoji /
  *    符号字符当图标（▶ ⚙ ⚡ ← ↑ ↓ ＋ ⋯ ✕ ✓ 等；部分系统会渲染成彩色 emoji）。
@@ -180,7 +180,7 @@ for (const name of REQUIRED) {
 const REQUIRED_MOTION_VARS = [
   '--m-dur-fast', '--m-dur-base', '--m-dur-slow', '--m-dur-flash',
   '--m-t-shift-fast', '--m-t-shift-base', '--m-t-color-fast', '--m-t-color-base', '--m-iter',
-  // 阶段 5：视图过渡的时长收口（::view-transition-* 只准引用这三个）
+ // 视图过渡的时长收口（::view-transition-* 只准引用这三个）
   '--m-dur-vt-fade', '--m-dur-vt-out', '--m-dur-vt-shift',
 ];
 for (const name of REQUIRED_MOTION_VARS) {

@@ -13,7 +13,7 @@
 
    循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例，
    如首页符号逐字符波按 1 组计）。上限由设计固定，`acceptance/tools/motion-probe.mjs`
-   逐档测量；阶段 6 已删运行时登记（registerLoop 随自查页退役）。 */
+ 逐档测量；已删运行时登记（registerLoop 随自查页退役）。 */
 
 /* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
    小面积装饰元素允许用 @property 注册的自定义属性做动画（放宽项），
@@ -40,7 +40,7 @@
   --m-t-color-base: var(--dur-base);
   /* 循环动画的 iteration-count：rich 才循环 */
   --m-iter: infinite;
-  /* 视图过渡（View Transitions）的时长收口（阶段 5；::view-transition-* 规则只引用这三个） */
+ /* 视图过渡（View Transitions）的时长收口（::view-transition-* 规则只引用这三个） */
   --m-dur-vt-fade: var(--m-dur-base);    /* 新快照淡入 */
   --m-dur-vt-out: var(--m-dur-fast);     /* 旧快照淡出（先退后进） */
   --m-dur-vt-shift: var(--m-dur-base);   /* 组容器（共享元素的位置 / 尺寸补间） */
@@ -138,7 +138,7 @@ html[data-motion="off"] {
 }
 
 /* ==================== 视图过渡（View Transitions） ====================
-   阶段 5：src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
+ src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
    调 document.startViewTransition；快照动画本身全部由下面三条伪元素规则提供，
    时长一律走 --m-dur-vt-*（再由上面三个档位块映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
    过渡名单与三档 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：

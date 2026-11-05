@@ -119,7 +119,7 @@ import { A, toast } from './core.js';
   }
 
   // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
-  // 阶段 2：打包逻辑抽到 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
+ // 打包逻辑抽到 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
   function buildBackupPack(stripKeys) {
     return BackupPack.buildBackupPack(
       S.settings,
@@ -182,7 +182,7 @@ import { A, toast } from './core.js';
   }
 
   async function applyBackupImport(obj, zipEntries) {
-    // 阶段 2：数据校验/清单过滤抽到 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
+ // 数据校验/清单过滤抽到 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
     const { stories, pending, missing } = BackupPack.parseBackup(obj, zipEntries);
     if (!stories.length && !obj.settings) { toast('备份文件里没有可还原的内容', true); return; }
     const ok = await irConfirm(
@@ -321,7 +321,7 @@ import { A, toast } from './core.js';
       return;
     }
     // 完整档案：原样续玩
-    // 阶段 2：story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack），
+ // story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack），
     // 这里只留落盘与界面跳转
     const st = BackupPack.storyFromPack(obj);
     Store.saveStory(st);

@@ -52,7 +52,7 @@ import './app/main.js';
 import './pwa.js';
 
 // —— 验收测试钩子（仅 ?ir-test=1）——
-// 阶段 6 删掉了全局 IR 兼容层，acceptance/* 仍需要一个稳定的观测面：这里把当前模块
+// 删掉了全局 IR 兼容层，acceptance/* 仍需要一个稳定的观测面：这里把当前模块
 // 的真实导出（不是副本）按旧 IR 的键名挂出来，脚本只读 / 驱动，应用代码不引用它。
 // 不带 ?ir-test=1 时 window.__IR_TEST__ 不存在，产物行为与普通打开完全一致。
 import { A } from './app/core.js';

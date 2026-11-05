@@ -1,5 +1,5 @@
 /*
- * src/screens/home/index.js —— 首页挂载（阶段 4 · 屏 1）
+ * src/screens/home/index.js —— 首页挂载
  *
  * 挂载只替换 #screen-start 的内容并打 data-impl（共用外壳见 src/screens/_mount.js）。
  * 屏幕可见性仍由界面层的 showStart / showShelf 切 #screen-start 的 hidden（Nav.showScreen）。

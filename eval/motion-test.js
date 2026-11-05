@@ -5,13 +5,13 @@
  *   显式 off / standard / rich 优先于系统偏好
  *   未知值 / undefined / null 当 'auto'
  *
- * 阶段 3 新增（统一 motion 模块）：
+ * 统一 motion 模块：
  *   TIERS 三档政策：off 无位移无循环 ≤80ms 透明度；standard 无循环、短位移 ≤160ms；rich 全开
  *   LOOP_BUDGET 循环动画上限（同屏 ≤3 组）
  *   ANIMATIONS 逐动画三档行为声明：off ⊆ {none,fade}、standard ⊆ {none,fade,shift}、
  *   rich ⊆ {none,fade,shift,full,loop}；档次富度 off ≤ standard ≤ rich
  *
- * 阶段 5 新增（过渡内核的声明表）：
+ * 过渡内核的声明表：
  *   TRANSITIONS 逐过渡动作三档 kind / 时长：off 一律 instant/0；standard 只准 instant|fade；
  *   rich 可到 shift|shared；时长 ≤ 该档 TIERS 上限（shift/shared 按 maxShiftMs，fade 按 maxOpacityMs）；
  *   shared 只准 rich；五个动作的 standard / rich 形态与三档矩阵逐条对齐。
@@ -100,7 +100,7 @@ for (const [name, spec] of Object.entries(SPECS)) {
   }
 }
 
-/* ---------- 阶段 5：过渡声明表 TRANSITIONS ---------- */
+/* ---------- 过渡声明表 TRANSITIONS ---------- */
 
 const TRANS = Motion.TRANSITIONS;
 ok('TRANSITIONS 非空', TRANS && Object.keys(TRANS).length > 0, '过渡声明表为空');

@@ -110,7 +110,7 @@ html[data-motion="off"] .set-panel { animation: none; }
 .prefs-body {
   display: flex; flex-direction: column; gap: 12px;
 }
-/* 「当前故事」组自全局设置迁入（阶段 4 屏 2）：沿用设置弹层的「平铺 + 小节标题」处理，
+/* 「当前故事」组自全局设置迁入：沿用设置弹层的「平铺 + 小节标题」处理，
    作用域只限 #prefs-story（全局 fieldset / legend 样式不动）。 */
 #prefs-story {
   display: flex; flex-direction: column;
@@ -157,7 +157,7 @@ html[data-motion="off"] .set-panel { animation: none; }
 .prefs-row .hint.warn { color: var(--danger-deep); }
 .prefs-row .ui-btn:where(.mini) { min-height: 32px; }
 
-/* ==================== 阶段 4 屏 2：面板内下钻（方案 A） ====================
+/* ==================== 面板内下钻 ====================
    一级 = 对话覆盖行 + 故事数据；二级 = 世界状态卡编辑器（#prefs-world，正文内滚 + 底部 sticky 保存栏）。
    切换由 .prefs-scroll[data-view] 收口；窄屏 76vh 底部弹层与桌面停靠面板同一套交互（不做桌面特例）。
    下钻 / 返回的进场用 leafIn（off 档收成纯透明度、standard 档 ≤160ms 短位移、rich 档全量，见 css/motion.css）。 */

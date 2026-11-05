@@ -8,7 +8,7 @@
  * 用法：node acceptance/tools/shoot.mjs [--state=empty|seeded] [--width=390|1280]
  *                                [--out=acceptance/…/shots] [--only=<PLAN.key>]
  *       --out：产出目录（相对仓库根；默认 acceptance/0.12.1/shots 基线）；
- *       --only：只落这个 key 的图（其余步骤照走，只是不截图）——阶段 4 逐屏前后截图用。
+ * --only：只落这个 key 的图（其余步骤照走，只是不截图）——逐屏前后截图用。
  *
  *  - 只新增文件，不改任何现有源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
@@ -30,7 +30,7 @@ const ROOT = path.resolve(HERE, '..', '..');
 // 产出目录默认是迁移基线；--out=<相对 ROOT 的目录> 可改写
 let OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
 let ONLY = null;   // --only=<PLAN.key>：只拍这个 key 的图（其余步骤照走，只是不落图）
-// 「双击 index.html 的真实形态」阶段 1 起 = 构建出的单文件产物（源码入口是 ES module，
+// 「双击 index.html 的真实形态」 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 const VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
@@ -52,7 +52,7 @@ const PLAN = [
   { key: 'settings-tools', state: 'empty', screen: 'settings-tools', expect: '#modal-settings:not(.hidden)', note: '设置 · 工具与服务（生成过程 / 本地服务 / 邮件 / 定时主动 / 购物支付）' },
   { key: 'settings-data', state: 'empty', screen: 'settings-data', expect: '#modal-settings:not(.hidden)', note: '设置 · 数据（用户画像 / 本地存储）' },
   { key: 'settings-look', state: 'empty', screen: 'settings-look', expect: '#modal-settings:not(.hidden)', note: '设置 · 外观（界面）' },
-  // 序号 10 的最终处置（阶段 4 屏 2）：原「设置 · 当前故事」随「当前故事」组迁出全局设置而退役，
+ // 序号 10 的最终处置：原「设置 · 当前故事」随「当前故事」组迁出全局设置而退役，
   // 空位原地复用为「本对话设置 · 世界状态卡二级视图」（PLAN 序号 = 文件名前缀，不重排）。
   { key: 'story-world-edit', state: 'seeded', screen: 'story-world-edit', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（面板内下钻：人物行卡 + sticky 保存栏）' },
   { key: 'modal-new', state: 'empty', screen: 'modal-new', expect: '#modal-new:not(.hidden)', note: '新故事弹窗（三张模式卡）' },
@@ -76,7 +76,7 @@ const PLAN = [
   { key: 'modal-payment', state: 'seeded', screen: 'modal-payment', expect: '#modal-payment:not(.hidden)', note: '代下单弹窗（同上，智能体模式）' },
   { key: 'settings-schedule', state: 'seeded', screen: 'settings-schedule', expect: '#fs-schedule', note: '定时主动（「＋」→ 定时主动：设置·工具与服务，滚动到「定时主动」分区）' },
   { key: 'lightbox', state: 'seeded', screen: 'lightbox', expect: '#lightbox:not(.hidden)', note: '图片灯箱（智能体模式内联图气泡点开的大图）' },
-  // —— 阶段 4 屏 2 补拍：本对话设置面板的新交互 ——
+ // —— 补拍：本对话设置面板的新交互 ——
   { key: 'story-savepoints', state: 'seeded', screen: 'story-savepoints', expect: '#sp-list', note: '本对话设置 · 存档点列表（n 个 + 摘要行）' },
   { key: 'story-world-empty', state: 'seeded', screen: 'story-world-empty', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（新故事：空世界，表单全空）' },
 ];
@@ -105,7 +105,7 @@ function parseArgs() {
 }
 
 async function openApp(page, query) {
-  // 阶段 6：应用不再有全局 IR；种子 / 档位 / 断言用的测试面只在 ?ir-test=1 时挂载。
+ // 应用不再有全局 IR；种子 / 档位 / 断言用的测试面只在 ?ir-test=1 时挂载。
   const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
   await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
   // 启动完成的信号 = init() 写完 html[data-motion] 且弹窗外壳已安装。
@@ -334,7 +334,7 @@ async function runEmpty(page, snap, vp, manifest) {
   const groups = [
     ['settings-models', 'g-models'], ['settings-subs', 'g-subs'], ['settings-image', 'g-image'],
     ['settings-tools', 'g-tools'], ['settings-data', 'g-data'], ['settings-look', 'g-look'],
-    // 阶段 4 屏 2：g-story「当前故事」组已迁入本对话设置面板（#prefs-story），
+ // g-story「当前故事」组已迁入本对话设置面板（#prefs-story），
     // 全局设置没有这个分组了；PLAN 里的 settings-story 条目保留不重排（序号 = 文件名前缀）。
   ];
   for (const [key, group] of groups) {
@@ -686,7 +686,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.click('#btn-close-anchor');
   await sleep(300);
 
-  // —— 角色卡（本对话设置 · 故事数据 → 编辑角色卡；阶段 4 屏 2 起入口在面板里，不再走全局设置） ——
+ // —— 角色卡（本对话设置 · 故事数据 → 编辑角色卡；入口在面板里，不再走全局设置） ——
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
@@ -700,7 +700,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.click('#prefs-close');
   await sleep(300);
 
-  // —— 本对话设置（滚到「故事数据」区：推进模式 / 存档点 / 世界状态卡，阶段 4 屏 2 迁入） ——
+ // —— 本对话设置（滚到「故事数据」区：推进模式 / 存档点 / 世界状态卡） ——
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
@@ -711,7 +711,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await sleep(400);
   await snap('story-prefs');
 
-  // —— 世界状态卡二级视图（面板内下钻，方案 A）：人物行卡 + sticky 保存栏 ——
+  // —— 世界状态卡二级视图（面板内下钻）：人物行卡 + sticky 保存栏 ——
   await page.click('#btn-world-edit');
   await sleep(450);
   await snap('story-world-edit');

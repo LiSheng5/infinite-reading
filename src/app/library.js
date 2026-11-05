@@ -242,7 +242,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const list = $('#sp-list');
     list.replaceChildren();
     const sps = (S.story.savepoints || []).slice().reverse();
-    const sum = $('#sp-summary');   // 摘要行（阶段 4 屏 2 一级视图：n 个存档点 · 退出自动存档）
+ const sum = $('#sp-summary'); // 摘要行（一级视图：n 个存档点 · 退出自动存档）
     if (sum) sum.textContent = sps.length + ' 个存档点 · 退出自动存档';
     if (!sps.length) {
       const d = document.createElement('div');
@@ -274,7 +274,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 Nav（阶段 5）：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
+ // 切屏收口到 Nav：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
     // 这样视图过渡的新快照里书架已经是渲染好的（本步之前等价于旧的三行 classList 写入）。
     Nav.showScreen('shelf', () => {
       A.closeMenus();
@@ -290,7 +290,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.story = null;
     S.busy = false;
     S.live = null;
-    // 切屏收口到 Nav（阶段 5）：同 showShelf，「继续上次」的状态推进进 mutate，
+ // 切屏收口到 Nav：同 showShelf，「继续上次」的状态推进进 mutate，
     // 保证过渡的新快照里首页已经是最终形态。
     Nav.showScreen('home', () => {
       A.closeMenus();

@@ -1,5 +1,5 @@
 <script>
-  /* CardModal.svelte —— #modal-card「角色卡」（屏 6c 重建）
+ /* CardModal.svelte —— #modal-card「角色卡」
    * 统一编辑器：自建空白表单 / 导入 SillyTavern V2/V3 PNG 后编辑。
    * 表单一律由 src/app/cards.js 按 id 灌值（fillCardForm）与读取（readCardForm）；
    * 标题（#card-modal-title）、来源提示（#card-source-hint）、保存钮文案（#btn-rc-save）

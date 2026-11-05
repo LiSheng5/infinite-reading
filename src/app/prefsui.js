@@ -23,8 +23,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   /* ================= 全局设置：分组导航 ================= */
 
   // fieldset → 分组：按 legend 归类（控件 id 不动，只是搬进分组面板）
-  // 阶段 4 屏 2：「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
-  // 不再进全局设置分组（阶段 4 屏 2 迁移方案）。
+ // 「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
+ // 不再进全局设置分组。
   // 分组标题（导航标签由设置屏组件自己渲染；这里只给旧入口的兜底文案用）
   const GROUP_TITLES = {
     'g-models': '模型',
@@ -650,7 +650,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (visible.has('model')) body.appendChild(modelRow());
     if (visible.has('style')) body.appendChild(styleRow());
     // 推进模式（s-story-mode）与角色卡（btn-edit-card）已并入下面的「故事数据」区（#prefs-story），
-    // 覆盖行里不再另出 p-mode / p-card-open（阶段 4 屏 2 迁移方案）。
+ // 覆盖行里不再另出 p-mode / p-card-open。
     if (visible.has('choices')) body.appendChild(choicesRow());
     if (visible.has('showReasoning')) body.appendChild(showReasoningRow());
     if (visible.has('tools')) body.appendChild(toolsRows());
@@ -665,7 +665,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     storyPanelOpen();   // 回到一级视图 + 对账判变
     renderStoryPrefs();
     // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新——
-    // 迁入面板后它不再等全局设置打开才画（阶段 4 屏 2 迁移方案）
+ // 迁入面板后它不再等全局设置打开才画
     A.renderStoryPanels();
     A.renderSavepoints();
     A.renderInjectHint();

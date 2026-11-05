@@ -1,5 +1,5 @@
 /*
- * src/core/backupPack.ts —— 全量备份的打包 / 解析纯逻辑（阶段 2 自 src/app/backup.js 抽出）
+ * src/core/backupPack.ts —— 全量备份的打包 / 解析纯逻辑（自 src/app/backup.js 抽出）
  *
  * 只搬数据变换，不碰界面（按钮态 / toast / 弹窗留在 src/app/backup.js，那里经 BackupPack 调用本模块）。
  * 把原先闭包里的 S.settings / Store 读取改成参数注入；版本戳由
@@ -133,7 +133,7 @@ function pickBackupJson(entries: Map<string, any>) {
   return best ? best.blob : null;
 }
 
-/* .irstory.json 完整档案 → story（阶段 2 自 src/app/backup.js 的 applyImport 数据段抽出，
+/* .irstory.json 完整档案 → story（自 src/app/backup.js 的 applyImport 数据段抽出，
  * 函数体与迁移前逐字一致；界面侧（showShelf / 换键异步段）留在 src/app/backup.js）。
  * 产物：newStory 形状 + 包字段回填 + scenes 重建 + prefs 清洗 + tree 透传并 ensure。 */
 function storyFromPack(obj: any) {

@@ -1,5 +1,5 @@
 /*
- * src/ui/viewTransition.js —— 过渡内核（阶段 5）
+ * src/ui/viewTransition.js —— 过渡内核
  *
  *   · src/core/motion.ts 的 TRANSITIONS = 每个过渡动作（切屏 / 舞台换画 / 分支切换 / 分支页开合 /
  *     弹窗开合）三档 kind 与时长的**唯一声明处**；TIERS = 三档上限。
@@ -48,7 +48,7 @@ export function vtDisabled() {
   }
 }
 
-/** 视图过渡是否正在跑（阶段 5：rich 的分支页入场动画要等它结束再开） */
+/** 视图过渡是否正在跑（rich 的分支页入场动画要等它结束再开） */
 export function vtActive() {
   return !!activeVT;
 }

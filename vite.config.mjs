@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { HOME_ART } from './src/screens/home/art.js';
 
 /*
- * 阶段 1：Vite 接入
+ * Vite 接入
  * 两份产物：
  *   dist/site/    多文件，GitHub Pages / Docker 用（http 服务，PWA 可安装）
  *   dist/single/  单文件 index.html，file:// 双击可开（JS/CSS/图片全部内联，零外链）
  * 开发：npm run dev（Vite dev server）。入口是 src/main.js，界面由 Vite 构建产物提供。
  *
- * 阶段 1c（本文件新增的 irShell 插件）：
+ * irShell 插件（本文件新增）：
  *   1. 版本戳构建注入：index.html 的 `__IR_VERSION__` 占位（meta 版本戳）→ VERSION 真源
  *     （不再手写 / 不走 ?v=；首页版本文字另走 vite define，见 src/core/version.ts）。
  *     同一个钩子还把首页无 JS 兜底的字符画（`<!--IR_HOME_ART-->`）从唯一真源
