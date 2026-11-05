@@ -67,14 +67,9 @@ const STORY_PANEL_IDS = [
   'w-place', 'w-time', 'w-scene', 'w-threads', 'w-characters',
   'w-rel-stage', 'w-rel-bonds', 'w-rel-notes', 'btn-save-world', 'world-scribe-at',
   'rc-status', 'btn-edit-card', 'sum-count', 'summary-list', 'tool-list',
- // 随迁移补进清单（人物行编辑的「+ 添加人物」）
+  // 随迁移补进清单（人物行编辑的「+ 添加人物」）
   'btn-w-char-add',
 ];
-
-// radio 组用 name 标识（不是 id）；同样冻结。
-// 出图时机 radio 组（name="s-trigger"）随「时机出图下线」整体删除，
-// 清单里不再有它——剧情模式作画只剩 🎨 按钮触发，这里同步冻结清单变化。
-const REQUIRED_NAMES = [];
 
 // === 已下线的能力位控件（只许消失，不许回来） ===
 // 参考表不再塑形请求体 —— 表里只有上下文窗口，思考档位 / 尺寸档位 / 质量

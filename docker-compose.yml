@@ -7,7 +7,6 @@
 services:
   infinite-reading:
     build: .
-    # 有了镜像仓库后可以改成拉取，避免每次本地构建：image: ghcr.io/lisheng5/infinite-reading:latest
     ports:
       - "8080:80"
     restart: unless-stopped
