@@ -6,34 +6,7 @@ dist/
 # Python 运行缓存（tools/serve.py 之类会顺手生成）
 __pycache__/
 
-# 编辑器 / IDE 与 AI 助手本地数据
-.codebuddy/
-.vscode/
-.idea/
-.playwright-cli/
 
-# 系统垃圾
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# 本地临时文件
-*.tmp
-*.bak
 
 # 本地旁路服务（sidecar）运行时数据：config.json / token / SQLite / 锁文件
 sidecar/data/
-
-# 本地视觉预览草稿（文件头已注明「验证完可删除」）
-_note-preview.html
-
-# 手动验收证据（截图 / 报告 / 网络日志 / DOM 快照）：不进仓库
-# 例外（基线截图与夹具入库）：迁移基线的工具与 0.12.1 基线
-#（截图 / 回归夹具 / 测试基线输出）随仓库走，后续每阶段都要与之比对
-acceptance/*
-!acceptance/tools/
-!acceptance/0.12.1/
-
-# 内部工作文档（只留本地，不进仓库）
-docs/manual_checks.md
-docs/代码审查报告*.md
