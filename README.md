@@ -19,6 +19,7 @@
 - 📚 **玩得久**：故事书架、存档分支、`.irstory.json` 导入导出、剧情文本导入
 - 🔌 **模型随便换**：对话与生图分离，兼容所有 OpenAI 格式接口（云端 / 本地，Base URL 自填）
 - 🖼 **MiniMax 生图（`image-01` / `image-01-live`）**：「生图适配器」选 **MiniMax 原生**即走官方 `/v1/image_generation`；`image-01-live` 支持「漫画 / 元气 / 中世纪 / 水彩」四种画风（填进自定义参数 `style.style_type=漫画, style.style_weight=0.8`）。浏览器直连被 CORS 拦时同样用 `node tools/video-proxy.mjs` 转发（生图 / 生视频共用一个进程），接口地址填 `http://127.0.0.1:4320`
+- 🖥 **ComfyUI 本地生图（零 API 费用）**：「生图适配器」选 **ComfyUI 本地**，地址填 `http://127.0.0.1:8188`，把 ComfyUI 里「导出（API 格式）」的 workflow JSON 贴进设置即可。每次作画只替换正向提示词、随机 seed 和宽高，模型 / 步数 / 负向提示词都以你的 workflow 为准。启动 ComfyUI 时加 `--enable-cors-header "*"` 即可跨域；出图上限 10 分钟
 - 🎯 **画风不漂**：画师写提示词时以上一张图为「差分基底」（风格词原样保留、只改剧情变化的部分）；设置里打开「参考图 = 用上一张图」后，还会把上一张缩到长边 1024 的 JPEG 作为 `subject_reference` 一并提交，人物长相与服饰更连贯
 - 🎬 **生视频（MiniMax）**：剧情模式舞台右上角「🎬」→「以当前图生成视频 / 按剧情文生视频」。画师把这一幕写成「动态提示词」，提交 MiniMax 异步任务（独立队列、每 10 秒轮询、不堵出图），完成后存进 IndexedDB 在舞台播放；中途刷新 / 切档回来自动续上同一个任务。走 MiniMax V2 接口（`MiniMax-H3` / `MiniMax-H3-Max`）。浏览器直连被 CORS 拦时，起 `node tools/video-proxy.mjs`（零依赖本地转发），接口地址填 `http://127.0.0.1:4320` 即可。
 
@@ -136,7 +137,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 文件 | 作用 |
 |---|---|
 | `src/main.js` | **唯一入口**：按依赖顺序加载应用层 → 各屏 → 组合根 → PWA（旧 `src/legacy.js` 已删） |
-| `src/core/providers.ts` | 适配器层：`ChatProviders` / `ImageProviders`（`openai-images` 通用兼容 · `minimax-image` 官方 `/v1/image_generation`）/ `VideoProviders['minimax-video']`（MiniMax V2：`submit` / `poll` / `generate`） |
+| `src/core/providers.ts` | 适配器层：`ChatProviders` / `ImageProviders`（`openai-images` 通用兼容 · `minimax-image` 官方 `/v1/image_generation` · `comfyui` 本地 `/prompt` 提交 → 轮询 → 取图）/ `VideoProviders['minimax-video']`（MiniMax V2：`submit` / `poll` / `generate`） |
 | `src/core/context.ts` | 上下文组装、压缩链、文本导入整理 |
 | `src/core/tree.ts` | 分支树数据层：回合树是唯一真源（「↻ 重试」= 新增兄弟、‹ n/m › 切换），log / 世界卡等全是「根 → head」的投影 |
 | `src/core/storage.ts` | IndexedDB 适配器（唯一碰 IndexedDB 的地方；无 IndexedDB 时自动退回 localStorage） |
@@ -156,36 +157,6 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器、生视频本地转发 `video-proxy.mjs`（不属于运行时代码） |
 
 模块职责、一回合的完整调用链、存储键位与备份格式、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。
-
-## 路线图
-
-**v0.2 已交付（2026-10-05）**：离线评测、世界卡与三模式、书架与存档点、画师工作台、画风锚定、工具召回、文本导入、角色扮演、数据安全（持久化申请 / 存储 70% 预警 / 一键全量备份）。
-
-**开源基座 + 零安装（2026-10-10）**：MIT 许可与社区文档（CONTRIBUTING〔含行为准则 / 安全说明 / 第三方资源与许可〕+ ARCHITECTURE）、版本号单一真源与同步脚本、CI（语法 + 版本号 + 离线评测 + 打包冒烟）、**单文件打包**、GitHub Pages 在线 Demo。
-
-**可安装 + 可分发（2026-10-10）**：**PWA**（manifest + Service Worker，断网也能打开；缓存名跟着版本号走）、图标生成器（矢量 + 各尺寸 PNG，含 maskable / iOS 主屏）、Windows **一键启动 `启动.bat`**（Python 优先，退回零依赖 PowerShell 服务器）、**Dockerfile + compose**（自托管 / NAS）。
-
-**v0.3 — 容量与手机（2026-10-10）**：**存储迁移 IndexedDB**（内存优先 + 异步落盘，Story schema 与调用签名不变；旧 localStorage 数据一次性迁移，带校验 / 幂等 / 失败回退）、**原图以 Blob 独立存放**（不再 base64 塞文本）、真实占用统计与孤儿原图清理、**「测试连接」按钮**（只探测可达性，不花钱）、**断网不排队**（离线时作画直接不发出，不排队、不事后补发）、**带原图的全量备份**（一键导出 `.zip`，全部故事连原图一起搬；零依赖手写 ZIP，见 `src/core/zip.ts`）、移动端安全区与触控目标打磨。默认存储上限从约 5MB 变成浏览器按磁盘空间分配的额度。
-
-**v0.12 — 生视频（2026-10-22）**：**MiniMax V2 生视频**（图生 / 文生，画师写「动态提示词」）、独立视频队列（不堵出图）、提交前付费确认、刷新 / 切档自动续上任务、下载转存 IndexedDB + CORS / 空间不足降级限时链接、只存封面不进备份、全链路离线测试。
-
-**v0.13 — 构建迁移与前端重构（2026-10-28）**：Vite + Svelte 5 重写全部界面（组件库 / 设计令牌 / 三档动效 / View Transitions），核心逻辑迁入 `src/core/`（关键模块带 TypeScript 类型），数据层与导入导出格式零改动；`file://` 单文件产物保留；`?demo=1` 离线演示下线。收尾阶段删除 legacy 入口与全局 `IR` 兼容层、删掉 0.12.1 的旧 DOM 与新旧开关；版本号改为全构建注入。回归夹具：导入 → 还原 → 导出逐字段一致，25 张 390 / 1280 截图逐字节对照无回归。
-
-**Backlog**
-- [ ] 本地目录 / 网盘同步（IndexedDB 已落地，见 v0.3）
-- [ ] 图生图参考（人物一致性）
-- [x] ~~视频生成（MiniMax）~~（已交付，见 v0.12）
-- [ ] 视频生成的更多渠道（可灵 / Vidu）与参考图/参考视频模式
-- [ ] 人物关系图
-- [ ] 画像 / 关系记忆加权检索
-- [ ] 角色卡增强字段（voice_samples / taboos / entity_synonyms）
-- [ ] 纸白主题
-- [ ] 语音朗读（TTS）
-- [ ] 导出一页小故事
-- [ ] 字体本地化（子集化，国内首屏更快、不再依赖 CDN）
-- [ ] 桌面版（Tauri 2：体积小、可用系统凭据库存 Key）
-- [ ] macOS / Linux 一键启动脚本
-- [ ] 内容仓库（`.irstory.json` / 画风包 / 角色卡）+ 格式 Schema + 精选画廊
 
 ## 参与与许可
 

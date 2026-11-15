@@ -22,6 +22,7 @@ An AI visual novel that never ends: you improvise the story with an LLM, and an 
 - 📚 **Made to last** — story shelf, save points, `.irstory.json` import/export, and import of raw story text.
 - 🔌 **Any model** — chat and image models are configured separately; any OpenAI-compatible endpoint works (cloud or local, set your own Base URL).
 - 🖼 **MiniMax image generation (`image-01` / `image-01-live`)** — pick **MiniMax native** in the image adapter to use the official `/v1/image_generation`; `image-01-live` supports four style presets (漫画 / 元气 / 中世纪 / 水彩 — manga / energetic / medieval / watercolor, via custom params like `style.style_type=漫画, style.style_weight=0.8`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (one local relay process serves both image and video), base URL `http://127.0.0.1:4320`.
+- 🖥 **ComfyUI local image generation (zero API cost)** — pick **ComfyUI local** in the image adapter, set the base URL to `http://127.0.0.1:8188`, and paste the workflow JSON exported from ComfyUI ("Export (API)") into settings. Each render only replaces the positive prompt, the random seed and the width/height; model, steps and the negative prompt all stay exactly as in your workflow. Start ComfyUI with `--enable-cors-header "*"` to allow browser access; renders may take up to 10 minutes.
 - 🎯 **Consistent art style** — the painter writes each prompt on top of the previous image's full prompt as a "diff base" (style words kept verbatim, only the plot-driven part rewritten). With "reference = last image" enabled in settings, a JPEG of the previous image (long edge ≤ 1024) is also submitted as `subject_reference`, keeping faces and outfits coherent across scenes.
 - 🎬 **Video (MiniMax)** — the 🎬 button on the story stage opens a small menu: "video from current image" / "video from the plot". The painter writes a motion prompt, a MiniMax async task runs on its own queue (10s polling, never blocks image generation), and the finished MP4 is stored in IndexedDB and played on stage. Reload or switch stories mid-run and the same task is picked up again. Uses the MiniMax V2 API (`MiniMax-H3` / `MiniMax-H3-Max`). If the browser is blocked by CORS, run `node tools/video-proxy.mjs` (a dependency-free local relay) and set the base URL to `http://127.0.0.1:4320`.
 
@@ -127,7 +128,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | File | Role |
 |---|---|
 | `src/main.js` | **Single entry**: app layer → screens → composition root → PWA, in dependency order (the old `src/legacy.js` is gone) |
-| `src/core/providers.ts` | Adapter layer: `ChatProviders` / `ImageProviders` (`openai-images` generic-compatible · `minimax-image` official `/v1/image_generation`) / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
+| `src/core/providers.ts` | Adapter layer: `ChatProviders` / `ImageProviders` (`openai-images` generic-compatible · `minimax-image` official `/v1/image_generation` · `comfyui` local `/prompt` submit → poll → fetch) / `VideoProviders['minimax-video']` (MiniMax V2: `submit` / `poll` / `generate`) |
 | `src/core/context.ts` | Context assembly, compression chain, text import |
 | `src/core/tree.ts` | Branch-tree data layer: the turn tree is the single source of truth ("retry" adds a sibling, ‹ n/m › switches branches); log / world card and friends are projections of the root→head path |
 | `src/core/storage.ts` | IndexedDB adapter (the only place that touches IndexedDB; falls back to localStorage without it) |
@@ -146,37 +147,6 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server, `video-proxy.mjs` local relay for image/video generation (not runtime code) |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip call chain, storage keys and backup formats, and the invariants you must not break.
-
-## Roadmap
-
-**Delivered in v0.2 (2026-10-05)**: offline evaluation; world card and three modes; shelf and save points; painter workbench; style anchoring; tool recall; text import; role-play; data safety (persistent storage, 70% warning, one-click full backup).
-
-**Open-source base + zero-install (2026-10-10)**: MIT license and community docs, single-source versioning, CI (syntax + version + offline eval + bundle smoke test), **single-file bundle**, GitHub Pages demo.
-
-**Installable + distributable (2026-10-10)**: **PWA** (manifest + Service Worker, works offline; the cache name follows the version), icon generator (vector + PNGs incl. maskable / iOS), Windows **one-click `启动.bat`** (Python first, falls back to a dependency-free PowerShell server), **Dockerfile + compose** for self-hosting.
-
-**v0.3 — capacity & mobile (2026-10-10)**: **storage migrated to IndexedDB** (memory-first + async persistence, same story schema and call signatures; one-time migration from localStorage with verification, idempotency and safe fallback), **originals stored as Blobs** instead of base64 text, real usage/quota readout and orphan-image cleanup, a **"Test connection" button** (reachability probe only — costs nothing), **no offline queueing** (offline image requests are simply not sent), **full backup with original images** (one click → `.zip` carrying every story plus its pictures; dependency-free hand-written ZIP, see `src/core/zip.ts`), and mobile polish (safe areas, 44px touch targets).
-
-**v0.12 — video generation (2026-10-22)**: **MiniMax V2 video** (image-to-video / text-to-video, painter writes the motion prompt), a dedicated video queue (never blocks image generation), a paid-task confirmation, automatic task resume after reload / story switch, MP4 stored in IndexedDB with a timed-link fallback when CORS or disk space blocks the download, covers-only backups, and a full offline test suite.
-
-**v0.13 — build migration & front-end rewrite (2026-10-28)**: every screen rewritten with Vite + Svelte 5 (component library / design tokens / three motion tiers / View Transitions), core logic moved to `src/core/` (key modules typed with TypeScript), with the data layer and import/export formats untouched; the `file://` single-file output is preserved and `?demo=1` was removed. The closing phase deleted the legacy entry, the global `IR` compatibility layer, the 0.12.1 DOM and the old/new switches; every version string is now build-injected. Regression fixture: import → restore → export is field-identical, and 25 screenshots at 390 / 1280 are byte-identical.
-
-**Backlog**
-
-- [ ] Local folder / cloud-drive sync (IndexedDB landed in v0.3)
-- [ ] Image-to-image reference (character consistency)
-- [x] ~~Video generation (MiniMax)~~ (delivered in v0.12)
-- [ ] More video providers (Kling / Vidu) and reference-image / reference-video modes
-- [ ] Character relationship graph
-- [ ] Weighted retrieval for profile / relationship memory
-- [ ] Extra character-card fields (`voice_samples` / `taboos` / `entity_synonyms`)
-- [ ] Paper-white theme
-- [ ] Text-to-speech
-- [ ] Export a one-page short story
-- [ ] Bundled fonts (subset locally — faster first paint, no CDN)
-- [ ] Desktop app (Tauri 2: smaller footprint, OS keychain for API keys)
-- [ ] macOS / Linux one-click start scripts
-- [ ] Content repository (`.irstory.json` / style packs / character cards) + format schema + curated gallery
 
 ## Contributing and license
 
