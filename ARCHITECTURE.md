@@ -28,7 +28,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 | 文件 | 职责 | 代表导出 |
 |---|---|---|
-| `src/core/providers.ts` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'] / ['minimax-image'].generate()`、`VideoProviders['minimax-video'].submit/poll/generate` |
+| `src/core/providers.ts` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'] / ['minimax-image'] / ['comfyui'].generate()`、`VideoProviders['minimax-video'].submit/poll/generate` |
 | `src/core/context.ts` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
 | `src/core/tree.ts` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换；任意节点继续 / 分叉。另承载 `genId / clone / sleep / plainReply` 四个根级纯工具 | `Tree.ensure` / `begin` / `commit` / `seal`、`Tree.project`、`switchSibling` / `switchTo`、`latestLeaf` / `forkBefore` / `canResume`、`pushLate`、`imageIdsOf` |
 | `src/core/treeLayout.ts` | 分支页画布几何（**纯逻辑**）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出，分四段纯函数（各自可单测） | `TreeLayout.compute`、`buildKids` / `assignRows` / `packLanes`（分层三段）、`pointsToD` |
@@ -375,7 +375,8 @@ PWA 是「装个帽子」，不是「换条路」：`src/pwa.js` 在 https / `lo
 
 ## 9. 想扩展的话
 
-- **接新的模型服务**：在 `src/core/providers.ts` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `src/app/*` 的业务逻辑。
+- **接新的模型服务**：在 `src/core/providers.ts` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `src/app/*` 的业务逻辑。异步任务型服务在适配器内部包掉轮询（`['comfyui']` 就是这么做的：提交 → 轮询 → 取图，对上仍是同步 `generate` → dataURL）。
+- **ComfyUI 本地生图（`['comfyui']`）**：参数真源是用户贴的 **API 格式 workflow JSON**（`settings.image.workflow`）——模型 / 步数 / CFG 全在 workflow 里，适配器每次只注入正向提示词、随机 seed、宽高（折 8 的倍数）；负向提示词保留 workflow 原文。节点定位默认自动（采样器 `positive`/`negative` 链接 + 空潜空间节点），`settings.image.nodes`（如 `positive=6, randomSeed=off`）可覆盖。CORS 走 ComfyUI 自带的 `--enable-cors-header "*"` 启动参数（新版还有 origin 校验中间件，Host/Origin 不匹配会 403，同一个参数放行），不需要本地转发。取消只停本地等待、不打 `/interrupt`（ComfyUI 是共享服务）。总超时 10 分钟（低于作画队列的 20 分钟兜底）。
 - **视频**：`['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`src/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。启动参数支持「只给上游 URL」（`node tools/video-proxy.mjs https://api.minimaxi.com`），端口 / 上游不合法与端口被占用都给可读报错、不裸崩；转发带上游空闲超时（5 分钟）与断开清理——客户端先断即掐掉在途请求、上游断流回 5xx 而不是崩进程，门禁 `eval/video-proxy-test.js` 用桩上游对账。
 - **主题**：`css/tokens.css` 的 `:root` 就是主题入口（颜色 / 时长 / 缓动全走令牌）。当前是白底蓝强调浅色主题；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `src/core/store.ts` 与 `src/core/roleCard.ts`，新增字段请同步 `migrateStory` 与 `src/core/schema.ts`。

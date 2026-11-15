@@ -44,8 +44,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#s-image-model').value = S.settings.image.model;
     $('#s-image-key').value = S.settings.image.apiKey;
     $('#s-image-params').value = typeof S.settings.image.extraParams === 'string' ? S.settings.image.extraParams : '';
-    // 生图适配器：只有两个真实值
-    $('#s-image-provider').value = S.settings.image.provider === 'minimax-image' ? 'minimax-image' : 'openai-images';
+    $('#s-image-workflow').value = typeof S.settings.image.workflow === 'string' ? S.settings.image.workflow : '';
+    $('#s-image-nodes').value = typeof S.settings.image.nodes === 'string' ? S.settings.image.nodes : '';
+    // 生图适配器：三个真实值，其余旧值归一到 OpenAI 兼容
+    $('#s-image-provider').value = ['minimax-image', 'comfyui'].indexOf(S.settings.image.provider) >= 0
+      ? S.settings.image.provider : 'openai-images';
     $('#s-image-ref').value = S.settings.image.refMode === 'prev' ? 'prev' : 'off';
     applyImageProviderHint();
     const vd = S.settings.video || {};
@@ -89,17 +92,20 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.renderSavepoints();
   }
 
-  // 生图适配器切换：两套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生）
+  // 生图适配器切换：三套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生 ↔ ComfyUI 本地）
   function applyImageProviderHint() {
     const sel = $('#s-image-provider');
-    const mm = !!sel && sel.value === 'minimax-image';
-    const hintO = $('#hint-image-openai'), hintM = $('#hint-image-minimax');
-    if (hintO) hintO.classList.toggle('hidden', mm);
+    const v = !!sel && sel.value;
+    const mm = v === 'minimax-image', cy = v === 'comfyui';
+    const hintO = $('#hint-image-openai'), hintM = $('#hint-image-minimax'), hintC = $('#hint-image-comfyui');
+    if (hintO) hintO.classList.toggle('hidden', mm || cy);
     if (hintM) hintM.classList.toggle('hidden', !mm);
-    const base = $('#s-image-base'), model = $('#s-image-model'), params = $('#s-image-params');
-    if (base) base.placeholder = mm ? 'http://127.0.0.1:4320 或 https://api.minimaxi.com' : 'https://…（点这里选，也可自己填）';
-    if (model) model.placeholder = mm ? 'image-01 或 image-01-live' : '填你的生图模型名';
-    if (params) params.placeholder = mm ? 'style.style_type=漫画, style.style_weight=0.8, seed=12345' : 'steps=30, negative_prompt=blurry';
+    if (hintC) hintC.classList.toggle('hidden', !cy);
+    const base = $('#s-image-base'), model = $('#s-image-model'), params = $('#s-image-params'), key = $('#s-image-key');
+    if (base) base.placeholder = cy ? 'http://127.0.0.1:8188' : (mm ? 'http://127.0.0.1:4320 或 https://api.minimaxi.com' : 'https://…（点这里选，也可自己填）');
+    if (model) model.placeholder = cy ? '（ComfyUI 不用填：模型在 workflow 里选）' : (mm ? 'image-01 或 image-01-live' : '填你的生图模型名');
+    if (params) params.placeholder = cy ? '（ComfyUI 的参数都在 workflow 里，这里留空）' : (mm ? 'style.style_type=漫画, style.style_weight=0.8, seed=12345' : 'steps=30, negative_prompt=blurry');
+    if (key) key.placeholder = cy ? '（通常不填：ComfyUI 默认无鉴权，套了反代才填）' : 'sk-…';
   }
 
   function applyAspectToFields() {
@@ -145,8 +151,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.draft.model = $('#s-draft-model').value.trim();
     S.settings.draft.apiKey = $('#s-draft-key').value.trim();
 
-    // 生图适配器选哪个用哪个
-    S.settings.image.provider = $('#s-image-provider').value === 'minimax-image' ? 'minimax-image' : 'openai-images';
+    // 生图适配器选哪个用哪个（非法值归一到 OpenAI 兼容）
+    S.settings.image.provider = ['minimax-image', 'comfyui'].indexOf($('#s-image-provider').value) >= 0
+      ? $('#s-image-provider').value : 'openai-images';
     // 参考图：'prev' 才真的传图，其余一律关闭
     S.settings.image.refMode = $('#s-image-ref').value === 'prev' ? 'prev' : 'off';
     S.settings.image.baseUrl = $('#s-image-base').value.trim();
@@ -156,6 +163,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.image.width = parseInt($('#s-image-width').value, 10) || 1280;
     S.settings.image.height = parseInt($('#s-image-height').value, 10) || 720;
     S.settings.image.extraParams = $('#s-image-params').value.trim();
+    // ComfyUI 专用：workflow JSON 原样保存（解析在适配器里做，坏了会在作画时报人话）
+    S.settings.image.workflow = $('#s-image-workflow').value.trim();
+    S.settings.image.nodes = $('#s-image-nodes').value.trim();
 
     S.settings.video = S.settings.video || {};
     S.settings.video.provider = 'minimax-video';
@@ -244,11 +254,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
     };
     return {
       cfg: {
-        // 生图按面板上选的适配器测
+        // 生图按面板上选的适配器测（comfyui 要带上 workflow / nodes，test 只用地址，出图才用它们）
         provider: t.kind === 'image'
-          ? (($('#s-image-provider') || {}).value === 'minimax-image' ? 'minimax-image' : 'openai-images')
+          ? ((($('#s-image-provider') || {}).value === 'minimax-image' || ($('#s-image-provider') || {}).value === 'comfyui')
+            ? ($('#s-image-provider') || {}).value : 'openai-images')
           : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
         baseUrl: grab(0), apiKey: grab(1), model: grab(2),
+        workflow: t.kind === 'image' ? String((($('#s-image-workflow') || {}).value || '')).trim() : '',
+        nodes: t.kind === 'image' ? String((($('#s-image-nodes') || {}).value || '')).trim() : '',
       },
       inherited,
     };

@@ -32,8 +32,9 @@ const GLOBAL_SETTINGS_IDS = [
   's-draft-base', 's-draft-model', 's-draft-key', 'btn-test-draft', 'test-draft-state',
   's-image-aspect', 'row-image-wh', 's-image-width', 's-image-height',
   's-image-base', 's-image-model', 's-image-key', 's-image-params',
-  // 生图适配器（OpenAI 兼容 / MiniMax 原生）与参考图（subject_reference）开关
-  's-image-provider', 's-image-ref',
+  // 生图适配器（OpenAI 兼容 / MiniMax 原生 / ComfyUI 本地）与参考图（subject_reference）开关；
+  // ComfyUI 专用：workflow JSON 框 + 节点定位覆盖（随 ComfyUI 渠道上线）
+  's-image-provider', 's-image-ref', 's-image-workflow', 's-image-nodes', 'hint-image-comfyui',
   'btn-test-image', 'test-image-state',
   // 生视频模型面板（地址 / 模型 / Key / 自定义参数 + 只读测试连接）
   // 后补：时长 / 分辨率 / 比例的独立控件（用户要求加回；自定义参数改为高级覆盖）

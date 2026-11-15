@@ -1,7 +1,7 @@
 /*
  * 无限阅读 · 适配器层
  * - ChatProviders：剧情对话（AI1）与画师提示词（AI2）共用的对话适配器
- * - ImageProviders：生图适配器（OpenAI 兼容 /images/generations；MiniMax 原生 /v1/image_generation）
+ * - ImageProviders：生图适配器（OpenAI 兼容 /images/generations；MiniMax 原生 /v1/image_generation；ComfyUI 本地 /prompt + 轮询）
  * - VideoProviders：生视频适配器（MiniMax V2「minimax-video」：提交任务 → 轮询取 URL）
  *
  * 全部适配器只依赖浏览器原生 fetch，可在 file:// 或任意静态服务器下运行。
@@ -523,6 +523,97 @@ import { sleep } from './tree.ts';
     return 'data:' + mime + ';base64,' + s;
   }
 
+  /* ---------------- ComfyUI 生图的常量与辅助 ----------------
+   * 出图单次上限与轮询口径（异步任务型，比云端同步接口宽）：
+   *   提交 60s / 单次轮询 30s / 间隔 1.5s / 总上限 10 分钟 / 连续网络错 3 次判失败。
+   * 本地大模型 + 慢显卡可能一张图跑几分钟，3 分钟（云端口径）不够用；
+   * 但总上限要低于作画队列的 20 分钟兜底（painter.js），队列才能先于它前进。 */
+  const COMFY_SUBMIT_TIMEOUT_MS = 60000;
+  const COMFY_POLL_TIMEOUT_MS = 30000;
+  const COMFY_POLL_MS = 1500;
+  const COMFY_TOTAL_TIMEOUT_MS = 10 * 60 * 1000;
+  const COMFY_NETFAIL_MAX = 3;
+
+  /* ComfyUI workflow（API 格式）节点定位：
+   *   采样器（KSampler / KSamplerAdvanced 等）的 inputs.positive / inputs.negative
+   *   是 [nodeId, slot] 链接 → 正 / 负提示词节点不用按 class_type 猜；
+   *   seed 就在采样器自己的 inputs（KSampler 叫 seed，Advanced 叫 noise_seed）；
+   *   宽高在空潜空间节点（EmptyLatentImage / EmptySD3LatentImage…）的 inputs。
+   * 多采样器（SDXL refiner 链）取第一个 = base；要 refiner 生效就手动指定。
+   * 手动覆盖（cfg.nodes，"positive=6, negative=7, seed=3, size=5, randomSeed=off"）
+   * 用 mergeExtraParams 解析（逗号 / 分号 / 换行分隔同生态），优先于自动探测。 */
+  function comfyLocateNodes(wf, nodesRaw) {
+    const ov = mergeExtraParams({}, nodesRaw || '');
+    const out: any = {
+      positive: ov.positive != null ? String(ov.positive) : '',
+      negative: ov.negative != null ? String(ov.negative) : '',
+      seedNode: ov.seed != null ? String(ov.seed) : '',
+      seedKey: '',
+      size: ov.size != null ? String(ov.size) : '',
+      randomSeed: String(ov.randomSeed || ''),
+    };
+    for (const id of Object.keys(wf)) {
+      const n = wf[id];
+      if (!n || typeof n !== 'object' || !n.class_type || !n.inputs) continue;
+      if (/sampler/i.test(n.class_type)) {
+        const pos = Array.isArray(n.inputs.positive) ? String(n.inputs.positive[0]) : '';
+        const neg = Array.isArray(n.inputs.negative) ? String(n.inputs.negative[0]) : '';
+        if (pos && !out.positive) {
+          out.positive = pos;
+          if (!out.seedNode) {
+            out.seedNode = id;
+            out.seedKey = ('seed' in n.inputs) ? 'seed' : (('noise_seed' in n.inputs) ? 'noise_seed' : '');
+          }
+        }
+        if (neg && !out.negative) out.negative = neg;
+      }
+      if (/latentimage/i.test(n.class_type) && !out.size) out.size = id;
+    }
+    // 手动指定了 seed 节点时，seedKey（seed / noise_seed）仍要从该节点身上认出来
+    if (out.seedNode && !out.seedKey) {
+      const sn = wf[out.seedNode];
+      out.seedKey = (sn && sn.inputs && 'seed' in sn.inputs) ? 'seed'
+        : ((sn && sn.inputs && 'noise_seed' in sn.inputs) ? 'noise_seed' : '');
+    }
+    return out;
+  }
+
+  /* ComfyUI 本地 server 默认无鉴权；填了 Key 就一并带上 Authorization——
+   * 套了带鉴权的反向代理、或以后 ComfyUI 给本地加登录（v0.44.0 曾试过 local_web_sso 又回退）时能直接用。 */
+  function comfyHeaders(cfg, json) {
+    const headers: any = {};
+    if (json) headers['Content-Type'] = 'application/json';
+    const key = String((cfg && cfg.apiKey) || '').trim();
+    if (key) headers['Authorization'] = 'Bearer ' + key;
+    return headers;
+  }
+
+  /* 新版 ComfyUI 带 origin 校验中间件（create_origin_only_middleware）：
+   * Host 与 Origin 对不上就 403，日志写 "request with non matching host and origin"。
+   * 放行开关仍是启动参数 --enable-cors-header（不带值 = 允许所有来源）。 */
+  function comfy403Text() {
+    return 'ComfyUI 拒绝了这次跨站请求（HTTP 403）：新版有 origin 校验，启动时加 --enable-cors-header "*" 再试（多半同时要带上这个参数才允许浏览器直连）。';
+  }
+
+  /* /view 回的是二进制图：转 dataURL（下游缩略图 / IndexedDB 存原图同云端 base64 口径，
+   * 不回传 URL——重启 ComfyUI 后 /view 就失效，存档里的图会全挂）。
+   * 浏览器走 FileReader；Node（eval 单测）走 btoa 兜底（分块拼二进制串，两边都有这个全局）。 */
+  async function blobToDataUrl(blob) {
+    if (typeof FileReader !== 'undefined' && FileReader.prototype && typeof FileReader.prototype.readAsDataURL === 'function') {
+      return await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => reject(new Error('读取图片失败'));
+        fr.readAsDataURL(blob);
+      });
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return 'data:' + (blob.type || 'image/png') + ';base64,' + btoa(bin);
+  }
+
+
   const ImageProviders: Record<string, ImageProvider> = {
 
     // OpenAI 兼容 /images/generations：
@@ -717,6 +808,209 @@ import { sleep } from './tree.ts';
         const failed = data.metadata && +data.metadata.failed_count;
         throw new Error('生图接口没有返回图片'
           + (failed ? '（' + failed + ' 张都被内容安全拦截了：改一改这次的画面描述再试）' : '：' + JSON.stringify(data).slice(0, 200)));
+      },
+    },
+
+    /* ComfyUI 本地生图 —— 走官方 HTTP API（aiohttp server，默认 127.0.0.1:8188）：
+     *   POST {Base}/prompt          body { prompt: <workflow API JSON>, client_id } → { prompt_id, node_errors }
+     *   GET  {Base}/history/{id}    任务没跑完回 {}；跑完回 { <id>: { outputs, status } }
+     *   GET  {Base}/view?filename=…&subfolder=…&type=output   取图（二进制）→ dataURL
+     * 与云端同步接口的关键差异：异步任务型（提交 → 轮询 → 取图），在适配器内部包掉，
+     * 对上仍是 generate(cfg, prompt) → dataURL（ARCHITECTURE.md §9 扩展口径：注册 key、保持签名）。
+     * workflow 是「参数」的真源：模型 / 步数 / CFG / 采样器全在用户贴的 API JSON 里，
+     * 适配器只注入三样——正向提示词、seed（默认随机）、宽高（折成 8 的倍数）；
+     * 负向提示词保留 workflow 原文（那是用户在 ComfyUI 里精调的，不覆盖）。
+     * CORS：ComfyUI 默认不带跨域头，浏览器直连会被拦——启动 ComfyUI 时加
+     * --enable-cors-header（或 --enable-cors-header "*"）即可，不需要本地转发。
+     * 取消：只取消本地等待（轮询停止），不打 POST /interrupt——ComfyUI 是共享服务，
+     * 别的窗口 / 队列可能正在用它，替用户打断在跑的任务反而误伤。 */
+    'comfyui': {
+      label: 'ComfyUI 本地（API 格式 workflow）',
+
+      /* 「测试连接」：GET /system_stats（只读、轻量，绝不出图）。
+       * ComfyUI 本身没有模型清单接口，回包里的 devices（显卡名）就是最好的确认信号。 */
+      async test(cfg) {
+        if (!cfg || !String(cfg.baseUrl || '').trim()) return { level: 'fail', message: '还没填接口地址。' };
+        if (!/^https?:\/\//i.test(String(cfg.baseUrl).trim())) {
+          return { level: 'fail', message: '接口地址要以 http:// 或 https:// 开头（通常填 http://127.0.0.1:8188）。' };
+        }
+        let res;
+        try {
+          res = await fetchWithTimeout(trimBase(cfg) + '/system_stats', { method: 'GET', headers: comfyHeaders(cfg, false) });
+        } catch (e) {
+          if (e instanceof TypeError) {
+            return {
+              level: 'fail',
+              message: '连不上：地址不对，或 ComfyUI 没开跨域（默认不开）。启动 ComfyUI 时加 <code>--enable-cors-header "*"</code> 再试。',
+            };
+          }
+          return { level: 'fail', message: friendlyNetwork(e) };
+        }
+        if (res.ok) {
+          let gpu = '';
+          try {
+            const j = await res.json();
+            const d = (j && Array.isArray(j.devices) && j.devices[0]) || {};
+            if (d.name) gpu = '，检测到设备：' + String(d.name).slice(0, 60);
+          } catch (_) {}
+          return { level: 'ok', message: '连接成功：ComfyUI 可达' + gpu + '。这里只读探测，不会出图；workflow 能不能跑要在第一次「作画」时验证。' };
+        }
+        if (res.status === 403) {
+          return { level: 'fail', message: '地址可达，但被 origin 校验拦住了（HTTP 403）：启动 ComfyUI 时加 <code>--enable-cors-header "*"</code> 再试。' };
+        }
+        if (res.status === 404) {
+          return { level: 'warn', message: '地址可达，但 /system_stats 返回 404：这不是标准 ComfyUI 接口（可能套了反代或版本很旧）。' };
+        }
+        return { level: 'warn', message: '地址可达，但探测没通过：' + friendlyStatus(res.status, '') };
+      },
+
+      async generate(cfg, prompt, opts) {
+        if (!cfg || !String(cfg.baseUrl || '').trim()) throw new Error('还没填接口地址（通常填 http://127.0.0.1:8188）。');
+        const text = String(prompt || '').trim();
+        if (!text) throw new Error('提示词是空的：这一张画没有内容可画。');
+        if (!String(cfg.workflow || '').trim()) {
+          throw new Error('还没填 Workflow：ComfyUI 渠道要在设置的「Workflow（API 格式 JSON）」里贴上从 ComfyUI「导出（API 格式）」得到的 JSON。');
+        }
+        let wf: any;
+        try { wf = JSON.parse(String(cfg.workflow)); } catch (e) {
+          throw new Error('Workflow 不是合法 JSON：' + ((e && e.message) ? e.message : String(e)) + '。要用 ComfyUI 菜单「导出（API 格式）」的那份，不是界面另存的 .json 工作流。');
+        }
+        if (!wf || typeof wf !== 'object' || Array.isArray(wf)) throw new Error('Workflow 的形状不对：API 格式是一个以节点 id 为键的对象，请用 ComfyUI 菜单「导出（API 格式）」。');
+
+        // 节点定位（手动覆盖优先，自动探测兜底）
+        const loc = comfyLocateNodes(wf, cfg.nodes);
+        if (!loc.positive) {
+          throw new Error('这个 workflow 里找不到正向提示词节点：自动探测认的是「采样器（KSampler 等）的 positive 输入直连的文本编码节点」。'
+            + '特殊结构请在「节点定位」里手动指定，例如 positive=6。');
+        }
+        const posNode = wf[loc.positive];
+        if (!posNode || !posNode.inputs || !('text' in posNode.inputs)) {
+          throw new Error('正向提示词节点 #' + loc.positive + ' 没有 text 输入（可能是 ConditioningCombine 之类的中转节点）。请在「节点定位」里手动指定真正写提示词的节点 id。');
+        }
+        posNode.inputs.text = text;
+
+        // seed：默认每次随机（每张画不同）；「节点定位」写 randomSeed=off 可保持 workflow 原值
+        if (loc.seedNode && loc.seedKey && loc.randomSeed !== 'off') {
+          wf[loc.seedNode].inputs[loc.seedKey] = Math.floor(Math.random() * 2 ** 47);
+        }
+        // 宽高：注入空潜空间节点（折成 8 的倍数；找不到就不动 workflow 里的）
+        if (loc.size) {
+          const sNode = wf[loc.size];
+          const w = Math.max(64, Math.round((+cfg.width || 1280) / 8) * 8);
+          const h = Math.max(64, Math.round((+cfg.height || 720) / 8) * 8);
+          if (sNode && sNode.inputs) { sNode.inputs.width = w; sNode.inputs.height = h; }
+        }
+
+        const signal = opts && opts.signal ? opts.signal : undefined;
+        // —— 提交 ——
+        let res;
+        try {
+          res = await fetchWithTimeout(trimBase(cfg) + '/prompt', {
+            method: 'POST',
+            headers: comfyHeaders(cfg, true),
+            body: JSON.stringify({ prompt: wf, client_id: 'infinite-reading-' + Math.random().toString(36).slice(2, 10) }),
+            signal,
+          }, COMFY_SUBMIT_TIMEOUT_MS);
+        } catch (e) {
+          if (e instanceof TypeError) {
+            throw new Error('ComfyUI 不允许浏览器直连（CORS）：启动 ComfyUI 时加 --enable-cors-header "*" 再试。');
+          }
+          if (e && e.name === 'TimeoutError') {
+            throw new Error('提交请求 ' + Math.round(COMFY_SUBMIT_TIMEOUT_MS / 1000) + ' 秒没有响应：ComfyUI 可能没在跑。');
+          }
+          throw e;
+        }
+        if (res.status === 403) throw new Error(comfy403Text());
+        if (!res.ok) throw new Error(await readError(res));
+        let data;
+        try { data = await res.json(); } catch (_) {
+          throw new Error('ComfyUI 回包不是 JSON：接口地址可能填错了（要填 API 端口，通常是 http://127.0.0.1:8188）。');
+        }
+        // HTTP 200 也可能带 node_errors（节点缺模型、参数越界都在这里）
+        const errs = data.node_errors || {};
+        const errKeys = Object.keys(errs);
+        if (errKeys.length) {
+          const first = errKeys[0];
+          const detail = (errs[first] && Array.isArray(errs[first].errors) && errs[first].errors[0])
+            ? JSON.stringify(errs[first].errors[0]).slice(0, 200) : '';
+          throw new Error('ComfyUI 拒绝了这个 workflow（节点 #' + first + '）' + (detail ? '：' + detail : '') + '。多半是缺模型或节点参数有问题，在 ComfyUI 界面里跑一遍再导出。');
+        }
+        const promptId = data.prompt_id;
+        if (!promptId) throw new Error('ComfyUI 没返回 prompt_id：' + JSON.stringify(data).slice(0, 200));
+
+        // —— 轮询 /history：空回包 = 还在跑 ——
+        // totalTimeoutMs / pollMs 可由 opts 覆盖（默认常量；单测用来缩短等待，运行时不传）
+        const totalMs = Number(opts && opts.totalTimeoutMs) > 0 ? Number(opts.totalTimeoutMs) : COMFY_TOTAL_TIMEOUT_MS;
+        const pollMs = Number(opts && opts.pollMs) > 0 ? Number(opts.pollMs) : COMFY_POLL_MS;
+        const started = Date.now();
+        let netFails = 0;
+        let outputs = null;
+        for (;;) {
+          if (signal && signal.aborted) {
+            const a: any = new Error('已停止本地等待（ComfyUI 里的任务不受影响，可能仍在跑）');
+            a.name = 'AbortError';
+            throw a;
+          }
+          if (Date.now() - started > totalMs) {
+            throw new Error('等了 ' + Math.round(totalMs / 60000) + ' 分钟还没出图：ComfyUI 可能在排队、显存不足或已经挂起。可在 ComfyUI 界面查看队列。');
+          }
+          let hist;
+          try {
+            const r = await fetchWithTimeout(trimBase(cfg) + '/history/' + encodeURIComponent(String(promptId)), { method: 'GET', headers: comfyHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
+            // 403 是持续性拒绝（来源校验 / 鉴权），重试没意义：标记 fatal 直接冒出去，不计网络错
+            if (r.status === 403) { const fe: any = new Error(comfy403Text()); fe.fatal = true; throw fe; }
+            if (!r.ok) throw new Error(await readError(r));
+            hist = await r.json();
+            netFails = 0;
+          } catch (e) {
+            if (e && e.fatal) throw e;
+            if (signal && signal.aborted) {
+              const a: any = new Error('已停止本地等待（ComfyUI 里的任务不受影响，可能仍在跑）');
+              a.name = 'AbortError';
+              throw a;
+            }
+            netFails += 1;
+            if (netFails >= COMFY_NETFAIL_MAX) {
+              throw new Error('连续 ' + netFails + ' 次查不到结果：ComfyUI 连接断了（' + ((e && e.message) ? e.message : e) + '）。');
+            }
+            await sleep(pollMs);
+            continue;
+          }
+          const rec = (hist && hist[promptId]) || null;
+          if (rec) {
+            const st = String((rec.status && rec.status.status_str) || '').toLowerCase();
+            if (st === 'error') {
+              const msgs = (rec.status && Array.isArray(rec.status.messages)) ? rec.status.messages : [];
+              const err = msgs.map(m => (Array.isArray(m) ? m.join(' ') : String(m))).join('；').slice(0, 200);
+              throw new Error('ComfyUI 执行出错' + (err ? '：' + err : '（界面里看队列详情）') + '。');
+            }
+            if (rec.outputs && Object.keys(rec.outputs).length) { outputs = rec.outputs; break; }
+          }
+          await sleep(pollMs);
+        }
+
+        // —— 取图：outputs 里任何一个节点带 images[] 都算（SaveImage / VHS_…）——
+        let img = null;
+        for (const nid of Object.keys(outputs)) {
+          const arr = outputs[nid] && outputs[nid].images;
+          if (Array.isArray(arr) && arr.length) { img = arr[0]; break; }
+        }
+        if (!img || !img.filename) throw new Error('ComfyUI 说跑完了，但 outputs 里没有图片：检查 workflow 末尾是不是 SaveImage 节点。');
+        let viewRes;
+        try {
+          viewRes = await fetchWithTimeout(
+            trimBase(cfg) + '/view?filename=' + encodeURIComponent(String(img.filename))
+            + '&subfolder=' + encodeURIComponent(String(img.subfolder || ''))
+            + '&type=' + encodeURIComponent(String(img.type || 'output')),
+            { method: 'GET', headers: comfyHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
+        } catch (e) {
+          if (e instanceof TypeError) throw new Error('取图被浏览器拦下（CORS）：启动 ComfyUI 时加 --enable-cors-header "*" 再试。');
+          throw e;
+        }
+        if (viewRes.status === 403) throw new Error(comfy403Text());
+        if (!viewRes.ok) throw new Error(await readError(viewRes));
+        const blob = await viewRes.blob();
+        return await blobToDataUrl(blob);
       },
     },
   };

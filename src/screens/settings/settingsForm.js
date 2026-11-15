@@ -196,6 +196,7 @@ export const GROUPS = [
           { k: 'select', id: 's-image-provider', label: '生图适配器', options: [
             ['openai-images', 'OpenAI 兼容（自动拼 /images/generations）'],
             ['minimax-image', 'MiniMax 原生（/v1/image_generation）'],
+            ['comfyui', 'ComfyUI 本地（API 格式 workflow）'],
           ] },
           { k: 'grid2', items: [
             { k: 'field', id: 's-image-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（可从下拉选）' },
@@ -216,12 +217,15 @@ export const GROUPS = [
                 ['off', '关闭（纯文生图）'], ['prev', '用上一张图（人物 / 画风更连贯）'],
               ] },
               { k: 'field', id: 's-image-params', label: '自定义请求参数（key=value，逗号分隔）', type: 'text', placeholder: 'steps=30, negative_prompt=blurry' },
+              { k: 'field', id: 's-image-workflow', label: 'Workflow（API 格式 JSON，仅 ComfyUI）', type: 'textarea', attrs: { rows: '6', spellcheck: 'false' }, placeholder: '在 ComfyUI 里画好工作流后，菜单「导出（API 格式）」的 JSON 贴到这里。模型 / 步数 / CFG 都以它为准；每次作画只替换正向提示词、随机 seed 和宽高，负向提示词保留你写的原文。' },
+              { k: 'field', id: 's-image-nodes', label: '节点定位（留空自动，仅 ComfyUI）', type: 'text', placeholder: 'positive=6, negative=7, seed=3, size=5, randomSeed=off' },
             ],
           },
           {
             k: 'help', title: '填写说明', nodes: [
               { k: 'text', id: 'hint-image-openai', cls: 'hint', text: '下拉里带「生图」标注的服务商可直接选，地址会自动拼上 /images/generations。尺寸用「比例 + 宽高」自己定（比例选「自定义」即可手填）；不确定的项留空，会走通用默认。画师工作台里也能改尺寸。' },
               { k: 'text', id: 'hint-image-minimax', cls: 'hint hidden', text: 'MiniMax 原生接口：地址填 https://api.minimaxi.com（国内）或 https://api.minimax.io（国外），带不带 /v1 都行；模型填 image-01 或 image-01-live。MiniMax 不给浏览器跨域，直连被拦时先跑 <code>node tools/video-proxy.mjs</code>，地址改填 http://127.0.0.1:4320。<br>尺寸：image-01-live 只认比例，自定义宽高只对 image-01 生效（512–2048 且 8 的倍数）。画风只对 live 生效，写进「自定义请求参数」：style.style_type=漫画（漫画 / 元气 / 中世纪 / 水彩）+ style.style_weight=0.8（0–1）。想更稳再加 seed=12345。' },
+              { k: 'text', id: 'hint-image-comfyui', cls: 'hint hidden', text: 'ComfyUI 本地接口：地址填 http://127.0.0.1:8188（默认端口），模型与 Key 都不用填。<b>跨域</b>：ComfyUI 默认不许浏览器直连，启动时加 <code>--enable-cors-header "*"</code>（新版还有 origin 校验，不加会 403）。<b>Workflow</b>：在 ComfyUI 里把工作流跑通，菜单「导出（API 格式）」得到的 JSON 贴进高级里的 Workflow 框（注意不是另存的普通 .json）。每次作画只替换正向提示词、随机 seed 和宽高，负向提示词保留你在 workflow 里写的原文。<br>自动定位认「采样器的 positive 直连节点 + 空潜空间节点」，特殊结构（refiner 双采样器、提示词中转）用「节点定位」覆盖：positive=6, negative=7, seed=3, size=5，想固定 seed 写 randomSeed=off。出图上限 10 分钟，比云端宽。' },
               { k: 'text', text: '参考图：开启后每次作画会把「上一张图」缩到长边 1024 的 JPEG，作为 subject_reference 交给接口，人物长相 / 服饰 / 画风更连贯，代价是构图更接近上一张。目前只有 MiniMax 原生适配器支持；第一次作画自动跳过。image-01-live 是否接受要实测，被拒会报 2013，改回「关闭」即可。' },
             ],
           },

@@ -302,7 +302,8 @@ import { APP_VERSION } from './version.ts';
       // 模型库：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
       // refMode：'off' = 纯文生图；“'prev' = 把上一张图当参考图（MiniMax subject_reference）
-      image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '', refMode: 'off' },
+      // workflow / nodes：ComfyUI 专用——API 格式 workflow JSON 与可选的节点定位覆盖（其余渠道不读）
+      image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '', refMode: 'off', workflow: '', nodes: '' },
       // 生视频（MiniMax V2「minimax-video」）：异步任务。
       // 时长 / 分辨率 / 比例以面板控件为唯一来源；extraParams 只补其它键。
       video: {
