@@ -544,6 +544,12 @@
   font-size: 13px;
   letter-spacing: .24em;
 }
+/* 作画中：空状态让位给纸墨显影动画，铺满舞台并盖过舞台暗角（自身带纸面暗角） */
+.stage-empty.is-painting {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
 /* 舞台空状态引导：出现时淡入（走动效等级：off 不动，standard / rich 同一档淡入）；
    有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
 html[data-motion="standard"] .stage-empty,

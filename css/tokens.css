@@ -106,6 +106,17 @@
   --loop-inf:      5.5s;      /* 色带流过整个符号一圈的时长 */
   --loop-inf-step: .14s;      /* 每列的相位步长（由首页状态桥按 --x 错相） */
 
+  /* 作画中的纸墨显影（舞台空状态；逐字墨色在组件脚本里，画布内容不算 UI 配色） */
+  --ink-paper-bg:
+    radial-gradient(ellipse 58% 88% at 40% 47%, rgba(168, 181, 184, .16) 0%, rgba(168, 181, 184, 0) 72%),
+    radial-gradient(ellipse 38% 56% at 78% 30%, rgba(166, 190, 204, .12) 0%, rgba(166, 190, 204, 0) 74%),
+    radial-gradient(ellipse 46% 60% at 62% 74%, rgba(196, 195, 184, .14) 0%, rgba(196, 195, 184, 0) 76%),
+    linear-gradient(166deg, #FBFAF6 0%, #F6F4ED 56%, #F1EFE7 100%);
+  --ink-grain:      radial-gradient(rgba(41, 55, 64, .14) 0.4px, transparent 0.55px);
+  --ink-vignette:
+    radial-gradient(ellipse 108% 104% at 50% 44%, rgba(45, 54, 58, 0) 58%, rgba(45, 54, 58, .055) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, .28) 0%, rgba(255, 255, 255, 0) 18%);
+
   /* 环境光（仅 data-motion="rich"）：白底上的极淡蓝，alpha ≤ .08 */
   --ambient-glow:
     radial-gradient(60% 50% at 30% 35%, rgba(37, 99, 235, .08), rgba(37, 99, 235, 0) 70%),

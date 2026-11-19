@@ -16,11 +16,17 @@
    * readmodel.js（JSON.stringify 转义见书架屏），组件不拼样式串。 */
   import Icon from '../../ui/Icon.svelte';
   import ChatBubble from './ChatBubble.svelte';
+  import PaintInk from './PaintInk.svelte';
   import { read } from './read.svelte.js';
   import { A as appApi } from '../../app/core.js';
   import { onActivate } from '../../ui/a11y.js';
+  import { onMount } from 'svelte';
 
   const A = () => appApi;
+
+  // 作画中的纸墨显影：队列非空（#gen-status 摘掉 hidden）且舞台还没有图（#stage-empty 未 hidden）
+  // 时才挂载。两个 class 都由命令式代码直接改（painter.js / render.js），这里只观察、不反向写。
+  let inkActive = $state(false);
 
   // 「开始第一幕」：与旧 renderOpeningHint 的按钮闭包同语义
   function runOpening() {
@@ -45,6 +51,23 @@
     a.renderStage();
     a.renderThumbs();
   }
+
+  // 观察两个由命令式代码维护的 class，决定舞台空状态是「点 🎨 画一张」还是纸墨显影
+  onMount(() => {
+    const pill = document.getElementById('gen-status');
+    const empty = document.getElementById('stage-empty');
+    if (!pill || !empty) return;
+
+    const sync = () => {
+      inkActive = !pill.classList.contains('hidden') && !empty.classList.contains('hidden');
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(pill, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(empty, { attributes: true, attributeFilter: ['class'] });
+    sync();
+
+    return () => observer.disconnect();
+  });
 </script>
 
 <div id="chat-pane" class="chat-pane">
@@ -126,7 +149,13 @@
     <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
     <img id="stage-img" class="stage-img hidden" alt="">
     <video id="stage-video" class="stage-video hidden" controls playsinline loop muted></video>
-    <div id="stage-empty" class="stage-empty">点 <Icon name="palette" class="ic-in" /> 为当前场景画一张</div>
+    <div id="stage-empty" class="stage-empty" class:is-painting={inkActive}>
+      {#if inkActive}
+        <PaintInk />
+      {:else}
+        点 <Icon name="palette" class="ic-in" /> 为当前场景画一张
+      {/if}
+    </div>
     <span id="gen-status" class="pill stage-pill hidden"></span>
     <span id="video-status" class="pill stage-pill stage-pill-video hidden"></span>
     <button id="btn-video-cancel" class="ui-btn mini video-cancel hidden" type="button" title="只停止本地等待；云端任务可能已计费">取消等待</button>
