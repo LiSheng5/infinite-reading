@@ -107,8 +107,8 @@
 <div id="app">
 
   <!-- ========== 开始页（应用入口） ==========
-       顶部是 ASCII 无限符号（src/screens/home 把每个字符包成 span，做深蓝 → 浅蓝的循环；
-       没有 JS 时就是同一份字符画的静态深蓝版本，构建期注入）；
+       顶部是只留符号的双纽线主视觉（src/screens/home/InfinityStage.svelte：canvas 逐字粒子）；
+       没有 JS 时 index.html 的兜底仍是同一份 ASCII 字符画的静态深蓝版本，构建期注入；
        三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
     <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）。

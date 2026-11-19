@@ -360,8 +360,10 @@ async function main() {
     eq(owners.join(' '), artFile, '字符画只在 art.js 里写一次');
 
     const home = read('src/screens/home/HomeScreen.svelte');
-    ok(home.indexOf("from './art.js'") >= 0 && /HOME_ART\.map\(/.test(home),
-      '首页组件从 art.js 取字符画（不再自带 ART 常量）');
+    ok(home.indexOf("from './InfinityStage.svelte'") >= 0 && home.indexOf('<InfinityStage') >= 0,
+      '首页主视觉用 InfinityStage（双纽线光流）组件');
+    ok(home.indexOf('<pre class="inf"') < 0,
+      '首页组件不再渲染 ASCII 字符画（字符画只留给无 JS 兜底）');
 
     ok(read('index.html').indexOf('<!--IR_HOME_ART-->') >= 0, 'index.html 的无 JS 兜底只留占位');
 
