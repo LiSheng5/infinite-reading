@@ -188,6 +188,10 @@
   <div id="modal-card" class="modal hidden">
   </div>
 
+  <!-- ========== 接入模型配置向导（首次启动自动弹出；设置里可重开） ========== -->
+  <div id="modal-connect" class="modal hidden">
+  </div>
+
     <!-- ========== 设置（模型 / 辅助模型 / 画面 / 工具与服务 / 数据 / 外观 / 当前故事） ==========
        版式原则：每个分组只露「必填 + 常改」的字段；高级参数、长说明、单独配置一律折进 <details>
        （src/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。分组由 settingsForm.js 的 GROUPS 直接渲染，不再按 legend 文字归类。 -->

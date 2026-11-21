@@ -325,6 +325,11 @@ import { APP_VERSION } from './version.ts';
       },
       showReasoning: true,
       toolsEnabled: 'on',
+      // 接入方式（接入向导写入）：'direct' = 厂商直连（默认）；'aggregate' = 聚合模式，
+      // 对话内容与 API Key 会经 connectionVia 那家第三方聚合商转发到模型厂商（界面上常驻警示徽章）
+      connectionMode: 'direct',
+      connectionVia: '',       // 聚合模式的运营方显示名（如 OpenRouter）；直连为空
+      setupSeen: false,        // 接入向导看过 / 完成过 = true（首次启动自动弹出的判据）
       noTools: [],            // 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
       stylePreset: 'anime',   // 视觉设定卡之前的兜底画风
       styleCustom: '',
@@ -570,6 +575,18 @@ import { APP_VERSION } from './version.ts';
           if (m) { out.image.width = +m[1]; out.image.height = +m[2]; out.image.aspect = 'custom'; }
         }
         delete out.image.size;
+      },
+    },
+    // 接入向导写入的接入方式标记（幂等归一）：非法值一律回「厂商直连」
+    {
+      since: '接入向导',
+      what: '接入方式 connectionMode / connectionVia + 向导已看标记 setupSeen（非法值回默认）',
+      when: () => true,
+      apply: ({ raw, out, d }) => {
+        out.connectionMode = raw.connectionMode === 'aggregate' ? 'aggregate' : d.connectionMode;
+        out.connectionVia = (out.connectionMode === 'aggregate' && typeof raw.connectionVia === 'string')
+          ? raw.connectionVia.trim().slice(0, 40) : '';
+        out.setupSeen = !!raw.setupSeen;
       },
     },
   ];

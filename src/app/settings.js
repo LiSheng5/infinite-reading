@@ -90,6 +90,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     renderStoryPanels();
     renderInjectHint();
     A.renderSavepoints();
+    A.renderConnBadge();        // 聚合模式常驻徽章（直连时藏起来）
+    A.bindModelLists();
+    A.refreshModelDatalists();  // 模型输入框的 datalist 自动回填（拉不到就留空，手填兜底）
   }
 
   // 生图适配器切换：三套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生 ↔ ComfyUI 本地）
@@ -300,6 +303,31 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   // 不内置任何服务商预设：Base URL / 模型名 / 参数全部由用户手填，
   // 避免厂商与模型名每天变动、项目疲于维护（通用 OpenAI 兼容适配器已覆盖所有接口）。
+  // （接入向导上线后 Base URL 有厂商速选、模型列表有 /models 自动回填；模型名仍不内置。）
+
+  /* ---------- 聚合模式：设置页顶部常驻徽章 + 一键切回直连 ----------
+   * connectionMode='aggregate' 时对话内容与 API Key 会经 connectionVia 那家第三方聚合商转发
+   * （浏览器 → 聚合商 → 模型厂商），所以徽章常驻说清「经谁转发」，不折进帮助里。 */
+  function renderConnBadge() {
+    const box = $('#conn-badge');
+    if (!box) return;
+    const agg = S.settings.connectionMode === 'aggregate';
+    box.classList.toggle('hidden', !agg);
+    const t = $('#conn-badge-text');
+    if (t && agg) t.textContent = '聚合模式 · 对话经由 ' + (S.settings.connectionVia || '第三方聚合商') + ' 转发';
+  }
+
+  function switchConnDirect() {
+    if (S.settings.connectionMode !== 'aggregate') { toast('现在就是厂商直连'); return; }
+    S.settings.connectionMode = 'direct';
+    S.settings.connectionVia = '';
+    // 聚合商的地址 / Key / 模型一并清掉：留着请求还会继续往第三方发，「切回直连」就名不副实
+    S.settings.chat = Object.assign({}, S.settings.chat, { baseUrl: '', apiKey: '', model: '' });
+    saveAll();
+    syncSettingsToForm();
+    toast('已切回直连：聚合商的地址与 Key 已清空，重新选一家厂商填 Key 就好');
+    A.openConnectWizard();   // 顺手重走向导，最快把直连配回来
+  }
 
   /* ================= 故事记忆面板（世界卡 / 摘要栈 / 留痕 / 模式） ================= */
 
@@ -616,5 +644,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
     toast('已更新画风备注（v' + card.version + '）：只影响画面气质，剧情事实仍由世界卡与剧情决定', false, true);
   }
 
-  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderStoryPanels, worldFormChanged, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
+  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderConnBadge, switchConnDirect, renderStoryPanels, worldFormChanged, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
 

@@ -55,6 +55,14 @@ export const VIDEO_BASE_OPTIONS = [
   ['https://api.minimax.io', '国外 · MiniMax（生视频 · V2）'],
 ];
 
+// —— 聚合模式的聚合商预设（接入向导用）：地址与 BASE_URL_OPTIONS 同源，只补「运营方」显示名 ——
+// 聚合模式 = 走现成第三方聚合商中转（浏览器 → 聚合商 → 模型厂商），不是自建网关；
+// 向导在选择卡片上写明知情警示（谁中转 / 过什么内容 / 链路怎么走）。
+export const AGGREGATORS = [
+  { via: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+  { via: '硅基流动 SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1' },
+];
+
 // —— 「测试连接」一行：按钮在左、结果文字在右。
 // id 以 id: '…' 字面量键值出现（不拼接）：eval/settings-ids-test.js 静态扫描这份配置的 id 真源，任一侧缺 id 即红。
 const testRow = (ids, hint) => ({
@@ -73,8 +81,9 @@ export const GROUPS = [
         nodes: [
           { k: 'grid2', items: [
             { k: 'field', id: 's-chat-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（可从下拉选服务商）' },
-            { k: 'field', id: 's-chat-model', label: '模型', type: 'text', placeholder: '填你的模型名' },
+            { k: 'field', id: 's-chat-model', label: '模型', type: 'text', list: 'dl-model-chat', placeholder: '填你的模型名（拉到列表后可下拉选）' },
           ] },
+          { k: 'datalist', id: 'dl-model-chat' },
           { k: 'field', id: 's-chat-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           testRow({ id: 'btn-test-chat', stateId: 'test-chat-state' }, '只探测，不生成内容。'),
           {
@@ -87,7 +96,7 @@ export const GROUPS = [
           },
           {
             k: 'help', title: '填写说明', nodes: [
-              { k: 'text', text: 'Base URL 通常以 /v1 结尾，点输入框会列出常见服务商；模型名去服务商控制台的「模型广场 / 文档」复制，注意大小写。不内置模型名，省得跟着厂商变动一直维护。' },
+              { k: 'text', text: 'Base URL 通常以 /v1 结尾，点输入框会列出常见服务商。填好地址与 Key 后会自动拉取服务商的模型列表（模型框点开可选，也可手填）；拉不到就去服务商控制台的「模型广场 / 文档」复制模型名，注意大小写。不内置模型名，省得跟着厂商变动一直维护。' },
               { k: 'text', text: 'API Key 只保存在你浏览器本地，不会上传到别处。' },
             ],
           },
@@ -106,8 +115,9 @@ export const GROUPS = [
             { k: 'text', id: 'mp-title', cls: 'hint mp-title' },
             { k: 'grid2', items: [
               { k: 'field', id: 'mp-name', label: '名称（自己认得出就行）', type: 'text', placeholder: '例如：便宜的 / 聪明的' },
-              { k: 'field', id: 'mp-model', label: '模型', type: 'text', placeholder: '填你的模型名' },
+              { k: 'field', id: 'mp-model', label: '模型', type: 'text', list: 'dl-model-mp', placeholder: '填你的模型名（拉到列表后可下拉选）' },
             ] },
+            { k: 'datalist', id: 'dl-model-mp' },
             { k: 'field', id: 'mp-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（留空 = 沿用默认主模型）' },
             { k: 'field', id: 'mp-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用默认主模型；已保存的 Key 不回显' },
             { k: 'text', id: 'mp-key-state', cls: 'hint' },
@@ -140,8 +150,9 @@ export const GROUPS = [
             k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
               { k: 'grid2', items: [
                 { k: 'field', id: 's-painter-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
-                { k: 'field', id: 's-painter-model', label: '模型', type: 'text', placeholder: '留空 = 沿用剧情模型' },
+                { k: 'field', id: 's-painter-model', label: '模型', type: 'text', list: 'dl-model-painter', placeholder: '留空 = 沿用剧情模型' },
               ] },
+              { k: 'datalist', id: 'dl-model-painter' },
               { k: 'field', id: 's-painter-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-painter', stateId: 'test-painter-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
@@ -159,8 +170,9 @@ export const GROUPS = [
             k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
               { k: 'grid2', items: [
                 { k: 'field', id: 's-scribe-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
-                { k: 'field', id: 's-scribe-model', label: '模型', type: 'text', placeholder: '留空 = 沿用剧情模型' },
+                { k: 'field', id: 's-scribe-model', label: '模型', type: 'text', list: 'dl-model-scribe', placeholder: '留空 = 沿用剧情模型' },
               ] },
+              { k: 'datalist', id: 'dl-model-scribe' },
               { k: 'field', id: 's-scribe-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-scribe', stateId: 'test-scribe-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
@@ -175,8 +187,9 @@ export const GROUPS = [
             k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
               { k: 'grid2', items: [
                 { k: 'field', id: 's-draft-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
-                { k: 'field', id: 's-draft-model', label: '模型', type: 'text', placeholder: '留空 = 沿用剧情模型' },
+                { k: 'field', id: 's-draft-model', label: '模型', type: 'text', list: 'dl-model-draft', placeholder: '留空 = 沿用剧情模型' },
               ] },
+              { k: 'datalist', id: 'dl-model-draft' },
               { k: 'field', id: 's-draft-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-draft', stateId: 'test-draft-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
@@ -200,8 +213,9 @@ export const GROUPS = [
           ] },
           { k: 'grid2', items: [
             { k: 'field', id: 's-image-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（可从下拉选）' },
-            { k: 'field', id: 's-image-model', label: '模型', type: 'text', placeholder: '填你的生图模型名' },
+            { k: 'field', id: 's-image-model', label: '模型', type: 'text', list: 'dl-model-image', placeholder: '填你的生图模型名（拉到列表后可下拉选）' },
           ] },
+          { k: 'datalist', id: 'dl-model-image' },
           { k: 'field', id: 's-image-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           { k: 'select', id: 's-image-aspect', label: '比例', options: [
             ['16:9', '16:9 横屏'], ['9:16', '9:16 竖屏'], ['1:1', '1:1 方形'], ['custom', '自定义'],
@@ -238,8 +252,9 @@ export const GROUPS = [
           { k: 'datalist', id: 'dl-video-base', options: VIDEO_BASE_OPTIONS },
           { k: 'grid2', items: [
             { k: 'field', id: 's-video-base', label: '接口地址 Base URL', type: 'text', list: 'dl-video-base', placeholder: 'https://api.minimaxi.com 或 https://api.minimax.io' },
-            { k: 'field', id: 's-video-model', label: '模型', type: 'text', placeholder: '填你的生视频模型名' },
+            { k: 'field', id: 's-video-model', label: '模型', type: 'text', list: 'dl-model-video', placeholder: '填你的生视频模型名（拉到列表后可下拉选）' },
           ] },
+          { k: 'datalist', id: 'dl-model-video' },
           { k: 'field', id: 's-video-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           { k: 'grid2', items: [
             { k: 'field', id: 's-video-duration', label: '时长（秒）', type: 'number', attrs: { min: '4', max: '15', step: '1', value: '5' } },

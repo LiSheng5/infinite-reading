@@ -58,7 +58,7 @@ import { sleep } from './tree.ts';
       return '请求超时（' + Math.round((Number(e.timeoutMs) || PROBE_TIMEOUT_MS) / 1000) + ' 秒）：接口一直没有响应，稍后再试一次。';
     }
     if (e && (e.name === 'AbortError' || /abort/i.test(msg))) return '连接超时（' + Math.round(PROBE_TIMEOUT_MS / 1000) + ' 秒）：地址不可达，或被网络 / 代理挡住了。';
-    if (e instanceof TypeError) return '连不上这个地址：可能是 Base URL 写错、断网，或该接口不允许浏览器直连（CORS）。';
+    if (e instanceof TypeError) return '连不上这个地址：可能是 Base URL 写错、断网，或该接口不允许浏览器直连（CORS）。对策：换一家允许浏览器直连的服务商；或自己起一个本地反向代理把请求转过去，Base URL 填代理地址（MiniMax 生图 / 生视频可直接跑 node tools/video-proxy.mjs）。';
     return '请求失败：' + (msg || '未知错误');
   }
 
@@ -103,7 +103,9 @@ import { sleep } from './tree.ts';
   }
 
   // GET /models：只读、免费。返回 { ok, status, detail, noEndpoint, models }
-  async function probeModels(cfg) {
+  // 导出给接入向导与设置页「模型列表自动回填」用（此前只在 test() 里校验、拉完即弃）；
+  // 模型名只来自这里或用户手填——任何预设都不硬编码模型名（厂商模型名变动频繁）。
+  export async function probeModels(cfg) {
     const headers = {};
     if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
     const res = await fetchWithTimeout(trimBase(cfg) + '/models', { method: 'GET', headers });

@@ -280,10 +280,11 @@ async function main() {
 
     const modalDir = path.join(ROOT, 'src', 'screens', 'modal');
     // 弹窗清单以挂载表为真源（该目录下还有 CharRows / Textarea 这类内容片段，不算外壳使用者）
+    // 11 = 10 个既有弹窗 + 接入向导 ConnectWizardModal（新增弹窗时同步改这里）
     const modalComps = [...read('src/screens/modal/index.js').matchAll(/from '\.\/(\w+Modal)\.svelte'/g)].map((m) => m[1]);
-    eq(modalComps.length, 10, '10 个弹窗组件都在挂载表里');
+    eq(modalComps.length, 11, '11 个弹窗组件都在挂载表里');
     const notUsing = modalComps.filter((n) => read('src/screens/modal/' + n + '.svelte').indexOf("from '../../ui/ModalCard.svelte'") < 0);
-    ok(notUsing.length === 0, '10 个弹窗都用同一份 ModalCard' + (notUsing.length ? '：' + notUsing.join('、') : ''));
+    ok(notUsing.length === 0, '11 个弹窗都用同一份 ModalCard' + (notUsing.length ? '：' + notUsing.join('、') : ''));
     ok(!fs.existsSync(path.join(modalDir, 'Card.svelte')), '旧骨架 src/screens/modal/Card.svelte 已删');
 
     const settings = stripComments(read('src/screens/settings/SettingsScreen.svelte'));
@@ -329,7 +330,7 @@ async function main() {
       for (const m of code.matchAll(/mountScreen\('([\w-]+)'/g)) ids.push(m[1]);
       for (const m of code.matchAll(/^\s*\['([\w-]+)', /gm)) ids.push(m[1]);   // 弹窗挂载表
     }
-    eq(ids.length, 16, '挂载点共 16 个（6 屏 + 10 个弹窗）');
+    eq(ids.length, 17, '挂载点共 17 个（6 屏 + 11 个弹窗）');
     eq(new Set(ids).size, ids.length, '挂载点没有重复 id');
     const html = read('index.html');
     const missing = ids.filter((id) => html.indexOf('id="' + id + '"') < 0);

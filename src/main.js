@@ -35,6 +35,8 @@ import './app/readmodel.js';
 import './app/layout.js';
 import './app/settings.js';
 import './app/prefsui.js';
+import './app/modelLists.js';
+import './app/connect.js';
 
 // —— 3：各屏（首页 / 设置 / 本对话设置 / 书架 / 阅读页 / 分支页 / 弹窗内容）——
 import './screens/home/index.js';

@@ -17,7 +17,7 @@
  *   #app > #app-modals(display:contents) > #modal-shell-host(display:contents) > #modal-*
  * 两层 display:contents 都不生成盒子 → 不产生新的包含块 / 层叠上下文 / 布局盒，
  * 弹窗仍是 `position:absolute; inset:0` 相对 #app，尺寸与绘制顺序与搬之前逐字节一致。
- * 11 个弹窗的顺序保持 index.html 里的原顺序（MODAL_IDS 就是这个顺序），内部 DOM 一行不改。
+ * 12 个弹窗的顺序保持 index.html 里的原顺序（MODAL_IDS 就是这个顺序），内部 DOM 一行不改。
  *
  * 原样保留的语义（逐条对齐迁移前实现）：
  *   · 层级：打开时 z-index = 30 + 栈深（首层 31）；关闭时清空并重排剩下几层（30 + i + 1）。
@@ -40,10 +40,10 @@ import { runTransition, transitionSpec, supportsVT, vtDisabled } from './viewTra
 // 应用层注册表（循环依赖是安全的：只在 dismissModal 被调用时读，eval 期不取值）
 import { A as appApi } from '../app/core.js';
 
-/** 11 个弹窗（顺序 = index.html 里的 DOM 顺序，搬进外壳时按它排，别改成字母序） */
+/** 12 个弹窗（顺序 = index.html 里的 DOM 顺序，搬进外壳时按它排，别改成字母序） */
 export const MODAL_IDS = [
   'modal-new', 'modal-wizard', 'modal-import-text', 'modal-export', 'modal-painter',
-  'modal-anchor', 'modal-card', 'modal-settings', 'modal-confirm',
+  'modal-anchor', 'modal-card', 'modal-connect', 'modal-settings', 'modal-confirm',
   'modal-email', 'modal-payment',
 ];
 
@@ -76,7 +76,7 @@ export function shellInstalled() {
 }
 
 /**
- * 安装外壳：把 index.html 里的 11 个弹窗整块搬进壳层。
+ * 安装外壳：把 index.html 里的 12 个弹窗整块搬进壳层。
  * 幂等；DOM 不在（极早期 / 单测环境）时什么都不做，弹窗照原样留在 #app 下。
  * @returns {HTMLElement|null} 壳层根
  */

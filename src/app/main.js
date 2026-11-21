@@ -308,6 +308,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (A.sidecarReady()) A.saveFeatureConfig();    // 安全项真源在侧车：单独同步一次
     };
 
+    // —— 接入向导 / 聚合模式徽章 ——
+    const openConnect = $('#btn-open-connect');
+    if (openConnect) openConnect.onclick = () => A.openConnectWizard();
+    const connDirect = $('#btn-conn-direct');
+    if (connDirect) connDirect.onclick = () => A.switchConnDirect();
+    A.bindConnectWizard();   // 向导内部按钮（三选一 / 上下一步 / 拉模型列表 / 测试连接）
+
     // —— 可选本地服务：探测 / 功能入口 / 安排与台账 ——
     const probeBtn = $('#btn-sidecar-probe');
     if (probeBtn) probeBtn.onclick = () => {
@@ -417,7 +424,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         if (ev.target !== el) return;
         if (modalStack[modalStack.length - 1] !== id) return;
         // 功能类弹窗（尤其设置 / 邮件 / 支付）里填了一半的内容，误点遮罩不该丢
-        if (id === 'modal-settings' || id === 'modal-email' || id === 'modal-payment' || id === 'modal-wizard') return;
+        if (id === 'modal-settings' || id === 'modal-email' || id === 'modal-payment' || id === 'modal-wizard' || id === 'modal-connect') return;
         dismissModal(id);
       });
     });
@@ -468,6 +475,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.renderShelf();
     A.initStorageGuard().then(A.renderStoragePanel);   // 申请持久化 + 刷新存储面板
     A.remindBackupIfNeeded();                        // 7 天没备份就提醒一次
+    A.maybeOpenConnectWizard();                      // 首次启动（还没接入过）自动弹接入向导
   }
 
   // 先进 boot（装载 IndexedDB / 把 localStorage 旧数据迁过来），再进界面。

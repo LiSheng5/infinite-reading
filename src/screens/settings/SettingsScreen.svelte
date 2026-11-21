@@ -26,6 +26,15 @@
     {#each BASE_URL_OPTIONS as opt}<option value={opt[0]}>{opt[1]}</option>{/each}
   </datalist>
 
+  <!-- 接入状态行：接入向导入口（随时重走）+ 聚合模式常驻警示徽章（一键切回直连） -->
+  <div class="conn-row">
+    <button id="btn-open-connect" class="ui-btn mini" type="button">接入向导</button>
+    <div id="conn-badge" class="conn-badge hidden">
+      <span id="conn-badge-text"></span>
+      <button id="btn-conn-direct" class="ui-btn mini" type="button">切回直连</button>
+    </div>
+  </div>
+
   <div class="set-shell" id="set-shell">
     <nav class="set-nav" id="set-nav" aria-label="设置分组">
       {#each GROUPS as g}
@@ -55,3 +64,22 @@
     </div>
   </div>
 </ModalCard>
+
+<style>
+  /* 接入状态行：向导入口 + 聚合模式琥珀色警示徽章（.hidden 是全局 !important，照样藏得住） */
+  .conn-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .conn-badge {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 5px 12px;
+    border: 1px solid var(--warn-line);
+    border-radius: 999px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+</style>
