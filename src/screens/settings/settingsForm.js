@@ -18,6 +18,16 @@
  *                          /「填写说明」长说明
  *   details / datalist / inline-num / nodes —— 通用 details、datalist、行内数字（每 N 回合…）、裸节点列表
  *
+ * 块级折叠（fold）：低频可选功能整块收成一行（渲染成 details.adv.opt-fold）。
+ *   fold.auto  —— 自动展开规则（语法同 adv 的 data-auto 并扩展）：
+ *                 'filled'              块内任一文本 / 数字 / 密码 / 输入非空（不含 .role-tools）
+ *                 'filled:#a,#b'        指定控件任一非空（有默认值的控件不算「配置过」时用它）
+ *                 'checked:#a,#b'       指定勾选框任一勾上；'#s-id' 是它的单控件简写
+ *                 以上用 | 连接 = 任一成立
+ *   fold.on    —— 状态标签（tagOn / tagOff）用的规则；与 auto 分开：
+ *                 「已启用」只看启用开关，「配置过就展开」看 auto（两者不是一回事）
+ *   opt: true  —— 标题旁挂「可选」小标签
+ *
  * 文案里允许 <b> <code> <br> 三种行内标记（Inline.svelte 解析）；用户 / 模型内容永不进这里。
  */
 
@@ -63,10 +73,69 @@ export const AGGREGATORS = [
   { via: '硅基流动 SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1' },
 ];
 
+/* —— 接入向导第二步的外链：「去 xxx 获取 Key」 ——
+ * 键 = Base URL（已归一：小写、去末尾斜杠），值 = 该厂商官方控制台的 Key 管理页。
+ * 收录标准只有一条：**能从厂商官方文档 / 官方网站核实**。核实不了的厂商不放——界面上不显示
+ * 链接而已；错链接把人送去钓鱼站，比没有链接糟得多。每条后面的注释就是核实来源。
+ * 本地地址（localhost / 127.0.0.1）与自定义地址永远不显示（本地没有「厂商控制台」）。 */
+export const VENDOR_KEY_URLS = {
+  // 智谱官方文档《HTTP API 调用》「获取 API Key」给的密钥管理页
+  'https://open.bigmodel.cn/api/paas/v4': 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+  // 阿里云百炼帮助中心《获取与配置 API Key》：华北2（北京）的 API Key 页面
+  'https://dashscope.aliyuncs.com/compatible-mode/v1': 'https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key',
+  // DeepSeek API 文档（api-docs.deepseek.com）指向 platform.deepseek.com/api_keys
+  'https://api.deepseek.com/v1': 'https://platform.deepseek.com/api_keys',
+  // Kimi 开放平台文档《快速开始》「获取 API Key」：platform.kimi.com/console/api-keys
+  'https://api.moonshot.cn/v1': 'https://platform.kimi.com/console/api-keys',
+  // 硅基流动文档《快速上手》「创建 API Key」：cloud.siliconflow.cn/account/ak
+  'https://api.siliconflow.cn/v1': 'https://cloud.siliconflow.cn/account/ak',
+  // OpenAI：API 密钥在 platform 的 API keys 页管理（帮助中心「管理项目 → API 密钥」同址）
+  'https://api.openai.com/v1': 'https://platform.openai.com/api-keys',
+  // Gemini API 文档《使用 Gemini API 密钥》：密钥在 Google AI Studio 的 API 密钥页创建
+  'https://generativelanguage.googleapis.com/v1beta/openai': 'https://aistudio.google.com/apikey',
+  // 火山方舟文档《获取 API Key 并配置》：控制台左下角「API Key 管理」（只核实到控制台入口，未核实深链）
+  'https://ark.cn-beijing.volces.com/api/v3': 'https://console.volcengine.com/ark',
+  // MiniMax 文档《前置准备》：登录开放平台后用「接口密钥」创建（只核实到平台入口，未核实深链）
+  'https://api.minimaxi.com': 'https://platform.minimaxi.com/',
+  'https://api.minimax.io': 'https://platform.minimax.io/',
+};
+
+// 本地地址（Ollama / LM Studio / vLLM / ComfyUI / 本地转发）：没有厂商控制台，不给外链
+const LOCAL_BASE_RE = /^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i;
+
+// —— 地址命中判定（末尾斜杠 / 大小写不敏感）：「算不算聚合商 / 预设」全仓只认这一套 ——
+// 设置表单的手填地址与向导的分支预判共用它，两条路径的结果才不会打架。
+const normBase = (u) => String(u || '').trim().replace(/\/+$/, '').toLowerCase();
+
+/** 命中聚合商 → 返回 AGGREGATORS 条目（带 via 显示名）；不命中 → null */
+export function matchAggregator(base) {
+  const n = normBase(base);
+  return n ? (AGGREGATORS.find((a) => normBase(a.baseUrl) === n) || null) : null;
+}
+
+/** 命中厂商预设（BASE_URL_OPTIONS）→ 返回 [baseUrl, label] 条目；不命中 → null */
+export function matchBaseUrlOption(base) {
+  const n = normBase(base);
+  return n ? (BASE_URL_OPTIONS.find((o) => normBase(o[0]) === n) || null) : null;
+}
+
+/** 命中已核实的厂商密钥页 → 返回官方控制台 URL；本地 / 自定义 / 未收录 → ''（界面不显示链接） */
+export function vendorKeyUrl(base) {
+  const n = normBase(base);
+  if (!n || LOCAL_BASE_RE.test(n)) return '';
+  return VENDOR_KEY_URLS[n] || '';
+}
+
+/** 厂商显示名（「去 xxx 获取 Key」的 xxx）：取预设标签「·」后的名字，去掉括号里的补充说明 */
+export function vendorKeyName(base) {
+  const hit = matchBaseUrlOption(base);
+  return hit ? String(hit[1]).replace(/^[^·]*·\s*/, '').replace(/（.*$/, '').trim() : '';
+}
+
 // —— 「测试连接」一行：按钮在左、结果文字在右。
 // id 以 id: '…' 字面量键值出现（不拼接）：eval/settings-ids-test.js 静态扫描这份配置的 id 真源，任一侧缺 id 即红。
 const testRow = (ids, hint) => ({
-  k: 'test', ...ids, text: '测试连接', icon: 'bolt', hint,
+  k: 'test', ...ids, text: '重新测试', icon: 'bolt', hint,
 });
 
 /* ================= 分组 → 分块 → 字段 ================= */
@@ -76,14 +145,38 @@ export const GROUPS = [
     id: 'g-models', title: '模型',
     blocks: [
       {
-        legend: '剧情对话模型',
-        sub: '旁白与角色都由它来写，新对话默认用它。任何兼容 OpenAI 格式的接口都能接（云端 / 本地）。',
+        // 概览：六行「角色 → 现在用什么模型」，每行左侧状态点（内存态，刷新回灰色），
+        // 点一行跳到对应分组并展开对应块。行内容由 settings.js 的 renderModelOverview 回填。
+        legend: '概览',
+        sub: '一眼看清各角色在用什么模型、是否连通；点一行直接跳到对应配置。状态点只在本次会话有效，刷新后回到灰色。',
         nodes: [
+          { k: 'box', id: 'model-overview', cls: 'ov-list' },
+        ],
+      },
+      {
+        id: 'fs-chat',
+        legend: '剧情对话模型',
+        sub: '旁白与角色都由它来写，新对话默认用它。任何兼容 OpenAI 格式的接口都能接（云端 / 本地）。不熟悉可以点右侧「向导重新配置」。',
+        nodes: [
+          // 接入状态行：当前接的是谁 + 重新走接入向导的入口（就住在这个块里，不再有游离按钮）
+          { k: 'row', cls: 'conn-state-row', items: [
+            { k: 'text', id: 'conn-status', cls: 'conn-status' },
+            { k: 'btn', id: 'btn-open-connect', text: '向导重新配置', cls: 'ui-btn ghost mini' },
+          ] },
+          // 聚合模式常驻徽章（只有 connectionMode='aggregate' 才显示；渲染在 settings.js 的 renderConnBadge）
+          { k: 'box', id: 'conn-badge', cls: 'conn-badge hidden', nodes: [
+            { k: 'text', id: 'conn-badge-text', cls: 'conn-badge-text' },
+            { k: 'btn', id: 'btn-conn-direct', text: '切回直连', cls: 'ui-btn mini' },
+          ] },
           { k: 'grid2', items: [
             { k: 'field', id: 's-chat-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（可从下拉选服务商）' },
             { k: 'field', id: 's-chat-model', label: '模型', type: 'text', list: 'dl-model-chat', placeholder: '填你的模型名（拉到列表后可下拉选）' },
           ] },
+          // 行内聚合提示：地址命中聚合商（AGGREGATORS）就在 Base URL 这一行下方亮出来
+          { k: 'text', id: 's-chat-agg-hint', cls: 'hint agg-hint hidden' },
           { k: 'datalist', id: 'dl-model-chat' },
+          // 模型名拼写提示（不阻塞）：填的名字不在服务商列表里时由 modelLists.js 点亮
+          { k: 'text', id: 'model-hint-chat', cls: 'hint warn spell-hint hidden' },
           { k: 'field', id: 's-chat-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           testRow({ id: 'btn-test-chat', stateId: 'test-chat-state' }, '只探测，不生成内容。'),
           {
@@ -118,6 +211,7 @@ export const GROUPS = [
               { k: 'field', id: 'mp-model', label: '模型', type: 'text', list: 'dl-model-mp', placeholder: '填你的模型名（拉到列表后可下拉选）' },
             ] },
             { k: 'datalist', id: 'dl-model-mp' },
+            { k: 'text', id: 'model-hint-mp', cls: 'hint warn spell-hint hidden' },
             { k: 'field', id: 'mp-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: 'https://…（留空 = 沿用默认主模型）' },
             { k: 'field', id: 'mp-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用默认主模型；已保存的 Key 不回显' },
             { k: 'text', id: 'mp-key-state', cls: 'hint' },
@@ -139,57 +233,62 @@ export const GROUPS = [
     ],
   },
 
+  // 三个辅助角色合成一块：三行折叠项共用同一套字段（地址 / 模型 / Key / 测试），
+  // 收起时不占版面，摘要右侧的标签直接说明「有没有单独配」——不展开也能一眼扫完。
+  // 书记员独有的三个开关与「单独配模型」无关，放在它那一行展开后的最上面，不进折叠里。
   {
     id: 'g-subs', title: '辅助模型',
     blocks: [
       {
-        legend: '画师子代理',
-        sub: '把剧情写成绘画提示词。推荐填最便宜的模型；留空沿用剧情对话模型。每张图下方的「工作台」可查看 / 修改完整提示词。',
+        // id 只为一件事：窄屏下钻态的大标题已经写着「辅助模型」，这块的 legend 与它同字，
+        // 由 css/settings.css 在 ≤720px 把它藏掉，免得同一个词紧挨着念两遍
+        id: 'fs-subs',
+        legend: '辅助模型',
+        sub: '默认全部跟随剧情对话模型，需要时再单独配置某一个。每一行都能独立展开。',
         nodes: [
           {
-            k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+            k: 'adv', id: 'fs-painter', title: '画师子代理', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+              { k: 'text', cls: 'hint role-desc', text: '把剧情写成绘画提示词。推荐填最便宜的模型；留空沿用剧情对话模型。每张图下方的「工作台」可查看 / 修改完整提示词。' },
               { k: 'grid2', items: [
                 { k: 'field', id: 's-painter-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
                 { k: 'field', id: 's-painter-model', label: '模型', type: 'text', list: 'dl-model-painter', placeholder: '留空 = 沿用剧情模型' },
               ] },
               { k: 'datalist', id: 'dl-model-painter' },
+              { k: 'text', id: 'model-hint-painter', cls: 'hint warn spell-hint hidden' },
               { k: 'field', id: 's-painter-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-painter', stateId: 'test-painter-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
           },
-        ],
-      },
-      {
-        legend: '书记员',
-        sub: '校对世界卡、压缩摘要、提取画像。校对是便宜活，推荐填便宜的模型；留空沿用剧情对话模型。',
-        nodes: [
-          { k: 'check', id: 's-scribe-enabled', checked: true, text: '启用书记员' },
-          { k: 'check', id: 's-scribe-ai', checked: true, text: '兼任「压缩摘要 + 滚动风格摘要」', sub: '调用失败时自动走本地规则，不花 API' },
-          { k: 'inline-num', id: 's-scribe-every', before: '每', after: '回合校对一次', attrs: { type: 'number', min: '1', max: '100', value: '10' } },
           {
-            k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+            k: 'adv', id: 'fs-scribe', title: '书记员', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+              // 这三个控件管「书记员做不做、多久做一次」，与「有没有单独配模型」无关：
+              // 放在展开后的最上面，并用 .role-tools 包起来——折叠块的「已单独配置」判定不看这里
+              //（否则「每 10 回合」这个数字会让它永远显示成已单独配置）。
+              { k: 'box', cls: 'role-tools', nodes: [
+                { k: 'check', id: 's-scribe-enabled', checked: true, text: '启用书记员' },
+                { k: 'check', id: 's-scribe-ai', checked: true, text: '兼任「压缩摘要 + 滚动风格摘要」', sub: '调用失败时自动走本地规则，不花 API' },
+                { k: 'inline-num', id: 's-scribe-every', before: '每', after: '回合校对一次', attrs: { type: 'number', min: '1', max: '100', value: '10' } },
+              ] },
+              { k: 'text', cls: 'hint role-desc', text: '校对世界卡、压缩摘要、提取画像。校对是便宜活，推荐填便宜的模型；留空沿用剧情对话模型。' },
               { k: 'grid2', items: [
                 { k: 'field', id: 's-scribe-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
                 { k: 'field', id: 's-scribe-model', label: '模型', type: 'text', list: 'dl-model-scribe', placeholder: '留空 = 沿用剧情模型' },
               ] },
               { k: 'datalist', id: 'dl-model-scribe' },
+              { k: 'text', id: 'model-hint-scribe', cls: 'hint warn spell-hint hidden' },
               { k: 'field', id: 's-scribe-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-scribe', stateId: 'test-scribe-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
           },
-        ],
-      },
-      {
-        legend: '起草模型',
-        sub: '开局向导里「一句话让 AI 起草」用它。起草需要创造力，推荐直接跟随剧情对话模型。',
-        nodes: [
           {
-            k: 'adv', title: '单独配置', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+            k: 'adv', id: 'fs-draft', title: '起草模型', auto: 'filled', tagOff: '沿用剧情模型', tagOn: '已单独配置', nodes: [
+              { k: 'text', cls: 'hint role-desc', text: '开局向导里「一句话让 AI 起草」用它。起草需要创造力，推荐直接跟随剧情对话模型。' },
               { k: 'grid2', items: [
                 { k: 'field', id: 's-draft-base', label: '接口地址 Base URL', type: 'text', list: 'dl-base-url', placeholder: '留空 = 沿用剧情模型' },
                 { k: 'field', id: 's-draft-model', label: '模型', type: 'text', list: 'dl-model-draft', placeholder: '留空 = 沿用剧情模型' },
               ] },
               { k: 'datalist', id: 'dl-model-draft' },
+              { k: 'text', id: 'model-hint-draft', cls: 'hint warn spell-hint hidden' },
               { k: 'field', id: 's-draft-key', label: 'API Key', type: 'password', placeholder: '留空 = 沿用剧情模型' },
               testRow({ id: 'btn-test-draft', stateId: 'test-draft-state' }, '留空项按「沿用剧情模型」代入后再测。'),
             ],
@@ -203,6 +302,7 @@ export const GROUPS = [
     id: 'g-image', title: '生图与画风',
     blocks: [
       {
+        id: 'fs-image',
         legend: '生图模型',
         sub: '为每一幕作画。可以和对话不是同一家（有些服务商只做对话，就再配一家）。',
         nodes: [
@@ -216,6 +316,7 @@ export const GROUPS = [
             { k: 'field', id: 's-image-model', label: '模型', type: 'text', list: 'dl-model-image', placeholder: '填你的生图模型名（拉到列表后可下拉选）' },
           ] },
           { k: 'datalist', id: 'dl-model-image' },
+          { k: 'text', id: 'model-hint-image', cls: 'hint warn spell-hint hidden' },
           { k: 'field', id: 's-image-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           { k: 'select', id: 's-image-aspect', label: '比例', options: [
             ['16:9', '16:9 横屏'], ['9:16', '9:16 竖屏'], ['1:1', '1:1 方形'], ['custom', '自定义'],
@@ -246,6 +347,7 @@ export const GROUPS = [
         ],
       },
       {
+        id: 'fs-video',
         legend: '生视频模型',
         sub: 'MiniMax 生视频（V2）。视频是异步任务，通常 1~3 分钟出结果，<b>按秒计费</b>。',
         nodes: [
@@ -255,6 +357,7 @@ export const GROUPS = [
             { k: 'field', id: 's-video-model', label: '模型', type: 'text', list: 'dl-model-video', placeholder: '填你的生视频模型名（拉到列表后可下拉选）' },
           ] },
           { k: 'datalist', id: 'dl-model-video' },
+          { k: 'text', id: 'model-hint-video', cls: 'hint warn spell-hint hidden' },
           { k: 'field', id: 's-video-key', label: 'API Key', type: 'password', placeholder: 'sk-…' },
           { k: 'grid2', items: [
             { k: 'field', id: 's-video-duration', label: '时长（秒）', type: 'number', attrs: { min: '4', max: '15', step: '1', value: '5' } },
@@ -325,6 +428,9 @@ export const GROUPS = [
       },
       {
         id: 'fs-sidecar', legend: '本地服务',
+        // 块级折叠：低频可选。端口有默认值，不算「配置过」——只有 token 非空才算
+        opt: true,
+        fold: { auto: 'filled:#s-sidecar-token', on: 'filled:#s-sidecar-token', tagOn: '已配置', tagOff: '未配置' },
         sub: '可选的本地小服务，只监听 127.0.0.1。邮件、定时主动、代下单都靠它；没启动时这些功能保持禁用，其它功能不受影响。',
         nodes: [
           { k: 'text', id: 'sidecar-state', cls: 'hint', text: '未启动' },
@@ -340,84 +446,90 @@ export const GROUPS = [
       },
       {
         id: 'fs-email', legend: '邮件',
+        // 块级折叠：默认关闭的可选服务。展开条件 = 启用过 或 填过关键字段；
+        // 状态标签只看启用开关（「填过但没启用」不该显示成已启用）
+        opt: true,
+        fold: {
+          auto: 'checked:#s-email-enabled|filled:#s-email-from,#s-email-resendkey,#s-email-allowlist',
+          on: 'checked:#s-email-enabled', tagOn: '已启用', tagOff: '未启用',
+        },
         sub: '默认关闭。白名单由本地服务硬校验：名单外的收件人只能先生成草稿，你确认后才会发出；所有发送 / 草稿 / 拒绝都有审计记录。',
         nodes: [
           { k: 'check', id: 's-email-enabled', text: '启用邮件功能' },
-          {
-            k: 'adv', title: '详细设置', auto: '#s-email-enabled', tagOff: '未启用', tagOn: '已启用', nodes: [
-              { k: 'grid2', items: [
-                { k: 'select', id: 's-email-provider', label: '发信渠道', options: [
-                  ['mock', '模拟（只记账，不真的发信）'], ['resend', 'Resend（HTTP API）'],
-                ] },
-                { k: 'field', id: 's-email-dailylimit', label: '每日发送上限（0 = 一封都不发）', type: 'number', attrs: { min: '0', step: '1' } },
-              ] },
-              { k: 'field', id: 's-email-from', label: '发件人地址', type: 'text', spellcheck: false, placeholder: '例如 me@example.com' },
-              { k: 'field', id: 's-email-resendkey', label: 'Resend API Key（只存在本地服务里；留空表示不改动已保存的 Key）', type: 'password', spellcheck: false },
-              { k: 'field', id: 's-email-allowlist', label: '收件人白名单（每行一个）', type: 'textarea', attrs: { rows: '3', spellcheck: 'false' }, placeholder: 'buddy@example.com' },
-              { k: 'details', cls: 'panel-block', summary: '邮件审计（最近记录）', nodes: [
-                { k: 'box', id: 'email-audit', cls: 'mono-list' },
-              ] },
-            ],
-          },
+          // 原「详细设置」折叠已由块级折叠顶替（再折一层要开两次才看得到字段），字段原样上提
+          { k: 'grid2', items: [
+            { k: 'select', id: 's-email-provider', label: '发信渠道', options: [
+              ['mock', '模拟（只记账，不真的发信）'], ['resend', 'Resend（HTTP API）'],
+            ] },
+            { k: 'field', id: 's-email-dailylimit', label: '每日发送上限（0 = 一封都不发）', type: 'number', attrs: { min: '0', step: '1' } },
+          ] },
+          { k: 'field', id: 's-email-from', label: '发件人地址', type: 'text', spellcheck: false, placeholder: '例如 me@example.com' },
+          { k: 'field', id: 's-email-resendkey', label: 'Resend API Key（只存在本地服务里；留空表示不改动已保存的 Key）', type: 'password', spellcheck: false },
+          { k: 'field', id: 's-email-allowlist', label: '收件人白名单（每行一个）', type: 'textarea', attrs: { rows: '3', spellcheck: 'false' }, placeholder: 'buddy@example.com' },
+          { k: 'details', cls: 'panel-block', summary: '邮件审计（最近记录）', nodes: [
+            { k: 'box', id: 'email-audit', cls: 'mono-list' },
+          ] },
         ],
       },
       {
         id: 'fs-schedule', legend: '定时主动',
+        opt: true,
+        fold: {
+          auto: 'checked:#s-sched-enabled|filled:#s-sched-quiet',
+          on: 'checked:#s-sched-enabled', tagOn: '已启用', tagOff: '未启用',
+        },
         sub: '默认关闭。免打扰时段与每日上限只存在本地服务里，<b>模型改不了</b>；模型提议的安排一律进「待确认」，要你点确认才生效。调度必须由本地服务常驻。',
         nodes: [
           { k: 'check', id: 's-sched-enabled', text: '启用定时主动联系' },
           { k: 'check', id: 's-sched-paused', text: '一键暂停所有主动行为' },
-          {
-            k: 'adv', title: '详细设置', auto: '#s-sched-enabled', tagOff: '未启用', tagOn: '已启用', nodes: [
-              { k: 'grid2', items: [
-                { k: 'field', id: 's-sched-dailycap', label: '每日主动消息上限（0 = 不限制）', type: 'number', attrs: { min: '0', step: '1' } },
-                { k: 'select', id: 's-sched-missed', label: '错过触发时', options: [
-                  ['SKIP', '跳过'], ['RUN_ONCE', '补一次'], ['RUN_ALL', '全部补齐'],
-                ] },
-              ] },
-              { k: 'field', id: 's-sched-quiet', label: '免打扰时段（每行一段，格式 22:00-08:00）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '23:00-08:00' },
-              { k: 'row', items: [
-                { k: 'btn', id: 'btn-trigger-refresh', text: '刷新安排', cls: 'ui-btn mini' },
-                { k: 'text', id: 'trigger-summary', cls: 'hint' },
-              ] },
-              { k: 'box', id: 'trigger-list', cls: 'mono-list' },
-            ],
-          },
+          { k: 'grid2', items: [
+            { k: 'field', id: 's-sched-dailycap', label: '每日主动消息上限（0 = 不限制）', type: 'number', attrs: { min: '0', step: '1' } },
+            { k: 'select', id: 's-sched-missed', label: '错过触发时', options: [
+              ['SKIP', '跳过'], ['RUN_ONCE', '补一次'], ['RUN_ALL', '全部补齐'],
+            ] },
+          ] },
+          { k: 'field', id: 's-sched-quiet', label: '免打扰时段（每行一段，格式 22:00-08:00）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '23:00-08:00' },
+          { k: 'row', items: [
+            { k: 'btn', id: 'btn-trigger-refresh', text: '刷新安排', cls: 'ui-btn mini' },
+            { k: 'text', id: 'trigger-summary', cls: 'hint' },
+          ] },
+          { k: 'box', id: 'trigger-list', cls: 'mono-list' },
         ],
       },
       {
         id: 'fs-payment', legend: '购物支付',
+        opt: true,
+        fold: {
+          auto: 'checked:#s-pay-enabled|filled:#s-pay-merchants,#s-pay-categories',
+          on: 'checked:#s-pay-enabled', tagOn: '已启用', tagOff: '未启用',
+        },
         sub: '默认关闭。策略由本地服务在代码层强制，AI 拿不到任何支付凭证；额度默认全是 0 = 什么都不放行。<b>AI 可能出错，请设置合理额度。</b>',
         nodes: [
           { k: 'check', id: 's-pay-enabled', text: '启用代下单功能' },
-          {
-            k: 'adv', title: '详细设置', auto: '#s-pay-enabled', tagOff: '未启用', tagOn: '已启用', nodes: [
-              { k: 'grid2', items: [
-                { k: 'select', id: 's-pay-provider', label: '渠道', options: [
-                  ['mock', '模拟支付（不真实扣款）'], ['manual-order', '仅生成订单（自己手动付款）'],
-                ] },
-                { k: 'field', id: 's-pay-currency', label: '货币', type: 'text', attrs: { maxlength: '8' }, placeholder: 'CNY' },
-              ] },
-              { k: 'grid2', items: [
-                { k: 'field', id: 's-pay-pertx', label: '单笔上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
-                { k: 'field', id: 's-pay-daily', label: '每日上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
-              ] },
-              { k: 'grid2', items: [
-                { k: 'field', id: 's-pay-monthly', label: '每月上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
-                { k: 'field', id: 's-pay-autoapprove', label: '免确认小额阈值（分，0 = 全部要确认）', type: 'number', attrs: { min: '0', step: '100' } },
-              ] },
-              { k: 'grid2', items: [
-                { k: 'field', id: 's-pay-cooldown', label: '冷静期（分钟）', type: 'number', attrs: { min: '0', step: '1' } },
-                { k: 'field', id: 's-pay-merchants', label: '商户白名单（每行一个，留空 = 不限）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' } },
-              ] },
-              { k: 'field', id: 's-pay-categories', label: '品类黑名单（每行一个）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '虚拟币' },
-              { k: 'row', items: [
-                { k: 'btn', id: 'btn-pay-refresh', text: '刷新台账', cls: 'ui-btn mini' },
-                { k: 'text', id: 'pay-summary', cls: 'hint' },
-              ] },
-              { k: 'box', id: 'pay-ledger', cls: 'mono-list' },
-            ],
-          },
+          { k: 'grid2', items: [
+            { k: 'select', id: 's-pay-provider', label: '渠道', options: [
+              ['mock', '模拟支付（不真实扣款）'], ['manual-order', '仅生成订单（自己手动付款）'],
+            ] },
+            { k: 'field', id: 's-pay-currency', label: '货币', type: 'text', attrs: { maxlength: '8' }, placeholder: 'CNY' },
+          ] },
+          { k: 'grid2', items: [
+            { k: 'field', id: 's-pay-pertx', label: '单笔上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
+            { k: 'field', id: 's-pay-daily', label: '每日上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
+          ] },
+          { k: 'grid2', items: [
+            { k: 'field', id: 's-pay-monthly', label: '每月上限（分，0 = 不放行）', type: 'number', attrs: { min: '0', step: '100' } },
+            { k: 'field', id: 's-pay-autoapprove', label: '免确认小额阈值（分，0 = 全部要确认）', type: 'number', attrs: { min: '0', step: '100' } },
+          ] },
+          { k: 'grid2', items: [
+            { k: 'field', id: 's-pay-cooldown', label: '冷静期（分钟）', type: 'number', attrs: { min: '0', step: '1' } },
+            { k: 'field', id: 's-pay-merchants', label: '商户白名单（每行一个，留空 = 不限）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' } },
+          ] },
+          { k: 'field', id: 's-pay-categories', label: '品类黑名单（每行一个）', type: 'textarea', attrs: { rows: '2', spellcheck: 'false' }, placeholder: '虚拟币' },
+          { k: 'row', items: [
+            { k: 'btn', id: 'btn-pay-refresh', text: '刷新台账', cls: 'ui-btn mini' },
+            { k: 'text', id: 'pay-summary', cls: 'hint' },
+          ] },
+          { k: 'box', id: 'pay-ledger', cls: 'mono-list' },
         ],
       },
     ],
@@ -428,6 +540,13 @@ export const GROUPS = [
     blocks: [
       {
         legend: '用户画像',
+        // 同类低频可选块：默认全关，按模式开；没开过就收起来
+        opt: true,
+        fold: {
+          auto: 'checked:#s-profile-choice,#s-profile-chat,#s-profile-rp',
+          on: 'checked:#s-profile-choice,#s-profile-chat,#s-profile-rp',
+          tagOn: '已启用', tagOff: '未启用',
+        },
         sub: '默认全关，可按模式开。开启后书记员校对时顺手提取，每轮只注入与当前话题相关的几条，不涨 token；关闭即停止收集，已存条目保留。',
         nodes: [
           { k: 'row', items: [

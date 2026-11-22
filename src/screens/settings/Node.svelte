@@ -67,7 +67,7 @@
     <span class="hint test-state" id={node.stateId}>{node.hint}</span>
   </div>
 {:else if node.k === 'adv'}
-  <details class="adv" data-auto={node.auto || null} data-tag-off={node.tagOff || null} data-tag-on={node.tagOn || null}>
+  <details class="adv" id={node.id || null} data-auto={node.auto || null} data-tag-off={node.tagOff || null} data-tag-on={node.tagOn || null}>
     <summary><span class="adv-t">{node.title}</span>{#if node.tagOn}<span class="adv-tag"></span>{/if}</summary>
     <div class="adv-body">
       {#each node.nodes as item}<Self node={item} />{/each}

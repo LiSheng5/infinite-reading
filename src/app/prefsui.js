@@ -113,31 +113,80 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   /* ================= 折叠块（details.adv）的自动展开 =================
-   * 设置页把「高级参数 / 单独配置 / 详细设置」折进 <details class="adv">；
-   * 已经有内容时自动展开，免得用户以为那些设置「不见了」：
-   *   data-auto="filled"        里面有任何非空的文本 / 数字 / 密码输入 → 展开
-   *   data-auto="#某个勾选框"     那个勾选框是勾上的 → 展开
-   * 摘要右侧的小标签（.adv-tag）用 data-tag-on / data-tag-off 标出当前状态。 */
+   * 设置页把「高级参数 / 单独配置 / 详细设置 / 低频可选块」折进 <details class="adv">；
+   * 已经有内容时自动展开，免得用户以为那些设置「不见了」。
+   * 规则串（data-auto；块级折叠的 fold.auto 同语法）：
+   *   filled              里面有任何非空的文本 / 数字 / 密码 / 输入 → 真（不含 .role-tools）
+   *   filled:#a,#b        指定控件任一非空（有默认值的控件不算「配置过」时用它）
+   *   checked:#a,#b       指定勾选框任一勾上；'#某个勾选框' 是它的单控件简写
+   *   以上用 | 连接 = 任一成立
+   * 摘要右侧的小标签（.adv-tag）用 data-tag-on / data-tag-off 标出当前状态：
+   * 块级折叠另有 data-status（状态标签专用规则，与「要不要展开」分开——
+   * 「填过但没启用」要展开给你看，但标签仍写「未启用」）。
+   * .role-tools 里的控件（书记员的启用 / 兼任 / 每 N 回合）不算「填过配置」：它们管的是角色做不做，
+   * 与「有没有单独配一套模型」无关；「每 10 回合」这种默认值一算进来，标签就永远是「已单独配置」。 */
+  function ruleOn(scope, rule) {
+    return String(rule || '').split('|').some((part) => {
+      const p = part.trim();
+      if (!p) return false;
+      if (p === 'filled') {
+        return Array.prototype.some.call(
+          scope.querySelectorAll('input[type="text"], input[type="number"], input[type="password"], textarea'),
+          el => String(el.value || '').trim() !== '' && !el.closest('.role-tools')
+        );
+      }
+      const filled = /^filled:(.+)$/.exec(p);
+      if (filled) {
+        return filled[1].split(',').some((sel) => {
+          const el = scope.querySelector(sel.trim()) || document.querySelector(sel.trim());
+          return !!el && String(el.value || '').trim() !== '';
+        });
+      }
+      const checked = /^checked:(.+)$/.exec(p);
+      let list;
+      if (checked) list = checked[1].split(',');
+      else if (/^#[A-Za-z0-9_-]+$/.test(p)) list = [p];   // '#s-id' 是 checked 的单控件简写
+      else return false;
+      return list.some((sel) => {
+        const el = scope.querySelector(sel.trim()) || document.querySelector(sel.trim());
+        return !!(el && el.checked);
+      });
+    });
+  }
+
   function syncAdvPanels() {
     document.querySelectorAll('#modal-settings details.adv[data-auto]').forEach((d) => {
-      const rule = d.dataset.auto;
-      let on = false;
-      if (rule === 'filled') {
-        on = Array.prototype.some.call(
-          d.querySelectorAll('input[type="text"], input[type="number"], input[type="password"], textarea'),
-          el => String(el.value || '').trim() !== ''
-        );
-      } else {
-        const box = document.querySelector(rule);
-        on = !!(box && box.checked);
-      }
+      const on = ruleOn(d, d.dataset.auto);
       const tag = d.querySelector('.adv-tag');
       if (tag) {
-        tag.textContent = on ? (d.dataset.tagOn || '') : (d.dataset.tagOff || '');
-        tag.classList.toggle('on', on);
+        // 状态标签：块级折叠用 data-status（与展开规则分开），其余沿用展开规则本身
+        const st = d.dataset.status ? ruleOn(d, d.dataset.status) : on;
+        tag.textContent = st ? (d.dataset.tagOn || '') : (d.dataset.tagOff || '');
+        tag.classList.toggle('on', st);
       }
       if (on) d.open = true;
     });
+  }
+
+  /* ================= 设置页跳转：先展开目标块，再滚动 =================
+   * 低频块折起来之后，跳转（「定时主动」入口 / 概览点行）落到收起的块上就等于没跳。
+   * 统一走这里：展开目标块与它外层的每个折叠，再滚到它。 */
+  function revealSettingsBlock(sel) {
+    const el = $(sel);
+    if (!el) return null;
+    let node = el;
+    while (node && node !== document) {
+      if (node.tagName === 'DETAILS') node.open = true;
+      node = node.parentElement;
+    }
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'start' });
+    return el;
+  }
+
+  // 切分组 + 展开 + 滚动（设置页内的「跳到某块」统一入口）
+  function gotoSettingsBlock(group, sel) {
+    openSettingsGroup(group);
+    revealSettingsBlock(sel);
   }
 
   /* ================= 模型库管理 ================= */
@@ -703,6 +752,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   A.reg({
     initSettingsNav, openSettingsGroup, syncSettingsNav, syncAdvPanels,
+    revealSettingsBlock, gotoSettingsBlock,
     renderModelProfiles, openProfileEditor, cancelProfileEditor, saveProfileFromEditor, deleteProfile,
     renderStoryPrefs, openStoryPrefs, closeStoryPrefs,
     bindPrefsUI,

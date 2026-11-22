@@ -529,6 +529,10 @@ export function dismissModal(id) {
   if (id === 'modal-anchor') { if (typeof A.closeAnchor === 'function') A.closeAnchor(); else closeModal(id); return; }
   if (id === 'modal-import-text') { if (typeof A.closeImportText === 'function') A.closeImportText(); else closeModal(id); return; }
   if (id === 'modal-card') { if (typeof A.closeCardEditor === 'function') A.closeCardEditor(true); else closeModal(id); return; }
+  // 接入向导：误关不丢数据——填过内容先弹确认（实现见 src/app/connect.js 的 closeConnectWizard）
+  if (id === 'modal-connect') { if (typeof A.closeConnectWizard === 'function') A.closeConnectWizard(); else closeModal(id); return; }
+  // 设置：X / 点遮罩 / Esc 三条路同一个口径——有未保存修改先确认（src/app/settings.js 的 closeSettings）
+  if (id === 'modal-settings') { if (typeof A.closeSettings === 'function') A.closeSettings(); else closeModal(id); return; }
   closeModal(id);
 }
 

@@ -345,6 +345,50 @@ html[data-motion="off"] .story-prefs { animation: none; }
 }
 #modal-settings .test-row .test-state { margin-top: 0; flex: 1 1 200px; min-width: 0; }
 
+/* 模型名拼写提示：一句轻提示 +（大小写不一致时）「改用 xxx」小按钮，窄屏自动换行 */
+#modal-settings .hint.spell-hint {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 12px;
+}
+#modal-settings .hint.spell-hint .spell-fix { flex: none; }
+
+/* 辅助模型三行折叠项里的角色说明：与下面的字段之间留一口气（.hint 默认只有上边距） */
+#modal-settings .hint.role-desc { margin: 2px 0 14px; }
+
+/* 接入状态行（「剧情对话模型」块里）：当前接的是谁 + 向导入口（文字型次要按钮，不抢主按钮） */
+#modal-settings .conn-state-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 10px;
+}
+#modal-settings .conn-status {
+  margin: 0; flex: 1 1 220px; min-width: 0;
+  font-family: var(--font-ui); font-size: 13px; line-height: 1.7; color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* 聚合模式琥珀色警示徽章（常驻说清「经谁转发」，可一键切回直连） */
+#modal-settings .conn-badge {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  width: fit-content; max-width: 100%;
+  padding: 5px 12px;
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+#modal-settings .conn-badge-text { margin: 0; overflow-wrap: anywhere; }
+/* 行内聚合提示：Base URL 命中聚合商时随地址亮出来（同一套琥珀色警示语言） */
+#modal-settings .agg-hint {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-left: 3px solid var(--warn-line);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
 /* 折叠块：高级参数 / 单独配置 / 详细设置（.adv，带边框）与填写说明（.help，无边框） */
 #modal-settings details.adv,
 #modal-settings details.help { margin-top: 8px; }
@@ -381,6 +425,41 @@ html[data-motion="off"] .story-prefs { animation: none; }
 #modal-settings .adv-tag { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
 #modal-settings .adv-tag.on { color: var(--accent); }
 #modal-settings .adv-body { padding: 14px 14px 2px; border-top: 1px solid var(--line-soft); }
+
+/* 块级折叠（低频可选功能）：整块收成一行，版式按「节」而不是「字段内的高级项」走 */
+#modal-settings details.adv.opt-fold { margin: 0 0 18px; }
+#modal-settings details.adv.opt-fold > summary { padding: 12px 14px; font-size: 14px; letter-spacing: .05em; }
+#modal-settings details.adv.opt-fold > summary:hover .adv-t { color: var(--accent); }
+#modal-settings .opt-tag {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  font-family: var(--font-ui); font-size: 11px; letter-spacing: .1em; line-height: 1.7;
+}
+#modal-settings details.adv.opt-fold .set-sub { margin-top: 0; }
+
+/* 模型概览：六行「角色 → 现在用什么模型」，每行点一下跳到对应配置 */
+#modal-settings .ov-list { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px; }
+#modal-settings .ov-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 38px; padding: 8px 10px;
+  border: 0; border-radius: var(--radius);
+  background: transparent; text-align: left; cursor: pointer;
+  font-family: var(--font-ui); font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+#modal-settings .ov-row:hover { background: var(--hover-tint); transform: none; }
+#modal-settings .ov-dot {
+  flex: none; width: 8px; height: 8px; border-radius: 999px;
+  background: var(--ink-faint);   /* 灰 = 未测试（刷新页面即回灰：状态只存内存） */
+}
+/* 绿 = 测试 / 自动探测通过；红 = 失败（三色口径：灰未测 / 绿通过 / 红失败） */
+#modal-settings .ov-dot.st-ok { background: var(--ok); }
+#modal-settings .ov-dot.st-fail { background: var(--danger); }
+#modal-settings .ov-label { flex: none; min-width: 62px; font-weight: 600; }
+#modal-settings .ov-desc { flex: 1 1 auto; min-width: 0; color: var(--ink-dim); overflow-wrap: anywhere; }
 #modal-settings .help-body { padding: 2px 0 4px; }
 #modal-settings .help-body p, #modal-settings .help-body .hint {
   margin: 6px 0; font-size: 12.5px; line-height: 1.8; color: var(--ink-dim);
@@ -409,6 +488,10 @@ html[data-motion="off"] .story-prefs { animation: none; }
   #modal-settings .set-nav-item.active { background: transparent; color: var(--ink); font-weight: 400; }
   #modal-settings .set-nav-item .ic { display: block; }
   #modal-settings .set-panel-title { margin: 6px 0 18px; font-size: 21px; letter-spacing: .06em; color: var(--ink); }
+  /* 这一组的 legend 与分组大标题同字（都叫「辅助模型」），窄屏下紧挨着出现两次：
+     藏掉 legend 后仍有 21px 大标题承担同样的视觉层级与语义（桌面端正相反——大标题隐藏，只看 legend），
+     读屏也不会把同名的 h3 + legend 连着念两遍 */
+  #modal-settings #fs-subs legend { display: none; }
   #modal-settings .set-back { margin: 10px 0 0; }
   /* 下钻：列表态只显示分组列表，详情态只显示当前分组（这两条要带 #modal-settings，才压得过上面的 display:flex） */
   #modal-settings .set-shell:not(.detail) .set-panels { display: none; }

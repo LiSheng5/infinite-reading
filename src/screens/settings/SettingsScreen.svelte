@@ -26,15 +26,8 @@
     {#each BASE_URL_OPTIONS as opt}<option value={opt[0]}>{opt[1]}</option>{/each}
   </datalist>
 
-  <!-- 接入状态行：接入向导入口（随时重走）+ 聚合模式常驻警示徽章（一键切回直连） -->
-  <div class="conn-row">
-    <button id="btn-open-connect" class="ui-btn mini" type="button">接入向导</button>
-    <div id="conn-badge" class="conn-badge hidden">
-      <span id="conn-badge-text"></span>
-      <button id="btn-conn-direct" class="ui-btn mini" type="button">切回直连</button>
-    </div>
-  </div>
-
+  <!-- 接入状态行 / 聚合徽章不再游离在分组外面：都住进「剧情对话模型」块里（见 settingsForm.js），
+       其它分组里不再出现与模型无关的入口 -->
   <div class="set-shell" id="set-shell">
     <nav class="set-nav" id="set-nav" aria-label="设置分组">
       {#each GROUPS as g}
@@ -51,6 +44,22 @@
               <div class="danger-row">
                 {#each b.nodes as n}<Node node={n} />{/each}
               </div>
+            {:else if b.fold}
+              <!-- 块级折叠（低频可选功能）：整块收成一行，标题旁「可选」小标签 + 状态标签。
+                   自动展开 / 状态规则走 syncAdvPanels 的 data-auto / data-status（fold.auto / fold.on） -->
+              <details class="adv opt-fold" id={b.id || null}
+                data-auto={b.fold.auto || null} data-status={b.fold.on || null}
+                data-tag-on={b.fold.tagOn || null} data-tag-off={b.fold.tagOff || null}>
+                <summary>
+                  <span class="adv-t">{b.legend}</span>
+                  {#if b.opt}<span class="opt-tag">可选</span>{/if}
+                  {#if b.fold.tagOn}<span class="adv-tag"></span>{/if}
+                </summary>
+                <div class="adv-body">
+                  {#if b.sub}<p class="set-sub"><Inline html={b.sub} /></p>{/if}
+                  {#each b.nodes as n}<Node node={n} />{/each}
+                </div>
+              </details>
             {:else}
               <fieldset id={b.id || null}>
                 <legend>{b.legend}</legend>
@@ -64,22 +73,3 @@
     </div>
   </div>
 </ModalCard>
-
-<style>
-  /* 接入状态行：向导入口 + 聚合模式琥珀色警示徽章（.hidden 是全局 !important，照样藏得住） */
-  .conn-row {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .conn-badge {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    padding: 5px 12px;
-    border: 1px solid var(--warn-line);
-    border-radius: 999px;
-    background: var(--warn-soft);
-    color: var(--warn);
-    font-family: var(--font-ui);
-    font-size: 12.5px;
-    line-height: 1.7;
-  }
-</style>

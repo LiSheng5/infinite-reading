@@ -139,6 +139,8 @@ label input.inline-num {
 .danger-row { text-align: right; margin-top: 4px; }
 /* 需要用户留意的提示（如存储接近上限）：跟随主题的强调色 */
 .hint.alert { color: var(--accent); }
+/* 提醒但不拦路（如模型名与列表里的写法不一致）：琥珀色，可忽略、可继续 */
+.hint.warn { color: var(--warn); }
 /* 「测试连接」结果行：成功 / 需注意 / 失败 */
 .test-row { margin-top: 12px; }
 .test-row .test-state { margin-top: 0; }

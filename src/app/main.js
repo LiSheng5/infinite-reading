@@ -252,9 +252,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#btn-anchor-rerun').onclick = () => { closeModal('modal-settings'); A.openAnchor({}); };
     $('#btn-pw-anchor').onclick = () => { A.closeWorkbench(); A.openAnchor({}); };
 
-    $('#btn-close-settings').onclick = () => closeModal('modal-settings');
+    // X / 点遮罩 / Esc 三条关闭路径统一走 A.closeSettings：与打开时的表单快照比对，
+    // 有未保存修改先问「放弃未保存的修改？」（Esc 走 dismissModal → 同一个函数，见 modalHost.js）
+    $('#btn-close-settings').onclick = () => A.closeSettings();
     $('#modal-settings').addEventListener('click', e => {
-      if (e.target === $('#modal-settings')) closeModal('modal-settings');
+      if (e.target === $('#modal-settings')) A.closeSettings();
     });
     $('#btn-add-savepoint').onclick = () => {
       if (!S.story) return;
@@ -346,10 +348,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (!A.featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
       openModal('modal-settings');
       A.initSettingsNav();
-      A.openSettingsGroup('g-tools');   // 定时主动在「工具与服务」组里：先切过去，再滚到它
       if (A.sidecarReady()) A.loadFeatureConfig();
-      const fs = $('#fs-schedule');
-      if (fs && fs.scrollIntoView) fs.scrollIntoView({ block: 'start' });
+      // 定时主动在「工具与服务」组里，且是折叠块：先切分组、展开目标块，再滚过去
+      //（不展开就滚会落在一个收起的块上，看起来像没跳）
+      A.gotoSettingsBlock('g-tools', '#fs-schedule');
     };
     const closeEmail = $('#btn-close-email');
     if (closeEmail) closeEmail.onclick = () => closeModal('modal-email');
@@ -383,6 +385,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
       A.showStart();
       toast('已清空');
     };
+    // Base URL 手改 → 行内聚合提示随地址即时亮 / 灭（徽章仍按保存后的口径）
+    $('#s-chat-base').addEventListener('input', () => A.renderConnBadge());
     // 模型名变化 → 按参考表刷新上下文窗口提示（表里只有窗口这一个数字）
     $('#s-chat-model').addEventListener('change', () => {
       const cap = Cap.find($('#s-chat-model').value.trim());
@@ -423,8 +427,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
       el.addEventListener('click', ev => {
         if (ev.target !== el) return;
         if (modalStack[modalStack.length - 1] !== id) return;
-        // 功能类弹窗（尤其设置 / 邮件 / 支付）里填了一半的内容，误点遮罩不该丢
-        if (id === 'modal-settings' || id === 'modal-email' || id === 'modal-payment' || id === 'modal-wizard' || id === 'modal-connect') return;
+        // 功能类弹窗（尤其设置 / 邮件 / 支付）里填了一半的内容，误点遮罩不该丢；
+        // 接入向导不在其列：它有自己的关闭确认（填过内容先弹一次 modal-confirm）
+        if (id === 'modal-settings' || id === 'modal-email' || id === 'modal-payment' || id === 'modal-wizard') return;
         dismissModal(id);
       });
     });

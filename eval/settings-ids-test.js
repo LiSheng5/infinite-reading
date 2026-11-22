@@ -16,11 +16,17 @@ const path = require('path');
 
 const HTML_PATH = path.join(__dirname, '..', 'index.html');
 
-// === 冻结清单 A：#modal-settings 全局设置（123 个 id，含控件 / 按钮 / 提示位 / 面板） ===
+// === 冻结清单 A：#modal-settings 全局设置（147 个 id，含控件 / 按钮 / 提示位 / 面板） ===
 const GLOBAL_SETTINGS_IDS = [
   'modal-settings',
   'dl-base-url',
   'btn-close-settings',
+  // 「剧情对话模型」块里的接入状态行 / 聚合徽章 / 行内聚合提示（原先游离在设置顶部，现归位进块里）
+  'conn-status', 'btn-open-connect', 'conn-badge', 'conn-badge-text', 'btn-conn-direct',
+  's-chat-agg-hint',
+  // 模型名拼写提示（一个角色一个提示位：填的名字与服务商清单不一致时点亮，不阻塞、不弹窗）
+  'model-hint-chat', 'model-hint-painter', 'model-hint-scribe', 'model-hint-draft',
+  'model-hint-mp', 'model-hint-image', 'model-hint-video',
   's-chat-base', 's-chat-model', 's-chat-key', 's-chat-temp',
   's-chat-ctx', 's-chat-params',
   's-chat-cap', 'btn-test-chat', 'test-chat-state',
@@ -47,6 +53,10 @@ const GLOBAL_SETTINGS_IDS = [
   'btn-anchor-rerun', 'rolling-style-text',
   's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',
   's-show-reasoning', 's-tools-enabled', 's-notools-hint', 'btn-clear-notools',
+  // 「辅助模型」整组只有一块 fieldset（三行折叠项）；这个 id 给窄屏藏 legend 用
+  'fs-subs',
+  // 模型概览（g-models 顶部六行）+ 各角色配置块的跳转锚点（概览点行 → 切组 / 展开 / 滚动）
+  'model-overview', 'fs-chat', 'fs-painter', 'fs-scribe', 'fs-draft', 'fs-image', 'fs-video',
   'fs-sidecar', 'sidecar-state', 's-sidecar-port', 's-sidecar-token', 'btn-sidecar-probe',
   'fs-email', 's-email-enabled', 's-email-provider', 's-email-dailylimit', 's-email-from',
   's-email-resendkey', 's-email-allowlist', 'email-audit',

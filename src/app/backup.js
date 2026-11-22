@@ -255,7 +255,8 @@ import { A, toast } from './core.js';
     openModal('modal-settings');
     A.initSettingsNav();   // 分组导航态（窄屏列表 / 桌面左导航）
     A.renderSidecarStatus();
-    A.syncAdvPanels();     // 已有内容的折叠块（单独配置 / 高级参数）自动展开
+    A.syncAdvPanels();     // 已有内容的折叠块（单独配置 / 高级参数 / 低频可选块）自动展开
+    A.autoTestSweep();     // 测试连接自动化：补一轮探测（有短时缓存，重开不重复狂测）
     if (A.sidecarReady()) {   // 打开设置时刷新一次安全项（真源在侧车）；填完再同步一次折叠块
       Promise.resolve(A.loadFeatureConfig()).then(() => A.syncAdvPanels(), () => {});
     }

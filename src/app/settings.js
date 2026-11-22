@@ -1,11 +1,12 @@
 /*
  * src/app/settings.js —— 设置界面 / 故事记忆面板 / 注入记忆 / 用户画像面板
+ * （测试连接 / 自动测试 / 模型概览在 src/app/modelStatus.js；未保存提示的快照在本文件）
  */
 import { Sidecar } from '../core/sidecar.ts';
-import { ImageProviders, VideoProviders, ChatProviders } from '../core/providers.ts';
 import { Context } from '../core/context.ts';
 import { RoleCard } from '../core/roleCard.ts';
 import { Tree } from '../core/tree.ts';
+import { matchAggregator } from '../screens/settings/settingsForm.js';
 import { syncDirty } from '../screens/storyPrefs/panel.svelte.js';
 import { A, renderChat, saveAll, toast } from './core.js';
 
@@ -93,6 +94,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.renderConnBadge();        // 聚合模式常驻徽章（直连时藏起来）
     A.bindModelLists();
     A.refreshModelDatalists();  // 模型输入框的 datalist 自动回填（拉不到就留空，手填兜底）
+    A.bindModelFormLive();      // 失焦自动测 + 概览跟表单（只绑一次）
+    A.renderModelOverview();    // 概览六行（读当前表单；状态点读内存里的测试结果）
+    takeSettingsSnapshot();     // 回填完 = 干净基线：此后只有用户改动才算「未保存」
   }
 
   // 生图适配器切换：三套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生 ↔ ComfyUI 本地）
@@ -138,6 +142,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.chat.contextWindow = Math.max(0, parseInt($('#s-chat-ctx').value, 10) || 0);
     // 手填参数原样并入请求体（providers.ts 的 mergeExtraParams）
     S.settings.chat.extraParams = $('#s-chat-params').value.trim();
+    // 接入方式只认地址：命中聚合商地址 = 聚合模式，否则厂商直连（向导写入同一口径，
+    // 手改地址与走向导两条路径结果一致，不会出现地址已是直连、徽章还挂着聚合的错位）
+    const chatAgg = matchAggregator(S.settings.chat.baseUrl);
+    S.settings.connectionMode = chatAgg ? 'aggregate' : 'direct';
+    S.settings.connectionVia = chatAgg ? chatAgg.via : '';
 
     S.settings.painter.baseUrl = $('#s-painter-base').value.trim();
     S.settings.painter.model = $('#s-painter-model').value.trim();
@@ -226,107 +235,102 @@ import { A, renderChat, saveAll, toast } from './core.js';
  // 「当前故事」组迁入本对话设置面板而移除：
     // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
     saveAll();
+    renderConnBadge();   // 状态行 / 聚合徽章 / 行内聚合提示跟着这次保存对账
+    A.renderModelOverview();
+    takeSettingsSnapshot();   // 保存完 = 新的干净基线
     if (S.story) { A.applyLayout(); renderChat(); }   // 布局 / 选项显示即时生效
     if (prevShowReasoning !== S.settings.showReasoning) renderChat();   // 思考链开关即时生效
   }
 
-  /* ---- 「测试连接」：只读当前输入框的值 ----
-   * 三个原则：① 不保存设置、② 不生成内容、③ 生图绝不出图（不花钱）。
-   * 子模型（画师 / 书记员 / 起草）留空的项按「沿用剧情模型」代入，测的就是实际会用到的那套配置。 */
-  const TEST_TARGETS = {
-    chat:    { kind: 'chat',  self: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
-    painter: { kind: 'chat',  self: ['#s-painter-base', '#s-painter-key', '#s-painter-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
-    scribe:  { kind: 'chat',  self: ['#s-scribe-base', '#s-scribe-key', '#s-scribe-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
-    draft:   { kind: 'chat',  self: ['#s-draft-base', '#s-draft-key', '#s-draft-model'], inherit: ['#s-chat-base', '#s-chat-key', '#s-chat-model'] },
-    image:   { kind: 'image', self: ['#s-image-base', '#s-image-key', '#s-image-model'] },
-    video:   { kind: 'video', self: ['#s-video-base', '#s-video-key', '#s-video-model'] },
-  };
+  /* ================= 关闭设置的未保存提示 =================
+   * 设置只有「保存」才写入；X / 点遮罩 / Esc 三条关闭路径都走 closeSettings——
+   * 与打开时的表单快照比一比，有差异先问「放弃未保存的修改？」，没差异直接关。
+   * 快照只放内存：syncSettingsToForm（表单从已存设置回填）与 applyFormToSettings（保存完）之后重取，
+   * 程序性回填因此不会被误判成「用户改过」。 */
+  let settingsSnap = '';
 
-  function readTestCfg(t) {
-    const pick = sels => {
-      for (const s of sels) { const el = $(s); const v = el ? String(el.value || '').trim() : ''; if (v) return v; }
-      return '';
-    };
-    let inherited = false;
-    const grab = i => {
-      const own = pick([t.self[i]]);
-      if (own) return own;
-      if (!t.inherit) return '';
-      inherited = true;
-      return pick([t.inherit[i]]);
-    };
-    return {
-      cfg: {
-        // 生图按面板上选的适配器测（comfyui 要带上 workflow / nodes，test 只用地址，出图才用它们）
-        provider: t.kind === 'image'
-          ? ((($('#s-image-provider') || {}).value === 'minimax-image' || ($('#s-image-provider') || {}).value === 'comfyui')
-            ? ($('#s-image-provider') || {}).value : 'openai-images')
-          : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
-        baseUrl: grab(0), apiKey: grab(1), model: grab(2),
-        workflow: t.kind === 'image' ? String((($('#s-image-workflow') || {}).value || '')).trim() : '',
-        nodes: t.kind === 'image' ? String((($('#s-image-nodes') || {}).value || '')).trim() : '',
-      },
-      inherited,
-    };
+  function snapshotSettingsForm() {
+    const root = document.getElementById('modal-settings');
+    if (!root) return '';
+    const parts = [];
+    root.querySelectorAll('input, select, textarea').forEach((el, i) => {
+      const id = el.id || ('anon-' + i);
+      if (el.type === 'checkbox') parts.push(id + '=?' + (el.checked ? '1' : '0'));
+      else parts.push(id + '=' + String(el.value || ''));
+    });
+    return parts.join('\n');
   }
 
-  async function testConnection(key, btn) {
-    const t = TEST_TARGETS[key];
-    if (!t) return;
-    const el = $('#test-' + key + '-state');
-    const set = (level, message) => {
-      if (!el) return;
-      el.className = 'hint test-state' + (level ? ' ' + level : '');
-      el.textContent = message;
-    };
+  function takeSettingsSnapshot() { settingsSnap = snapshotSettingsForm(); }
 
-    const { cfg, inherited } = readTestCfg(t);
-    const adapter = t.kind === 'image'
-      ? (ImageProviders[cfg.provider] || ImageProviders['openai-images'])
-      : t.kind === 'video'
-        ? (VideoProviders[cfg.provider] || VideoProviders['minimax-video'])
-        : (ChatProviders[cfg.provider] || ChatProviders['openai-compatible']);
-    if (!adapter || typeof adapter.test !== 'function') { set('fail', '这个适配器不支持测试连接。'); return; }
+  function settingsFormDirty() { return snapshotSettingsForm() !== settingsSnap; }
 
-    const oldText = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = '测试中…'; }
-    set(null, '正在连接 ' + (cfg.baseUrl || '（还没填地址）') + ' …');
-    try {
-      const r = await adapter.test(cfg);
-      set(r.level, r.message + (inherited ? '（留空项已按剧情模型代入）' : ''));
-    } catch (e) {
-      set('fail', '测试失败：' + ((e && e.message) ? e.message : String(e)));
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = oldText; }
-    }
+  // 受控关闭（X / 遮罩 / Esc 共用；modalHost.dismissModal 也转到这里）
+  async function closeSettings() {
+    if (!settingsFormDirty()) { A.closeModal('modal-settings'); return; }
+    const ok = await irConfirm('放弃未保存的修改？这次打开后改动的设置还没点「保存」。', {
+      title: '关闭设置', okText: '放弃修改',
+    });
+    if (ok) A.closeModal('modal-settings');
   }
 
   // 不内置任何服务商预设：Base URL / 模型名 / 参数全部由用户手填，
   // 避免厂商与模型名每天变动、项目疲于维护（通用 OpenAI 兼容适配器已覆盖所有接口）。
   // （接入向导上线后 Base URL 有厂商速选、模型列表有 /models 自动回填；模型名仍不内置。）
 
-  /* ---------- 聚合模式：设置页顶部常驻徽章 + 一键切回直连 ----------
+  /* ---------- 接入状态行 + 聚合模式徽章 + 行内聚合提示（全在「剧情对话模型」块里） ----------
    * connectionMode='aggregate' 时对话内容与 API Key 会经 connectionVia 那家第三方聚合商转发
-   * （浏览器 → 聚合商 → 模型厂商），所以徽章常驻说清「经谁转发」，不折进帮助里。 */
+   * （浏览器 → 聚合商 → 模型厂商），所以徽章常驻说清「经谁转发」，不折进帮助里。
+   * 状态行说清「现在接的是谁」，未配置时给「一步步接入」的向导入口。 */
   function renderConnBadge() {
+    renderConnStatus();
     const box = $('#conn-badge');
-    if (!box) return;
-    const agg = S.settings.connectionMode === 'aggregate';
-    box.classList.toggle('hidden', !agg);
-    const t = $('#conn-badge-text');
-    if (t && agg) t.textContent = '聚合模式 · 对话经由 ' + (S.settings.connectionVia || '第三方聚合商') + ' 转发';
+    if (box) {
+      const agg = S.settings.connectionMode === 'aggregate';
+      box.classList.toggle('hidden', !agg);
+      const t = $('#conn-badge-text');
+      if (t && agg) t.textContent = '聚合模式 · 对话经由 ' + (S.settings.connectionVia || '第三方聚合商') + ' 转发';
+    }
+    renderAggHint();
+  }
+
+  // 状态行：已配置 → 当前：<host> · <模型名>（右侧「向导重新配置」）；未配置 → 还没接入模型（右侧「一步步接入」）
+  function renderConnStatus() {
+    const st = $('#conn-status');
+    if (!st) return;
+    const chat = S.settings.chat || {};
+    const btn = $('#btn-open-connect');
+    if (!chat.baseUrl) {
+      st.textContent = '还没接入模型';
+      if (btn) btn.textContent = '一步步接入';
+      return;
+    }
+    st.textContent = '当前：' + A.describeRole(chat);
+    if (btn) btn.textContent = '向导重新配置';
+  }
+
+  // hostOf / describeRole / 概览（OV_ROLES + renderModelOverview）住在 src/app/modelStatus.js：
+  // 「host · 模型名」的格式全仓只写一份，概览与这条状态行共用（A.describeRole）。
+
+  // 行内聚合提示：表单里的地址一命中聚合商就随地址亮出来（不等保存；徽章仍以保存后的口径为准）
+  function renderAggHint() {
+    const el = $('#s-chat-agg-hint');
+    if (!el) return;
+    const agg = matchAggregator(String((($('#s-chat-base') || {}).value) || ''));
+    el.classList.toggle('hidden', !agg);
+    if (agg) el.textContent = '对话内容与 API Key 会先经过 ' + agg.via + ' 服务器再转发到模型厂商';
   }
 
   function switchConnDirect() {
     if (S.settings.connectionMode !== 'aggregate') { toast('现在就是厂商直连'); return; }
     S.settings.connectionMode = 'direct';
     S.settings.connectionVia = '';
-    // 聚合商的地址 / Key / 模型一并清掉：留着请求还会继续往第三方发，「切回直连」就名不副实
+    // 聚合商的地址 / Key / 模型一并清掉：留着请求还会继续往第三方发，「切回直连」就名不副实；
+    // 清完地址后 connectionMode 与地址口径自然一致（下次保存也还是直连）
     S.settings.chat = Object.assign({}, S.settings.chat, { baseUrl: '', apiKey: '', model: '' });
     saveAll();
     syncSettingsToForm();
-    toast('已切回直连：聚合商的地址与 Key 已清空，重新选一家厂商填 Key 就好');
-    A.openConnectWizard();   // 顺手重走向导，最快把直连配回来
+    toast('已切回直连：聚合商的地址与 Key 已清空，在下面重新填一家厂商的地址与 Key 就好');
   }
 
   /* ================= 故事记忆面板（世界卡 / 摘要栈 / 留痕 / 模式） ================= */
@@ -644,5 +648,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
     toast('已更新画风备注（v' + card.version + '）：只影响画面气质，剧情事实仍由世界卡与剧情决定', false, true);
   }
 
-  A.reg({ syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote, TEST_TARGETS, testConnection, renderConnBadge, switchConnDirect, renderStoryPanels, worldFormChanged, saveWorldFromForm, toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange });
+  A.reg({
+    syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote,
+    takeSettingsSnapshot, settingsFormDirty, closeSettings,
+    renderConnBadge, switchConnDirect, renderStoryPanels, worldFormChanged, saveWorldFromForm,
+    toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange,
+  });
 

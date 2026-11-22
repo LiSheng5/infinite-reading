@@ -33,6 +33,7 @@ import './app/round.js';
 import './app/render.js';
 import './app/readmodel.js';
 import './app/layout.js';
+import './app/modelStatus.js';
 import './app/settings.js';
 import './app/prefsui.js';
 import './app/modelLists.js';
