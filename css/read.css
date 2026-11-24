@@ -343,6 +343,37 @@
 .opening-hint-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
 .opening-hint .hint { margin: 0; }
 
+/* 智能体空对话引导（「能做什么」）：纸墨风，同 opening-hint 的虚线框 + 纸面底色，不做营销卡片；
+   能力 chip 两列网格，未启用的仍可点（跳设置分组）、第二行「未启用 ›」点明去处。
+   高度不设限：随聊天区滚动，键盘弹出时照常可滚。 */
+.agent-intro {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.agent-intro-line { margin: 0; font-family: var(--font-body); font-size: 15px; line-height: 1.8; color: var(--ink-dim); }
+.agent-chips {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; width: 100%;
+}
+.agent-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  text-align: left; color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.agent-chip:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+.agent-chip.off { border-style: dashed; color: var(--ink-dim); }
+.agent-chip.off:hover { color: var(--ink); }
+.agent-chip-fix { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); letter-spacing: 0.05em; }
+
 /* 选项：默认走「💡 灵感」托盘；always 模式才内联在旁白下 */
 .choices-inline { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .choice-btn {

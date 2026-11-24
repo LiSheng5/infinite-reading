@@ -87,3 +87,14 @@ export function charApi(kind) {
     add(vals) { return addRow(kind, vals); },
   };
 }
+
+/** 角色卡弹窗的双视图开关（name: 'pick' 选卡 / 'edit' 编辑）。
+ *  界面层（cards.js 的 openCardEditor / 导入回调 / 视图切换）经 setCardView 写，
+ *  CardModal 读它切视图块的 hidden——两块都常驻 DOM，id 绑定与按 id 灌值不受视图影响。
+ *  backable = 这次打开是从选卡视图走过来的（编辑视图才有「← 选卡」可回）。 */
+export const cardView = $state({ name: 'edit', backable: false });
+
+export function setCardView(name, backable) {
+  if (name === 'pick' || name === 'edit') cardView.name = name;
+  if (backable !== undefined) cardView.backable = !!backable;
+}

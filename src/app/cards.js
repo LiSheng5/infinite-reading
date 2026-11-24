@@ -3,6 +3,7 @@
  */
 import { RoleCard } from '../core/roleCard.ts';
 import { Context } from '../core/context.ts';
+import { setCardView } from '../screens/modal/state.svelte.js';
 import { A, renderChat, saveAll, toast } from './core.js';
 
 
@@ -11,21 +12,31 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   /* ================= 角色卡 =================
-   * 统一编辑器：自建 = 空白表单；导入 = SillyTavern V2/V3 PNG（只兼容格式，不复制内容）；改完即生效。
+   * 双视图编辑器：视图 A「选卡」= 导入 SillyTavern V2/V3 PNG（只兼容格式，不复制内容）/ 自己写一张；
+   * 视图 B「编辑」= 名字 + 开场白直给，其余折进「更多设定（可选）」。改完即生效。
    * rp 开局 = 选（建 / 导入）一张角色卡；开场白作为首条旁白；示例对话喂给模型学口吻。 */
 
-  let cardEditor = null;   // { mode: 'new'|'edit', source, onCancel }
+  let cardEditor = null;   // { mode: 'new'|'edit', source, hasExisting, imported, onCancel }
 
   function openCardEditor(opts) {
     opts = opts || {};
     const mode = opts.mode === 'new' ? 'new' : 'edit';
     const card = opts.card || ((mode === 'edit' && S.story && S.story.characterCard) || RoleCard.emptyCard());
-    cardEditor = { mode: mode, source: card.source || 'custom', onCancel: opts.onCancel || null };
+    // hasExisting = 在改一张已经存在的卡；决定初始视图与来源提示的口吻
+    const hasExisting = mode === 'edit' && !!(opts.card || (S.story && S.story.characterCard));
+    cardEditor = {
+      mode: mode,
+      source: card.source || 'custom',
+      hasExisting: hasExisting,
+      imported: null,
+      onCancel: opts.onCancel || null,
+    };
     fillCardForm(card);
-    $('#card-modal-title').textContent = mode === 'new' ? '选一张角色卡（扮演开局）' : '角色卡';
-    $('#card-source-hint').textContent = '来源：' + RoleCard.sourceLabel(card)
-      + (mode === 'new' ? '。可以空白自建，也可以导入你自己的 SillyTavern V2/V3 PNG 卡；导入后可随意改。' : '（改完即生效，下一回合开始用新卡）');
-    $('#btn-rc-save').textContent = mode === 'new' ? '用这张卡开局' : '保存角色卡';
+    bindCardExtras();
+    // 开局选卡（mode 为 new）或故事里还没有角色卡（切到扮演模式时补的第一张）→ 先到选卡视图；
+    // 编辑已有卡直接进编辑视图。backable 只在这里定：从选卡走过去的编辑视图才有「← 选卡」。
+    const wantPick = mode === 'new' || !hasExisting;
+    showCardView(wantPick ? 'pick' : 'edit', wantPick);
     openModal('modal-card');
   }
 
@@ -47,6 +58,82 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#rc-example').value = c.exampleDialogue;
     $('#rc-note').value = c.systemNote;
     $('#rc-sync-world').checked = true;
+    syncCardMore(true);   // 有内容就把「更多设定（可选）」展开（折叠摘要同步）
+  }
+
+  /* ---------- 双视图与折叠区的就地状态（标题 / 提示 / 摘要 / 必填红字），DOM 契约仍按 id 读写 ---------- */
+
+  // 视图切换（'pick' 选卡 / 'edit' 编辑）：组件按 cardView 状态切 hidden，这里同步文案。
+  // 保存钮文案仍按 id 改写（组件里只放纯文本子节点）。
+  function showCardView(v, backable) {
+    const pick = v === 'pick';
+    setCardView(pick ? 'pick' : 'edit', backable);
+    if (pick && cardEditor) cardEditor.imported = null;   // 回到选卡 = 重新选，导入提示作废
+    $('#card-modal-title').textContent = pick ? '扮演' : '角色卡';
+    $('#card-source-hint').textContent = pick ? '' : cardSourceHint();
+    $('#btn-rc-save').textContent = (cardEditor && cardEditor.mode === 'new') ? '开始扮演' : '保存角色卡';
+    const req = $('#rc-required-hint');
+    if (req) req.classList.add('hidden');
+    if (!pick) {
+      const nameEl = $('#rc-name');
+      if (nameEl && !nameEl.value) nameEl.focus();   // 自己写一张 → 直接落在名字上
+    }
+    syncCardMore(true);
+  }
+
+  // 来源提示随场景：导入后报文件名；改已有卡沿用「改完即生效」；
+  // 新建说清归属——这张卡会存进故事（characterCard），之后在故事里随时能改。
+  function cardSourceHint() {
+    if (!cardEditor) return '';
+    if (cardEditor.imported) return '已导入：' + cardEditor.imported;
+    if (cardEditor.hasExisting) {
+      return '来源：' + RoleCard.sourceLabel({ source: cardEditor.source }) + '（改完即生效，下一回合开始用新卡）';
+    }
+    return '这张卡只属于这次扮演：会随故事保存，之后随时能改';
+  }
+
+  // 「更多设定（可选）」：摘要行给已填提示；autoOpen 时「有内容就展开」（不自动收起），
+  // 与剧情向导的折叠块同一套口径。只认文本字段——同步世界卡勾选框默认就勾着，
+  // 算「有内容」的话折叠块会永远自动展开。
+  function syncCardMore(autoOpen) {
+    const parts = [];
+    if ($('#rc-appearance').value.trim()) parts.push('已填外貌');
+    if ($('#rc-personality').value.trim()) parts.push('已填性格');
+    if ($('#rc-scene').value.trim()) parts.push('已填场景');
+    if ($('#rc-example').value.trim()) parts.push('已填示例');
+    if ($('#rc-note').value.trim()) parts.push('已填提示');
+    const sum = $('#rc-more-sum');
+    if (sum) sum.textContent = parts.length ? parts.join(' · ') : '外貌 · 性格 · 场景 · 其他';
+    const more = $('#rc-more');
+    if (autoOpen && parts.length && more && !more.open) more.open = true;
+  }
+
+  // 表单是界面层按 id 灌值的，Svelte 感知不到；折叠摘要与必填红字靠容器上的委托监听同步
+  let cardBound = false;
+  function bindCardExtras() {
+    if (cardBound) return;
+    cardBound = true;
+    $('#modal-card').addEventListener('input', () => {
+      syncCardMore(false);
+      const req = $('#rc-required-hint');
+      if (req) req.classList.add('hidden');   // 任一项有输入，必填红字就撤
+    });
+  }
+
+  // 自己写一张：进编辑视图。表单里还是导入来的卡才重置成空白——
+  // 用户自己敲过的内容（回选卡再进来）原样保留，不替用户做主。
+  function writeCardFromScratch() {
+    if (cardEditor && cardEditor.imported) {
+      fillCardForm(RoleCard.emptyCard());
+      cardEditor.imported = null;
+    }
+    showCardView('edit');
+  }
+
+  // 选卡视图的大按钮走 main.js 的既有绑定（点它开文件框）；编辑视图的「导入 PNG 卡」走这里
+  function pickCardFile() {
+    const f = $('#file-card');
+    if (f) f.click();
   }
 
   function readCardForm() {
@@ -66,7 +153,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function saveCardFromEditor() {
     if (!cardEditor) return;
     const card = readCardForm();
-    if (!card.name) { toast('先给角色起个名字吧', true); return; }
+    if (!card.name) {
+      // 就地提示（不弹 toast）：红字给在名字上方，焦点落到名字；有输入即撤
+      const req = $('#rc-required-hint');
+      if (req) req.classList.remove('hidden');
+      const nameEl = $('#rc-name');
+      if (nameEl) nameEl.focus();
+      return;
+    }
     const syncWorld = $('#rc-sync-world').checked;
     if (cardEditor.mode === 'new') {
       closeModal('modal-card');
@@ -86,12 +180,16 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function importCardFile(file) {
     if (!file) return;
+    const isPng = file.type === 'image/png' || /\.png$/i.test(file.name || '');
+    if (!isPng) { toast('只支持 PNG 格式的角色卡（SillyTavern V2/V3 内嵌 JSON）', true); return; }
     const reader = new FileReader();
     reader.onload = () => {
       let card = null;
       try { card = RoleCard.parsePNG(new Uint8Array(reader.result)); } catch (_) { card = null; }
       if (!card) { toast('没能从这张 PNG 里读到角色卡：支持 SillyTavern V2 / V3 内嵌 JSON 的卡', true, true); return; }
+      if (cardEditor) cardEditor.imported = file.name;
       fillCardForm(card);
+      showCardView('edit');   // 导入成功 → 进编辑视图（表单已灌值）
       toast('已读入角色卡「' + card.name + '」（' + RoleCard.sourceLabel(card) + '），可以随意改，改完保存', false, true);
     };
     reader.readAsArrayBuffer(file);
@@ -178,5 +276,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
       : '[用户画像] 未开启：不要输出 profile 字段。';
   }
 
-  A.reg({ openCardEditor, closeCardEditor, saveCardFromEditor, importCardFile, profileOn, activeProfileEntries, applyProfileEntries, collectProfileLocal, scribeProfileHint });
+  A.reg({ openCardEditor, closeCardEditor, showCardView, writeCardFromScratch, pickCardFile, saveCardFromEditor, importCardFile, profileOn, activeProfileEntries, applyProfileEntries, collectProfileLocal, scribeProfileHint });
 

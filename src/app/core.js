@@ -31,7 +31,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
 
   const DEFAULT_TOPIC = '雨夜便利店：凌晨三点的第八个货架，与一场没有说出口的告别。';
 
-  const CHAT_PREMISE = '对话模式：没有剧本，随性聊天。对话的走向由你们共同决定。';
+  const CHAT_PREMISE = '对话模式：没有剧本，随性聊天。对话的走向由你们共同决定。你自带画图、记事、定时提醒、写邮件、下单这些能力，需要时主动用起来（邮件与下单会先让用户确认）。';
   // rp：premise 与角色卡绑定（卡常驻系统提示词；开场白由卡写、直接进日志）
   function rpPremise(card) {
     const name = (card && card.name) || '角色';

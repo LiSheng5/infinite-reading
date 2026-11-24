@@ -13,24 +13,30 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ================= 可选本地服务（sidecar）：调度工具与主动消息 ================= */
 
+  // 本地服务类能力（定时 / 邮件 / 下单）「为什么还没启用」的唯一口径：
+  // 返回 '' = 这个能力可用；否则是给用户看的一句话原因。
+  // scheduleToolsAvailable / proposalToolsAvailable 从这里派生，工具注入判定（round.js 的
+  // toolInjection）与智能体空对话引导的「未启用原因」也读这里——门控条件只写这一套，不会漂移。
+  function sidecarFeatureWhy(feature) {
+    const SC = Sidecar;
+    if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return '本地服务未启动';
+    const st = SC.status();
+    if (!st.hasToken) return '本地服务还没填 token';
+    if (!(st.features && st.features[feature])) return '本地服务里还没开启这个功能';
+    return '';
+  }
+
   // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时才下发
   function scheduleToolsAvailable() {
-    const SC = Sidecar;
-    if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return false;
-    const st = SC.status();
-    return !!(st.features && st.features.schedule && st.hasToken);
+    return !sidecarFeatureWhy('schedule');
   }
 
   // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
   // 另外 toolsForMode 只在 chat（智能体）模式放行（红线 7）。
   function proposalToolsAvailable() {
-    const SC = Sidecar;
-    if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return { email: false, payment: false };
-    const st = SC.status();
-    const ready = !!st.hasToken;
     return {
-      email: !!(ready && st.features && st.features.email),
-      payment: !!(ready && st.features && st.features.payment),
+      email: !sidecarFeatureWhy('email'),
+      payment: !sidecarFeatureWhy('payment'),
     };
   }
 
@@ -738,5 +744,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return what + '：' + p.status;
   }
 
-  A.reg({ scheduleToolsAvailable, proposalToolsAvailable, runScheduleTool, loadFeatureConfig, saveFeatureConfig, renderTriggerList, openEmailModal, doEmailSend, renderPayLedger, openPaymentModal, doPaymentSubmit, runProposalTool, proposalStatusLabel, confirmProposal, denyProposal });
+  A.reg({ sidecarFeatureWhy, scheduleToolsAvailable, proposalToolsAvailable, runScheduleTool, loadFeatureConfig, saveFeatureConfig, renderTriggerList, openEmailModal, doEmailSend, renderPayLedger, openPaymentModal, doPaymentSubmit, runProposalTool, proposalStatusLabel, confirmProposal, denyProposal });
 

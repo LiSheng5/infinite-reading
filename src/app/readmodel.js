@@ -191,12 +191,47 @@ import { A } from './core.js';
     return m;
   }
 
+  /* ================= 智能体空对话引导（新对话「能做什么」） =================
+   * 还没有任何消息时显示一块引导；发出第一条消息后永久消失（只依赖 log.length === 0，不存状态）。
+   * chips 的「启用」复用工具注入判定（round.js 的 toolInjection）：启用 ⇔ 对应工具这回合会被注入，
+   * 判定不写第二套；未启用项仍显示（「未启用 ›」），why 是给用户看的未启用原因。
+   * 示例句是通用模板，不涉及任何模型名或厂商名。 */
+  const AGENT_CHIPS = [
+    { id: 'draw',   label: '帮我画一张…',   prompt: '帮我画一张……',      tool: 'request_image',   category: 'image',    fixGroup: 'g-image', word: '画图' },
+    { id: 'memo',   label: '记一件事…',    prompt: '记一下……',          tool: 'update_memory',   category: 'memory',   fixGroup: 'g-tools', word: '记事' },
+    { id: 'remind', label: '明天提醒我…',   prompt: '明天早上提醒我……',    tool: 'schedule_once',   category: 'schedule', fixGroup: 'g-tools', word: '定时' },
+    { id: 'email',  label: '写封邮件…',    prompt: '帮我起草一封邮件……',   tool: 'email_propose',   category: 'email',    fixGroup: 'g-tools', word: '写邮件' },
+    { id: 'order',  label: '帮我买点东西…',  prompt: '帮我买一点……',       tool: 'payment_propose', category: 'payment',  fixGroup: 'g-tools', word: '下单' },
+  ];
+  const AGENT_CONFIRM_LABEL = { email: '发邮件', order: '下单' };
+
+  // 引导文案：「能帮你……」只列判定为可用的能力（诚实），全部未启用时改成一句指路；
+  // 「先让你确认」的机制说明只在对应的提案能力可用时出现。
+  function agentIntroText(chips) {
+    const defs = {};
+    AGENT_CHIPS.forEach(d => { defs[d.id] = d; });
+    const on = chips.filter(c => c.enabled);
+    if (!on.length) return ['这些能力都还没启用：点下面的「未启用」去打开。'];
+    const words = on.map(c => defs[c.id].word);
+    const list = words.length > 1
+      ? (words.slice(0, -1).join('、') + '和' + words[words.length - 1])
+      : words[0];
+    const lines = ['能帮你' + list + '。'];
+    const proposals = on.filter(c => AGENT_CONFIRM_LABEL[c.id]);
+    if (proposals.length >= 2) lines.push('邮件与下单都会先让你确认。');
+    else if (proposals.length === 1) lines.push(AGENT_CONFIRM_LABEL[proposals[0].id] + '前会让你确认。');
+    return lines;
+  }
+
   /* ================= renderChat 整模型（旧 renderChat 的同步语义） ================= */
 
   function readChatModel() {
     const m = {
       entries: [],
       openingHint: false,
+      agentIntro: false,
+      agentChips: [],
+      agentIntroText: [],
       live: false,
       liveReason: false,
       choices: [],
@@ -213,6 +248,25 @@ import { A } from './core.js';
 
     // 剧情模式空档：不自动跑开场，显示「开始第一幕」按钮（renderOpeningHint 同口径）
     m.openingHint = !S.busy && !S.live && story.mode === 'choice' && !log.length;
+
+    // 智能体空对话：还没发过消息时给「能做什么」引导（发出第一条消息后 log 非空，自然消失）
+    m.agentIntro = !S.busy && !S.live && story.mode === 'chat' && !log.length;
+    if (m.agentIntro) {
+      const inj = A.toolInjection();
+      const names = inj.tools.map(t => t.function.name);
+      m.agentChips = AGENT_CHIPS.map(c => {
+        const enabled = names.indexOf(c.tool) >= 0;
+        return {
+          id: c.id,
+          label: c.label,
+          prompt: c.prompt,
+          enabled: enabled,
+          why: enabled ? '' : (inj.why[c.category] || '还没启用'),
+          fixGroup: c.fixGroup,
+        };
+      });
+      m.agentIntroText = agentIntroText(m.agentChips);
+    }
 
     // 流式 / 打字机中的临时旁白（renderChat 的 S.live 分支）：
     // 组件只渲染两个空壳（reason-live + bubble-live），interior 由 render.js 的 fillLiveDom 填

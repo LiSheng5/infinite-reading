@@ -58,6 +58,57 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 提案路径只走 Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
 
+  /* 工具注入判定的唯一口径：「本回合正常发一轮」会注入哪些工具、各类目为什么没注入。
+   * buildAI1Request 的工具组装与智能体空对话引导（readmodel 的 agentChips）共用这一个函数：
+   * 「chip 已启用」≡「对应工具这回合会被注入」，判定不写第二套、不会漂移。
+   * 返回 { on, tools, why }：
+   *   on    —— 全局工具门（toolsEnabled 关 / 模型不支持 tools 时 false）；
+   *   tools —— 会注入的工具对象（已过 toolsForMode 的模式门控、prefs 本对话开关与各类目可用性）；
+   *   why   —— 各类目（image / memory / schedule / email / payment）未启用的一句话原因（chips 的「未启用」提示）。 */
+
+  // 生图的执行前提：按渠道看「能不能真的出一张图」（OpenAI 兼容要模型名、MiniMax 另要 Key、
+  // ComfyUI 要 workflow，模型名在 workflow 里选）。缺配置时 request_image 不注入、
+  // 画图 chip 显示「未启用 ›」——与工具注入同一套判定，不出「界面说能画、画时才失败」的岔子。
+  function imageModelReady() {
+    const im = S.settings.image || {};
+    const provider = String(im.provider || 'openai-images');
+    if (!String(im.baseUrl || '').trim()) return false;
+    if (provider === 'comfyui') return !!String(im.workflow || '').trim();
+    if (provider === 'minimax-image') {
+      return !!String(im.model || '').trim() && !!String(im.apiKey || '').trim();
+    }
+    return !!String(im.model || '').trim();
+  }
+
+  function toolInjection() {
+    const prefsTools = Prefs.effective(S.settings, S.story, 'tools');
+    const resolved = Prefs.resolveChatCfg(S.settings, S.story);
+    const on = S.settings.toolsEnabled !== 'off' && !A.noToolsFor(resolved.cfg);
+    if (!on) {
+      const reason = S.settings.toolsEnabled === 'off' ? '「向模型下发工具」已关闭' : '当前模型不支持工具调用';
+      const all = {};
+      Prefs.TOOL_KEYS.forEach(k => { all[k] = reason; });
+      return { on: false, tools: [], why: all };
+    }
+    const why = {};
+    Prefs.TOOL_KEYS.forEach(k => {
+      if (prefsTools[k] === false) { why[k] = '本对话里已关掉它'; return; }
+      if (k === 'image' && !imageModelReady()) { why[k] = '还没配置生图模型'; return; }
+      if (k === 'schedule' || k === 'email' || k === 'payment') {
+        const w = A.sidecarFeatureWhy(k);
+        if (w) why[k] = w;
+      }
+    });
+    // 模式门控（chat / rp 的 request_image 直出变体、邮件 / 下单只放 chat 等）在 toolsForMode 里；
+    // 类目可用性（why）在结果上再收一道——chip 的「启用」与注入清单始终一致
+    const tools = Context.toolsForMode(S.story ? S.story.mode : 'choice', {
+      schedule: !why.schedule,
+      email: !why.email,
+      payment: !why.payment,
+    }).filter(t => !why[Prefs.toolCategory(t.function.name)]);
+    return { on: true, tools: tools, why: why };
+  }
+
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发
   // 拆两段：
   //   buildAI1Request —— 组装 tools / messages（含偏好解析、工具可用性、预算压缩）
@@ -87,23 +138,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
       pushLog({ type: 'system', text: '已注入完整记忆（世界卡 + 设定 + 视觉设定卡）：本轮先复述处境再继续' });
     }
 
-    // 工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）
-    const prefsTools = Prefs.effective(S.settings, S.story, 'tools');
-    const toolAllowed = (t) => prefsTools[Prefs.toolCategory(t.function.name)] !== false;
-    const toolsOn = opts.tools !== false && !opts.recall
-      && S.settings.toolsEnabled !== 'off' && !A.noToolsFor(cfg);
-    // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时追加；剧情模式工具集不变
-    const schedTools = toolsOn && prefsTools.schedule !== false && A.scheduleToolsAvailable();
-    // 邮件 / 下单（提案制）只在智能体（chat）+ 对应 feature 开启时追加（红线 7；toolsForMode 内部再挡一次模式）
-    const propTools = toolsOn ? A.proposalToolsAvailable() : { email: false, payment: false };
-    const toolOpts = {
-      schedule: schedTools,
-      email: propTools.email && prefsTools.email !== false,
-      payment: propTools.payment && prefsTools.payment !== false,
-    };
+    // 工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）。
+    // 判定只有一份：toolInjection()（智能体空对话引导的 chips 也读它），这里只再叠本次调用的
+    // 关断（opts.tools===false / recall 二跳不带工具）。
+    const inj = toolInjection();
+    const toolsOn = opts.tools !== false && !opts.recall && inj.on;
     const asmOpts = Object.assign({}, opts);
     if (toolsOn) {
-      asmOpts.tools = Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed).map(t => t.function.name);
+      asmOpts.tools = inj.tools.map(t => t.function.name);
     }
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = A.activeProfileEntries();   // 画像按开关 / 范围注入（关则空数组，零成本）
@@ -130,7 +172,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       reportBackgroundFailure('回合压缩', e, { note: '按原样发送（最坏超一轮预算）' });
     }
     const cfgTools = toolsOn
-      ? Object.assign({}, cfg, { tools: Context.toolsForMode(S.story.mode, toolOpts).filter(toolAllowed) })
+      ? Object.assign({}, cfg, { tools: inj.tools })
       : cfg;
     return { adapter: adapter, cfg: cfg, cfgTools: cfgTools, messages: messages, asmOpts: asmOpts, toolsOn: toolsOn };
   }
@@ -438,5 +480,16 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (inp && inp.focus) inp.focus();
   }
 
-  A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText });
+  // 智能体引导 chip 的预填（不发送）：复用 setComposerText，光标落在尾部省略号前的「可编辑处」
+  function fillPlayerInput(text) {
+    const s = String(text == null ? '' : text);
+    setComposerText(s);
+    const inp = $('#player-input');
+    if (inp && inp.setSelectionRange) {
+      const caret = s.replace(/[…]+$/, '').length;
+      try { inp.setSelectionRange(caret, caret); } catch (_) { /* 不支持选区的输入框保持默认光标 */ }
+    }
+  }
+
+  A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText, toolInjection, fillPlayerInput });
 

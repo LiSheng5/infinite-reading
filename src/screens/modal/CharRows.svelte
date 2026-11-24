@@ -10,7 +10,7 @@
   import Button from '../../ui/Button.svelte';
   import { CHAR_FIELDS, charRows, addRow, removeRow } from './state.svelte.js';
 
-  let { kind, rowsId = null, addId = null, addLabel = '+ 添加人物' } = $props();
+  let { kind, rowsId = null, addId = null, addLabel = '+ 添加人物', variant = 'rows' } = $props();
 
   const fields = $derived(CHAR_FIELDS[kind] || []);
   const rows = $derived(charRows[kind]);
@@ -21,7 +21,7 @@
   <span class="del-gap"></span>
 </div>
 
-<div id={rowsId} class="char-rows">
+<div id={rowsId} class="char-rows" class:cards={variant === 'cards'}>
   {#each rows as row (row.id)}
     <div class="char-row">
       {#each fields as f}
@@ -49,10 +49,25 @@
 
   .add-row { margin-top: 8px; }
 
-  /* 窄屏：四个人物字段并排会挤成一条线，改成两列（表头在窄屏不显示，靠 placeholder） */
+  /* 窄屏：四个人物字段并排会挤成一条线，改成两列（表头在窄屏不显示，靠 placeholder）。
+     variant="cards"（开局向导）：窄屏改成一人一张竖向小卡（名字 / 性格 / 说话方式各一行，
+     删除钮钉在右上角），占位符不再被并排窄框截断；桌面仍三列，文本导入（variant="rows"）不动。 */
   @media (max-width: 720px) {
     .char-head { display: none; }
     .char-row { flex-wrap: wrap; }
     .cell { flex: 1 1 44%; }
+    .char-rows.cards .char-row {
+      position: relative;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+    }
+    .char-rows.cards .cell { flex: 1 1 auto; }
+    .char-rows.cards .cell:first-child { padding-right: 40px; }   /* 名字行让开删除钮 */
+    .char-rows.cards .del-cell { position: absolute; top: 6px; right: 4px; }
   }
 </style>

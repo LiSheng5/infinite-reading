@@ -16,6 +16,7 @@
    * readmodel.js（JSON.stringify 转义见书架屏），组件不拼样式串。 */
   import Icon from '../../ui/Icon.svelte';
   import ChatBubble from './ChatBubble.svelte';
+  import AgentIntro from './AgentIntro.svelte';
   import PaintInk from './PaintInk.svelte';
   import { read } from './read.svelte.js';
   import { A as appApi } from '../../app/core.js';
@@ -81,6 +82,9 @@
         <p class="hint">点下面按钮让 AI 按设定写第一幕（会调用一次模型）；也可以直接在输入框里写下你的第一个行动。</p>
         <button type="button" class="ui-btn primary" onclick={runOpening}><Icon name="play" class="ic-l" />开始第一幕</button>
       </div>
+    {/if}
+    {#if read.chat.agentIntro}
+      <AgentIntro chat={read.chat} />
     {/if}
     {#if read.chat.live && read.chat.liveReason}
       <!-- 流式思考窗空壳：interior 由 render.js 的 fillLiveDom 命令式回填（span 系统零改动） -->

@@ -23,6 +23,27 @@
   animation: var(--an-leafIn) var(--m-dur-base) var(--ease-spring) both;   /* 入场：弹簧手感 */
 }
 .modal-card.narrow { width: min(520px, 94vw); }
+/* 开局弹窗（剧情向导 / 角色卡 / 试画锚定）在 ≤640px 走整屏 sheet：卡片铺满全高、
+   页脚随 flex 钉在底部、内容区自己滚动（高用 dvh，键盘弹起时不把底部按钮顶没）；
+   桌面仍是居中弹窗。设置 / 确认等其他弹窗不走这套。
+   底部按钮区的 safe-area 由文件末尾 @supports 那条 .modal-foot 兜底。 */
+@media (max-width: 640px) {
+  :is(#modal-wizard, #modal-card, #modal-anchor) {
+    padding: 0;
+    align-items: stretch;
+  }
+  :is(#modal-wizard, #modal-card, #modal-anchor) .modal-card {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+  }
+  :is(#modal-wizard, #modal-card, #modal-anchor) .modal-head {
+    padding-top: max(16px, env(safe-area-inset-top, 0px));
+  }
+}
 .modal-head {
   position: relative;
   display: flex; justify-content: space-between; align-items: center;
@@ -43,6 +64,9 @@
   text-align: right;
   display: flex; justify-content: flex-end; gap: 10px;
 }
+/* 角色卡「选卡」视图没有页脚（两个大卡就是入口）：按钮仍留在 DOM 保住 id 绑定，
+   整条页脚（含分隔线）按内层包裹的 hidden 一起收起。 */
+#modal-card .modal-foot:has(> .rc-foot-row.hidden) { display: none; }
 
 /* 人物设定区的标题与壳（开局向导 / 文本导入确认页共用一份，组件里只留结构）。
    限定在这两个弹窗：设置页的世界卡编辑器也用 .char-editor 作语义包裹，但它不需要外边距。
@@ -214,8 +238,46 @@ label input.inline-num {
   transform: translateY(-1px);
 }
 .mode-card:hover b { color: var(--accent); }
+/* 角色卡选卡视图的导入卡同时是拖放目标：拖入时给出与 hover 同款的反馈 */
+#modal-card .mode-card.dragover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
 .draft-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 6px; }
 .draft-row label { flex: 1; margin-bottom: 0; }
+
+/* 「更多设定（可选）」折叠块：开局弹窗（剧情向导 / 角色卡）共用这一份样式与措辞，
+   收起时摘要行给已填提示；有内容时由界面层自动展开（设置页 fold.auto: 'filled' 的思路）。 */
+.opt-fold {
+  margin-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+.opt-fold summary {
+  cursor: pointer;
+  font-family: var(--font-note);
+  font-size: 13.5px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.opt-fold[open] > summary { margin-bottom: 12px; }
+.opt-fold .fold-sum {
+  margin-left: 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.05em;
+}
+
+/* 起草回填的字段短暂高亮：颜色过渡走 --m-t-*（off 档 0ms 直接跳变；
+   prefers-reduced-motion 由动效档 auto 解析成 off 兜底），1.2 秒后由界面层撤掉 .wz-flash。 */
+#modal-wizard .wz-flashable {
+  transition: background-color var(--m-t-color-base) var(--ease-out), border-color var(--m-t-color-base) var(--ease-out);
+}
+#modal-wizard .wz-flashable.wz-flash {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
 
 /* ==================== 画师工作台 ==================== */
 .pw-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
