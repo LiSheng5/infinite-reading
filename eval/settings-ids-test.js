@@ -51,7 +51,7 @@ const GLOBAL_SETTINGS_IDS = [
   // 画风备注就地改（不必重画 4 张候选）
   's-card-note', 'btn-save-card-note',
   'btn-anchor-rerun', 'rolling-style-text',
-  's-ui-layout', 's-ui-choices', 's-ui-motion', 'ui-layout-hint',
+  's-ui-layout', 's-ui-choices', 'ui-layout-hint',
   's-show-reasoning', 's-tools-enabled', 's-notools-hint', 'btn-clear-notools',
   // 「辅助模型」整组只有一块 fieldset（三行折叠项）；这个 id 给窄屏藏 legend 用
   'fs-subs',

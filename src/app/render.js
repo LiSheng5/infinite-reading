@@ -207,7 +207,7 @@ import { A, saveAll, toast } from './core.js';
     pre.src = src;
   }
 
-  // 视频场景：video 元素接管舞台；文件未到先显示封面；动效 off 不自动播放、只显示封面
+  // 视频场景：video 元素接管舞台；文件未到先显示封面；系统「减少动态效果」不自动播放、只显示封面
   function setStageVideo(sc) {
     const v = $('#stage-video');
     if (!v) return;

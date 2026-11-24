@@ -44,7 +44,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/paintQueue.ts` | 作画串行队列（**纯逻辑**）：时机 / 工具 / 手动 / 重画共用一条 FIFO，画师构思也在队列里；带兜底超时与取消（`run(signal)` / `timeoutMs`），任务体挂死也不会堵死队列 | `create`、`enqueue`、`has`、`size`、`cancel` |
 | `src/core/proposals.ts` | 提案（**纯逻辑**）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；状态机（pending / awaiting_confirm / executing / 四个终态）以 `p.status` 为唯一真源 | `create`、`reconcile`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `src/core/errors.ts` | 失败处理策略的纯逻辑端（**纯逻辑**）：原因归一 / 截短 / tool 留痕拼装；DOM 与 toast 出口在 `src/app/core.js` | `errorText`、`shortError`、`failureEntry` |
-| `src/core/motion.ts` | 动效强度的纯逻辑端：`off / standard / rich / auto` 解析、`TIERS` 三档政策、`ANIMATIONS` 逐动画与 `TRANSITIONS` 逐过渡的三档声明表 | `resolve` `TIERS` `ANIMATIONS` `TRANSITIONS` |
+| `src/core/motion.ts` | 动效声明的纯逻辑端：rich 单档政策 `TIERS`、`ANIMATIONS` 逐动画与 `TRANSITIONS` 逐过渡的单值声明表（系统「减少动态效果」是 JS 侧的静默例外，不属档位） | `TIERS` `ANIMATIONS` `TRANSITIONS` |
 | `src/core/titles.ts` | 自动标题（**纯逻辑**）：触发判定、给小模型的 prompt、输出清洗、本地兜底 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
 | `src/core/search.ts` | 全文搜索（**纯逻辑**）：标题 + 全部分支节点的子串检索，片段带 `ranges`（**输出零 HTML**） | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
 | `src/core/importText.ts` / `backupPack.ts` | 剧情文本导入解析 / 备份打包与还原的纯数据段（界面留在 `src/app/`） | `ImportText.*`、`BackupPack.*` |
@@ -215,7 +215,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices / motion` + 新增 `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。`chat.thinking`（思考档位）v0.13.0 起同样下线：`defaultSettings` 不再写它，旧档里的值原样带过、不读不删，厂商形参写进 `extraParams`。）
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices` + `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。`chat.thinking`（思考档位）v0.13.0 起同样下线：`defaultSettings` 不再写它，旧档里的值原样带过、不读不删，厂商形参写进 `extraParams`。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
 **主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。
@@ -238,7 +238,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **布局算法分四段**：`buildKids`（children 表：防环 / 剔除自引用 / 补 parent 指针）→ `assignRows`（BFS 行号 + 唯一父指针 + `tracePath` 出的 root→head 路径）→ `packLanes`（泳道：主干 lane 0，支线按子树行区间贪心打包，`rangeMemo` / `forkQueue` 只在这一段内）→ `foldChains` + `geometryOf`（折叠与几何）。`layerTree` 只剩十来行装配，四段各自在 `eval/treelayout-test.js` 第 10 节有单测（同一入参 → 同一出参、不改入参）；改布局先跑该节，失败点能直接定位到段。
 
-**动效预算**（走令牌）：rich = 边按深度描边生长（封顶 ~600ms）+ 节点弹簧弹出（WAAPI，只动 `transform` / `opacity`，新节点「长出来」）+ **流光只挂 `pathEdgeD` 合成的一条 path** + head 呼吸 + 选中脉冲（循环动画恰好 3 条）；standard = 整体淡入；off = 无。`data-paused` 全局暂停循环；>400 节点视口裁剪（只建可见行附近的 SVG 元素）。
+**动效预算**（走令牌）：rich = 边按深度描边生长（封顶 ~600ms）+ 节点弹簧弹出（WAAPI，只动 `transform` / `opacity`，新节点「长出来」）+ **流光只挂 `pathEdgeD` 合成的一条 path** + head 呼吸 + 选中脉冲（循环动画恰好 3 条）；`data-paused` 全局暂停循环；>400 节点视口裁剪（只建可见行附近的 SVG 元素）。
 
 ## 5. 关键不变量（改动时别碰坏）
 
@@ -297,35 +297,35 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **颜色**：全站只从 `css/tokens.css` 的 `:root` 令牌取色（阶段 3 起独立成文件）——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。**页面之外的颜色也归令牌**：地址栏 `theme-color` 与 manifest 的 `theme_color` / `background_color` 在源码里是 `__IR_THEME_COLOR__` 占位，构建期由 `vite.config.mjs` 从 `--bg` 展开——各写一份白底值，换主题时必然漏一处。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、index.html / manifest 的颜色占位、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
 
-**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与档位参数 `--dur-off/shift/flash/none`。**表单字号** `--fs-field: 14px` / `--fs-field-mono: 12px`（等宽提示词编辑器）：`input / select / textarea` 只读它们，≤720px 由 `css/responsive.css` 在 `:root` 上一起抬到 16px（iOS Safari 聚焦小于 16px 的输入框会自动放大页面；把 16px 直接写在控件选择器上是 0,0,1 特异性，会被 `#player-input` / `.shelf-search-input` / `label input` / 组件里的 `input.svelte-*` 整条盖掉），`eval/css-structure-test.js` 对账「表单控件的 font-size 一律 `var(--fs-field)` / `var(--fs-field-mono)`」。**主圆角** `--radius: 8px`（卡片 / 按钮 / 输入框 / 舞台与灯箱大图；阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。圆角不是全站一个值——例外按用途登记在 `css/style.css` 的「圆角标尺」里：胶囊（状态 / 模式标签、计数徽标、作画提示、进度线）用 `999px`，面板内次级卡片与大图预览用 `10px`，缩略图与行内小件用 `6px`，行内 `code` 用 `4px`，`<mark>` 与视频角标用 `3px`，窄屏底部抽屉用 `14px 14px 0 0` / `var(--radius) var(--radius) 0 0`，贴边用 `0`；`eval/css-structure-test.js` 对账「分片里的每个圆角取值都在标尺上」，新数值先登记再写。
+**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与 `--dur-flash/none`。**表单字号** `--fs-field: 14px` / `--fs-field-mono: 12px`（等宽提示词编辑器）：`input / select / textarea` 只读它们，≤720px 由 `css/responsive.css` 在 `:root` 上一起抬到 16px（iOS Safari 聚焦小于 16px 的输入框会自动放大页面；把 16px 直接写在控件选择器上是 0,0,1 特异性，会被 `#player-input` / `.shelf-search-input` / `label input` / 组件里的 `input.svelte-*` 整条盖掉），`eval/css-structure-test.js` 对账「表单控件的 font-size 一律 `var(--fs-field)` / `var(--fs-field-mono)`」。**主圆角** `--radius: 8px`（卡片 / 按钮 / 输入框 / 舞台与灯箱大图；阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。圆角不是全站一个值——例外按用途登记在 `css/style.css` 的「圆角标尺」里：胶囊（状态 / 模式标签、计数徽标、作画提示、进度线）用 `999px`，面板内次级卡片与大图预览用 `10px`，缩略图与行内小件用 `6px`，行内 `code` 用 `4px`，`<mark>` 与视频角标用 `3px`，窄屏底部抽屉用 `14px 14px 0 0` / `var(--radius) var(--radius) 0 0`，贴边用 `0`；`eval/css-structure-test.js` 对账「分片里的每个圆角取值都在标尺上」，新数值先登记再写。
 
-**动效强度（阶段 3 统一 motion 模块）**：语义真源 `src/core/motion.ts`（`resolve` / `TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画三档声明 / `TRANSITIONS` 逐过渡动作三档声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 档位收口变量 `--m-*` + 动画名表 `--an-*` + `::view-transition-*` 时长收口 + 暂停规则），DOM 端 `src/ui/motion.js`（`applyMotion` / `applyPaused` / `suspendLoops` 子树挂起 / `holdLoops` 过渡期冻结）。`<html data-motion="off|standard|rich">` 由 `.resolve(pref, prefersReduced)` 解析（设置 `settings.ui.motion`，默认 `auto`；显式选择优先于系统「减少动态效果」），`src/app/core.js` 的 `applyMotion` 在启动与 `matchMedia` 变化时写入；**首帧**由 `index.html` 的 `<head>` 内联脚本先写一遍（按同一套 `resolve` 口径：先读 `store` 落盘的 `ir:motion` 镜像，没有镜像时按 `prefers-reduced-motion` 选 `off` / `rich`）——CSS 的 `:root` 默认是 rich，不先写的话「减少动态效果」的用户会先看到一帧完整动效，启动后 `applyMotion` 再复核一次；每个动画的三档行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
+**动效（统一 motion 模块）**：运行时只有 rich 一档（完整动效）。语义真源 `src/core/motion.ts`（`TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画单值声明 / `TRANSITIONS` 逐过渡动作单值声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 收口变量 `--m-*` + 动画名表 `--an-*` + `::view-transition-*` 时长收口 + 暂停规则），DOM 端 `src/ui/motion.js`（`applyPaused` / `suspendLoops` 子树挂起 / `holdLoops` 过渡期冻结）。`<html>` 静态写 `data-motion="rich"`（不再有首帧内联脚本，也不再写 localStorage 镜像）。
+
+**系统「减少动态效果」是唯一静默例外**：它不是档位、不出现在任何 UI，只由 JS 动画路径在 `matchMedia('(prefers-reduced-motion: reduce)')` 为真时跳过（`src/app/core.js` 的 `motionLevel()` 实时读成 `'off'`）；CSS 侧由 `css/motion.css` 末尾的 `@media (prefers-reduced-motion: reduce)` 无条件兜底（动画 / 过渡压到 `--dur-none`、循环压成 1 次）。每个动画的行为在 `ANIMATIONS` 显式声明（`none / fade / shift / full / loop`），`eval/tokens-test.js` 对账 `@keyframes`、`--an-*` 名表与声明表三者一致。
 
 | 档 | 行为 |
 |---|---|
-| off | 无位移、无循环；最多保留瞬时（≤80ms）的透明度变化 |
-| standard | 淡入淡出与短位移（≤160ms）；无循环动画；无 Ken Burns、无环境光、无逐段文字淡入 |
-| rich | 全部动效（默认） |
+| rich | 全部动效（唯一档） |
 
-循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例），由设计固定、`acceptance/tools/motion-probe.mjs` 逐档测量校验（不再有运行时登记队列：`registerLoop` 随自查页一起删除）；页面不可见 `html[data-paused]` 全局暂停；分支页打开时暂停底下阅读页的循环（`data-branch` + `suspendLoops` 双保险）。
+循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例），由设计固定、`acceptance/tools/motion-probe.mjs` 实测校验（不再有运行时登记队列：`registerLoop` 随自查页一起删除）；页面不可见 `html[data-paused]` 全局暂停；分支页打开时暂停底下阅读页的循环（`data-branch` + `suspendLoops` 双保险）。
 
-**过渡（阶段 5 · View Transitions）**：五个动作共用唯一入口 `src/ui/viewTransition.js` 的 `runTransition(name, mutate)`——`off` 档同步改 DOM（绝不 await 后再改：焦点与滚动位置都不动）；浏览器支持 `document.startViewTransition` 且没带 `?vt=0` 时开原生过渡，快照动画的时长 / 缓动只在 `css/motion.css` 的 `::view-transition-*` 里收口（`--m-dur-vt-*`）；浏览器不支持 / `?vt=0` / 调用抛错时降级为「对 `scope` 整块淡入」（时长 ≤ 该档透明度上限），要求同步隐藏的路径（如关弹窗）即时收。三档 kind / ms 的真源是 `Motion.TRANSITIONS`，不变式由 `eval/motion-test.js` 校验（off 一律 instant/0；standard 只准 instant|fade；shared 只准 rich；时长 ≤ 该档 `TIERS` 上限）。
+**过渡（View Transitions）**：五个动作共用唯一入口 `src/ui/viewTransition.js` 的 `runTransition(name, mutate)`——浏览器支持 `document.startViewTransition` 且没带 `?vt=0` 时开原生过渡，快照动画的时长 / 缓动只在 `css/motion.css` 的 `::view-transition-*` 里收口（`--m-dur-vt-*`）；浏览器不支持 / `?vt=0` / 调用抛错时降级为「对 `scope` 整块淡入」（时长 ≤ rich 档透明度上限），要求同步隐藏的路径（如关弹窗）即时收。kind / ms 的真源是 `Motion.TRANSITIONS`，不变式由 `eval/motion-test.js` 校验（时长 ≤ rich `TIERS` 上限）。
 
-| 动作 | 声明 | off | standard | rich | 接线 |
-|---|---|---|---|---|---|
-| 切屏 | `screen` | 即时 | 交叉淡入 ≤160ms | 淡入 + 8px 短位移 ≈220ms | `src/ui/navigation.js`：`showScreen` |
-| 舞台换画 | `stageArt` | 即时替换 | 淡入 ≤160ms | 共享元素 `stage-art` ≈220ms | `navigation.js`：`stageArt` |
-| 分支切换 | `sibling` | 即时 | 交叉淡入 ≤160ms | 方向性短位移 ≈220ms | `src/app/turn.js`（旧 WAAPI 位移留作降级） |
-| 分支页开合 | `branchPage` | 即时 | 淡入 ≤160ms | 淡入 + 位移 ≈220ms | `navigation.js`：`branchPage` |
-| 弹窗开合 | `modal` | 即时、焦点仍正确 | 遮罩淡入 ≤160ms | 缩放 / 位移 + 背景渐隐 ≈220ms | `src/ui/modalHost.js`：`openModal` / `closeModal` |
+| 动作 | 声明 | rich | 接线 |
+|---|---|---|---|
+| 切屏 | `screen` | 淡入 + 8px 短位移 ≈220ms | `src/ui/navigation.js`：`showScreen` |
+| 舞台换画 | `stageArt` | 共享元素 `stage-art` ≈220ms | `navigation.js`：`stageArt` |
+| 分支切换 | `sibling` | 方向性短位移 ≈220ms | `src/app/turn.js`（旧 WAAPI 位移留作降级） |
+| 分支页开合 | `branchPage` | 淡入 + 位移 ≈220ms | `navigation.js`：`branchPage` |
+| 弹窗开合 | `modal` | 缩放 / 位移 + 背景渐隐 ≈220ms | `src/ui/modalHost.js`：`openModal` / `closeModal` |
 
 `view-transition-name` 只在过渡期挂、收尾立即撤；同一时刻必须唯一：舞台用固定的 `stage-art`（一次只给一张图）、弹窗用 `id` / `id-card` 两层、弹窗过渡期间根节点临时 `view-transition-name: none`（否则根快照会曝光固定层与弹窗内部滚动）。连续触发先 `skipTransition()` 收掉上一段，避免快照残留。
 
-**过渡期的循环**（`holdLoops`）：视图过渡的快照会盖住 live DOM，但循环并没有停——220ms 后撤快照那一下，Ken Burns / 环境光 / 流光 / 呼吸会从「快照里的相位」跳到「已推进的相位」。所以 `runTransition` 在 VT 的 update 回调里（新快照拍摄之前）把**正在跑的真实 DOM 循环**用 WAAPI `pause()` 住（跳过 `::view-transition-*` 自己的动画；本来因 `data-paused` / `data-loops-paused` 停着的不碰），`finished`（含被 `skipTransition` 顶掉）计数式 `play()` 回来。`?vt=0` / 不支持 VT / `off` 没有快照，不冻结也不干预。验收：阶段 5 的 `loop-freeze-smoke.mjs`（8 场景 75 条断言）按 `.gitignore` 只留本地工作副本、不入库；需要复跑时从历史提交取回，或参考 `acceptance/tools/motion-probe.mjs` 的循环测量口径。
+**过渡期的循环**（`holdLoops`）：视图过渡的快照会盖住 live DOM，但循环并没有停——220ms 后撤快照那一下，Ken Burns / 环境光 / 流光 / 呼吸会从「快照里的相位」跳到「已推进的相位」。所以 `runTransition` 在 VT 的 update 回调里（新快照拍摄之前）把**正在跑的真实 DOM 循环**用 WAAPI `pause()` 住（跳过 `::view-transition-*` 自己的动画；本来因 `data-paused` / `data-loops-paused` 停着的不碰），`finished`（含被 `skipTransition` 顶掉）计数式 `play()` 回来。`?vt=0` / 不支持 VT 时没有快照，不冻结也不干预。验收：阶段 5 的 `loop-freeze-smoke.mjs`（8 场景 75 条断言）按 `.gitignore` 只留本地工作副本、不入库；需要复跑时从历史提交取回，或参考 `acceptance/tools/motion-probe.mjs` 的循环测量口径。
 
-**本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断；阶段 5 起主路径改走 `runTransition`，旧 WAAPI 位移留作降级）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。阶段 5 的五个过渡动作（切屏 / 舞台换画 / 切兄弟 / 分支页开合 / 弹窗开合）统一走 `runTransition`，三档与降级见下节。
+**本期动效**（都只动 `transform` / `opacity`，图片 blur-up 的 `filter` 是唯一例外）：切兄弟滑动（WAAPI，先切数据 + 重渲染再播入场，可打断；阶段 5 起主路径改走 `runTransition`，旧 WAAPI 位移留作降级）、流式文字逐段淡入（增量包 `span.delta`，存活 span ≤ 200，流结束合并成单个文本节点）、顶栏忙碌进度线 `#busy-line`、图片 blur-up / 舞台交叉淡入 / Ken Burns（离屏与 `data-paused` 暂停）、环境光（仅 rich，`--ambient-glow`）、按钮 / 弹窗 / toast 手感。阶段 5 的五个过渡动作（切屏 / 舞台换画 / 切兄弟 / 分支页开合 / 弹窗开合）统一走 `runTransition`，声明与降级见下节。
 
-**分支页动效**：rich = 边按深度描边生长（`stroke-dashoffset`，总时长封顶 ~600ms）+ 节点弹簧弹出（新节点单独「长出来」）+ 当前路径流光（**只挂 `pathEdgeD` 合成的一条 path**）+ head 呼吸环 + 选中 / 悬停脉冲环；standard = 整体淡入、无循环；off = 无动画。
+**分支页动效**：边按深度描边生长（`stroke-dashoffset`，总时长封顶 ~600ms）+ 节点弹簧弹出（新节点单独「长出来」）+ 当前路径流光（**只挂 `pathEdgeD` 合成的一条 path**）+ head 呼吸环 + 选中 / 悬停脉冲环；系统「减少动态效果」时 JS 跳过这些特效。
 
 **暂停与预算**：`visibilitychange` 写 `html[data-paused]`，CSS 暂停一切循环动画；同屏循环动画 ≤ 3 个（阅读页：`#busy-line` + Ken Burns + 环境光；分支页：流光 + head 呼吸 + 选中脉冲，且流光只有 1 条 path）；`will-change` 只在动画进行时临时加、结束移除。
 

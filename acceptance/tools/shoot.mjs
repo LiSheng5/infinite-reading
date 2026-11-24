@@ -13,7 +13,7 @@
  *  - 只新增文件，不改任何现有源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
  *  - empty  = 干净浏览器上下文（无存档）；seeded = 页面内播种一局（回合 / 分叉 / 图 / 存档点）之后。
- *  - 动效锁到 off（html[data-motion]=off）：reducedMotion:reduce + 显式把 ui.motion 置 off，
+ *  - 动效静默例外：浏览器上下文 reducedMotion:reduce（CSS @media 兜底 + JS 动画路径跳过），
  *    截图前把鼠标移到中性点（阅读页特意悬停舞台，让舞台按钮完整显示）并等动效稳定。
  *  - 只截 viewport（fullPage:false），deviceScaleFactor=1。
  */
@@ -108,7 +108,7 @@ async function openApp(page, query) {
  // 应用不再有全局 IR；种子 / 档位 / 断言用的测试面只在 ?ir-test=1 时挂载。
   const extra = query ? '&' + String(query).replace(/^[?&]/, '') : '';
   await page.goto(APP_URL + '?ir-test=1' + extra, { waitUntil: 'load' });
-  // 启动完成的信号 = init() 写完 html[data-motion] 且弹窗外壳已安装。
+  // 启动完成的信号 = 弹窗外壳已安装（html[data-motion] 是静态属性，不再等 JS 写）。
   await page.waitForFunction(() => !!document.documentElement.dataset.motion, null, { timeout: 15000 });
   await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => !!window.__IR_TEST__, null, { timeout: 15000 });
@@ -309,7 +309,7 @@ async function runPass(browser, state, vp, manifest) {
   manifest.console.push({ state, width: vp.width, dataMotion: motion, navigatorOnLine: onLine, errors, failedRequests });
   if (!manifest.motion) manifest.motion = {
     level: motion,
-    how: "context(reducedMotion:'reduce') + 页面里把 settings.ui.motion 置 'off' 后 applyMotion()（经 ?ir-test=1 钩子），截图前校验 html[data-motion]",
+    how: "context(reducedMotion:'reduce')：系统「减少动态效果」静默例外（CSS @media 兜底 + JS 动画路径跳过）；html[data-motion] 静态为 rich",
   };
   await ctx.close();
 }
@@ -381,15 +381,6 @@ async function runEmpty(page, snap, vp, manifest) {
   await sleep(300);
   await page.click('#btn-close-settings');
   await sleep(200);
-
-  // 动效档位显式锁 off（截图稳定性）
-  await page.evaluate(() => {
-    if (window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings) {
-      __IR_TEST__.App.state.settings.ui = __IR_TEST__.App.state.settings.ui || {};
-      __IR_TEST__.App.state.settings.ui.motion = 'off';
-      if (__IR_TEST__.App.applyMotion) __IR_TEST__.App.applyMotion();
-    }
-  });
 }
 
 /* ---------- seeded 播种：页面内直接写入一局（含回合 / 分叉 / 两张图 / 存档点） ----------
@@ -638,15 +629,6 @@ async function runSeeded(page, snap, vp, manifest) {
     return;
   }
   log('  seeded story ready, turn =', seeded.turn, 'nodes =', seeded.nodes);
-
-  // 动效档位显式锁 off（播种后再锁一次，防启动期覆盖）
-  await page.evaluate(() => {
-    if (window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings) {
-      __IR_TEST__.App.state.settings.ui = __IR_TEST__.App.state.settings.ui || {};
-      __IR_TEST__.App.state.settings.ui.motion = 'off';
-      if (__IR_TEST__.App.applyMotion) __IR_TEST__.App.applyMotion();
-    }
-  });
 
   // —— 阅读页（聊天 / 舞台 / 缩略图条 / 选项托盘；图与分叉都在播种时写好） ——
   await page.evaluate(() => { const b = document.getElementById('btn-inspiration'); if (b) b.click(); });

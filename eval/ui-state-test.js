@@ -10,7 +10,7 @@
  *   3. 静态回归 ：布局写回之后走 commitUi() 落盘（命中 story.prefs.ui 的键只
  *      persistSettings 等于没存），退出沉浸回到进入前的布局而不是一律 auto；
  *   4. 静态回归 ：覆盖层背景 inert + aria-hidden、聊天图与缩略图
- *      可键盘触发、本对话设置面板的滚动快照不反成 $effect 依赖、首帧 data-motion 先于 CSS；
+ *      可键盘触发、本对话设置面板的滚动快照不反成 $effect 依赖、<html> 静态 data-motion="rich"；
  *   5. 静态回归 ：聊天流按条目 key 做 keyed 更新（不再 {#key} 整条销毁重建），
  *      每个条目模型带 readmodel 发的稳定 key，流式空壳回填幂等；
  *   6. 静态回归 ：弹窗外壳（头 / 身 / 脚 + 关闭）全站只有 ModalCard 一份，设置页复用，
@@ -218,20 +218,14 @@ async function main() {
     ok(panelSvelte.indexOf('panel.listScroll') < 0 && /listScrollTop\(\)/.test(panelSvelte),
       '$effect 读 listScrollTop()，不再读 panel.listScroll');
 
-    /* head 内联脚本在样式生效前写 data-motion，档位有 localStorage 镜像 */
+    /* <html> 静态声明 data-motion="rich"：不再有首帧内联脚本与动效档位镜像 */
     const html = read('index.html');
+    ok(/<html[^>]*\sdata-motion="rich"/.test(html), '<html> 静态声明 data-motion="rich"');
     const head = html.slice(0, html.indexOf('</head>'));
-    const bootAt = head.indexOf("setAttribute('data-motion'");
-    ok(bootAt >= 0, 'index.html 的 <head> 有内联脚本写 html[data-motion]');
-    ok(bootAt >= 0 && bootAt < head.indexOf('css/tokens.css'), '内联脚本在样式表之前（首帧就是对的）');
-    ok(/prefers-reduced-motion/.test(head) && /ir:motion/.test(head),
-      '内联脚本认系统偏好，并读 store 落盘的 ir:motion 镜像');
+    ok(head.indexOf("setAttribute('data-motion'") < 0, '<head> 不再有首帧内联脚本');
     const storeSrc = stripComments(read('src/core/store.ts'));
-    ok(/MOTION_MIRROR/.test(storeSrc) && /setItem\(MOTION_MIRROR/.test(storeSrc),
-      'store 在读写设置时同步 ir:motion 镜像');
-    ok(/mirrorMotion\(s\)/.test(bodyOf(storeSrc, 'loadSettings')) &&
-       /mirrorMotion\(s\)/.test(bodyOf(storeSrc, 'saveSettings')),
-      'loadSettings / saveSettings 都刷新镜像');
+    ok(!/MOTION_MIRROR/.test(storeSrc) && !/mirrorMotion/.test(storeSrc),
+      'store 不再写动效档位镜像');
   }
 
   /* ---------------- 5. 聊天流 keyed 更新 ---------------- */

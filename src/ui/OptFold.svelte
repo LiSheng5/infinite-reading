@@ -8,8 +8,8 @@
   * 手动折叠不被普通输入抢回去），摘要行也由它们按 id 写「人物 2 · 已填风格」这类已填提示，
   * 所以这里的 id / sumId 必须原样落到 DOM 上，组件自己不碰 open。
   *
-  * 动画：内容区 .fold-body 在展开时淡入，低动效档由 css/overlays.css 里那条
-  * html[data-motion="off"] 规则整条关掉（原生 details 直接跳变）。 */
+  * 动画：内容区 .fold-body 在展开时淡入（css/overlays.css）；系统「减少动态效果」时
+  * 由 css/motion.css 末尾的 @media 兜底压到接近 0（原生 details 直接跳变）。 */
   let { id = null, sumId = null, sumText = '', children } = $props();
 </script>
 

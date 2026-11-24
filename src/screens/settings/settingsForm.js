@@ -611,9 +611,6 @@ export const GROUPS = [
             { k: 'select', id: 's-ui-choices', label: '选项显示', options: [
               ['tray', '收在「灵感」里'], ['always', '始终内联在旁白下'],
             ] },
-            { k: 'select', id: 's-ui-motion', label: '动效强度', options: [
-              ['auto', '跟随系统'], ['off', '关'], ['standard', '标准'], ['rich', '丰富'],
-            ] },
           ] },
           { k: 'grid2', items: [
             { k: 'select', id: 's-ui-font', label: '字号默认（扮演 / 智能体）', options: [
@@ -627,7 +624,6 @@ export const GROUPS = [
             ] },
           ] },
           { k: 'text', id: 'ui-layout-hint', cls: 'hint' },
-          { k: 'text', cls: 'hint', text: '首页的无限符号只在「丰富」档循环流动；「标准」「关」或系统开了「减少动态效果」时停成一道静态渐变。' },
         ],
       },
     ],

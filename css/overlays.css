@@ -269,12 +269,11 @@ label input.inline-num {
   color: var(--ink-faint);
   letter-spacing: 0.05em;
 }
-/* 展开时内容区淡入（默认收起 → 展开不闪跳）；低动效档整条关掉，原生 details 直接跳变 */
+/* 展开时内容区淡入（默认收起 → 展开不闪跳） */
 .opt-fold[open] > .fold-body { animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both; }
-html[data-motion="off"] .opt-fold[open] > .fold-body { animation: none; }
 
-/* 起草回填的字段短暂高亮：颜色过渡走 --m-t-*（off 档 0ms 直接跳变；
-   prefers-reduced-motion 由动效档 auto 解析成 off 兜底），1.2 秒后由界面层撤掉 .wz-flash。 */
+/* 起草回填的字段短暂高亮：颜色过渡走 --m-t-*，
+   prefers-reduced-motion 由末尾的 @media 兜底压到接近 0；1.2 秒后由界面层撤掉 .wz-flash。 */
 #modal-wizard .wz-flashable {
   transition: background-color var(--m-t-color-base) var(--ease-out), border-color var(--m-t-color-base) var(--ease-out);
 }

@@ -7,8 +7,7 @@
    * 页面是白底，所以不叠「lighter」发光：波峰用深蓝压住纸面，波谷用淡蓝 + 低透明度融回去。
    *
    * 与项目动效纪律的接法：
-   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；只在 rich 档播放，
-   *     off / standard、系统「减少动效」、页面不可见时都停在当前帧；
+   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；系统「减少动效」、页面不可见时停在当前帧；
    *   · 没有按钮 / 滑杆 / 角标：符号就是全部内容，不拦点击，也不拦滚轮；
    *   · 画布两端色从 --inf-light / --accent / --inf-deep 读（见 css/tokens.css），
    *     画布内容色不算 UI 配色，但仍然跟着令牌走，不在脚本里另抄一份色值。
@@ -275,17 +274,16 @@
     const html = document.documentElement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    /* 只有 rich 档播放；其余档（以及页面不可见、系统要减少动效）停在当前帧 */
+    /* 页面不可见 / 系统「减少动态效果」时停在当前帧 */
     function syncMotion() {
-      isPlaying = (html.dataset.motion || 'rich') === 'rich'
-        && !reducedMotion.matches
+      isPlaying = !reducedMotion.matches
         && !html.hasAttribute('data-paused')
         && !document.hidden;
       needsRender = true;
     }
 
     const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-motion', 'data-paused'] });
+    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
     document.addEventListener('visibilitychange', syncMotion);
     reducedMotion.addEventListener('change', syncMotion);
 

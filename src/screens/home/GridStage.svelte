@@ -6,8 +6,7 @@
    * 版面与 InfinityStage 一致：白底、无标题 / 帧号 / 控件、约原来三分之二大小。
    *
    * 与项目动效纪律的接法：
-   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；只有 rich 档推进帧号，
-   *     off / standard、系统「减少动效」、页面不可见时停在当前帧；
+   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；系统「减少动效」、页面不可见时停在当前帧；
    *   · 墨色是画布内容色，按 tokens.css 的 --inf-deep / --accent / --inf-light 取同一族蓝。
    */
   import { onMount } from 'svelte';
@@ -304,10 +303,9 @@
     const html = document.documentElement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    /* 只有 rich 档推进帧号；其余档停在当前帧（仍是一整颗逐格 ∞） */
+    /* 页面不可见 / 系统「减少动态效果」时停在当前帧（仍是一整颗逐格 ∞） */
     function syncMotion() {
-      isPlaying = (html.dataset.motion || 'rich') === 'rich'
-        && !reducedMotion.matches
+      isPlaying = !reducedMotion.matches
         && !html.hasAttribute('data-paused')
         && !document.hidden;
       accumulator = 0;
@@ -316,7 +314,7 @@
     }
 
     const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-motion', 'data-paused'] });
+    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
     document.addEventListener('visibilitychange', syncMotion);
     reducedMotion.addEventListener('change', syncMotion);
 

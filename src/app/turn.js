@@ -344,7 +344,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
    * 新增文字包进 span.delta（createElement + textContent）套 fadeIn；
    * 存活 span 超过 DELTA_MAX_SPANS 时把更早的合并进一个前缀文本节点；
    * 流结束（finishNarration）整体合并成单个文本节点。
-   * standard 档只对整个气泡做一次淡入（见 style.css 的 .bubble-live）；off 档无。 */
+   * 系统「减少动态效果」时只对整个气泡做一次文本替换（不建 span.delta）。 */
   const DELTA_MAX_SPANS = 200;
   let liveDeltaSpans = [];    // 当前气泡里存活的 span.delta
   let liveDeltaMerged = null; // 已合并的前缀文本节点（更早的文字都在这里）
@@ -381,7 +381,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function appendLiveDelta(el, fullText) {
     const level = motionLevel();
     if (level !== 'rich') {
-      // standard / off：不做逐段淡入（standard 由 CSS 对整个气泡做一次淡入）
+      // 系统「减少动态效果」：不做逐段淡入
       el.textContent = fullText;
       liveDeltaText = fullText;
       return;
@@ -658,8 +658,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
  /* 切兄弟过渡（收编进过渡内核；形态 / 时长全由 TRANSITIONS.sibling 决定）：
-   *   off      即时（runTransition 同步换 DOM：焦点与滚动位置都不动）
-   *   standard 交叉淡入、无横向位移（VT 的 ::view-transition-*，或降级整块淡入）
    *   rich     方向性短位移（±24px 新快照滑入 ≈220ms；降级把旧 WAAPI 的位移段叠回淡入上）
    * 名字只在过渡期间挂 #chat-scroll（同屏 view-transition-name 必须唯一，常驻会拖累每次切屏）。
    * 连点：内核先 skipTransition 收上一段（防快照残留），这里再撤上一段的名字与位移；

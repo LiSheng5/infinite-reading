@@ -14,7 +14,7 @@ import { esc as storyPanelEsc } from '../screens/storyPrefs/panel.svelte.js';
 import { A, renderChat, saveAll, toast } from './core.js';
 
   const S = A.state;
-  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionMQ, motionLevel, applyMotion, applyPaused, motionMs, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, resolveSub, imageCfg, miniBtn } = A;
+  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionLevel, applyPaused, motionMs, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, resolveSub, imageCfg, miniBtn } = A;
 
   /* ================= 事件绑定 ================= */
 
@@ -464,12 +464,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
     Store.migrateLegacy();            // 旧档 → （幂等）
     S.settings = Store.loadSettings();  // 迁移后重新读取
-    // 动效强度：启动写 data-motion；系统「减少动态效果」变化时跟随（显式选择优先）
-    applyMotion();
-    if (motionMQ) {
-      if (motionMQ.addEventListener) motionMQ.addEventListener('change', applyMotion);
-      else if (motionMQ.addListener) motionMQ.addListener(applyMotion);
-    }
     A.watchStageVisibility();           // Ken Burns 离屏暂停
     installShell();                     // 11 个弹窗搬进唯一的壳层（幂等）
     bind();

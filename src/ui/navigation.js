@@ -102,8 +102,8 @@ export function showScreen(name, mutate) {
   const stamp = ++switchSeq;
   const guarded = () => { if (stamp === switchSeq) runMutate(); };
 
-  // 过渡形态 / 时长全由 TRANSITIONS.screen 决定：off → 同步换、standard → 交叉淡入、
-  // rich → 交叉淡入 + 短位移。降级（?vt=0 / 不支持 VT）只对目标屏做整块淡入。
+  // 过渡形态 / 时长全由 TRANSITIONS.screen 决定：交叉淡入 + 短位移（运行时固定 rich）。
+  // 降级（?vt=0 / 不支持 VT）只对目标屏做整块淡入。
   cancelShift('screen');
   const r = runTransition('screen', guarded, { scope: screenEl(name) });
   if (r.mode === 'vt' && r.kind === 'shift') shiftNewSnapshot('screen', r.ms, SHIFT_PX);
@@ -160,7 +160,7 @@ function shiftNewSnapshot(key, ms, fromY) {
  *
  * 名字只在这段过渡期间挂上去（同屏 view-transition-name 必须唯一，常驻会把每次切屏都拖进快照）。
  * Ken Burns 挂在 #stage-img.has-art 上：过渡期用 src/ui/motion.js 的 suspendLoops 暂停（快照会冻住它，
- * 不暂停的话结束后会从「快照里的旧相位」跳一下），结束后恢复——standard / off 本来就没有 Ken Burns。
+ * 不暂停的话结束后会从「快照里的旧相位」跳一下），结束后恢复——系统「减少动态效果」时本来就没有 Ken Burns。
  * 只在阅读页可见时开过渡：后台（书架 / 首页）的换画不该弹一段全屏快照。 */
 const STAGE_ART_NAME = 'stage-art';
 
@@ -233,8 +233,6 @@ export function isBranchOpen() {
 
 /* ---------- 分支页开合 ----------
  * 与 showScreen 同构：过渡形态 / 时长全由 TRANSITIONS.branchPage 决定
- *   off      → 同步切（焦点与滚动位置都不动）
- *   standard → root 交叉淡入（分支页不命名，整屏换页）
  *   rich     → 交叉淡入 + 新快照 translateY(±8px) 短位移（开 = 从下往上，关 = 往上退）
  * 降级（?vt=0 / 不支持 VT）→ 只对 scope 做整块淡入：开 = 分支页，关 = 阅读页。
  *

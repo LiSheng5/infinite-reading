@@ -183,18 +183,16 @@ function restack() {
 }
 
 /* ---------- 开合过渡 ----------
- * 形态（三档验收矩阵「弹窗开合」一行，声明表 = src/core/motion.ts 的 TRANSITIONS.modal）：
- *   off       即时：改 DOM 同步做，焦点与滚动位置都不动；不挂名字、不开快照
- *   standard  遮罩层整体交叉淡入 / 淡出（≤160ms）：背景随遮罩一起渐隐，卡片不位移
- *   rich      同上 + 卡片从 scale(.96) translateY(6px) 收进来（关窗时反向退到 scale(.98)
- *             translateY(-4px)）；时长取 TRANSITIONS.modal.rich.ms
+ * 形态（「弹窗开合」一行，声明表 = src/core/motion.ts 的 TRANSITIONS.modal）：
+ *   rich      遮罩层整体交叉淡入 / 淡出，卡片从 scale(.96) translateY(6px) 收进来
+ *             （关窗时反向退到 scale(.98) translateY(-4px)）；时长取 TRANSITIONS.modal.ms
  *   降级      ?vt=0 / 浏览器没有 startViewTransition：开窗对弹窗容器整块淡入；关窗即时（理由见下）
  *
  * 命名范围（根快照会曝光 fixed 层与内部滚动）：
  *   · 过渡期间给根节点挂 `view-transition-name: none` —— 根不参与快照，弹窗只要自己那一层。
  *     这是**临时**改（计数式 holdRootOutOfSnapshot），不写进 css：切屏 / 分支页的过渡仍要用
  *     ::view-transition-new(root) 做位移，常驻 none 会把那两步弄坏。
- *   · 容器名 = 弹窗 id（modal-settings…），卡片名 = id + '-card'（rich 才挂：standard 不许位移）。
+ *   · 容器名 = 弹窗 id（modal-settings…），卡片名 = id + '-card'。
  *     一次只给「这一个弹窗」的两个节点命名，嵌套弹窗各用各的名字，同屏不重名。
  *   · 名字只在过渡期存在：开窗过渡一结束就撤（与 stage-art 同一口径），
  *     免得开着弹窗去切屏时，弹窗被拖进那一层快照里做无意义的自交叉淡入。
@@ -237,16 +235,9 @@ function seqIs(id, n) {
   return (modalSeq.get(id) || 0) === n;
 }
 
-/** 当前动效档（与 src/ui/viewTransition.js 的 tierOf 同口径：没写 data-motion 时按 rich） */
-function motionTier() {
-  let v = '';
-  try { v = document.documentElement.dataset.motion || ''; } catch (_) {}
-  return v === 'off' || v === 'standard' ? v : 'rich';
-}
-
-/** 这批改动要不要真的开 View Transition（off / 降级都不挂名字） */
+/** 这批改动要不要真的开 View Transition（降级不挂名字） */
 function planModal() {
-  const spec = transitionSpec('modal', motionTier());
+  const spec = transitionSpec('modal');
   const willVT = spec.kind !== 'instant' && !vtDisabled() && supportsVT();
   return { spec, willVT, rich: willVT && spec.kind === 'shift' };
 }

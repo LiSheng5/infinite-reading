@@ -223,7 +223,7 @@ import { A, saveAll, toast } from './core.js';
     return true;
   }
 
-  // 打字机式替换标题（rich 逐字；standard 淡入替换；off 直接换）
+  // 打字机式替换标题（rich 逐字；系统「减少动态效果」直接换）
   function typewriteTitle(storyId, text) {
     const el = titleElOf(storyId);
     if (!el) return;
@@ -238,11 +238,6 @@ import { A, saveAll, toast } from './core.js';
         if (i < chars.length) setTimeout(step, 26);
       };
       step();
-    } else if (level === 'standard') {
-      el.textContent = text;
-      el.classList.remove('title-swap');
-      void el.offsetWidth;
-      el.classList.add('title-swap');
     } else {
       el.textContent = text;
     }

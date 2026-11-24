@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-motion="rich">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,25 +8,6 @@
 <!-- 版本戳：构建期由 vite.config.mjs 的 transformIndexHtml 从根目录 VERSION 注入。
      占位符不许手写成具体版本号——版本号的唯一真源是根目录 VERSION 文件。 -->
 <meta name="ir-version" content="__IR_VERSION__">
-
-<!-- 首帧动效档位：css/motion.css 的 :root 默认是 rich，JS 要等 Store.boot() 之后才写
-     html[data-motion]——「减少动态效果」的用户会先看到一帧完整动效。
-     这里在 <head> 里先按同一套规则（Motion.resolve：显式选择优先，其次系统偏好）写一遍：
-     档位真源仍是 settings.ui.motion，落盘时顺带写 ir:motion 镜像（src/core/store.ts），
-     启动后 src/app/main.js 的 applyMotion() 会再对一次（含系统偏好变化的跟随）。 -->
-<script>
-(function () {
-  try {
-    var pref = '';
-    try { pref = localStorage.getItem('ir:motion') || ''; } catch (e) {}
-    if (pref !== 'off' && pref !== 'standard' && pref !== 'rich') {
-      var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-      pref = (mq && mq.matches) ? 'off' : 'rich';
-    }
-    document.documentElement.setAttribute('data-motion', pref);
-  } catch (e) {}
-})();
-</script>
 
 <!-- PWA / 图标：manifest + favicon + iOS 主屏图标（图标由 tools/make-icons.mjs 生成，已随仓库提交） -->
 <link rel="manifest" href="manifest.webmanifest">
@@ -43,7 +24,7 @@
 
 <!-- 样式三层：令牌（css/tokens.css）→ 屏幕样式（css/style.css，只有 @import；
      规则按屏分成 base / home / shelf / read / overlays / responsive / settings / branch / icons）
-     → 动效模块（css/motion.css，最后加载：档位政策与暂停规则优先） -->
+     → 动效模块（css/motion.css，最后加载：政策变量与暂停规则优先） -->
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/motion.css">
@@ -148,7 +129,7 @@
           </div>
         </div>
       </div>
-      <!-- 顶栏忙碌进度线：busy 时由 src/app/core.js 的 state setter 显隐；样式见 css/base.css，三档动效见 css/motion.css -->
+      <!-- 顶栏忙碌进度线：busy 时由 src/app/core.js 的 state setter 显隐；样式见 css/base.css，动效见 css/motion.css -->
       <div id="busy-line" class="hidden" aria-hidden="true"></div>
     </header>
 

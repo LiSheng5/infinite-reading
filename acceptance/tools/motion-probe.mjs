@@ -1,7 +1,7 @@
 /*
  * acceptance/tools/motion-probe.mjs —— 动效测量工具
  *
- * 干什么：按 --tier=off|standard|rich 打开 file:// 的 dist/single/index.html（双击的真实形态），
+ * 干什么：打开 file:// 的 dist/single/index.html（双击的真实形态），
  * 播种一局最小故事（含一次真分叉、两张图），然后跑一组固定动作：
  *
  *   screen   切屏：首页 → 书架 → 首页 → 阅读页
@@ -11,30 +11,29 @@
  *
  * 每个动作窗口内用 document.getAnimations() 逐帧采集（rAF 采样 + 动作收尾再补一次），
  * 记下每条动画的时长 / 迭代次数 / 动的属性 / 目标元素 / 伪元素 / 触发步，
- * 再按三档上限断言（真源 = 页面里的 __IR_TEST__.Motion.TIERS / LOOP_BUDGET，与 css/motion.css 收口一致）：
+ * 再按 rich 单档上限断言（真源 = 页面里的 __IR_TEST__.Motion.TIERS / LOOP_BUDGET，与 css/motion.css 收口一致）：
  *
- *   off       无位移（maxShiftMs 0）、无颜色过渡、透明度 ≤80ms、循环 0 组
- *   standard  位移 ≤160ms、透明度 ≤160ms、颜色 ≤220ms、循环 0 组
  *   rich      位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）
  *
- * 产出（--out 默认 acceptance/phase5/1）：
- *   {out}/{tier}/{tier}-{动作}-{序}-{pre|mid|end}.png   动作前 / 动作中 / 动作后的画面
- *   {out}/manifest.json                                三档可累积（跑一档只替换这一档）
+ * 系统「减少动态效果」是静默例外，不参与本工具：上下文固定 reducedMotion:'no-preference'。
  *
- *   node acceptance/tools/motion-probe.mjs --tier=off|standard|rich
+ * 产出（--out 默认 acceptance/phase5/1）：
+ *   {out}/rich/rich-{动作}-{序}-{pre|mid|end}.png   动作前 / 动作中 / 动作后的画面
+ *   {out}/manifest.json                             单档结果（重跑即替换）
+ *
+ *   node acceptance/tools/motion-probe.mjs
  *        [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal]
  *        [--width=1280|390] [--strict]
  *
- * 退出码：0 = 三档动作全部跑完且 console error / pageerror 为 0
+ * 退出码：0 = 动作全部跑完且 console error / pageerror 为 0
  *         1 = 有动作没跑完、或出现 console error / pageerror
- *         2 = 用法错误（缺 --tier 等）
- * --strict：额外要求「零违规」（违规 = 超出该档上限）。默认不 strict：
+ *         2 = 用法错误
+ * --strict：额外要求「零违规」（违规 = 超出 rich 上限）。默认不 strict：
  *          当前多数动作还没有过渡（属正常），测量结果里的 violations 是后续步骤的待办清单。
  *
  *  - 只新增文件，不改产品代码；页面一律 file:// 打开，不联网（本地服务探测被本地路由接住）。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
- *  - 档位靠 settings.ui.motion + __IR_TEST__.App.applyMotion() 显式落定，并校验 html[data-motion]，
- *    不依赖 auto 的系统偏好推测；上下文 reducedMotion 取 no-preference。
+ *  - html[data-motion] 静态为 rich，跑前校验一次；上下文 reducedMotion 取 no-preference。
  *  - 截图不开 animations:'disabled'——要的就是动画进行中的中间帧。
  */
 import { createRequire } from 'module';
@@ -50,7 +49,6 @@ const ROOT = path.resolve(HERE, '..', '..');
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
 const VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
 
-const TIERS = ['off', 'standard', 'rich'];
 const ACTIONS = ['screen', 'stage', 'sibling', 'modal'];
 const ACTION_NOTES = {
   screen: '切屏：首页 → 书架 → 首页 → 阅读页（当前实现只切 .hidden，无过渡属正常）',
@@ -63,7 +61,7 @@ const log = (...a) => console.log('[motion-probe]', ...a);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function parseArgs() {
-  const out = { tier: '', out: 'acceptance/phase5/1', actions: ACTIONS.join(','), width: '1280', strict: false };
+  const out = { out: 'acceptance/phase5/1', actions: ACTIONS.join(','), width: '1280', strict: false };
   for (const a of process.argv.slice(2)) {
     const m = a.match(/^--([\w-]+)(?:=(.*))?$/);
     if (!m) continue;
@@ -75,7 +73,7 @@ function parseArgs() {
 
 function usage(msg) {
   console.error('[motion-probe] ' + msg);
-  console.error('用法：node acceptance/tools/motion-probe.mjs --tier=off|standard|rich [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal] [--width=1280|390] [--strict]');
+  console.error('用法：node acceptance/tools/motion-probe.mjs [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal] [--width=1280|390] [--strict]');
   process.exit(2);
 }
 
@@ -207,15 +205,9 @@ async function openApp(page) {
   await sleep(500);
 }
 
-async function forceTier(page, tier) {
-  const got = await page.evaluate((t) => {
-    const A = window.__IR_TEST__.App;
-    A.state.settings.ui = A.state.settings.ui || {};
-    A.state.settings.ui.motion = t;
-    if (A.applyMotion) A.applyMotion();
-    return document.documentElement.dataset.motion || '';
-  }, tier);
-  if (got !== tier) throw new Error('档位没能落定：期望 html[data-motion]=' + tier + '，实为 ' + (got || '(空)'));
+async function checkRich(page) {
+  const got = await page.evaluate(() => document.documentElement.dataset.motion || '');
+  if (got !== 'rich') throw new Error('html[data-motion] 应为 rich，实为 ' + (got || '(空)'));
   return got;
 }
 
@@ -475,8 +467,8 @@ const PROP_KIND = {
 // getKeyframes() 给的是驼峰（borderBottomColor）；统一转 kebab 再查分类表
 const toKebab = (p) => String(p).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
 
-function assertAction(action, tier, policy) {
-  const t = policy.tiers[tier];
+function assertAction(action, policy) {
+  const t = policy.tier;
   const violations = [];
   const notes = [];
   const loopGroups = [];
@@ -487,7 +479,7 @@ function assertAction(action, tier, policy) {
       const g = a.name || a.target || '(未命名)';
       if (loopGroups.indexOf(g) < 0) loopGroups.push(g);
       if (!t.loops) {
-        violations.push({ rule: 'no-loop', animation: a.name || a.target, detail: tier + ' 档不允许循环动画（' + g + ' × ' + a.iterations + '）' });
+        violations.push({ rule: 'no-loop', animation: a.name || a.target, detail: 'rich 档不允许循环动画（' + g + ' × ' + a.iterations + '）' });
       }
       continue;   // 循环动画只看预算，不套单次时长上限
     }
@@ -509,7 +501,7 @@ function assertAction(action, tier, policy) {
           target: a.target,
           duration: a.duration,
           cap,
-          detail: tier + ' 档 ' + k + ' 上限 ' + cap + 'ms，实测 ' + a.duration + 'ms（' + (a.name || a.target) + '）',
+          detail: 'rich 档 ' + k + ' 上限 ' + cap + 'ms，实测 ' + a.duration + 'ms（' + (a.name || a.target) + '）',
         });
       }
     }
@@ -528,13 +520,12 @@ function assertAction(action, tier, policy) {
   };
 }
 
-/* ================= 单档跑一遍 ================= */
+/* ================= 单档（rich）跑一遍 ================= */
 
-async function runTier(browser, args, outDir) {
-  const tier = args.tier;
+async function runProbe(browser, args, outDir) {
   const width = Number(args.width) === 390 ? 390 : 1280;
   const height = width === 390 ? 844 : 800;
-  const tierDir = path.join(outDir, tier);
+  const tierDir = path.join(outDir, 'rich');
   fs.mkdirSync(tierDir, { recursive: true });
   for (const f of fs.readdirSync(tierDir)) if (/\.png$/i.test(f)) fs.rmSync(path.join(tierDir, f), { force: true });
 
@@ -566,10 +557,10 @@ async function runTier(browser, args, outDir) {
   }));
 
   const result = {
-    tier,
+    tier: 'rich',
     viewport: { width, height },
     dataMotion: '',
-    how: "context(reducedMotion:'no-preference') + settings.ui.motion=tier + __IR_TEST__.App.applyMotion()，跑前校验 html[data-motion]",
+    how: "context(reducedMotion:'no-preference') + html[data-motion] 静态 rich，跑前校验",
     actions: [],
     console: { errors: consoleErrors, failedRequests },
   };
@@ -580,11 +571,11 @@ async function runTier(browser, args, outDir) {
     if (!seeded.ok) throw new Error('播种失败：' + seeded.error);
     log('  播种完成：场景 ' + seeded.scenes.length + ' 张，head=' + seeded.head);
 
-    result.dataMotion = await forceTier(page, tier);
+    result.dataMotion = await checkRich(page);
     await page.evaluate(installRecorder);
 
     const policy = await page.evaluate(() => ({
-      tiers: JSON.parse(JSON.stringify(__IR_TEST__.Motion.TIERS)),
+      tier: JSON.parse(JSON.stringify(__IR_TEST__.Motion.TIERS.rich)),
       loopBudget: __IR_TEST__.Motion.LOOP_BUDGET,
     }));
     result.policy = policy;
@@ -598,7 +589,7 @@ async function runTier(browser, args, outDir) {
     }
 
     for (const name of order) {
-      log('  -- ' + tier + ' / ' + name);
+      log('  -- ' + name);
       const action = {
         name,
         note: ACTION_NOTES[name] || '',
@@ -608,7 +599,7 @@ async function runTier(browser, args, outDir) {
         error: '',
       };
       const shot = async (suffix) => {
-        const file = `${tier}-${name}-${suffix}.png`;
+        const file = `rich-${name}-${suffix}.png`;
         await page.screenshot({ path: path.join(tierDir, file), animations: 'allow', fullPage: false });
         action.screenshots.push(file);
       };
@@ -631,7 +622,7 @@ async function runTier(browser, args, outDir) {
 
       action.steps = data.steps;
       action.animations = data.records;
-      const verdict = assertAction(action, tier, policy);
+      const verdict = assertAction(action, policy);
       Object.assign(action, verdict);
       result.actions.push(action);
       log('    ' + (action.error ? '✗' : verdict.ok ? '✓' : '⚠') + ' 动画 ' + action.animations.length +
@@ -663,8 +654,6 @@ async function runTier(browser, args, outDir) {
 
 async function main() {
   const args = parseArgs();
-  if (!args.tier) usage('缺少 --tier');
-  if (TIERS.indexOf(args.tier) < 0) usage('--tier 只认 off|standard|rich，实为 ' + args.tier);
   const badActions = String(args.actions || '').split(',').map(s => s.trim()).filter(s => s && ACTIONS.indexOf(s) < 0);
   if (badActions.length) usage('--actions 里有不认识的项：' + badActions.join(','));
 
@@ -674,58 +663,39 @@ async function main() {
   const outDir = path.resolve(ROOT, args.out || 'acceptance/phase5/1');
   fs.mkdirSync(outDir, { recursive: true });
 
-  log('== tier=' + args.tier + '  out=' + path.relative(ROOT, outDir) + ' ==');
+  log('== rich  out=' + path.relative(ROOT, outDir) + ' ==');
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   let run;
   try {
-    run = await runTier(browser, args, outDir);
+    run = await runProbe(browser, args, outDir);
   } finally {
     await browser.close();
   }
 
-  // 三档可累积：跑一档只替换这一档，其余档的记录原样保留
   const manifestPath = path.join(outDir, 'manifest.json');
-  let prev = null;
-  try { prev = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch (_) {}
-  const tiers = Object.assign({}, (prev && prev.tiers) || {});
-  tiers[args.tier] = run;
-
   const manifest = {
     project: 'infinite-reading',
     version: VERSION,
-    stage: '阶段 6 · 收尾发布 · 动效三档复测',
+    stage: '阶段 6 · 收尾发布 · 动效单档（rich）复测',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/motion-probe.mjs',
     entry: APP_URL,
-    usage: 'node acceptance/tools/motion-probe.mjs --tier=off|standard|rich [--out=…] [--actions=…] [--width=1280|390] [--strict]',
-    naming: '{tier}/{tier}-{动作}-{序}-{pre|mid|end}.png',
+    usage: 'node acceptance/tools/motion-probe.mjs [--out=…] [--actions=…] [--width=1280|390] [--strict]',
+    naming: 'rich/rich-{动作}-{序}-{pre|mid|end}.png',
     how: {
       actions: ACTION_NOTES,
       capture: '动作窗口内 requestAnimationFrame 逐帧 document.getAnimations() + 收尾补采；记时长 / 迭代次数 / 动的属性 / 目标 / 伪元素 / 触发步',
-      assert: '按页面真源 __IR_TEST__.Motion.TIERS 与 LOOP_BUDGET 判上限：off 无位移无循环 ≤80ms 透明度；standard 位移 ≤160ms、透明度 ≤160ms、颜色 ≤220ms、无循环；rich 位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）',
+      assert: '按页面真源 __IR_TEST__.Motion.TIERS.rich 与 LOOP_BUDGET 判上限：位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）',
       note: '断言只查上限，不要求动画存在。当前多数动作还没有过渡（切屏 / 弹窗关闭 / 舞台换画之外的多数路径），属正常；violations 是后续步骤的待办清单。',
       strict: '--strict 时违规也算失败；默认只把「动作没跑完 / console error」当失败。',
     },
-    tiers: {},
-    summary: {},
-  };
-  for (const t of TIERS) if (tiers[t]) manifest.tiers[t] = tiers[t];
-
-  const runs = TIERS.map(t => tiers[t]).filter(Boolean);
-  manifest.summary = {
-    tiers: Object.keys(manifest.tiers),
-    tiersOk: runs.filter(r => r.summary && r.summary.ok).length,
-    actions: runs.reduce((n, r) => n + (r.summary ? r.summary.actions : 0), 0),
-    actionsFailed: runs.reduce((n, r) => n + (r.summary ? r.summary.actionsFailed : 0), 0),
-    animations: runs.reduce((n, r) => n + (r.summary ? r.summary.animations : 0), 0),
-    violations: runs.reduce((n, r) => n + (r.summary ? r.summary.violations : 0), 0),
-    consoleErrors: runs.reduce((n, r) => n + (r.summary ? r.summary.consoleErrors : 0), 0),
-    screenshots: runs.reduce((n, r) => n + (r.summary ? r.summary.screenshots : 0), 0),
+    rich: run,
+    summary: run.summary,
   };
 
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
   log('manifest →', path.relative(ROOT, manifestPath));
-  log('本档：动作 ' + run.summary.actions + '，动画 ' + run.summary.animations +
+  log('rich：动作 ' + run.summary.actions + '，动画 ' + run.summary.animations +
     '，违规 ' + run.summary.violations + '，console error ' + run.summary.consoleErrors +
     '，截图 ' + run.summary.screenshots);
   if (!run.summary.ok) process.exitCode = 1;

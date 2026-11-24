@@ -496,7 +496,7 @@ async function seedInPage(page) {
           { id: 'pf-fixture-alt', label: '备用便宜档', baseUrl: 'https://api2.invalid/v1', apiKey: '', model: 'fixture-lite-model' },
         ],
         userProfile: { enabled: 'all' },
-        ui: { layout: 'split', splitRatio: 0.55, imageCollapsed: false, choices: 'tray', motion: 'rich', fontScale: 'md', width: 'standard', density: 'standard' },
+        ui: { layout: 'split', splitRatio: 0.55, imageCollapsed: false, choices: 'tray', fontScale: 'md', width: 'standard', density: 'standard' },
         showReasoning: true,
         toolsEnabled: 'on',
         noTools: [{ baseUrl: 'https://api2.invalid/v1', model: 'fixture-lite-model', at: 0 }],

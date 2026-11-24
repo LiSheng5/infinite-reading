@@ -6,8 +6,8 @@
    * 只在实际作画（队列非空且舞台上还没有图）时挂载，队列一空随舞台空状态一起卸载。
    *
    * 与项目动效纪律的接法：
-   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；只有 rich 档滚动帧号，
-   *     standard / off、系统「减少动效」、页面不可见时停在当前帧（同样是一张纸墨 ∞）；
+   *   · 逐帧绘制在 canvas 里，不走 CSS @keyframes；系统「减少动效」、页面不可见时停在当前帧
+   *     （同样是一张纸墨 ∞）；
    *   · 没有标题、角标、帧号、暂停与重排控件：状态文字仍由舞台左上角的胶囊负责；
    *   · 纸面底色 / 纸纹 / 暗角走 tokens.css 的 --ink-* 令牌，逐字墨色是画布内容色。
    */
@@ -451,10 +451,9 @@
     const html = document.documentElement;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    /* 只有 rich 档滚动帧号；其余档停在当前帧（仍是一张完整的纸墨 ∞） */
+    /* 页面不可见 / 系统「减少动态效果」时停在当前帧（仍是一张完整的纸墨 ∞） */
     function syncMotion() {
-      isPlaying = (html.dataset.motion || 'rich') === 'rich'
-        && !reducedMotion.matches
+      isPlaying = !reducedMotion.matches
         && !html.hasAttribute('data-paused')
         && !document.hidden;
       accumulator = 0;
@@ -463,7 +462,7 @@
     }
 
     const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-motion', 'data-paused'] });
+    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
     document.addEventListener('visibilitychange', syncMotion);
     reducedMotion.addEventListener('change', syncMotion);
 

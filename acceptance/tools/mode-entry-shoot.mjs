@@ -109,17 +109,6 @@ async function settle(page, opts) {
   await sleep(opts.wait || 450);
 }
 
-function lockMotion(page) {
-  return page.evaluate(() => {
-    const T = window.__IR_TEST__;
-    if (T && T.App && T.App.state && T.App.state.settings) {
-      T.App.state.settings.ui = T.App.state.settings.ui || {};
-      T.App.state.settings.ui.motion = 'off';
-      if (T.App.applyMotion) T.App.applyMotion();
-    }
-  });
-}
-
 /* ---------------- 主流程 ---------------- */
 async function main() {
   if (!fs.existsSync(path.join(ROOT, 'dist', 'single', 'index.html'))) {
@@ -255,7 +244,6 @@ async function runWidth(browser, vp, manifest, png) {
 
   try {
     await openApp(page);
-    await lockMotion(page);
 
     /* —— 扮演开局 → 选卡视图 —— */
     await page.click('#screen-start .mode-card[data-mode="rp"]');

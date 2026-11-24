@@ -1,10 +1,9 @@
 /*
  * src/ui/motion.js —— 统一 motion 模块 · DOM 端
  *
- * 分工：档位语义与三档行为声明在 src/core/motion.ts（纯逻辑、Node 可测）；
+ * 分工：动效声明在 src/core/motion.ts（纯逻辑、Node 可测）；
  * 政策变量、@keyframes、暂停规则在 css/motion.css。本文件只做 DOM 接线：
  *
- *   applyMotion(root, pref)  解析档位并写 html[data-motion]
  *   applyPaused(root, doc)   页面不可见 → html[data-paused]
  *   suspendLoops(el)         子树挂起（分支页打开 / 舞台换画时暂停底下循环），返回恢复函数
  * holdLoops() 过渡期循环冻结：暂停所有正在跑的真实 DOM 循环，返回解冻函数
@@ -12,21 +11,6 @@
  * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（旧版的机制，原样保留）。
  * 应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
 import { Motion } from '../core/motion.ts';
-
-const REDUCED_MQ = '(prefers-reduced-motion: reduce)';
-
-/** 当前档位：pref 为用户设置（'auto' | 'off' | 'standard' | 'rich'），显式选择优先于系统偏好 */
-export function resolveLevel(pref, root) {
-  const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(REDUCED_MQ) : null;
-  return Motion.resolve(pref, !!(mq && mq.matches));
-}
-
-/** 把档位写进 html[data-motion]（CSS 档位规则的唯一开关），返回落定的档位 */
-export function applyMotion(root, pref) {
-  const level = resolveLevel(pref, root);
-  root.dataset.motion = level;
-  return level;
-}
 
 /** 页面不可见 → html[data-paused]（CSS 暂停一切循环动画） */
 export function applyPaused(root, doc) {

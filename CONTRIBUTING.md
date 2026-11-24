@@ -42,7 +42,7 @@ src/screens/            7 个屏幕的组件与 $state 模块：home / settings 
 css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角 / 表单字号 --fs-field）；:root 之外不写颜色字面量
 css/style.css           屏幕样式入口（只有 @import + 设计原则 / 断点标尺 / 按钮词汇）
 css/{base,home,shelf,read,overlays,responsive,settings,branch,icons}.css   9 个分片：import 顺序 = 层叠顺序（M4）；某个屏的样式就改它那一片
-css/motion.css          动效档位收口 + @keyframes 唯一定义点 + 暂停规则
+css/motion.css          动效政策收口 + @keyframes 唯一定义点 + 暂停规则
 eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
 eval/_harness.js        门禁共用脚手架：check / finish / run / loadEsm / localMs（不单独跑，不算门禁）
@@ -66,11 +66,11 @@ npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 39 个 eva
 它的组成与用途：
 
 - `node eval/run.js`：用固定剧本重放 32 回合，检查「上下文组装 / 压缩 / 启发式召回 / 角色卡 / 画像」是否被改坏——**不调用任何 API、不产生费用**，改记忆机制前尤其要先跑。
-- `node eval/tokens-test.js` / `node eval/motion-test.js`：`:root` 之外无颜色字面量、`@keyframes` 属性白名单、三档动效声明表与 CSS 逐项对齐。
+- `node eval/tokens-test.js` / `node eval/motion-test.js`：`:root` 之外无颜色字面量、`@keyframes` 属性白名单、动效声明表（rich 单档）与 CSS 逐项对齐。
 - `node eval/css-structure-test.js`：样式分片与入口 `@import` 一一对应且顺序固定、断点只用标尺（480 / 640 / 720 / 721 / 900 / `hover: none`）、按钮只有 `.ui-btn` 一套词汇（旧类名一律拦下）。改 CSS 前先看它。
 - `node eval/comments-test.js`：注释里不许出现仓库外的编号（任务书章节号、审查条目号、阶段号、轮次号）；要引用就引仓内文档（`ARCHITECTURE.md §4.2`）。约定见 §四「注释写什么」。
 - `node eval/error-policy-test.js`：网络 / 模型 / 存储这类真实失败的 catch 不许静默吞掉（必须有上报出口或说明性注释）；同时单测 `errorText` / `shortError` / `failureEntry`。约定见 `ARCHITECTURE.md §2.2` 与 §四「失败处理」。
-- `node eval/settings-ids-test.js`：148 个设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）；已下线的能力位控件（思考档位 / 尺寸档位 / 质量）不许回来。
+- `node eval/settings-ids-test.js`：设置控件 id 一个不能少（唯一真源是 `src/screens/settings` 与 `src/screens/storyPrefs`）；已下线的能力位控件（思考档位 / 尺寸档位 / 质量）不许回来。
 - `node eval/capability-scope-test.js`：模型参考表只登记上下文窗口——`providers.ts` 不许按表塑形请求体（温度 / 尺寸照发，厂商形参走「自定义请求参数」），表里也不许再出现 image / video / thinking / sizes / quality。
 - `node eval/app-structure-test.js`：入口 import 顺序、模块行数上限、`A.reg` 键唯一、顶层解构白名单、高频入口（`renderChat` / `saveAll` / `toast`）必须是 `core.js` 的命名导出（调用方不再写 `A.xxx`）。
 - `node eval/platform-test.js`：浏览器能力的两处边界——IndexedDB 开库被**别的标签页挡住**（`blocked`）是瞬时状态，必须能重试且不把会话判死，只有真错误才降级；Service Worker 的 `activate` 只清带 `ir-v` 前缀的旧缓存（同源还挂着别的项目）。
@@ -84,7 +84,7 @@ npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 39 个 eva
 - **数据层不许动**：`story` 结构 / `.irstory.json` / `.irbackup.json` / `.zip` 备份一个字段都不许改；改动结构必须走 `src/core/store.ts` 的 `migrateStory` / `SCHEMA` 升级，老存档要能继续打开（`eval/schema-test.js` + 回归夹具守着）。
 - **模块写法**：核心逻辑是 ES module（`src/core/*.ts`，各自 export 真实 API、模块间静态 import）；界面行为层是 ES module + `src/app/core.js` 的注册表 `A`——**不要**新建全局命名空间（旧的 `window.IR` 已删）。跨模块调用写 `A.xxx()`，只在顶部解构 core 的导出；高频入口（`renderChat` / `saveAll` / `toast`）例外，从 `./core.js` 命名 import（IDE 能 Ctrl+Click），口径与门槛见 `ARCHITECTURE.md §2.1` 第 2 条。
 - **界面写法**：屏幕用 Svelte 5（`$state` / `$props`），状态模块与组件分离；容器只替换内容，屏幕可见性仍归 `src/ui/navigation.js` 的 `Nav.showScreen`。安全红线：用户 / 模型产出**一律文本插值**，禁止 `{@html}` 与 `innerHTML`（`eval/ui-lib-test.js` 会拦）。
-- **动效**：任何新动画都要在 `src/core/motion.ts` 的 `ANIMATIONS` / `TRANSITIONS` 声明三档行为；`@keyframes` 只写在 `css/motion.css`；`off` 档不许有位移与循环。
+- **动效**：运行时只有 rich 一档，任何新动画都要在 `src/core/motion.ts` 的 `ANIMATIONS` / `TRANSITIONS` 声明单档行为（单个值，不再是三档对象）；`@keyframes` 只写在 `css/motion.css`。系统「减少动态效果」是唯一静默例外：JS 动画路径自己判断 `motionLevel() !== 'off'`（或 `=== 'rich'`），CSS 侧由 `prefers-reduced-motion` 的 `@media` 兜底，不把它做成设置项或档位。
 - **改了前端资源看不到变化**：先用 DevTools → Application → Service Workers 注销（`sw.js` 会缓存静态资源），别怀疑人生。
 - **文案**：界面与注释用简体中文，术语保持一致（如「世界状态卡」「画师子代理」「存档点」）。
 - **失败处理**：用户可行动的失败 → `A.reportUserFailure`（错误 toast 7 秒 + 调用方保留重试入口）；纯后台降级 → `A.reportBackgroundFailure`（`console.warn`，影响故事状态时用 `A.failureEntry` 在 `WriteBack` 闸内落 tool 留痕）；清理 / 探测 / 解析兜底可以吞，但 catch 里要写清为什么。**真实失败绝不允许空 catch**，`eval/error-policy-test.js` 会逐个拦下。完整口径见 `ARCHITECTURE.md §2.2`。

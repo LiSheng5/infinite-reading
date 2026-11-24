@@ -48,11 +48,6 @@ import { APP_VERSION } from './version.ts';
 
   const MIGRATED_V3 = 'ir:migrated-v3';           // localStorage → IndexedDB 迁移标记
 
-  // 动效档位的「首帧镜像」：只写 localStorage（IDB 是异步的，首帧读不到）。
-  // index.html 的 <head> 内联脚本在 CSS 生效前读它，先把 html[data-motion] 写上，
-  // 「减少动态效果」的用户就不会先看到一帧 rich 动效。真源仍是 settings.ui.motion。
-  const MOTION_MIRROR = 'ir:motion';
-
   // 旧键，只读、不删（迁移失败还能退回旧版本）
   const LEGACY = {
     settings: 'infinite-reading-v1:settings',
@@ -317,7 +312,6 @@ import { APP_VERSION } from './version.ts';
         splitRatio: 0.5,         // 双栏比例（每栏最小约 28%）
         imageCollapsed: false,   // 舞台收起（聊天占满）
         choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
-        motion: 'auto',          // 动效强度：auto | off | standard | rich
         // 扮演 / 智能体的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
         fontScale: 'md',         // sm | md | lg
         width: 'standard',       // narrow | standard | wide
@@ -450,7 +444,7 @@ import { APP_VERSION } from './version.ts';
     // 界面布局（新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
     {
       since: 'v0.3 – v0.11.0',
-      what: '界面布局 ui：layout / splitRatio 夹值，choices / motion / fontScale / width / density 回默认',
+      what: '界面布局 ui：layout / splitRatio 夹值，choices / fontScale / width / density 回默认',
       when: () => true,
       apply: ({ raw, out, d }) => {
         const rawUi = (raw.ui && typeof raw.ui === 'object') ? raw.ui : {};
@@ -461,8 +455,6 @@ import { APP_VERSION } from './version.ts';
           splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
           imageCollapsed: !!rawUi.imageCollapsed,
           choices: rawUi.choices === 'always' ? 'always' : 'tray',
-          // 动效强度：auto | off | standard | rich，非法值当 auto（幂等）
-          motion: ['auto', 'off', 'standard', 'rich'].indexOf(rawUi.motion) >= 0 ? rawUi.motion : 'auto',
           // 字号 / 宽度 / 密度默认（令牌驱动；非法值回默认）
           fontScale: ['sm', 'md', 'lg'].indexOf(rawUi.fontScale) >= 0 ? rawUi.fontScale : d.ui.fontScale,
           width: ['narrow', 'standard', 'wide'].indexOf(rawUi.width) >= 0 ? rawUi.width : d.ui.width,
@@ -902,23 +894,11 @@ import { APP_VERSION } from './version.ts';
 
   /* ---------------- 读写 API ---------------- */
 
-  // 把动效档位镜像进 localStorage（'auto' 也写：内联脚本按 Motion.resolve 同口径解析）
-  function mirrorMotion(s: any) {
-    try {
-      const raw = s && s.ui ? s.ui.motion : 'auto';
-      const v = (raw === 'off' || raw === 'standard' || raw === 'rich') ? raw : 'auto';
-      ls().setItem(MOTION_MIRROR, v);
-    } catch (_) { /* 配额 / 隐私模式：首帧退回 matchMedia 判断，不影响功能 */ }
-  }
-
   function loadSettings() {
     const raw = readKV(KEYS.settings);
-    const s = migrateSettings(raw);
-    mirrorMotion(s);   // 下一次打开页面时 <head> 的内联脚本能读到准确档位
-    return s;
+    return migrateSettings(raw);
   }
   function saveSettings(s) {
-    mirrorMotion(s);
     return writeKV(KEYS.settings, s || {});
   }
 

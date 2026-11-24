@@ -6,11 +6,10 @@
  */
 import { Store } from '../core/store.ts';
 import { ModelCapabilities as Cap } from '../core/modelCapabilities.ts';   // 模型能力登记表
-import { Motion } from '../core/motion.ts';
 import { sleep, clone } from '../core/tree.ts';
 import { createConfirmQueue } from '../core/confirmQueue.ts';
 import { errorText, shortError, failureEntry } from '../core/errors.ts';
-import { applyMotion as setMotionTier, applyPaused as syncPausedAttr } from '../ui/motion.js';
+import { applyPaused as syncPausedAttr } from '../ui/motion.js';
 import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal } from '../ui/modalHost.js';
 
   const $ = s => document.querySelector(s);
@@ -144,14 +143,9 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     ? window.matchMedia('(prefers-reduced-motion: reduce)')
     : null;
 
-  // 当前动效强度：settings.ui.motion + 系统「减少动态效果」→ Motion.resolve
+  // 运行时只有 rich 一档；系统「减少动态效果」是唯一静默例外（JS 动画路径直接跳过）
   function motionLevel() {
-    return Motion.resolve((S.settings.ui && S.settings.ui.motion) || 'auto', !!(motionMQ && motionMQ.matches));
-  }
-
-  function applyMotion() {
-    const pref = (S.settings.ui && S.settings.ui.motion) || 'auto';
-    return setMotionTier(document.documentElement, pref);
+    return (motionMQ && motionMQ.matches) ? 'off' : 'rich';
   }
 
   // 页面不可见 → html[data-paused]（CSS 暂停一切循环动画）
@@ -493,7 +487,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     setSendButtonsBusy,
     motionMQ,
     motionLevel,
-    applyMotion,
     applyPaused,
     motionMs,
     toast,

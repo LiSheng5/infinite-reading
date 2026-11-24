@@ -78,8 +78,6 @@ fieldset.feature-off legend { color: var(--ink-dim); }
   letter-spacing: .14em; color: var(--ink-dim); margin: 2px 0 12px;
 }
 .set-back { margin-bottom: 12px; }
-html[data-motion="off"] .set-nav-item:hover { transform: none; }
-html[data-motion="off"] .set-panel { animation: none; }
 
 /* 模型库：列表行 + 编辑块 */
 #fs-profiles .mono-row { gap: 8px; flex-wrap: wrap; }
@@ -257,7 +255,6 @@ html[data-motion="off"] .set-panel { animation: none; }
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
-html[data-motion="off"] .story-prefs { animation: none; }
 
 /* ==================== 字号 / 内容宽度 / 密度令牌 ==================== */
 #screen-game { --font-scale: 1; --content-w: 760px; --density: 1; }

@@ -1,26 +1,26 @@
-/*  动效强度解析 + 三档声明表单测——纯逻辑。
+/* 动效单档（rich）+ 静默例外断言——纯逻辑 + 源码口径。
  *
- * IR.Motion.resolve(pref, prefersReduced)：
- *   auto → prefersReduced ? 'off' : 'rich'
- *   显式 off / standard / rich 优先于系统偏好
- *   未知值 / undefined / null 当 'auto'
+ * 运行时只有 rich 一档（完整动效）：
+ *   TIERS 只有 rich；LOOP_BUDGET 同屏循环上限 ≤3 组；
+ *   ANIMATIONS 每条是单个行为值（none | fade | shift | full | loop）；
+ *   TRANSITIONS 每条是单个 { kind, ms }，时长 ≤ rich 档上限。
+ *   Motion 只暴露单档声明（三档机制已删除）。
  *
- * 统一 motion 模块：
- *   TIERS 三档政策：off 无位移无循环 ≤80ms 透明度；standard 无循环、短位移 ≤160ms；rich 全开
- *   LOOP_BUDGET 循环动画上限（同屏 ≤3 组）
- *   ANIMATIONS 逐动画三档行为声明：off ⊆ {none,fade}、standard ⊆ {none,fade,shift}、
- *   rich ⊆ {none,fade,shift,full,loop}；档次富度 off ≤ standard ≤ rich
- *
- * 过渡内核的声明表：
- *   TRANSITIONS 逐过渡动作三档 kind / 时长：off 一律 instant/0；standard 只准 instant|fade；
- *   rich 可到 shift|shared；时长 ≤ 该档 TIERS 上限（shift/shared 按 maxShiftMs，fade 按 maxOpacityMs）；
- *   shared 只准 rich；五个动作的 standard / rich 形态与三档矩阵逐条对齐。
+ * 静默例外（系统「减少动态效果」）：
+ *   · 不是档位、不出现在 UI；只由 JS 动画路径跳过（src/app/core.js 的 motionLevel 两态）；
+ *   · CSS 侧由 css/motion.css 末尾的 @media (prefers-reduced-motion: reduce) 无条件兜底；
+ *   · index.html 的 <html> 静态写 data-motion="rich"，不再有首帧内联脚本。
  *
  * 用法：node eval/motion-test.js（任一不过 → 退出码 1）
  */
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const Motion = require('../src/core/motion.ts').Motion;
+
+const ROOT = path.join(__dirname, '..');
+const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 let failed = 0;
 function eq(name, actual, expected) {
@@ -41,117 +41,88 @@ function ok(name, cond, detail) {
   console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
 }
 
-/* ---------- resolve（迁移前语义，逐字保留） ---------- */
+/* ---------- 单档语义 ---------- */
 
-eq("resolve('auto', false)", Motion.resolve('auto', false), 'rich');
-eq("resolve('auto', true)", Motion.resolve('auto', true), 'off');
-eq("resolve('rich', true)（显式优先）", Motion.resolve('rich', true), 'rich');
-eq("resolve('off', false)", Motion.resolve('off', false), 'off');
-eq("resolve('standard', false)", Motion.resolve('standard', false), 'standard');
-eq("resolve('standard', true)", Motion.resolve('standard', true), 'standard');
-eq('resolve(undefined, false) 当 auto', Motion.resolve(undefined, false), 'rich');
-eq('resolve(null, true) 当 auto', Motion.resolve(null, true), 'off');
-eq("resolve('nonsense', false) 当 auto", Motion.resolve('nonsense', false), 'rich');
-eq('resolve(42, true) 当 auto', Motion.resolve(42, true), 'off');
-
-/* ---------- 三档政策 ---------- */
-
-eq('LEVELS', Motion.LEVELS.join(','), 'off,standard,rich');
-ok('TIERS 三档齐备', ['off', 'standard', 'rich'].every(l => Motion.TIERS && Motion.TIERS[l]));
-
-const off = Motion.TIERS.off;
-const std = Motion.TIERS.standard;
+eq('TIERS 只有 rich 一档', Object.keys(Motion.TIERS).sort().join(','), 'rich');
 const rich = Motion.TIERS.rich;
-eq('off 透明度上限 80ms', off.maxOpacityMs, 80);
-eq('off 无位移', off.maxShiftMs, 0);
-eq('off 无循环', off.loops, false);
-eq('standard 短位移 ≤160ms', std.maxShiftMs, 160);
-eq('standard 无循环', std.loops, false);
-eq('rich 全开', rich.loops, true);
+eq('rich 透明度上限 420ms', rich.maxOpacityMs, 420);
+eq('rich 短位移上限 220ms', rich.maxShiftMs, 220);
+eq('rich 颜色上限 220ms', rich.maxColorMs, 220);
+eq('rich 允许循环', rich.loops, true);
 eq('LOOP_BUDGET = 3（同屏循环上限）', Motion.LOOP_BUDGET, 3);
 eq('rich 的循环预算 = LOOP_BUDGET', rich.loopBudget, Motion.LOOP_BUDGET);
-eq('off/standard 循环预算为 0', off.loopBudget + std.loopBudget, 0);
 
-/* ---------- 逐动画三档行为声明表 ---------- */
+/* ---------- 逐动画行为声明（单值） ---------- */
 
 const SPECS = Motion.ANIMATIONS;
-const VOCAB = {
-  off: new Set(['none', 'fade']),
-  standard: new Set(['none', 'fade', 'shift']),
-  rich: new Set(['none', 'fade', 'shift', 'full', 'loop']),
-};
-const RICHNESS = { none: 0, fade: 1, shift: 2, full: 3, loop: 4 };
+const VOCAB = new Set(['none', 'fade', 'shift', 'full', 'loop']);
 
 ok('ANIMATIONS 非空', SPECS && Object.keys(SPECS).length > 0, '声明表为空');
-ok('fadeIn 是全档淡入的兜底动画', SPECS.fadeIn && SPECS.fadeIn.off === 'fade' && SPECS.fadeIn.rich === 'fade');
+eq('fadeIn 是淡入兜底动画', SPECS.fadeIn, 'fade');
 
 for (const [name, spec] of Object.entries(SPECS)) {
-  const keys = Object.keys(spec).filter(k => k !== 'decorative').sort().join(',');
-  ok(name + ' 恰好声明 off/standard/rich', keys === 'off,rich,standard', '实为 ' + keys);
-  for (const tier of ['off', 'standard', 'rich']) {
-    ok(name + '.' + tier + ' 合法（' + spec[tier] + '）', VOCAB[tier].has(spec[tier]),
-      tier + ' 不允许 ' + spec[tier]);
-  }
-  ok(name + ' 档次富度 off ≤ standard ≤ rich',
-    RICHNESS[spec.off] <= RICHNESS[spec.standard] && RICHNESS[spec.standard] <= RICHNESS[spec.rich]);
-  if (spec.rich === 'loop') {
-    ok(name + ' 循环只在 rich（standard/off 必须收成 none/fade）',
-      VOCAB.off.has(spec.off) && spec.standard !== 'loop');
-  }
+  ok(name + ' 是单值声明（不是三档对象）', typeof spec === 'string', '实为 ' + JSON.stringify(spec));
+  ok(name + ' 行为合法（' + spec + '）', VOCAB.has(spec), '不允许 ' + spec);
 }
 
-/* ---------- 过渡声明表 TRANSITIONS ---------- */
+/* 循环清单必须与「只有这几条循环」一致 */
+const LOOPS = Object.keys(SPECS).filter((n) => SPECS[n] === 'loop').sort();
+eq('循环动画清单', LOOPS.join(','),
+  ['ambientDrift', 'breathe', 'busyFlow', 'flowLight', 'infWave', 'kenBurns', 'nodePulse'].join(','));
+
+/* ---------- 过渡声明（单档） ---------- */
 
 const TRANS = Motion.TRANSITIONS;
 ok('TRANSITIONS 非空', TRANS && Object.keys(TRANS).length > 0, '过渡声明表为空');
 
 const TRANS_ACTIONS = ['screen', 'stageArt', 'sibling', 'branchPage', 'modal'];
-for (const name of TRANS_ACTIONS) {
-  ok('TRANSITIONS.' + name + ' 已声明', !!(TRANS && TRANS[name]), '缺少 ' + name);
-}
-
-// 「三档验收矩阵」：standard = 交叉淡入、rich = 位移 / 共享元素
+const TKIND = new Set(['instant', 'fade', 'shift', 'shared']);
 const TRANS_MATRIX = {
-  screen: ['fade', 'shift'],       // 切屏：standard 交叉淡入 / rich 淡入 + 短位移
-  stageArt: ['fade', 'shared'],    // 舞台换画：standard 淡入 / rich 共享元素
-  sibling: ['fade', 'shift'],      // 分支切换：standard 交叉淡入无横向位移 / rich 方向性短位移
-  branchPage: ['fade', 'shift'],   // 分支页开合：standard 淡入 / rich 淡入 + 位移
-  modal: ['fade', 'shift'],        // 弹窗开合：standard 淡入 / rich 缩放 / 位移 + 背景渐隐
+  screen: 'shift',       // 切屏：淡入 + 短位移
+  stageArt: 'shared',    // 舞台换画：共享元素
+  sibling: 'shift',      // 分支切换：方向性短位移
+  branchPage: 'shift',   // 分支页开合：淡入 + 位移
+  modal: 'shift',        // 弹窗开合：缩放 / 位移 + 背景渐隐
 };
 
-const TKIND = {
-  off: new Set(['instant']),
-  standard: new Set(['instant', 'fade']),
-  rich: new Set(['instant', 'fade', 'shift', 'shared']),
-};
-const TRICH = { instant: 0, fade: 1, shift: 2, shared: 3 };
-
-for (const [name, spec] of Object.entries(TRANS || {})) {
+for (const name of TRANS_ACTIONS) {
+  const spec = TRANS && TRANS[name];
+  ok('TRANSITIONS.' + name + ' 已声明', !!spec, '缺少 ' + name);
+  if (!spec) continue;
   const keys = Object.keys(spec).sort().join(',');
-  ok(name + ' 过渡恰好声明 off/standard/rich', keys === 'off,rich,standard', '实为 ' + keys);
-  for (const tier of ['off', 'standard', 'rich']) {
-    const s = spec[tier] || {};
-    ok(name + '.' + tier + ' kind 合法（' + s.kind + '）', TKIND[tier].has(s.kind),
-      '三档矩阵：' + tier + ' 不允许 ' + s.kind);
-    ok(name + '.' + tier + ' 有毫秒时长', typeof s.ms === 'number' && s.ms >= 0 && s.ms <= 1000, '实为 ' + s.ms);
-    const cap = (s.kind === 'shift' || s.kind === 'shared')
-      ? Motion.TIERS[tier].maxShiftMs
-      : Motion.TIERS[tier].maxOpacityMs;
-    ok(name + '.' + tier + ' 时长 ≤ 该档上限（' + s.ms + ' ≤ ' + cap + 'ms）', s.ms <= cap,
-      tier + ' 上限 ' + cap + 'ms');
-    if (s.kind === 'shared') ok(name + '.' + tier + ' 共享元素只准 rich', tier === 'rich', 'shared 仅 rich');
-  }
-  ok(name + ' 过渡档次富度 off ≤ standard ≤ rich',
-    (TRICH[spec.off.kind] || 0) <= (TRICH[spec.standard.kind] || 0)
-    && (TRICH[spec.standard.kind] || 0) <= (TRICH[spec.rich.kind] || 0));
-  ok(name + '.off 必须即时且 0ms（off 无过渡）', spec.off.kind === 'instant' && spec.off.ms === 0,
-    '实为 ' + spec.off.kind + '/' + spec.off.ms + 'ms');
-  const want = TRANS_MATRIX[name];
-  if (want) {
-    ok(name + '.standard = ' + want[0] + '（三档矩阵）', spec.standard.kind === want[0], '实为 ' + spec.standard.kind);
-    ok(name + '.rich = ' + want[1] + '（三档矩阵）', spec.rich.kind === want[1], '实为 ' + spec.rich.kind);
-  }
+  eq(name + ' 是单值声明（kind,ms）', keys, 'kind,ms');
+  ok(name + ' kind 合法（' + spec.kind + '）', TKIND.has(spec.kind), '不允许 ' + spec.kind);
+  ok(name + ' 有毫秒时长', typeof spec.ms === 'number' && spec.ms >= 0, '实为 ' + spec.ms);
+  const cap = (spec.kind === 'shift' || spec.kind === 'shared')
+    ? rich.maxShiftMs
+    : rich.maxOpacityMs;
+  ok(name + ' 时长 ≤ rich 上限（' + spec.ms + ' ≤ ' + cap + 'ms）', spec.ms <= cap,
+    '上限 ' + cap + 'ms');
+  eq(name + ' 形态（单档矩阵）', spec.kind, TRANS_MATRIX[name]);
 }
+
+/* ---------- 静默例外：系统「减少动态效果」 ---------- */
+
+const coreSrc = read('src/app/core.js');
+ok('motionLevel 两态：reduced-motion ? off : rich',
+  /return\s*\(motionMQ\s*&&\s*motionMQ\.matches\)\s*\?\s*'off'\s*:\s*'rich'/.test(coreSrc),
+  'src/app/core.js 的 motionLevel 不是两态实现');
+ok('JS 侧不再读设置里的动效档位', !/S\.settings\.ui/.test(coreSrc), 'core.js 仍读 S.settings.ui');
+
+const motionCss = read('css/motion.css');
+ok('CSS 兜底 @media (prefers-reduced-motion: reduce) 在位',
+  /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?animation-duration:\s*var\(--dur-none\)/.test(motionCss),
+  'css/motion.css 末尾的兜底块缺失');
+ok('CSS 不再有 standard / off 档选择器',
+  !/data-motion="(standard|off)"/.test(motionCss), 'css/motion.css 仍有标准 / 关闭档选择器');
+
+const html = read('index.html');
+ok('<html> 静态声明 data-motion="rich"', /<html[^>]*\sdata-motion="rich"/.test(html), 'index.html 缺少静态属性');
+const head = html.slice(0, html.indexOf('</head>'));
+ok('<head> 不再有首帧内联脚本', head.indexOf("setAttribute('data-motion'") < 0, '内联脚本仍在');
+
+const storeSrc = read('src/core/store.ts');
+ok('store 不再写动效档位镜像', !/MOTION_MIRROR|mirrorMotion/.test(storeSrc), 'store.ts 仍有镜像逻辑');
 
 if (failed) {
   console.error('motion-test：' + failed + ' 项未过');

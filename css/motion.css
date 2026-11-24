@@ -1,19 +1,17 @@
 /* ==================== 动效模块（统一 motion 模块 · CSS 端） ====================
-   · 档位语义与逐动画三档行为声明 → src/core/motion.ts（ANIMATIONS 是真源）
-   · 档位政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
-   · DOM 接线（data-motion / data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js
+   · 动效声明 → src/core/motion.ts（ANIMATIONS 是真源）
+   · 政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
+   · DOM 接线（data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js
    eval/tokens-test.js 会对账：本文件的 --an-* 名表必须与 src/core/motion.ts 的
    ANIMATIONS 声明表逐条推导一致；@keyframes 必须一条不多、一条不少。
 
-   三档（off / standard / rich；auto 解析见 src/core/motion.ts 的 resolve）：
-   · off：无位移、无循环，最多 80ms 的透明度变化（--m-dur-* 收到 --dur-off，位移/颜色过渡 0ms）。
-   · standard：淡入淡出与 ≤160ms 的短位移；无循环（--m-iter 压成 1）。
-   · rich：完整动效（默认档；无 JS 时 :root 的默认值即 rich）。
-   · auto：跟随系统「减少动态效果」（系统开了则 off）；用户显式选择优先于系统偏好。
+   运行时只有 rich 一档（完整动效）。系统「减少动态效果」是唯一静默例外：它不出现在任何 UI，
+   也不作为档位暴露——JS 动画路径在 matchMedia 为真时跳过，末尾的
+   @media (prefers-reduced-motion: reduce) 为 CSS 兜底，无条件生效。
 
    循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例，
    如首页符号逐字符波按 1 组计）。上限由设计固定，`acceptance/tools/motion-probe.mjs`
- 逐档测量；已删运行时登记（registerLoop 随自查页退役）。 */
+   测量；已删运行时登记（registerLoop 随自查页退役）。 */
 
 /* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
    小面积装饰元素允许用 @property 注册的自定义属性做动画（放宽项），
@@ -25,9 +23,9 @@
   initial-value: 0.5;
 }
 
-/* ==================== 档位政策变量（动画/过渡时长的档位收口） ====================
+/* ==================== 政策变量（动画/过渡时长的收口） ====================
    规则里只准引用这些变量，不写死毫秒数；改手感只改令牌（css/tokens.css）或这张收口表。 */
-:root, html[data-motion="rich"] {
+:root {
   /* 动画单次时长（收口：rich 取令牌原值） */
   --m-dur-fast: var(--dur-fast);
   --m-dur-base: var(--dur-base);
@@ -45,44 +43,14 @@
   --m-dur-vt-out: var(--m-dur-fast);     /* 旧快照淡出（先退后进） */
   --m-dur-vt-shift: var(--m-dur-base);   /* 组容器（共享元素的位置 / 尺寸补间） */
 }
-html[data-motion="standard"] {
-  --m-dur-fast: var(--dur-fast);
-  --m-dur-base: var(--dur-shift);   /* 短位移 ≤160ms */
-  --m-dur-slow: var(--dur-shift);
-  --m-dur-flash: var(--dur-shift);
-  --m-t-shift-fast: var(--dur-fast);
-  --m-t-shift-base: var(--dur-shift);
-  --m-t-color-fast: var(--dur-fast);
-  --m-t-color-base: var(--dur-base);
-  --m-iter: 1;                      /* standard 无循环 */
-  --m-dur-vt-fade: var(--m-dur-base);    /* 收口到 --dur-shift = 160ms（无位移的交叉淡入） */
-  --m-dur-vt-out: var(--m-dur-fast);
-  --m-dur-vt-shift: var(--m-dur-base);
-}
-html[data-motion="off"] {
-  --m-dur-fast: var(--dur-off);     /* 最多 80ms 的透明度变化 */
-  --m-dur-base: var(--dur-off);
-  --m-dur-slow: var(--dur-off);
-  --m-dur-flash: var(--dur-off);
-  --m-t-shift-fast: 0ms;            /* 无位移 */
-  --m-t-shift-base: 0ms;
-  --m-t-color-fast: 0ms;            /* 非透明度过渡一律即时 */
-  --m-t-color-base: 0ms;
-  --m-iter: 1;                      /* 无循环 */
-  /* off 档理论上不开视图过渡（src/ui/viewTransition.js 同步换 DOM）；这里是兜底：
-     只剩 80ms 以内的透明度变化，组容器 0ms（无位移） */
-  --m-dur-vt-fade: var(--m-dur-fast);
-  --m-dur-vt-out: var(--m-dur-fast);
-  --m-dur-vt-shift: 0ms;
-}
 
-/* ==================== 动画名三档表（--an-*） ====================
-   每个动画声明自己三档下的行为（真源 = src/core/motion.ts 的 ANIMATIONS，此处是 CSS 镜像）：
-   · 档位为 none → 该档名字换成 none（不跑）
-   · 档位为 fade → 名字换成 fadeIn（fade 类保持本名）；off 档一切位移/滤镜收成 80ms 淡入
-   · 档位为 shift / full / loop → 名字保持本名（时长与循环次数由 --m-* 收口）
+/* ==================== 动画名表（--an-*） ====================
+   每个动画声明自己的行为（真源 = src/core/motion.ts 的 ANIMATIONS，此处是 CSS 镜像）：
+   · none → 名字换成 none（不跑）
+   · fade → 名字换成 fadeIn（fade 类保持本名）
+   · shift / full / loop → 名字保持本名（时长与循环次数由 --m-* 收口）
    用法：animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环再加 var(--m-iter)）。 */
-:root, html[data-motion="rich"] {
+:root {
   --an-fadeIn: fadeIn;
   --an-fadeOut: fadeOut;
   --an-titleSwap: titleSwap;
@@ -100,48 +68,12 @@ html[data-motion="off"] {
   --an-flowLight: flowLight;
   --an-nodePulse: nodePulse;
 }
-html[data-motion="standard"] {
-  --an-fadeIn: fadeIn;
-  --an-fadeOut: fadeOut;
-  --an-titleSwap: titleSwap;
-  --an-leafIn: leafIn;
-  --an-leafInX: leafInX;
-  --an-prefsIn: prefsIn;
-  --an-prefsUp: prefsUp;
-  --an-blurUp: fadeIn;      /* 去模糊属滤镜，standard 收成淡入 */
-  --an-rowIn: none;
-  --an-busyFlow: fadeIn;    /* 忙碌线 standard 改单次淡入（无循环） */
-  --an-breathe: none;
-  --an-kenBurns: none;
-  --an-ambientDrift: none;
-  --an-infWave: none;
-  --an-flowLight: none;
-  --an-nodePulse: none;
-}
-html[data-motion="off"] {
-  --an-fadeIn: fadeIn;
-  --an-fadeOut: fadeOut;
-  --an-titleSwap: titleSwap;
-  --an-leafIn: fadeIn;
-  --an-leafInX: fadeIn;
-  --an-prefsIn: fadeIn;
-  --an-prefsUp: fadeIn;
-  --an-blurUp: fadeIn;
-  --an-rowIn: none;
-  --an-busyFlow: none;
-  --an-breathe: none;
-  --an-kenBurns: none;
-  --an-ambientDrift: none;
-  --an-infWave: none;
-  --an-flowLight: none;
-  --an-nodePulse: none;
-}
 
 /* ==================== 视图过渡（View Transitions） ====================
  src/ui/viewTransition.js 的 runTransition 只在「浏览器支持 + 不是 ?vt=0」时
    调 document.startViewTransition；快照动画本身全部由下面三条伪元素规则提供，
-   时长一律走 --m-dur-vt-*（再由上面三个档位块映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
-   过渡名单与三档 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：
+   时长一律走 --m-dur-vt-*（再由上面的政策表映射到 --m-dur-*，调手感仍只改令牌 / 那张表）。
+   过渡名单与 kind 的真源 = src/core/motion.ts 的 TRANSITIONS；eval/tokens-test.js 对账：
    这三条规则的 animation-duration 只准 var(--m-dur-vt-*)。
    注意：::view-transition-* 匹配不到 html[data-paused] * / [data-loops-paused] * 这类选择器，
    过渡期的循环暂停与预算复位要单独处理。 */
@@ -159,15 +91,7 @@ html[data-motion="off"] {
   animation-timing-function: var(--ease-out);
 }
 
-/* off 档兜底：即便有代码误开 VT，也不许任何快照动画（JS 侧同样是同步换 DOM）。
-   animation-name 而不是 animation 简写：tokens-test 的「名字必须走 --an-*」只查简写。 */
-html[data-motion="off"]::view-transition-group(*),
-html[data-motion="off"]::view-transition-old(*),
-html[data-motion="off"]::view-transition-new(*) {
-  animation-name: none;
-}
-
-/* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明三档行为） ====================
+/* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明行为） ====================
    动画属性白名单：transform / opacity / filter / stroke-dashoffset / stroke-dasharray；
    小面积装饰元素可用上面 @property 注册的自定义属性。不得动画 width / height / top / left /
    margin / box-shadow 等触发重排的属性（eval/tokens-test.js 把这条变成可执行检查）。 */

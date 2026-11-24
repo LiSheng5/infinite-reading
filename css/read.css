@@ -583,9 +583,7 @@
   inset: 0;
   z-index: 3;
 }
-/* 舞台空状态引导：出现时淡入（走动效等级：off 不动，standard / rich 同一档淡入）；
-   有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
-html[data-motion="standard"] .stage-empty,
+/* 舞台空状态引导：出现时淡入；有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
 html[data-motion="rich"] .stage-empty {
   animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both;
 }

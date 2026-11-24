@@ -204,24 +204,21 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
 .hint.entry-desc { margin: 0 0 14px; }
 
 /* ==================== 动效基座（走统一 motion 模块） ====================
-   @keyframes、档位政策（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
-   三档行为的真源声明在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。
+   @keyframes、政策变量（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
+   行为声明的真源在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。
    这里只写「哪个元素用哪个动画」：
    animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环加 var(--m-iter)）；
-   transition 的时长走 var(--m-t-*)（位移 / 颜色）或 var(--m-dur-*)（透明度），
-   off 档自动收成 80ms 透明度变化、0ms 其余——不再需要全局 !important 改写。 */
+   transition 的时长走 var(--m-t-*)（位移 / 颜色）或 var(--m-dur-*)（透明度）。 */
 
 .start-card, .shelf-wrap, .story-card, .anchor-card,
 .chat-note, .reason-block, .thumb {
   animation: var(--an-leafIn) var(--m-dur-slow) var(--ease-out) both;
 }
 
-/* 流式增量：新到的文字包在 span.delta 里逐段淡入（仅 rich；standard/off 由 JS 不建 span） */
+/* 流式增量：新到的文字包在 span.delta 里逐段淡入（系统「减少动态效果」时 JS 不建 span） */
 .delta { animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both; }
-/* standard 档：不对逐段做动画，只对整个流式气泡做一次淡入 */
-html[data-motion="standard"] .bubble-live { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 
-/* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐）：三档行为见 ANIMATIONS.busyFlow ---- */
+/* ---- 顶栏忙碌进度线 #busy-line（busy 时由 JS 显隐）：行为见 ANIMATIONS.busyFlow ---- */
 #busy-line {
   position: absolute; left: 0; right: 0; bottom: -1px;
   height: 2px;
@@ -236,16 +233,9 @@ html[data-motion="standard"] .bubble-live { animation: var(--an-fadeIn) var(--m-
   width: 36%;
   background: var(--accent);
 }
-/* rich：横向流动循环；standard：单次淡入（无循环）；off：静态线，无动画 */
+/* rich：横向流动循环 */
 html[data-motion="rich"] #busy-line::after {
   animation: var(--an-busyFlow) var(--loop-busy) var(--ease-inout) var(--m-iter);
-}
-html[data-motion="standard"] #busy-line::after {
-  width: 100%;
-  animation: var(--an-busyFlow) var(--m-dur-base) var(--ease-out) both;
-}
-html[data-motion="off"] #busy-line::after {
-  width: 100%;
 }
 
 /* ---- 舞台图片：blur-up（原图就绪） / 交叉淡入（换画） / Ken Burns（仅 rich） ---- */

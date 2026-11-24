@@ -173,5 +173,3 @@ html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
   .history-bar { flex-wrap: wrap; }
   .history-bar #history-bar-text { white-space: normal; }
 }
-html[data-motion="off"] .branch-page.enter,
-html[data-motion="off"] .branch-panel { animation: none; }

@@ -11,8 +11,8 @@
  *   - canResume === false（sid === null 的迁移旧节点）只许查看；
  *   - 文本一律 textContent；键盘导航（role=tree / treeitem + aria-activedescendant）。
  *
- * 动效：rich = 边按深度描边生长 + 节点弹簧弹出 + 流光（只挂 pathEdgeD 一条）
- *              + head 呼吸 / 选中脉冲；standard = 整体淡入；off = 无。
+ * 动效：边按深度描边生长 + 节点弹簧弹出 + 流光（只挂 pathEdgeD 一条）
+ *              + head 呼吸 / 选中脉冲；系统「减少动态效果」时 JS 跳过这些特效。
  *   新出现的节点（从聊天页返回后）单独「长出来」——seen 集合只存视图态，不进存档。
  */
 import { TreeLayout } from '../core/treeLayout.ts';
@@ -98,7 +98,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ================= 打开 / 关闭 ================= */
 
- /* 开合走 Nav.branchPage（过渡内核；off 同步 / standard 交叉淡入 / rich 位移）。
+ /* 开合走 Nav.branchPage（过渡内核；运行时固定 rich 位移）。
    * 时序要点：
    *   · 渲染整块放进 mutate —— 视图过渡在 update 回调之后才拍新快照，先渲染，快照里才有树；
    *   · rich 的入场动画（边描边 / 节点弹出）不在 mutate 里开跑：快照会把它拍成空白首帧，
@@ -324,11 +324,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return g;
   }
 
-  // 入场动效（仅 rich）：边按深度描边生长（总时长封顶 ~600ms）；新节点弹簧弹出
+  // 入场动效：边按深度描边生长（总时长封顶 ~600ms）；新节点弹簧弹出
   function playEntry(edges, nodeEls) {
-    const lv = motionLevel();
-    if (lv === 'off' || (typeof document !== 'undefined' && document.hidden)) return;
-    if (lv !== 'rich') return;   // standard：整体淡入由 .enter 负责，不做逐元素动效
+    if (motionLevel() === 'off' || (typeof document !== 'undefined' && document.hidden)) return;
     for (const item of edges) {
       const p = item.el;
       try {

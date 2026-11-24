@@ -13,9 +13,9 @@
  * 7. [新] 时长 / 缓动只走令牌：animation 时长 var(--m-dur-*|--loop-*)、transition 时长
  *    var(--m-t-*|--m-dur-*)、缓动 var(--ease-*)，时间字面量只准 0；
  * 8. [新] 循环只准 var(--m-iter)（字面量 infinite 全禁）；带 var(--m-iter) 的动画在
- *    声明表必须是 rich: 'loop'（standard 无循环、off 无循环）；
- * 9. [新] 动画名一律经声明表：animation 简写必须 var(--an-*)，--an-* 名表三档值
- *    与 ANIMATIONS 逐条推导一致（off/standard/rich 各一块）；
+ *    声明表必须是 'loop'；
+ * 9. [新] 动画名一律经声明表：animation 简写必须 var(--an-*)，--an-* 名表值
+ *    与 ANIMATIONS 逐条推导一致（运行时只有 rich 一档）；
  * 10. [新] 暂停机制在位：data-paused / data-loops-paused / data-loop="wait" 都有
  *    animation-play-state: paused 规则（页面不可见、子树挂起、循环预算排队）；
  * 11. [新] 视图过渡：::view-transition-group/old/new(*) 三条规则在位，
@@ -166,7 +166,7 @@ const REQUIRED = [
   // 圆角（旧版漏定义，后补上）
   '--radius',
   // 动效
-  '--dur-fast', '--dur-base', '--dur-slow', '--dur-off', '--dur-shift', '--dur-flash', '--dur-none',
+  '--dur-fast', '--dur-base', '--dur-slow', '--dur-flash', '--dur-none',
   '--ease-out', '--ease-spring', '--ease-inout', '--ease-io', '--ease-linear',
   '--loop-busy', '--loop-kb', '--loop-ambient', '--loop-flow', '--loop-inf', '--loop-inf-step',
   // 首页符号两端色
@@ -252,45 +252,37 @@ check('@keyframes 只定义在 css/motion.css', strayKf.length === 0, strayKf.jo
 const declared = new Set(Object.keys(ANIMATIONS));
 const undeclared = [...kfNames].filter(n => !declared.has(n));
 const orphan = [...declared].filter(n => !kfNames.has(n));
-check('每个 @keyframes 都在 ANIMATIONS 声明三档', undeclared.length === 0, undeclared.join(' | '));
+check('每个 @keyframes 都在 ANIMATIONS 声明行为', undeclared.length === 0, undeclared.join(' | '));
 check('ANIMATIONS 每条都有 @keyframes（不多不少）', orphan.length === 0, orphan.join(' | '));
 
-/* ---------- 3b. [新] --an-* 名表与 ANIMATIONS 逐档推导一致 ---------- */
+/* ---------- 3b. [新] --an-* 名表与 ANIMATIONS 逐条推导一致（单档 rich） ---------- */
 
-function derived(name, tier) {
-  const spec = ANIMATIONS[name][tier];
+function derived(name) {
+  const spec = ANIMATIONS[name];
   if (spec === 'none') return 'none';
-  if (spec === 'fade') return ANIMATIONS[name].rich === 'fade' ? name : 'fadeIn';
+  if (spec === 'fade') return name;   // 单档：fade 类保持本名（fadeIn / fadeOut / titleSwap）
   return name;
 }
 
-const anTable = {};   // name → { off, standard, rich }
+const anTable = {};   // name → rich 名表值
 eachRule(MOTION, (selector, body) => {
-  let tier = null;
-  if (/data-motion="off"/.test(selector)) tier = 'off';
-  else if (/data-motion="standard"/.test(selector)) tier = 'standard';
-  else if (/data-motion="rich"/.test(selector) || /(^|[,\s]):root/.test(selector)) tier = 'rich';
-  if (!tier) return;
+  if (!/data-motion="rich"/.test(selector) && !/(^|[,\s]):root/.test(selector)) return;
   eachDeclaration(body, (prop, value) => {
     const m = /^--an-([\w-]+)$/.exec(prop);
-    if (m) (anTable[m[1]] ||= {})[tier] = value.trim();
+    if (m) anTable[m[1]] = value.trim();
   });
 });
 
 const anBad = [];
-for (const [name, tiers] of Object.entries(anTable)) {
+for (const [name, got] of Object.entries(anTable)) {
   if (!declared.has(name)) { anBad.push('--an-' + name + ' 没有声明表条目'); continue; }
-  for (const tier of ['off', 'standard', 'rich']) {
-    const got = tiers[tier];
-    const want = derived(name, tier);
-    if (got == null) anBad.push('--an-' + name + ' 缺 ' + tier + ' 档');
-    else if (got !== want) anBad.push('--an-' + name + ' ' + tier + ' 档应为 ' + want + '，实为 ' + got);
-  }
+  const want = derived(name);
+  if (got !== want) anBad.push('--an-' + name + ' 应为 ' + want + '，实为 ' + got);
 }
 for (const name of declared) {
-  if (!anTable[name]) anBad.push('ANIMATIONS.' + name + ' 没有 --an-' + name + ' 名表');
+  if (!(name in anTable)) anBad.push('ANIMATIONS.' + name + ' 没有 --an-' + name + ' 名表');
 }
-check('--an-* 名表三档与 ANIMATIONS 推导一致', anBad.length === 0, anBad.join(' | '));
+check('--an-* 名表与 ANIMATIONS 推导一致', anBad.length === 0, anBad.join(' | '));
 
 /* ---------- 4. @keyframes 只动合成层属性（放宽：@property 注册的自定义属性） ---------- */
 
@@ -431,8 +423,8 @@ function scanTiming(name, text) {
     }
     if (prop === 'animation' && /var\(\s*--m-iter\s*\)/.test(value)) {
       const n = ([...value.matchAll(/var\(\s*--an-([\w-]+)\s*\)/g)].map(m => m[1]))[0];
-      if (n && (!ANIMATIONS[n] || ANIMATIONS[n].rich !== 'loop')) {
-        timingBad.push(name + ' ' + n + ' 带 var(--m-iter) 但声明表 rich 不是 loop');
+      if (n && ANIMATIONS[n] !== 'loop') {
+        timingBad.push(name + ' ' + n + ' 带 var(--m-iter) 但声明表不是 loop');
       }
     }
   });
@@ -482,12 +474,10 @@ const KIND_VAR = { fade: '--m-dur-vt-fade', shift: '--m-dur-vt-shift', shared: '
 const KIND_OK = ['instant', 'fade', 'shift', 'shared'];
 const kindBad = [];
 for (const [name, spec] of Object.entries(TRANSITIONS)) {
-  for (const tier of ['off', 'standard', 'rich']) {
-    const kind = spec && spec[tier] && spec[tier].kind;
-    if (kind && KIND_OK.indexOf(kind) < 0) kindBad.push(name + '.' + tier + ' 的 kind 不认识：' + kind);
-    const v = KIND_VAR[kind];
-    if (v && !motionVars.has(v)) kindBad.push(name + '.' + tier + '（' + kind + '）需要 ' + v);
-  }
+  const kind = spec && spec.kind;
+  if (kind && KIND_OK.indexOf(kind) < 0) kindBad.push(name + ' 的 kind 不认识：' + kind);
+  const v = KIND_VAR[kind];
+  if (v && !motionVars.has(v)) kindBad.push(name + '（' + kind + '）需要 ' + v);
 }
 check('TRANSITIONS 的 kind 都有对应 CSS 时长变量', kindBad.length === 0, kindBad.join(' | '));
 

@@ -12,7 +12,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, applyMotion, irConfirm, fmtTime, miniBtn } = A;
+  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, irConfirm, fmtTime, miniBtn } = A;
 
   function syncSettingsToForm() {
     A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
@@ -81,7 +81,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const sui = S.settings.ui || Store.defaultSettings().ui;
     if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
-    if ($('#s-ui-motion')) $('#s-ui-motion').value = ['auto', 'off', 'standard', 'rich'].indexOf(sui.motion) >= 0 ? sui.motion : 'auto';
     // 外观：字号 / 宽度 / 密度默认（扮演 / 智能体；本对话可覆盖）
     if ($('#s-ui-font')) $('#s-ui-font').value = ['sm', 'md', 'lg'].indexOf(sui.fontScale) >= 0 ? sui.fontScale : 'md';
     if ($('#s-ui-width')) $('#s-ui-width').value = ['narrow', 'standard', 'wide'].indexOf(sui.width) >= 0 ? sui.width : 'standard';
@@ -207,11 +206,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       S.settings.ui.layout = (lv === 'split' || lv === 'stack') ? lv : 'auto';
     }
     if ($('#s-ui-choices')) S.settings.ui.choices = $('#s-ui-choices').value === 'always' ? 'always' : 'tray';
-    if ($('#s-ui-motion')) {
-      const mv = $('#s-ui-motion').value;
-      S.settings.ui.motion = ['auto', 'off', 'standard', 'rich'].indexOf(mv) >= 0 ? mv : 'auto';
-      applyMotion();   // 动效强度即时生效
-    }
     // 字号 / 宽度 / 密度默认（非法值回默认）
     if ($('#s-ui-font')) {
       const fv = $('#s-ui-font').value;

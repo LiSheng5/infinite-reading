@@ -76,7 +76,6 @@ if (new URLSearchParams(location.search).get('ir-test') === '1') {
       loopsHeld: MotionDOM.loopsHeld,
       holdLoops: MotionDOM.holdLoops,
       suspendLoops: MotionDOM.suspendLoops,
-      applyMotion: MotionDOM.applyMotion,
       applyPaused: MotionDOM.applyPaused,
     },
     Nav, ModalHost, ChatProviders, ImageProviders, Sidecar, genId,
