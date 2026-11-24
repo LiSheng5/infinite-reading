@@ -14,6 +14,8 @@
  *   · 导入 PNG 成功 → 自动进编辑视图、内容正确、来源提示「已导入：<文件名>」；
  *   · 「开始扮演」建 rp 故事（卡存进故事）；编辑已有卡直接进编辑视图，文案「保存角色卡」；
  *   · 窄屏键盘代理：视口压矮后底部主按钮仍在视口内且可点（真键盘无法在无头环境复现，用缩高代理）。
+ *   · 三个开局页的文案与样式一致：标题「新故事 · 模式名」+ ≤18 字的一句话说明（同一张文案表）、
+ *     折叠块同用「更多设定（可选）」一份组件、主按钮贴右下、低动效档展开与高亮直接跳变。
  *
  * 只新增文件，不改任何现有源码；页面一律 file:// 打开构建出的单文件产物，不联网。
  * Chromium 优先走系统 Chrome（channel:'chrome'），没有则退回 Playwright 自带内核。
@@ -214,6 +216,42 @@ async function runWidth(browser, vp, manifest, png) {
   const text = (sel) => page.locator(sel).textContent();
   const hidden = (sel) => page.locator(sel).evaluate(el => el.classList.contains('hidden') || getComputedStyle(el).display === 'none');
   const detailOpen = (sel) => page.locator(sel).evaluate(el => el.open);
+  // 三个开局页共用的口径：标题 = 「新故事 · 模式名」，说明 ≤18 字、不带标点结尾（判断句读感一致）
+  const ENTRY_TITLE = {
+    choice: '新故事 · 剧情',
+    chat: '新故事 · 智能体',
+    rp: '新故事 · 扮演',
+  };
+  const ENTRY_DESC = {
+    choice: '先搭个舞台，故事从这里生长',
+    chat: '有事直说，它替你去办',
+    rp: '以一张角色卡登场，玩的是关系',
+  };
+  const titleIs = async (sel, mode) => {
+    const t = ((await text(sel)) || '').trim();
+    return t === ENTRY_TITLE[mode] ? '' : '标题=' + t + '（期望 ' + ENTRY_TITLE[mode] + '）';
+  };
+  const descIs = async (sel, mode) => {
+    const t = ((await text(sel)) || '').trim();
+    if (t !== ENTRY_DESC[mode]) return '说明=' + t + '（期望 ' + ENTRY_DESC[mode] + '）';
+    return t.length <= 18 ? '' : '说明超过 18 字：' + t.length;
+  };
+  // 折叠块措辞一致：标题固定「更多设定（可选）」，摘要行跟在后面（两个弹窗同一份组件）
+  const foldWording = async (sel) => {
+    const t = ((await text(sel + ' > summary')) || '').trim();
+    return t.indexOf('更多设定（可选）') === 0 ? '' : '摘要行=' + t;
+  };
+  // 主按钮在右下：右边缘贴页脚内边距、且确实落在页脚行里（不是标题旁 / 内容中段）
+  const primaryRightBottom = async (modalSel, btnSel) => {
+    const bb = await page.locator(btnSel).boundingBox();
+    const foot = await page.locator(modalSel + ' .modal-foot').boundingBox().catch(() => null);
+    if (!bb) return '按钮不在布局里';
+    if (!foot) return '找不到页脚';
+    const dRight = Math.abs((foot.x + foot.width) - (bb.x + bb.width));
+    if (dRight > 26) return '离右边缘 ' + Math.round(dRight) + 'px（应贴页脚内边距 ≈22）';
+    if (bb.y < foot.y) return '按钮不在页脚行里';
+    return '';
+  };
 
   try {
     await openApp(page);
@@ -228,10 +266,8 @@ async function runWidth(browser, vp, manifest, png) {
       (await hidden('#rc-view-edit')) ? '' : '编辑块不该显示');
     await check('选卡视图没有页脚', async () =>
       (await page.locator('#modal-card .modal-foot').isVisible()) ? '页脚应整条收起' : '');
-    await check('选卡视图标题「扮演」+ 一句话说明', async () => {
-      const t = (await text('#card-modal-title')) || '';
-      return t.trim() === '扮演' ? '' : '标题=' + t;
-    });
+    await check('选卡视图标题「新故事 · 扮演」', async () => titleIs('#card-modal-title', 'rp'));
+    await check('选卡视图一句话说明（≤18 字）', async () => descIs('#rc-view-pick .entry-desc', 'rp'));
     await snap('card-pick', { note: '扮演开局 · 选卡视图（导入大卡 / 自己写一张）' });
 
     /* —— 自己写一张 → 编辑视图 —— */
@@ -251,6 +287,9 @@ async function runWidth(browser, vp, manifest, png) {
     });
     await check('空卡的折叠区默认收起', async () =>
       (await detailOpen('#rc-more')) ? '折叠区不该展开' : '');
+    await check('折叠块措辞「更多设定（可选）」', async () => foldWording('#rc-more'));
+    await check('主按钮「开始扮演」在右下', async () =>
+      primaryRightBottom('#modal-card', '#btn-rc-save'));
     await snap('card-edit-new', { note: '扮演 · 编辑视图（自己写一张：名字 + 开场白直给）' });
 
     /* —— 必填就地提示 —— */
@@ -388,7 +427,32 @@ async function runWidth(browser, vp, manifest, png) {
     await page.click('#screen-start .mode-card[data-mode="choice"]');
     await page.waitForSelector('#modal-wizard:not(.hidden)', { timeout: 8000 });
     await sleep(400);
-    await snap('mode-wizard', { note: '剧情开局 · 开局设定向导' });
+    await check('向导标题「新故事 · 剧情」', async () => titleIs('#modal-wizard .modal-head h2', 'choice'));
+    await check('向导一句话说明（≤18 字）', async () => descIs('#modal-wizard .entry-desc', 'choice'));
+    await check('向导折叠块措辞「更多设定（可选）」', async () => foldWording('#wz-more'));
+    await check('主按钮「下一步：试画（可跳过）」在右下', async () => {
+      const t = ((await text('#btn-wz-start')) || '').trim();
+      if (t !== '下一步：试画（可跳过）') return '按钮文案=' + t;
+      return primaryRightBottom('#modal-wizard', '#btn-wz-start');
+    });
+    await check('低动效档：折叠展开不跑动画（直接跳变）', async () => {
+      await page.click('#wz-more summary');
+      await sleep(250);
+      const name = await page.locator('#wz-more > .fold-body').evaluate(el => getComputedStyle(el).animationName);
+      return name === 'none' ? '' : 'animationName=' + name;
+    });
+    await check('低动效档：起草回填高亮时长收成 0s（跳变）', async () => {
+      const dur = await page.locator('#wz-world').evaluate((el) => {
+        el.classList.add('wz-flashable', 'wz-flash');
+        const d = getComputedStyle(el).transitionDuration;
+        el.classList.remove('wz-flashable', 'wz-flash');
+        return d;
+      });
+      // off 档过渡给 0ms；浏览器开了「减少动态效果」时无 JS 兜底把一切压成 .001s，同样是跳变
+      const over = dur.split(',').map(s => parseFloat(s) * (s.indexOf('ms') >= 0 ? 0.001 : 1)).filter(n => n > 0.001);
+      return over.length ? 'transitionDuration=' + dur : '';
+    });
+    await snap('mode-wizard', { note: '剧情开局 · 开局设定向导（折叠区已展开）' });
     await page.click('#btn-close-wizard');
     await sleep(300);
 
@@ -398,6 +462,8 @@ async function runWidth(browser, vp, manifest, png) {
     await sleep(500);
     await check('智能体新对话出现「能做什么」引导', async () =>
       (await page.locator('.agent-intro').count()) ? '' : '引导块没渲染');
+    await check('智能体引导首行是模式说明（≤18 字）', async () =>
+      descIs('.agent-intro .entry-desc', 'chat'));
     await snap('mode-agent-intro', { note: '智能体开局 · 空对话的「能做什么」引导' });
   } catch (e) {
     manifest.checks.push({ width: vp.width, label: '整轮流程中断', ok: false, detail: String((e && e.stack) || e) });

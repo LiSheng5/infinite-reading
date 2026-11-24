@@ -2,6 +2,8 @@
  /* CardModal.svelte —— #modal-card「角色卡」（选卡 / 编辑两个视图）
   * 视图 A「选卡」：导入 PNG 卡（拖入或点选）/ 自己写一张——开局选卡、以及故事里还没有卡时先到这里；
   * 视图 B「编辑」：名字 + 开场白直给，其余折进「更多设定（可选）」。
+  * 开局页的标题与一句话说明读 A.MODE_ENTRY.rp（与剧情 / 智能体同一份文案表），
+  * 折叠块用共用的 OptFold，可选字段的措辞与样式三个开局页只有一套。
   * 视图切换是组件内的 cardView 状态（state.svelte.js）：两块都常驻 DOM 只切 hidden，
   * 于是 main.js 启动时按 id 绑的 #btn-rc-import / #btn-rc-cancel / #btn-rc-save 不会因
   * 视图重建而丢监听，cards.js 也能照常按 id 灌值（fillCardForm / readCardForm）。
@@ -16,6 +18,7 @@
   import Button from '../../ui/Button.svelte';
   import Icon from '../../ui/Icon.svelte';
   import Textarea from './Textarea.svelte';
+  import OptFold from '../../ui/OptFold.svelte';
   import { cardView } from './state.svelte.js';
   import { A as appApi } from '../../app/core.js';
 
@@ -37,10 +40,10 @@
   </div>
 {/snippet}
 
-<Card title="扮演" titleId="card-modal-title" closeId="btn-close-card" footer={foot}>
+<Card title={appApi.MODE_ENTRY.rp.title} titleId="card-modal-title" closeId="btn-close-card" footer={foot}>
   <!-- 视图 A：选卡 -->
   <div id="rc-view-pick" class:hidden={!isPick}>
-    <p class="hint rc-intro">以一张角色卡登场，玩的是关系</p>
+    <p class="hint entry-desc">{appApi.MODE_ENTRY.rp.desc}</p>
     <div class="rc-pick-cards">
       <button type="button" class="mode-card" id="btn-rc-import"
         ondragover={e => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}
@@ -73,8 +76,7 @@
       <Textarea id="rc-opening" rows={3} spellcheck="false" placeholder="「这么晚还来买东西？」" />
     </Field>
 
-    <details id="rc-more" class="opt-fold">
-      <summary>更多设定（可选）<span class="fold-sum" id="rc-more-sum">外貌 · 性格 · 场景 · 其他</span></summary>
+    <OptFold id="rc-more" sumId="rc-more-sum" sumText="外貌 · 性格 · 场景 · 其他">
       <Field label="外貌" for="rc-appearance">
         <TextInput id="rc-appearance" spellcheck="false" placeholder="一两句；会给画师当参考" />
       </Field>
@@ -91,7 +93,7 @@
         <TextInput id="rc-note" spellcheck="false" />
       </Field>
       <Checkbox id="rc-sync-world" checked label="同时初始化世界卡人物条目（性格 / 说话方式对接）" />
-    </details>
+    </OptFold>
 
     <div class="rc-import-row">
       <Button id="btn-rc-reimport" size="slim" icon="up"
@@ -102,7 +104,8 @@
 </Card>
 
 <style>
-  .rc-intro { margin: 0 0 14px; }
+  /* 页脚：外层 .modal-foot 已经右对齐，内层这一行只补同样的间距（取消在左、主按钮贴右下角） */
+  .rc-foot-row { display: flex; justify-content: flex-end; gap: 10px; }
   #card-source-hint { margin-bottom: 12px; }   /* 来源提示与「名字」标签之间留一口气 */
   /* 选卡视图的两张入口卡：内容居中，观感像投放框（导入卡同时是拖放目标） */
   .rc-pick-cards { display: flex; flex-direction: column; gap: 14px; }

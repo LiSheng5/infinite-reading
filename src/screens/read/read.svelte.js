@@ -19,6 +19,7 @@ export const read = $state({
     entries: [],      // [entryModel]（src/app/readmodel.js，每项带稳定 key）
     openingHint: false,
     agentIntro: false,   // 智能体空对话引导（只依赖 log.length === 0，不存状态）
+    agentIntroDesc: '',  // 引导首行的模式说明（与剧情 / 扮演开局页同一份文案表）
     agentChips: [],      // [{ id, label, prompt, enabled, why, fixGroup }]（readmodel 同构）
     agentIntroText: [],  // 引导文案行（只列判定为可用的能力）
     live: false,      // 流式 / 打字机临时旁白在场（组件渲染两个空壳）

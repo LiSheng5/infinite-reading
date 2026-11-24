@@ -247,7 +247,8 @@ label input.inline-num {
 .draft-row label { flex: 1; margin-bottom: 0; }
 
 /* 「更多设定（可选）」折叠块：开局弹窗（剧情向导 / 角色卡）共用这一份样式与措辞，
-   收起时摘要行给已填提示；有内容时由界面层自动展开（设置页 fold.auto: 'filled' 的思路）。 */
+   收起时摘要行给已填提示；有内容时由界面层自动展开（设置页 fold.auto: 'filled' 的思路）。
+   标记只此一份（src/ui/OptFold.svelte），措辞写死在组件里，两个弹窗不再各写一遍。 */
 .opt-fold {
   margin-top: 14px;
   border-top: 1px solid var(--line-soft);
@@ -268,6 +269,9 @@ label input.inline-num {
   color: var(--ink-faint);
   letter-spacing: 0.05em;
 }
+/* 展开时内容区淡入（默认收起 → 展开不闪跳）；低动效档整条关掉，原生 details 直接跳变 */
+.opt-fold[open] > .fold-body { animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both; }
+html[data-motion="off"] .opt-fold[open] > .fold-body { animation: none; }
 
 /* 起草回填的字段短暂高亮：颜色过渡走 --m-t-*（off 档 0ms 直接跳变；
    prefers-reduced-motion 由动效档 auto 解析成 off 兜底），1.2 秒后由界面层撤掉 .wz-flash。 */

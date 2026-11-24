@@ -354,6 +354,8 @@
   background: var(--surface-2);
 }
 .agent-intro-line { margin: 0; font-family: var(--font-body); font-size: 15px; line-height: 1.8; color: var(--ink-dim); }
+/* 首行是模式说明（与两个开局弹窗同一条 .entry-desc）：块内已经用 gap 排版，不再吃外边距 */
+.agent-intro .hint.entry-desc { margin: 0; }
 .agent-chips {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px; width: 100%;

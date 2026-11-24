@@ -230,6 +230,7 @@ import { A } from './core.js';
       entries: [],
       openingHint: false,
       agentIntro: false,
+      agentIntroDesc: '',
       agentChips: [],
       agentIntroText: [],
       live: false,
@@ -252,6 +253,9 @@ import { A } from './core.js';
     // 智能体空对话：还没发过消息时给「能做什么」引导（发出第一条消息后 log 非空，自然消失）
     m.agentIntro = !S.busy && !S.live && story.mode === 'chat' && !log.length;
     if (m.agentIntro) {
+      // 首行是模式说明（与剧情 / 扮演的开局页同一份文案表）：
+      // 这一屏没有弹窗标题，「新建的这次对话是什么模式」由顶栏的模式名担着，说明印在引导块第一行。
+      m.agentIntroDesc = A.MODE_ENTRY.chat.desc;
       const inj = A.toolInjection();
       const names = inj.tools.map(t => t.function.name);
       m.agentChips = AGENT_CHIPS.map(c => {

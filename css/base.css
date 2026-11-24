@@ -199,6 +199,10 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   margin-top: 8px;
 }
 
+/* 三个开局页共用的「一句话说明」（剧情 / 扮演印在弹窗标题下，智能体印在空对话引导第一行）：
+   字号与字色直接吃 .hint，这里只统一留白——三处各写一遍外边距迟早会漂。 */
+.hint.entry-desc { margin: 0 0 14px; }
+
 /* ==================== 动效基座（走统一 motion 模块） ====================
    @keyframes、档位政策（--m-* / --an-*）、循环预算与暂停机制都在 css/motion.css，
    三档行为的真源声明在 src/core/motion.ts（eval/tokens-test.js 逐条对账）。

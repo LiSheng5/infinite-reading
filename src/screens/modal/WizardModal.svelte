@@ -5,6 +5,8 @@
    * 人物行是唯一走状态桥的部分（见 CharRows.svelte / state.svelte.js）：
    * wizard.js 的 wzChars() 在 Svelte 形态下取 state.svelte.js 的 charApi('wizard')。
    * 骨架（三模式同一套）：标题 + 一句话说明 → 主操作 → 折叠的「更多设定（可选）」→ 底部固定主按钮。
+   * 标题与说明读 A.MODE_ENTRY.choice（与扮演 / 智能体同一份文案表），折叠块用共用的 OptFold，
+   * 于是三个开局页的措辞与样式不会各走各的。
    * 可选块里的字段 id（wz-characters / wz-style / wz-development）始终在 DOM 里，
    * details 收起不影响 startFromWizard 读取；起草提示、必填红字、折叠摘要由 wizard.js 就地改写。
    * 取消 / 关闭统一走 closeModal：旧实现直接 classList.add('hidden')，会把弹窗留在栈里；
@@ -15,6 +17,7 @@
   import Button from '../../ui/Button.svelte';
   import Textarea from './Textarea.svelte';
   import CharRows from './CharRows.svelte';
+  import OptFold from '../../ui/OptFold.svelte';
   import { closeModal } from '../../ui/modalHost.js';
   import { A as appApi } from '../../app/core.js';
 
@@ -26,8 +29,8 @@
   <Button id="btn-wz-start" variant="primary">下一步：试画（可跳过）</Button>
 {/snippet}
 
-<Card title="新故事 · 剧情" closeId="btn-close-wizard" onclose={close} footer={foot}>
-  <p class="hint wz-intro">先搭个舞台，故事从这里生长</p>
+<Card title={appApi.MODE_ENTRY.choice.title} closeId="btn-close-wizard" onclose={close} footer={foot}>
+  <p class="hint entry-desc">{appApi.MODE_ENTRY.choice.desc}</p>
 
   <div class="draft-row">
     <div class="draft-field">
@@ -53,8 +56,7 @@
     <Textarea id="wz-role" rows={2} placeholder="你是谁、从哪来、想做什么……" spellcheck="false" />
   </Field>
 
-  <details id="wz-more" class="opt-fold">
-    <summary>更多设定（可选）<span class="fold-sum" id="wz-more-sum">人物 · 风格 · 发展</span></summary>
+  <OptFold id="wz-more" sumId="wz-more-sum" sumText="人物 · 风格 · 发展">
     <div class="char-editor">
       <p class="char-title">主要人物（姓名 / 性格 / 说话方式）</p>
       <CharRows kind="wizard" rowsId="wz-characters" addId="btn-wz-char-add" variant="cards" />
@@ -67,13 +69,12 @@
     <Field label="想看的发展" for="wz-development">
       <Textarea id="wz-development" rows={2} placeholder="你希望故事朝哪个方向走……" spellcheck="false" />
     </Field>
-  </details>
+  </OptFold>
 </Card>
 
 <style>
   .draft-field { flex: 1 1 auto; min-width: 0; }
   .draft-field :global(.field) { margin-bottom: 0; }
-  .wz-intro { margin: 0 0 14px; }
   /* 起草结果行：提示文字 + 「去接入」「撤销起草」两个行内小按钮 */
   .draft-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .draft-status .hint { margin: 0; flex: 1 1 auto; }

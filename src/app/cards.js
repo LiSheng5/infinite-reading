@@ -8,7 +8,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, rpPremise, openModal, closeModal, fmtTime } = A;
+  const { $, Store, rpPremise, openModal, closeModal, fmtTime, MODE_ENTRY } = A;
 
 
   /* ================= 角色卡 =================
@@ -69,7 +69,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const pick = v === 'pick';
     setCardView(pick ? 'pick' : 'edit', backable);
     if (pick && cardEditor) cardEditor.imported = null;   // 回到选卡 = 重新选，导入提示作废
-    $('#card-modal-title').textContent = pick ? '扮演' : '角色卡';
+    // 选卡视图是「开局页」：标题与剧情 / 智能体同一套（新故事 · 模式名 + 一句话说明在组件里）；
+    // 编辑视图不是在开局，标题保持「角色卡」，说明位让给来源提示。
+    $('#card-modal-title').textContent = pick ? MODE_ENTRY.rp.title : '角色卡';
     $('#card-source-hint').textContent = pick ? '' : cardSourceHint();
     $('#btn-rc-save').textContent = (cardEditor && cardEditor.mode === 'new') ? '开始扮演' : '保存角色卡';
     const req = $('#rc-required-hint');
