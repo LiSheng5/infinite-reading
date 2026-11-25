@@ -135,8 +135,8 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
        │    └─ 若有 tool_calls → handleToolCalls → applyToolCall
        │         ├─ update_memory  → mergeWorld / 写 userProfile / 落一条 {type:'tool'} 留痕
        │         ├─ recall_*       → 重发一次（召回内容并入本轮 user 前缀注入）
-       │         └─ request_image（仅 chat / rp， 起剧情模式无此工具）
-       │              ├─ chat / rp：submitToolPaint → paintQueue.enqueue（**立刻返回**，不等图）
+       │         └─ request_image（仅聊天 chat，剧情模式无此工具）
+       │              ├─ chat：submitToolPaint → paintQueue.enqueue（**立刻返回**，不等图）
        │              │    └─ 后台任务：runPaintTask（直出 prompt，跳过画师）→ runPaint
        │              └─ choice（旧历史诱导模型调了）：按「该工具不可用」回传重发，
        │                 不入队、不报错、不弹 toast
@@ -157,11 +157,11 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 - **对话与生图彻底分离**：两个 `Base URL` / `Key` / 模型名各自独立（设置面板里是两组配置）。
 - **剧情模式的作画只能由用户触发（v0.11.0）**：时机出图（`settings.trigger` 的每轮 / 选择后）与开局自动出图已删除，「出图时机」设置整体下线（`settings.trigger` / `story.prefs.trigger` 停止读写，旧值原样留在存档里）；剧情模型也不再下发 `request_image`（工具清单与工具说明里都没有它，模型若照旧历史调了按「该工具不可用」回传）。唯一入口 = 🎨（`#btn-stage-gen` / `#btn-manual-gen`）与画师工作台重画；舞台无图时显示引导「点 🎨 为当前场景画一张」。
-- **出图不卡回合**（v0.5.1）：`request_image`（chat / rp 直出变体）提交进**同一条作画队列**（`PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
-- **画师是子代理，隔离上下文、用完即弃**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**scene 模式的输入只有固定几块**：`PAINTER_SYSTEM` + `[画风锚]`（设定卡优先）+ `[最近两张图]` + `[基底 prompt]`（上一次出图的**完整** prompt，差分基底：风格词原样保留、只改剧情变化的部分；第一次作画时整块省略）+ `[最近剧情]`（最近 `PAINTER_RECENT_TURNS = 3` 回合的「玩家行动 + 旁白」，玩家行动带（做）/（说）/（导演）标记、每条截断 200 字）+ `[画面参考]` / `[画风要求]`；**不得出现**更早对话、世界卡全文、摘要栈、剧情规则提示词、用户画像（`eval/painter-context-test.js` 固定）。**对话 / 扮演的工具出图不经画师**：模型自己写 `prompt` 直出；工作台对话（chat 模式）保持 `recall_recent_plot` 不动。
+- **出图不卡回合**（v0.5.1）：`request_image`（聊天直出变体）提交进**同一条作画队列**（`PaintQueue`，严格串行、画师构思也在队列里）就立刻返回；图稍后落回「它所属的回合」——回合锚点 `turnAnchor` 在提交时随任务走，`commit` 成功补 `nodeId`、失败 / 停止置 `dead`（开跑前与写回前各核一次）。
+- **画师是子代理，隔离上下文、用完即弃**：它不是独立会话，而是由 `assemblePainter` 拼出的一次性请求，产物是 `prompt_en / subject / alt`，可被用户改写。**scene 模式的输入只有固定几块**：`PAINTER_SYSTEM` + `[画风锚]`（设定卡优先）+ `[最近两张图]` + `[基底 prompt]`（上一次出图的**完整** prompt，差分基底：风格词原样保留、只改剧情变化的部分；第一次作画时整块省略）+ `[最近剧情]`（最近 `PAINTER_RECENT_TURNS = 3` 回合的「玩家行动 + 旁白」，玩家行动带（做）/（说）/（导演）标记、每条截断 200 字）+ `[画面参考]` / `[画风要求]`；**不得出现**更早对话、世界卡全文、摘要栈、剧情规则提示词、用户画像（`eval/painter-context-test.js` 固定）。**聊天的工具出图不经画师**：模型自己写 `prompt` 直出；工作台对话（chat 模式）保持 `recall_recent_plot` 不动。
 - **「停止」只管聊天回合**（v0.5.1）：`chatAbortCtrl` 只有聊天回合的请求写它；`painterCompose` / 生图不再挂上来，后台作画不被停止中断（超时沿用适配器自己的）。
 - **出图任务带 `storyId`**：写入前核对，避免切故事后把图贴到别的档上。
-- **临时例外**：对话 / 扮演的「手动作画」按钮本期仍走「画师优先、不可用则场景描述兜底」——工具被关 / 模型不吃 tools 时它是唯一出图入口，而 chat / rp 的 `lastSceneSummary` 只是旁白截断、不适合当提示词。等智能体模式改版（画布去掉、工具为主）时整体处理。
+- **临时例外**：聊天的「手动作画」按钮本期仍走「画师优先、不可用则场景描述兜底」——工具被关 / 模型不吃 tools 时它是唯一出图入口，而 chat 的 `lastSceneSummary` 只是旁白截断、不适合当提示词。等聊天模式改版（画布去掉、工具为主）时整体处理。
 
 ## 4. 数据模型
 
@@ -188,9 +188,9 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 ### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
-顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat|rp), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], pendingVideos[], lastBg, lastSceneSummary, tree{}`。
+顶层字段：`schema, id, title, titleAuto, titleGen, premise, mode(choice|chat), createdAt, updatedAt, log[], world{}, styleCard, rollingStyle{}, styleTone, characterCard, userProfile[], painterThread[], messages[], summaries[], savepoints[], ui{}, prefs{}, turn, scenes[], pendingVideos[], lastBg, lastSceneSummary, tree{}`。`mode` 只有 `'choice'`（剧情）与 `'chat'`（聊天，可选角色卡）；旧档案里的 `'rp'`（原「扮演」）在读取时归一为 `'chat'`，新导出一律写 `'chat'`。
 
-- `titleAuto` / `titleGen`：`titleAuto` 为真时标题可被自动任务覆盖（新建的智能体 / 扮演对话为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn >= 1`（第一次）与 `turn >= 6`（第二次）**配 `titleGen` 判重**——用 `<`/`>=` 而不是 `===`：重试 / 切分支 / 导入会让 turn 跳号，钉死 1 和 6 会让恰好跳过的对话永远停在「新对话」；两种补跑各最多一次，失败不计次。
+- `titleAuto` / `titleGen`：`titleAuto` 为真时标题可被自动任务覆盖（新建的聊天为真，初始标题「新对话」；剧情新故事与旧存档为假）；任何手动改名 / 手动重新生成标题都会把 `titleAuto` 收成假。`titleGen` 记自动已生成次数（0 / 1 / 2），触发点是 `turn >= 1`（第一次）与 `turn >= 6`（第二次）**配 `titleGen` 判重**——用 `<`/`>=` 而不是 `===`：重试 / 切分支 / 导入会让 turn 跳号，钉死 1 和 6 会让恰好跳过的对话永远停在「新对话」；两种补跑各最多一次，失败不计次。
 
 - `world`（世界状态卡）：`place, time, characters[], threads[], relationship{stage,bonds,notes}, scene, updatedAt, scribeAt`。
 - `ui`（随故事记住的界面状态）：只写 `kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）。旧档里遗留的 `split / showImage / immersive` 读档时由 `Object.assign(defaultUi(), raw.ui)` 原样带过、不读取也不删除（新档不再写）；布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
@@ -234,7 +234,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - `forkBefore(story, nodeId)`：`switchTo(node.parent)`（站在这一回合发生之前），返回 `{ok, action:{type,text,kind,sent}}` 供输入框预填（`setComposerText(text, kind)`，不触发发送）；根节点与开局节点（`action.type === 'opening'`）返回 `{ok:false, reason}`。
 - `canResume(story, nodeId)`（纯函数）：节点 `sid === null`（旧档迁移来的早期回合，状态未知）→ `false`。`project` 对 `sid === null` 保持当前状态不动，所以**所有会落到这类节点的继续 / 分叉入口都要拦**（面板按钮置灰，落点含「改我说的」的 parent）。
 
-**分支页（`src/app/branch.js` + `src/core/treeLayout.ts`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 剧情模式直接开分支页选中该节点（**不**自动 `switchTo`）；对话 / 扮演没有分支入口（HUD 行菜单 / 搜索兜底统一由 `A.branchUiOn(story)` 判定，仅 `mode === 'choice'` 为真），只提示「该结果在其他版本里」。
+**分支页（`src/app/branch.js` + `src/core/treeLayout.ts`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 剧情模式直接开分支页选中该节点（**不**自动 `switchTo`）；聊天没有分支入口（HUD 行菜单 / 搜索兜底统一由 `A.branchUiOn(story)` 判定，仅 `mode === 'choice'` 为真），只提示「该结果在其他版本里」。
 
 **布局算法分四段**：`buildKids`（children 表：防环 / 剔除自引用 / 补 parent 指针）→ `assignRows`（BFS 行号 + 唯一父指针 + `tracePath` 出的 root→head 路径）→ `packLanes`（泳道：主干 lane 0，支线按子树行区间贪心打包，`rangeMemo` / `forkQueue` 只在这一段内）→ `foldChains` + `geometryOf`（折叠与几何）。`layerTree` 只剩十来行装配，四段各自在 `eval/treelayout-test.js` 第 10 节有单测（同一入参 → 同一出参、不改入参）；改布局先跑该节，失败点能直接定位到段。
 
@@ -249,7 +249,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | **`usage` 只存不发** | 旁白条目可带 `usage { prompt, completion, total, cached?, reasoning? }`（`src/core/providers.ts` 的 `normalizeUsage`；一回合多次请求由 `mergeUsage` 相加，`turn.js` 的 `pushNarrationEntry` 写入）。服务商没上报就没有这个字段；不进请求体、不参与上下文预算，只用于气泡底部的用量小字。流式请求默认带 `stream_options.include_usage`，服务商 400 点名它时去掉重发一次 | 用量显示是附加信息，缺失不影响回合；旧档与 0.13.0 导出格式不受影响（新增可选字段） |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `src/core/context.ts`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `src/core/context.ts`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
-| **工具结果按语义分流** | `src/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（chat / rp）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
+| **工具结果按语义分流** | `src/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（聊天）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
 | **剧情作画只能点按钮**（v0.11.0） | `src/app/round.js`（删 `maybeEnqueueImage` 与开局出图）、`src/core/context.ts`：`toolsForMode('choice')` 无 `request_image` | 回合结束 / 开局不再自动出图，`S.turnPaintedByTool` 已随去重需求一起删除；省掉没要求时的画师构思 + 生图开销 |
 | **画师上下文隔离规则** | `src/core/context.ts`：`assemblePainter`（scene）/ `recentTurnLines`、`PAINTER_RECENT_TURNS` / `PAINTER_RECENT_LINE_CHARS` | 画师每次调用只看固定几块（画风锚 / 最近两张图 / 基底 prompt / 最近 3 回合剧情 / 画面参考）；更早对话、世界卡、摘要栈、剧情规则、画像一律不进（`eval/painter-context-test.js` 固定） |
 | **画风稳定靠「差分 prompt」** | `src/core/context.ts`：`lastImagePrompt`、`PAINTER_SYSTEM`（差分规则）；`src/core/providers.ts`：`clipPromptText` | 生图是纯文生图（不传图），风格只能靠文字锚：把上一次出图的完整 prompt 作为基底、只重写变化部分；超长 prompt 截断时保留尾部画风词（不许被 1500 字上限切掉） |
@@ -334,7 +334,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 `Context.assembleAI1` 由这几层自上而下拼成（从贵到便宜）；实现上每层一个 `appendXxx(parts, ctx)`（常驻 / 画像 / 摘要 / 工具 / 历史 / 单次注入），主函数只保留顺序，选项的键由 `AssembleOpts` 定死（拼错由 `tsc` 报错）：
 
-1. **模式系统提示词** `systemForMode`：剧情 / 智能体 / 扮演三套人格与输出契约（剧情模式为中文键 `旁白 / 选项 / 场景切换`；智能体是通用助手定位，工具能力含画图 / 记事 / 定时 / 写邮件 / 下单，后两样只是提案；扮演是「角色卡里的人」+ 2~6 句体量锚定，无角色卡时用降级提示词）。
+1. **模式系统提示词** `systemForMode`：两套人格与输出契约——剧情（中文键 `旁白 / 选项 / 场景切换`）与聊天。聊天按 `{hasCard, tools}` 三段拼装：核心助手段（通用助手定位）+ 工具段（只写本轮实际下发的类目，没下发就不提）+ 角色段（仅 `story.characterCard` 存在时拼上「角色卡里的人」+ 2~6 句体量锚定，没有卡就是普通助手，不存在降级提示词）。原「扮演」`mode: 'rp'` 已并入 `'chat'`：读档 / 导入 / 索引在读取时归一，角色卡与历史不动。
 2. **风格基调 + 故事设定常驻**：`[风格基调]`（≤120 字）与 `[故事设定（常驻）]`（≤400 字摘要）——地基信息不随摘要合并流失。
 3. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
 4. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
@@ -344,7 +344,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 召回结果、工具回传、启发式与强制注入统一**并入本轮 user 消息前缀**（不插中段 system 块，规避兼容层吞中段 system）。
 
-扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
+聊天有卡（`story.characterCard`）时额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`）；无卡的聊天与剧情模式不常驻，避免涨预算。
 
 **用量指示器**（对话输入区常驻）：只读，与压缩判定同源——`src/core/ctxusage.ts` 用 `estimateTokensOf(assembleAI1(story, '', opts))` 估算「下一轮请求」的 token、用 `compressThreshold(window)` 取自动压缩线（不另写一套估算、不硬编码比例），组装选项走 `src/app/round.js` 的 `buildAssembleOpts` dry 口径（不写回合字段、不消费 🧠 一次性开关、不触发会改 story 的压缩）。估算失败界面显示「—」，原因走 `reportBackgroundFailure` 留 console。气泡里另列**分层明细**（系统提示 / 常驻设定 / 前情摘要 / 工具说明 / 历史对话 / 本轮输入）：`assembleAI1` 的可选 `opts.trace` 只记录每层占 `messages` 的下标区间，不传时返回值、顺序与性能不变；各层 token 由 `estimateTokensOf` 的**前缀差分**摊分（`C(to) − C(from)`），相邻层首尾相接，因此各层之和恒等于整体估算，估算仍只有一套。
 
@@ -357,6 +357,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - 重放 `eval/mock-story.js` 的 32 回合剧本，与运行时同样地调用 `assembleAI1` / `compressStory`；
 - 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 是否命中 5 类探针（角色名 / 时间设定 / 伏笔原话 / 地点细节 / 玩家自己说过的事）；
 - `checkHeuristic` 校验启发式注入的命中与「零注入」；`checkCardProfile` 校验角色卡解析（自造 PNG）与画像预算 / 合并 / 本地提取；
+- `eval/chat-mode-test.js` 守「扮演并入聊天」之后的行为契约：旧值 `rp` 读档归一为 `chat` 且卡与历史完整、聊天没有做 / 说 / 导演（旧存档里的内层标记在组装时剥掉）、有卡默认不下发邮件与下单（本对话显式打开才下发）、侧车离线时定时 / 邮件 / 下单三类都不下发；
 - 输出总分并与 v0.1 基线（60.0%）对比；低于基线或校验未全中时返回非 0 退出码（CI 据此拦截回归）。
 
 改记忆、压缩、召回相关代码前请先跑 `node eval/run.js`。
@@ -418,7 +419,7 @@ node sidecar/server.mjs --show-token
 
 **存储与真源**：侧车用 `node:sqlite`（`sidecar/data/ir-sidecar.db`）持久化触发器、触发记录、邮件审计与草稿、支付台账与授权范围。**安全项（额度 / 白名单 / 每日上限 / 免打扰时段 / token）的唯一真源是 `sidecar/data/config.json`**，前端设置页只是它的编辑界面（经 `GET/PUT /api/config`），前端本地不保存这些值，模型也没有任何写入通道——这与 SillyTavern（`config.yaml` + `secrets.json`）、Open WebUI（环境变量 + Admin Panel）、LibreChat（`.env` > `yaml` > 面板）三家一致。长期授权范围（mandate）按「月」签发与续签：额度 = 设置里的每月上限、有效期 = 本月（`period_start` / `period_end`），签了窗口的授权过期 / 未开始由策略层直接拒绝（`MANDATE_EXPIRED`）、已用额度只按窗口内统计，前端在下一次购买前确认续签一份新的；没签窗口的旧档保持终身累计口径（`eval/payment-test.js` 对账）。
 
-**工具通道的取舍（v0.6.0 起）**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），**只在 `chat`（智能体）/ `rp` 模式且侧车在线时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效；模型对**已生效的同名触发器**做实质修改（prompt / 规格 / 频道 / 启用位）**直接拒绝**（`TRIGGER_LOCKED`，库里那行一个字段都不动；不改「先覆盖再退回待确认」，否则批准过的 prompt 在用户确认前就已经没了），内容完全没变则保留 `active`、也不推迟 `next_at`。**`source` 不是请求体字段**：`upsertTrigger(input, opts)` 只认进程内 `opts.asUser`，HTTP 路由拿不到「用户在场」的证据、一律按模型处理——否则请求体里写 `source:'user'` 就等于自带一把绕过确认闸门的钥匙（`eval/sidecar-smoke.js` 有 HTTP 级反向用例）。邮件与支付也做成了模型工具（`email_propose` / `payment_propose`），但**只是提案制**：模型发起的一律停在提案卡上，执行必须由用户点「确认」触发（`src/core/proposals.ts` 状态机 + 侧车双层把关）；工具**只在 `chat` 模式 + 侧车在线 + 对应 feature 开启且有 token 时下发**（rp / choice 即便能力齐备也不给）。用户显式发起的手写邮件 / 下单表单仍是「界面按钮 → 确认弹窗 → 执行」的老路径。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
+**工具通道的取舍（v0.6.0 起）**：调度保留 5 个模型工具（`schedule_once` / `schedule_heartbeat` / `schedule_cron` / `list_triggers` / `cancel_trigger`），**只在 `chat`（聊天）模式且侧车在线、对应 feature 开启且有 token 时下发**，且模型新建的触发器一律是 `pending_confirm`，需用户在界面上点确认才生效；模型对**已生效的同名触发器**做实质修改（prompt / 规格 / 频道 / 启用位）**直接拒绝**（`TRIGGER_LOCKED`，库里那行一个字段都不动；不改「先覆盖再退回待确认」，否则批准过的 prompt 在用户确认前就已经没了），内容完全没变则保留 `active`、也不推迟 `next_at`。**`source` 不是请求体字段**：`upsertTrigger(input, opts)` 只认进程内 `opts.asUser`，HTTP 路由拿不到「用户在场」的证据、一律按模型处理——否则请求体里写 `source:'user'` 就等于自带一把绕过确认闸门的钥匙（`eval/sidecar-smoke.js` 有 HTTP 级反向用例）。邮件与支付也做成了模型工具（`email_propose` / `payment_propose`），但**只是提案制**：模型发起的一律停在提案卡上，执行必须由用户点「确认」触发（`src/core/proposals.ts` 状态机 + 侧车双层把关）；工具**只在 `chat` 模式 + 侧车在线 + 对应 feature 开启且有 token 时下发**（choice 即便能力齐备也不给；有卡聊天在用户未显式打开时也不给，见 `src/core/prefs.ts` 的解析层默认）。用户显式发起的手写邮件 / 下单表单仍是「界面按钮 → 确认弹窗 → 执行」的老路径。因此 `MAX_TOOL_CALLS_PER_TURN` 仍是 2。
 
 **页面关闭时**：侧车到点只把触发**写入待处理队列**（不打扰、不猜）；前端下次打开时按 `SKIP / RUN_ONCE / RUN_ALL` 补跑，补跑时走的是与真实用户消息完全相同的回合链路（合成一条入站消息 → `sendPlayerAction`）。「页面开着」则由 SSE 实时推送 `trigger.fire`。这一处做成了可替换的策略点（见 `scheduler.mjs` 的 `missedPolicy`）。
 

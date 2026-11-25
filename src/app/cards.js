@@ -193,6 +193,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.renderStoryPanels();
     A.renderProfilePanel();
     closeCardEditor(false);
+    // 有没有卡会改输入区口吻（「说点什么」/「说点什么，或交给我办件事」）：加完卡立刻同步一次
+    A.syncKindSwitch();
     renderChat();
     toast(hadCard
       ? '角色卡已保存，改完即生效'
@@ -206,6 +208,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     delete S.story.characterCard;
     saveAll();
     A.renderStoryPanels();
+    A.syncKindSwitch();   // 摘卡后输入区回到「或交给我办件事」的口吻
     renderChat();
     toast('角色卡已移除，历史消息保留');
   }

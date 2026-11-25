@@ -6,7 +6,7 @@
  *   1. saveStory 写出的索引条目含 mode / turn / titleAuto / snippet；
  *   2. 旧索引条目（缺字段 / 空标题 / 坏条目）补齐后再运行为空操作（幂等）；
  *   3. deleteStory 同步清理索引与搜索文档；
- *   4. titleAuto 默认值：新建智能体 / 扮演为真，剧情为假，旧档迁移为假。
+ *   4. titleAuto 默认值：新建聊天（含旧 rp 值归一）为真，剧情为假，旧档迁移为假。
  *
  * 用法：node eval/shelf-index-test.js
  */
@@ -180,8 +180,10 @@ const KEYS = Store.KEYS;
 /* ---------------- 5. titleAuto 默认值 ---------------- */
 
 {
-  check('newStory：chat / rp 默认 titleAuto=true',
-    Store.newStory({ mode: 'chat' }).titleAuto === true && Store.newStory({ mode: 'rp' }).titleAuto === true);
+  check('newStory：聊天默认 titleAuto=true（旧 rp 值归一为 chat 后同样是真）',
+    Store.newStory({ mode: 'chat' }).titleAuto === true
+      && Store.newStory({ mode: 'rp' }).mode === 'chat'
+      && Store.newStory({ mode: 'rp' }).titleAuto === true);
   check('newStory：choice 默认 titleAuto=false',
     Store.newStory({ mode: 'choice' }).titleAuto === false);
   const old = Store.migrateStory({

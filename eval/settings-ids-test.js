@@ -33,7 +33,7 @@ const GLOBAL_SETTINGS_IDS = [
   's-painter-base', 's-painter-model', 's-painter-key', 'btn-test-painter', 'test-painter-state',
   's-scribe-enabled', 's-scribe-ai', 's-scribe-every', 's-scribe-base', 's-scribe-model', 's-scribe-key',
   'btn-test-scribe', 'test-scribe-state',
-  's-profile-choice', 's-profile-chat', 's-profile-rp', 'btn-profile-all', 'btn-profile-none',
+  's-profile-choice', 's-profile-chat', 'btn-profile-all', 'btn-profile-none',
   's-profile-scope', 'profile-state', 'profile-list', 'btn-profile-clear',
   's-draft-base', 's-draft-model', 's-draft-key', 'btn-test-draft', 'test-draft-state',
   's-image-aspect', 'row-image-wh', 's-image-width', 's-image-height',

@@ -543,16 +543,15 @@ export const GROUPS = [
         // 同类低频可选块：默认全关，按模式开；没开过就收起来
         opt: true,
         fold: {
-          auto: 'checked:#s-profile-choice,#s-profile-chat,#s-profile-rp',
-          on: 'checked:#s-profile-choice,#s-profile-chat,#s-profile-rp',
+          auto: 'checked:#s-profile-choice,#s-profile-chat',
+          on: 'checked:#s-profile-choice,#s-profile-chat',
           tagOn: '已启用', tagOff: '未启用',
         },
         sub: '默认全关，可按模式开。开启后书记员校对时顺手提取，每轮只注入与当前话题相关的几条，不涨 token；关闭即停止收集，已存条目保留。',
         nodes: [
           { k: 'row', items: [
             { k: 'check', id: 's-profile-choice', text: '剧情' },
-            { k: 'check', id: 's-profile-chat', text: '智能体' },
-            { k: 'check', id: 's-profile-rp', text: '扮演' },
+            { k: 'check', id: 's-profile-chat', text: '聊天' },
             { k: 'btn', id: 'btn-profile-all', text: '全部开启', cls: 'ui-btn mini' },
             { k: 'btn', id: 'btn-profile-none', text: '全部关闭', cls: 'ui-btn mini' },
           ] },
@@ -613,13 +612,13 @@ export const GROUPS = [
             ] },
           ] },
           { k: 'grid2', items: [
-            { k: 'select', id: 's-ui-font', label: '字号默认（扮演 / 智能体）', options: [
+            { k: 'select', id: 's-ui-font', label: '字号默认（剧情 / 聊天）', options: [
               ['sm', '小'], ['md', '中'], ['lg', '大'],
             ] },
-            { k: 'select', id: 's-ui-width', label: '内容宽度默认（扮演 / 智能体）', options: [
+            { k: 'select', id: 's-ui-width', label: '内容宽度默认（剧情 / 聊天）', options: [
               ['narrow', '窄'], ['standard', '标准'], ['wide', '宽'],
             ] },
-            { k: 'select', id: 's-ui-density', label: '密度默认（扮演 / 智能体）', options: [
+            { k: 'select', id: 's-ui-density', label: '密度默认（剧情 / 聊天）', options: [
               ['compact', '紧凑'], ['standard', '标准'],
             ] },
           ] },

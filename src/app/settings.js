@@ -68,12 +68,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#s-show-reasoning').checked = !!S.settings.showReasoning;
     $('#s-tools-enabled').checked = S.settings.toolsEnabled !== 'off';
     A.renderNoToolsHint();
-    // 用户画像：默认全关，可按模式单独开或全开（'all' 与三个勾等价）
+    // 用户画像：默认全关，可按模式单独开或全开（'all' 与两个勾等价）
     const up = S.settings.userProfile || {};
-    const enabled = up.enabled === 'all' ? { choice: true, chat: true, rp: true } : (up.enabled || {});
+    const enabled = up.enabled === 'all' ? { choice: true, chat: true } : (up.enabled || {});
     $('#s-profile-choice').checked = !!enabled.choice;
     $('#s-profile-chat').checked = !!enabled.chat;
-    $('#s-profile-rp').checked = !!enabled.rp;
     $('#s-profile-scope').value = up.scope === 'per-story' ? 'per-story' : 'global';
     renderProfilePanel();
     $('#s-style-preset').value = S.settings.stylePreset;
@@ -190,12 +189,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.video.ratio = $('#s-video-ratio').value || '16:9';
     S.settings.video.extraParams = $('#s-video-params').value.trim();
 
-    // 用户画像：三个勾全开 = 'all'（等价写法，省得以后加模式还要改数据）
+    // 用户画像：两个勾全开 = 'all'（等价写法，省得以后加模式还要改数据）
     const pChoice = $('#s-profile-choice').checked;
     const pChat = $('#s-profile-chat').checked;
-    const pRp = $('#s-profile-rp').checked;
     S.settings.userProfile = {
-      enabled: (pChoice && pChat && pRp) ? 'all' : { choice: pChoice, chat: pChat, rp: pRp },
+      enabled: (pChoice && pChat) ? 'all' : { choice: pChoice, chat: pChat },
       scope: $('#s-profile-scope').value === 'per-story' ? 'per-story' : 'global',
     };
 

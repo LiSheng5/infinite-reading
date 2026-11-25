@@ -114,7 +114,7 @@ async function main() {
 
   S.stop();
 
-  /* 7. 工具门控：调度工具只在对话 / 扮演 + 后端已开启调度时下发 */
+  /* 7. 工具门控：调度工具只在聊天 + 后端已开启调度时下发 */
   const Ctx = core('context').Context;
   const namesOf = list => list.map(t => t.function.name);
   if (!Ctx) {
@@ -123,13 +123,13 @@ async function main() {
     const choiceNames = namesOf(Ctx.toolsForMode('choice', { schedule: true }));
     const chatOn = namesOf(Ctx.toolsForMode('chat', { schedule: true }));
     const chatOff = namesOf(Ctx.toolsForMode('chat', { schedule: false }));
-    const rpOn = namesOf(Ctx.toolsForMode('rp', { schedule: true }));
     check('门控：剧情模式不追加调度工具', choiceNames.indexOf('schedule_once') < 0, choiceNames.join(','));
-    check('门控：对话模式 + 调度开启 → 下发 5 个调度工具',
+    check('门控：聊天 + 调度开启 → 下发 5 个调度工具',
       chatOn.indexOf('schedule_once') >= 0 && chatOn.indexOf('cancel_trigger') >= 0, chatOn.join(','));
     check('门控：后端没开调度 → 不下发调度工具', chatOff.indexOf('schedule_once') < 0);
-    check('门控：扮演模式同样可用', rpOn.indexOf('schedule_cron') >= 0);
-    check('门控：chat / rp 仍有 request_image / update_memory；剧情模式少了 request_image',
+    check('门控：旧值 rp 兜底与 chat 同清单（读档归一后不会再出现）',
+      namesOf(Ctx.toolsForMode('rp', { schedule: true })).join(',') === chatOn.join(','));
+    check('门控：聊天仍有 request_image / update_memory；剧情模式少了 request_image',
       chatOn.indexOf('request_image') >= 0 && chatOn.indexOf('update_memory') >= 0
       && choiceNames.indexOf('update_memory') >= 0 && choiceNames.indexOf('request_image') < 0,
       chatOn.join(',') + ' vs ' + choiceNames.join(','));
@@ -138,23 +138,20 @@ async function main() {
     check('调度工具共 5 个', Ctx.TOOL_NAMES_SCHEDULE.length === 5, Ctx.TOOL_NAMES_SCHEDULE.join(','));
     check('工具总量仍受每轮上限约束（常量存在）', Ctx.MAX_TOOL_CALLS_PER_TURN === 2);
 
-    // request_image 变体分流：chat / rp 直出（prompt 必填）；choice 已无此工具
+    // request_image 变体分流：聊天直出（prompt 必填）；choice 已无此工具
     const toolOf = (list, name) => list.filter(t => t.function.name === name)[0];
     const imgOf = mode => toolOf(Ctx.toolsForMode(mode, { schedule: false }), 'request_image');
-    const chImg = imgOf('chat'), rpImg = imgOf('rp'), chChoiceImg = imgOf('choice');
+    const chImg = imgOf('chat'), chChoiceImg = imgOf('choice');
     const propsOf = t => ((t && t.function.parameters) || {}).properties || {};
     const reqOf = t => ((t && t.function.parameters) || {}).required || [];
-    check('request_image：对话模式是直出变体（含 prompt 且必填）',
+    check('request_image：聊天是直出变体（含 prompt 且必填）',
       !!chImg && !!propsOf(chImg).prompt && reqOf(chImg).indexOf('prompt') >= 0,
       JSON.stringify(Object.keys(propsOf(chImg))));
-    check('request_image：扮演模式同为直出变体（含 prompt 且必填）',
-      !!rpImg && !!propsOf(rpImg).prompt && reqOf(rpImg).indexOf('prompt') >= 0);
     check('request_image：剧情模式工具名集合不含它（作画只能点按钮）',
       !chChoiceImg && choiceNames.indexOf('request_image') < 0 && choiceNames.indexOf('update_memory') >= 0,
       choiceNames.join(','));
-    check('工具名集合：chat / rp 一致；choice = chat 去掉 request_image',
-      chatOff.join(',') === namesOf(Ctx.toolsForMode('rp', { schedule: false })).join(',')
-      && choiceNames.join(',') === chatOff.filter(n => n !== 'request_image').join(','),
+    check('工具名集合：choice = chat 去掉 request_image',
+      choiceNames.join(',') === chatOff.filter(n => n !== 'request_image').join(','),
       choiceNames.join(','));
     check('工具说明：choice 的 [可用工具] 措辞不含 request_image',
       Ctx.toolPolicyText(Ctx.toolNamesForMode('choice', {})).indexOf('request_image') < 0
@@ -163,24 +160,20 @@ async function main() {
       Ctx.systemForMode('choice').indexOf('请画师') < 0 && Ctx.systemForMode('choice').indexOf('画师作画') < 0, 'ok');
   }
 
-  /* 7b. 智能体（chat）工具集 / 系统提示 / stripKindMarker（增补） */
+  /* 7b. 聊天工具集 / 系统提示 / stripKindMarker（增补） */
   if (!Ctx) {
     check('IR.Context 可用（7b）', false);
   } else {
     const namesOf2 = list => list.map(t => t.function.name);
     const all = { schedule: true, email: true, payment: true };
     const chatAll = namesOf2(Ctx.toolsForMode('chat', all));
-    const rpAll = namesOf2(Ctx.toolsForMode('rp', all));
     const choiceAll = namesOf2(Ctx.toolsForMode('choice', all));
     const chatNone = namesOf2(Ctx.toolsForMode('chat', { schedule: false, email: false, payment: false }));
-    check('门控：chat + email/payment 开启 → 含 email_propose / payment_propose',
+    check('门控：聊天 + email/payment 开启 → 含 email_propose / payment_propose',
       chatAll.indexOf('email_propose') >= 0 && chatAll.indexOf('payment_propose') >= 0, chatAll.join(','));
-    check('门控：旧 rp 值并入 chat——邮件 / 下单跟随开关（清单与 chat 相同）',
-      rpAll.join(',') === chatAll.join(',') && rpAll.indexOf('email_propose') >= 0 && rpAll.indexOf('payment_propose') >= 0,
-      rpAll.join(','));
     check('门控：choice 即便传了 true 也不下发邮件 / 下单工具',
       choiceAll.indexOf('email_propose') < 0 && choiceAll.indexOf('payment_propose') < 0, choiceAll.join(','));
-    check('门控：chat 但标志为假 → 不含邮件 / 下单工具',
+    check('门控：聊天但标志为假 → 不含邮件 / 下单工具',
       chatNone.indexOf('email_propose') < 0 && chatNone.indexOf('payment_propose') < 0, chatNone.join(','));
     check('isScheduleTool(email_propose) === false / isProposalTool(email_propose) === true',
       Ctx.isScheduleTool('email_propose') === false && Ctx.isProposalTool('email_propose') === true
@@ -192,12 +185,15 @@ async function main() {
       && chatAll.indexOf('schedule_once') >= 0 && Ctx.isScheduleTool('schedule_once') === true);
 
     const chatSys = Ctx.systemForMode('chat');
-    const rpSys = Ctx.systemForMode('rp');
+    const cardSys = Ctx.systemForMode('chat', { hasCard: true });
     const choiceSys = Ctx.systemForMode('choice');
     check('systemForMode(chat)：不含（做）标记说明', chatSys.indexOf('（做）') < 0, chatSys.slice(0, 40));
-    check('systemForMode(chat)：是智能体系统提示（含「智能助手」）', /智能助手/.test(chatSys));
-    check('systemForMode(rp)：旧值并入 chat（无标记说明，与无卡 chat 逐字相同）',
-      rpSys === chatSys && rpSys.indexOf('（做）') < 0);
+    check('systemForMode(chat)：是助手系统提示（含「智能助手」）', /智能助手/.test(chatSys));
+    check('systemForMode(rp)：旧值兜底——与 chat 逐字相同（读档归一后不会再出现）',
+      Ctx.systemForMode('rp') === chatSys && Ctx.systemForMode('rp', { hasCard: true }) === cardSys);
+    check('systemForMode(chat, hasCard)：拼上角色段（角色卡里的人 + 2~6 句），仍无标记说明',
+      cardSys.length > chatSys.length && cardSys.indexOf('角色卡里的那个人') >= 0
+      && cardSys.indexOf('2~6 句') >= 0 && cardSys.indexOf('（做）') < 0, cardSys);
     check('systemForMode(choice)：仍是剧情 JSON 契约（逐字未动）',
       choiceSys.indexOf('旁白') >= 0 && choiceSys.indexOf('场景切换') >= 0 && choiceSys.indexOf('（做）') >= 0
       && choiceSys === Ctx.systemForMode('choice', {}));

@@ -57,7 +57,7 @@ async function main() {
   const TH = Context.compressThreshold(CW);
   const WARN_LINE = Math.ceil(TH * 17 / 20);
   H.check('阈值口径 = compressThreshold（不另写一套）', TH === 14000 && WARN_LINE === 11900, 'th=' + TH + ' warn=' + WARN_LINE);
-  for (const mode of ['choice', 'chat', 'rp']) {
+  for (const mode of ['choice', 'chat']) {
     for (const [target, level] of [[WARN_LINE - 1, 'ok'], [WARN_LINE, 'warn'], [TH - 1, 'warn'], [TH, 'over'], [TH + 1, 'over']]) {
       const u = padToTarget(newStory(mode), { contextWindow: CW }, target);
       H.check(mode + ' tokens=' + target + ' → ' + level,
@@ -84,14 +84,20 @@ async function main() {
     { contextWindow: 32000 },
     { contextWindow: 32000, tools: ['update_memory', 'recall_world_state'], profile: ['玩家喜欢甜食'] },
   ];
-  for (const mode of ['choice', 'chat', 'rp']) {
+  const CARD_STORY = { characterCard: { name: '沈砚', opening: '「门没锁。」' } };
+  const MODES = [
+    ['choice', {}],
+    ['chat', {}],
+    ['chat（有卡）', CARD_STORY],
+  ];
+  for (const [tag, extra] of MODES) {
     for (const opts of combos) {
-      const st = newStory(mode);
+      const st = Object.assign(newStory(tag === 'choice' ? 'choice' : 'chat'), extra);
       st.messages.push({ role: 'user', content: '走' }, { role: 'assistant', content: '{"旁白":"雨更大了。","选项":[]}' });
       st.summaries.push('【第一幕】雨夜车站｜凌晨｜发生｜伏笔：埋下「未寄出的信」');
       const u = describeContextUsage(st, opts);
       const direct = Context.estimateTokensOf(Context.assembleAI1(st, '', opts));
-      H.check('tokens 同源（' + mode + ' ' + JSON.stringify(opts).slice(0, 40) + '）', u.tokens === direct, u.tokens + ' ≠ ' + direct);
+      H.check('tokens 同源（' + tag + ' ' + JSON.stringify(opts).slice(0, 40) + '）', u.tokens === direct, u.tokens + ' ≠ ' + direct);
     }
   }
 
@@ -154,15 +160,15 @@ async function main() {
   /* ---------- 4. 分层明细（opts.trace）：不改组装结果，且各层之和 == 整体估算 ---------- */
   const plainKeys = ['system', 'persistent', 'summary', 'history', 'user'];
   const toolKeys = ['system', 'persistent', 'summary', 'tools', 'history', 'user'];
-  for (const mode of ['choice', 'chat', 'rp']) {
+  for (const [modeTag, extra] of MODES) {
     for (const opts of combos) {
-      const st = newStory(mode);
+      const st = Object.assign(newStory(modeTag === 'choice' ? 'choice' : 'chat'), extra);
       st.messages.push({ role: 'user', content: '走' }, { role: 'assistant', content: '{"旁白":"雨更大了。","选项":[]}' });
       st.summaries.push('【第一幕】雨夜车站｜凌晨｜发生｜伏笔：埋下「未寄出的信」');
       const trace = [];
       const traced = Context.assembleAI1(st, '', Object.assign({}, opts, { trace: trace }));
       const plain = Context.assembleAI1(st, '', opts);
-      const tag = mode + ' ' + JSON.stringify(opts).slice(0, 40);
+      const tag = modeTag + ' ' + JSON.stringify(opts).slice(0, 40);
       H.check('不传 / 传 trace 的组装结果逐字一致（' + tag + '）',
         JSON.stringify(traced) === JSON.stringify(plain));
       H.check('trace 连续覆盖全部消息（' + tag + '）', (() => {

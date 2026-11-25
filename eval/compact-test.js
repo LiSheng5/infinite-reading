@@ -25,7 +25,7 @@ const core = (f) => require(path.join(ROOT, 'src', 'core', f + '.ts'));
 const { Context } = core('context');
 const { Tree: T } = core('tree');
 
-/* ---------- 夹具：mode 决定切幕口径（choice 按 scene_change，chat/rp 按固定条数） ---------- */
+/* ---------- 夹具：mode 决定切幕口径（choice 按 scene_change，chat 按固定条数） ---------- */
 function newStory(mode, n) {
   const story = {
     schema: 3, id: 'compact-story', title: '测试', premise: '在雨夜的车站。',
@@ -115,7 +115,7 @@ async function main() {
     H.check('无可压内容时不改摘要栈',
       JSON.stringify({ m: equal.messages.length, s: equal.summaries.length }) === before);
 
-    const fewer = newStory('rp', 2);                           // 4 条 < 8
+    const fewer = newStory('chat', 2);                         // 4 条 < 8
     H.check('消息少于 keep 条 → null', Context.compressStory(fewer, { force: true }) === null);
 
     const keepAll = newStory('choice', 10);                    // 20 条，keep=20

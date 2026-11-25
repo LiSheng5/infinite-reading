@@ -300,10 +300,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
     // —— 用户画像 ——
     $('#btn-profile-all').onclick = () => {
-      ['#s-profile-choice', '#s-profile-chat', '#s-profile-rp'].forEach(s => { $(s).checked = true; });
+      ['#s-profile-choice', '#s-profile-chat'].forEach(s => { $(s).checked = true; });
     };
     $('#btn-profile-none').onclick = () => {
-      ['#s-profile-choice', '#s-profile-chat', '#s-profile-rp'].forEach(s => { $(s).checked = false; });
+      ['#s-profile-choice', '#s-profile-chat'].forEach(s => { $(s).checked = false; });
     };
     $('#btn-profile-clear').onclick = A.clearProfile;
     // —— 测试连接（只探测，不保存、不出图） ——

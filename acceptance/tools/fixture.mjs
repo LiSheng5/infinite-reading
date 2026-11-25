@@ -4,11 +4,14 @@
  * 「准备一份真实形态的备份（多个故事，含分支、存档点、图片、视频、角色卡、
  * 用户画像），后续每阶段都要能导入、还原、再导出，并与原文件逐字段比对。」
  *
- * 产物（acceptance/0.12.1/fixture/）：
+ * 产物（acceptance/<版本>/fixture/，当前写 0.14.0）：
  *   backup-plain.irbackup.json      「一键导出全部备份」（不带原图 / 不带 API Key）——真实 UI 导出
  *   backup-with-src.zip             「一键导出全部备份（带原图）」——真实 UI 导出
  *   story-choice-full.irstory.json  单故事完整档案（剧情 + 分支 + 图 + 视频 + 存档点，带原图）
- *   story-rp-full.irstory.json      单故事完整档案（扮演 + 角色卡 + 用户画像）
+ *   story-chat-card-full.irstory.json  单故事完整档案（聊天 + 角色卡 + 用户画像）
+ *
+ * 旧值 rp（原「扮演」）已并入 chat，新导出一律写 'chat'；迁移用例的输入用
+ * acceptance/0.12.1/fixture/story-rp-full.irstory.json（旧版留档，不要重生成）。
  *   fixture-seed.json               播种清单 + 各产物 sha256 + 易变字段口径
  *   roundtrip-report.json           roundtrip 逐字段比对报告（roundtrip 命令写）
  *
@@ -42,7 +45,7 @@ const { chromium } = require('playwright');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
-const OUT = path.join(ROOT, 'acceptance', '0.12.1', 'fixture');
+const OUT = path.join(ROOT, 'acceptance', '0.14.0', 'fixture');
 // 「双击 index.html 的真实形态」 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
 const APP_URL = pathToFileURL(path.join(ROOT, 'dist', 'single', 'index.html')).href;
@@ -312,15 +315,15 @@ async function buildFixture() {
     log('  API Key 校验：带 Key 导出含 Key、默认导出已剥净 ✓');
 
     const storyChoiceId = seedResult.stories[0].id;   // 雨夜便利店
-    const storyRpId = seedResult.stories[1].id;       // 角色卡故事
+    const storyCardId = seedResult.stories[1].id;     // 聊天 + 角色卡的故事
     const storyChoice = await exportStoryPack(page, storyChoiceId, { withSrc: true });
-    const storyRp = await exportStoryPack(page, storyRpId, { withSrc: false });
+    const storyCard = await exportStoryPack(page, storyCardId, { withSrc: false });
 
     const artifacts = [
       { file: 'backup-plain.irbackup.json', bytes: plain, kind: 'ir-backup', withSrc: false, rules: 'RULES_BACKUP' },
       { file: 'backup-with-src.zip', bytes: zip, kind: 'ir-backup-zip', withSrc: true, rules: 'RULES_BACKUP + 逐图字节' },
       { file: 'story-choice-full.irstory.json', bytes: storyChoice, kind: 'ir-story', withSrc: true, rules: 'RULES_STORY' },
-      { file: 'story-rp-full.irstory.json', bytes: storyRp, kind: 'ir-story', withSrc: false, rules: 'RULES_STORY' },
+      { file: 'story-chat-card-full.irstory.json', bytes: storyCard, kind: 'ir-story', withSrc: false, rules: 'RULES_STORY' },
     ];
     for (const a of artifacts) {
       fs.writeFileSync(path.join(OUT, a.file), a.bytes);
@@ -581,8 +584,8 @@ async function seedInPage(page) {
 
       Store.saveStory(stA);
 
-      /* ---------- 故事 B：扮演 + 角色卡 + 故事内画像 ---------- */
-      const stB = Store.newStory({ title: '凌霜的航线夜谈', premise: '与星舰领航员凌霜的扮演对话。', mode: 'rp' });
+      /* ---------- 故事 B：聊天 + 角色卡 + 故事内画像（有没有卡只看 characterCard，不看模式名） ---------- */
+      const stB = Store.newStory({ title: '凌霜的航线夜谈', premise: '与星舰领航员凌霜的角色对话。', mode: 'chat' });
       stB.titleAuto = true;
       stB.characterCard = {
         name: '凌霜', appearance: '银白长发，舰桥制服，左眼下一颗小痣',
@@ -600,8 +603,8 @@ async function seedInPage(page) {
       playTurn(stB, { actionType: 'player', kind: 'say', text: '「这圈虚线，被人擦过。」', reply: { narration: '「眼力不错。」她终于转过头来，「那是三年前，我亲手擦的。」', choices: [], scene_change: true, scene_summary: '凌霜回头，舷窗外星云缓慢旋转' } }, false);
       Store.saveStory(stB);
 
-      /* ---------- 故事 C：智能体（纯文本对话，无图） ---------- */
-      const stC = Store.newStory({ title: '新对话', premise: '日常智能体对话。', mode: 'chat' });
+      /* ---------- 故事 C：聊天（纯文本对话，无卡无图） ---------- */
+      const stC = Store.newStory({ title: '新对话', premise: '日常助手对话。', mode: 'chat' });
       playTurn(stC, { actionType: 'player', kind: 'do', text: '帮我记一下：周五下午三点和印刷厂开对接会', reply: { narration: '记下了：周五 15:00，与印刷厂开对接会。要不要我提前一天提醒你？', choices: [], scene_change: false, scene_summary: '' } }, false);
       playTurn(stC, { actionType: 'player', kind: 'do', text: '要，顺便把上次的样张文件找出来', reply: { narration: '好，周四 15:00 提醒你。样张文件在「印刷/样张」目录里，最近一次修改是上周二。', choices: [], scene_change: false, scene_summary: '' } }, false);
       Store.saveStory(stC);

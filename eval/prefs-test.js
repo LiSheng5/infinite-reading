@@ -115,8 +115,10 @@ console.log('[3] visibleFor：两种模式的可见控件集合');
   ok(!choice.has('tools') && !choice.has('schedule'), '剧情：不含工具开关 / 定时主动开关');
   ok(chat.has('model') && chat.has('tools') && chat.has('layout') && chat.has('showReasoning'), '聊天：模型 / 工具开关 / 布局 / 思考过程');
   ok(!chat.has('trigger') && !chat.has('choices'), '聊天：不含出图时机 / 选项显示');
+  ok(chat.has('tools') && !chat.has('characterCard'),
+    '聊天（有卡 / 无卡同一集合）：工具开关在，角色卡入口在故事数据区、不在可见控件集');
   ok(P.visibleFor('rp').has('tools') && !P.visibleFor('rp').has('characterCard'),
-    '旧 rp 值归一为 chat 集合（角色卡入口在故事数据区，不在可见控件集）');
+    '旧 rp 值归一为 chat 集合（读档归一后不会再出现）');
   ok(P.visibleFor('unknown') instanceof Set, '未知模式回落剧情集合且不抛错');
 }
 

@@ -76,7 +76,7 @@
     <!-- 提示 / 完成 -->
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.2L3 19.4h18z"/><path d="M12 10v4.4M12 17.2h.01"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6l4.6 4.5L19 7.6"/></symbol>
-    <!-- 三种模式：剧情 = 书；智能体 = 对话框；扮演 = 面具 -->
+    <!-- 模式图标：剧情 = 书；聊天 = 对话框（原「扮演」的面具 i-mask 已闲置，sprite 保留） -->
     <symbol id="i-book" viewBox="0 0 24 24"><path d="M3.8 5.6c2.7-1 5.6-.8 8.2.8 2.6-1.6 5.5-1.8 8.2-.8v12.8c-2.7-1-5.6-.8-8.2.8-2.6-1.6-5.5-1.8-8.2-.8z"/><path d="M12 6.4v12.8"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5.2 4.8h13.6a1.7 1.7 0 011.7 1.7v8.2a1.7 1.7 0 01-1.7 1.7h-6.4l-4.6 3.5v-3.5H5.2a1.7 1.7 0 01-1.7-1.7V6.5a1.7 1.7 0 011.7-1.7z"/><path d="M8 10h8M8 13h4.6"/></symbol>
     <symbol id="i-mask" viewBox="0 0 24 24"><path d="M4.6 5.4c4.6-1.4 10.2-1.4 14.8 0v6.2c0 4.3-3.2 7.6-7.4 7.6s-7.4-3.3-7.4-7.6z"/><path d="M8 10.4c.9-.7 2-.7 2.9 0M13.1 10.4c.9-.7 2-.7 2.9 0M9.2 14.6c1.6 1.5 4 1.5 5.6 0"/></symbol>
@@ -90,7 +90,7 @@
   <!-- ========== 开始页（应用入口） ==========
        顶部是只留符号的双纽线主视觉（src/screens/home/InfinityStage.svelte：canvas 逐字粒子）；
        没有 JS 时 index.html 的兜底仍是同一份 ASCII 字符画的静态深蓝版本，构建期注入；
-       三张模式卡即三个开局入口；其余入口收成底部一排文字链接。 -->
+       两张模式卡即两个开局入口（剧情 / 聊天）；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
     <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）。
          以下是无 JS 兜底：字符画不在这里维护——唯一真源是 src/screens/home/art.js，

@@ -2,12 +2,13 @@
  * acceptance/tools/shoot.mjs —— 「无限阅读」迁移基线截图工具
  *
  * 产出：
- *   acceptance/0.12.1/shots/{序号}-{状态}-{屏幕}-{宽度}.png
- *   acceptance/0.12.1/shots/manifest.json（每张图的元信息 + 未能截图项及原因 + console error / pageerror）
+ *   acceptance/0.14.0/shots/{序号}-{状态}-{屏幕}-{宽度}.png
+ *   acceptance/0.14.0/shots/manifest.json（每张图的元信息 + 未能截图项及原因 + console error / pageerror）
+ *   （acceptance/0.12.1/shots 是旧版留档，不再覆盖）
  *
  * 用法：node acceptance/tools/shoot.mjs [--state=empty|seeded] [--width=390|1280]
  *                                [--out=acceptance/…/shots] [--only=<PLAN.key>]
- *       --out：产出目录（相对仓库根；默认 acceptance/0.12.1/shots 基线）；
+ *       --out：产出目录（相对仓库根；默认 acceptance/0.14.0/shots 基线）；
  * --only：只落这个 key 的图（其余步骤照走，只是不截图）——逐屏前后截图用。
  *
  *  - 只新增文件，不改任何现有源码；页面一律 file:// 打开（双击 index.html 的真实形态），不联网。
@@ -28,7 +29,7 @@ const { chromium } = require('playwright');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 // 产出目录默认是迁移基线；--out=<相对 ROOT 的目录> 可改写
-let OUT = path.join(ROOT, 'acceptance', '0.12.1', 'shots');
+let OUT = path.join(ROOT, 'acceptance', '0.14.0', 'shots');
 let ONLY = null;   // --only=<PLAN.key>：只拍这个 key 的图（其余步骤照走，只是不落图）
 // 「双击 index.html 的真实形态」 = 构建出的单文件产物（源码入口是 ES module，
 // file:// 会被浏览器拦）。先 npm run build:single，再跑本脚本。
@@ -43,7 +44,7 @@ const VIEWPORTS = [
 /* ================= 截图清单（序号 = 下标 + 1，两个宽度共用） ================= */
 const PLAN = [
   // —— empty：无存档 ——
-  { key: 'start', state: 'empty', screen: 'start', expect: '#screen-start:not(.hidden)', note: '首页（无「继续上次」）：ASCII 无限符号 + 三张模式卡 + 底部文字入口' },
+  { key: 'start', state: 'empty', screen: 'start', expect: '#screen-start:not(.hidden)', note: '首页（无「继续上次」）：ASCII 无限符号 + 两张模式卡（剧情 / 聊天）+ 底部文字入口' },
   { key: 'shelf', state: 'empty', screen: 'shelf', expect: '#screen-shelf:not(.hidden)', note: '书架空态' },
   { key: 'settings-nav', state: 'empty', screen: 'settings-nav', widths: [390], expect: '#set-nav', note: '设置弹窗 · 分组列表（仅窄屏 ≤720px 是「列表→下钻」态）' },
   { key: 'settings-models', state: 'empty', screen: 'settings-models', expect: '#modal-settings:not(.hidden)', note: '设置 · 模型（剧情对话模型 / 模型库）' },
@@ -55,7 +56,7 @@ const PLAN = [
  // 序号 10 的最终处置：原「设置 · 当前故事」随「当前故事」组迁出全局设置而退役，
   // 空位原地复用为「本对话设置 · 世界状态卡二级视图」（PLAN 序号 = 文件名前缀，不重排）。
   { key: 'story-world-edit', state: 'seeded', screen: 'story-world-edit', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（面板内下钻：人物行卡 + sticky 保存栏）' },
-  { key: 'modal-new', state: 'empty', screen: 'modal-new', expect: '#modal-new:not(.hidden)', note: '新故事弹窗（三张模式卡）' },
+  { key: 'modal-new', state: 'empty', screen: 'modal-new', expect: '#modal-new:not(.hidden)', note: '新故事弹窗（两张模式卡：剧情 / 聊天）' },
   { key: 'modal-wizard', state: 'empty', screen: 'modal-wizard', expect: '#modal-wizard:not(.hidden)', note: '开局设定向导（剧情模式）' },
   { key: 'modal-import-text', state: 'empty', screen: 'modal-import-text', expect: '#modal-import-text:not(.hidden)', note: '粘贴剧情文本导入弹窗' },
   { key: 'modal-confirm', state: 'empty', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（设置→数据→清空本地存档与设置 触发，无输入框）' },
@@ -72,10 +73,10 @@ const PLAN = [
   { key: 'modal-confirm', state: 'seeded', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（打一个存档点，带名字输入框）' },
   { key: 'toast', state: 'seeded', screen: 'toast', expect: '#toast:not(.hidden)', note: '提示条（打完存档点的「已打存档点」）' },
   { key: 'modal-export', state: 'seeded', screen: 'modal-export', expect: '#modal-export:not(.hidden)', note: '导出弹窗（书架行「⋯」→ 导出）' },
-  { key: 'modal-email', state: 'seeded', screen: 'modal-email', expect: '#modal-email:not(.hidden)', note: '写邮件弹窗（入口仅智能体/扮演模式：先在「本对话设置→推进模式」切到智能体）' },
-  { key: 'modal-payment', state: 'seeded', screen: 'modal-payment', expect: '#modal-payment:not(.hidden)', note: '代下单弹窗（同上，智能体模式）' },
+  { key: 'modal-email', state: 'seeded', screen: 'modal-email', expect: '#modal-email:not(.hidden)', note: '写邮件弹窗（入口仅聊天模式：先在「本对话设置→推进模式」切到聊天）' },
+  { key: 'modal-payment', state: 'seeded', screen: 'modal-payment', expect: '#modal-payment:not(.hidden)', note: '代下单弹窗（同上，聊天模式）' },
   { key: 'settings-schedule', state: 'seeded', screen: 'settings-schedule', expect: '#fs-schedule', note: '定时主动（「＋」→ 定时主动：设置·工具与服务，滚动到「定时主动」分区）' },
-  { key: 'lightbox', state: 'seeded', screen: 'lightbox', expect: '#lightbox:not(.hidden)', note: '图片灯箱（智能体模式内联图气泡点开的大图）' },
+  { key: 'lightbox', state: 'seeded', screen: 'lightbox', expect: '#lightbox:not(.hidden)', note: '图片灯箱（聊天模式内联图气泡点开的大图）' },
  // —— 补拍：本对话设置面板的新交互 ——
   { key: 'story-savepoints', state: 'seeded', screen: 'story-savepoints', expect: '#sp-list', note: '本对话设置 · 存档点列表（n 个 + 摘要行）' },
   { key: 'story-world-empty', state: 'seeded', screen: 'story-world-empty', expect: '#prefs-world', note: '本对话设置 · 世界状态卡二级视图（新故事：空世界，表单全空）' },
@@ -85,7 +86,7 @@ const PLAN = [
 const KNOWN_GAPS = [
   { item: 'modal-painter / modal-export / modal-card / lightbox / toast', state: 'empty', reason: '依赖故事数据（要有存档、图片或角色卡），empty 上游入口直接拦掉' },
   { item: 'modal-anchor（画风锚定）', state: 'empty', reason: '试画 4 张候选要生图适配器；empty 是未配置的普通模式，点了只会报「没配模型」' },
-  { item: 'modal-email / modal-payment / 定时主动', state: 'empty', reason: '入口只在智能体/扮演模式出现，empty 无故事可切模式' },
+  { item: 'modal-email / modal-payment / 定时主动', state: 'empty', reason: '入口只在聊天模式出现，empty 无故事可切模式' },
   { item: 'settings-nav（设置分组列表）', state: 'seeded', reason: '与 empty 的设置弹窗同构，全局设置只在 empty 逐分组截；seeded 只补「本对话设置」与「定时主动」' },
   { item: '10 号序（原 settings-story）', state: 'empty', reason: '「当前故事」组已迁出全局设置（阶段 4 屏 2 commit 1），empty 里无故事可截；PLAN 序号原地复用为 seeded 的世界卡二级视图（story-world-edit），序号不重排' },
 ];
@@ -113,6 +114,16 @@ async function openApp(page, query) {
   await page.waitForSelector('#modal-shell-host', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => !!window.__IR_TEST__, null, { timeout: 15000 });
   await sleep(600);
+  // 首次启动（还没接入过模型）会自动弹「接入向导」，它会挡住底下所有点击：
+  // 空表单直接关掉不会问「丢弃」，万一弹了确认框就顺手确认。
+  if (await page.locator('#modal-connect:not(.hidden)').count()) {
+    await page.click('#btn-close-connect');
+    await sleep(400);
+    if (await page.locator('#modal-confirm:not(.hidden)').count()) {
+      await page.click('#cf-ok');
+      await sleep(300);
+    }
+  }
 }
 
 // 截图前的稳定化：藏掉瞬态 toast、失焦、鼠标挪到中性点（或舞台）、等动效收干净
@@ -192,7 +203,7 @@ async function main() {
     notes: [
       '阶段 6 起应用没有全局 IR：页面一律以 ?ir-test=1 打开，经 src/main.js 的验收钩子（window.__IR_TEST__）播种 / 锁档位；不带该参数时产物没有这个对象（pwa-offline 已做负向检查）。',
       '截图前隐藏瞬态 toast、鼠标移到 (2,2) 中性点（阅读页特意悬停舞台以完整显示舞台按钮），避免半悬停态。',
-      'modal-email / modal-payment / 定时主动的入口只在智能体(chat)/扮演(rp)模式出现：seeded 尾段用「本对话设置 → 推进模式」把播种故事切到智能体后再截，其余截图都保持剧情(choice)模式。',
+      'modal-email / modal-payment / 定时主动的入口只在聊天(chat)模式出现：seeded 尾段用「本对话设置 → 推进模式」把播种故事切到聊天后再截，其余截图都保持剧情(choice)模式。',
       '全部截图只截 viewport（fullPage:false）。',
     ],
     shots: [],
@@ -256,7 +267,11 @@ async function runPass(browser, state, vp, manifest) {
   page.on('console', m => {
     if (m.type() !== 'error') return;
     const loc = m.location && m.location();
-    errors.push({ kind: 'console', text: m.text().slice(0, 300), at: (loc && loc.url) ? loc.url.slice(0, 200) : '' });
+    const at = (loc && loc.url) ? loc.url.slice(0, 200) : '';
+    // 本地服务没启动时，启动探测的 /health 会打一条 ERR_CONNECTION_REFUSED：
+    // 那是 empty 状态的真实形态（不是页面错误），记进 failedRequests 就够了
+    if (at.indexOf('127.0.0.1:4319') >= 0 && /ERR_CONNECTION_REFUSED|Failed to fetch/.test(m.text())) return;
+    errors.push({ kind: 'console', text: m.text().slice(0, 300), at });
   });
   page.on('pageerror', e => errors.push({ kind: 'pageerror', text: String(e).slice(0, 300) }));
   page.on('requestfailed', r => {
@@ -669,16 +684,34 @@ async function runSeeded(page, snap, vp, manifest) {
   await sleep(300);
 
  // —— 角色卡（本对话设置 · 故事数据 → 编辑角色卡；入口在面板里，不再走全局设置） ——
+  // 种子里是剧情故事（剧情不显示角色卡区块）：先切到聊天、临时塞一张卡，截完切回剧情。
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
   await sleep(400);
+  await page.selectOption('#s-story-mode', 'chat');
+  await sleep(400);
+  await page.evaluate(() => {
+    const S = __IR_TEST__.App.state;
+    S.story.characterCard = {
+      name: '周叙', appearance: '瘦高个，制服第二颗扣子总是没扣；左手腕有块旧表。',
+      personality: '话里有话、克制，从不把话说满', scene: '凌晨的末班电车，窗外隧道灯一闪一闪',
+      opening: '「到终点还有四站。」他说，「不过你要是赶时间，别在第三站下。」',
+      exampleDialogue: '「第三站没有站台。」', systemNote: '保持克制，不主动推进。',
+      source: 'custom', updatedAt: Date.now(),
+    };
+    __IR_TEST__.App.renderStoryPanels();
+  });
+  await sleep(300);
   await page.click('#btn-edit-card');
   await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 }).catch(() => {});
   await sleep(500);
   await snap('card');
   await page.click('#btn-close-card');
   await sleep(300);
+  await page.selectOption('#s-story-mode', 'choice');
+  await sleep(400);
+  // 卡留在存档里只是停用（剧情不常驻、区块也不显示），其余截图仍是剧情口径
   await page.click('#prefs-close');
   await sleep(300);
 
@@ -750,12 +783,12 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.waitForSelector('#screen-game:not(.hidden)');
   await sleep(600);
 
-  // —— 智能体模式才有的入口：写邮件 / 代下单 / 定时主动（本对话设置→推进模式 切到智能体） ——
+  // —— 聊天模式才有的入口：写邮件 / 代下单 / 定时主动（本对话设置→推进模式 切到聊天） ——
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
   await page.selectOption('#s-story-mode', 'chat').catch(e => {
-    manifest.skipped.push({ item: '切换推进模式到智能体', state: 'seeded', width: vp.width, reason: '#s-story-mode 选择失败：' + e.message });
+    manifest.skipped.push({ item: '切换推进模式到聊天', state: 'seeded', width: vp.width, reason: '#s-story-mode 选择失败：' + e.message });
   });
   await sleep(600);
   await page.click('#prefs-close');
@@ -797,16 +830,29 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.click('#btn-close-settings');
   await sleep(300);
 
-  // —— 图片灯箱（智能体模式：内联图气泡） ——
-  const bubbleImg = page.locator('#chat-scroll .bubble-image-inline img').first();
+  // —— 图片灯箱（聊天模式：内联图气泡） ——
+  // 气泡图是异步补进来的（晚到的图 pushLate 后重绘），点不到就记 skipped，不让整轮中断
+  const bubbleImg = page.locator('#chat-scroll .bubble-image-inline img:visible').first();
+  let lightboxOpened = false;
   if (await bubbleImg.count()) {
-    await bubbleImg.click();
-    await page.waitForSelector('#lightbox:not(.hidden)', { timeout: 5000 }).catch(() => {});
+    try {
+      // 气泡图挂在滚动容器里、外层还有托盘 / 菜单的点击热区：直接派发 click，绕开可操作性检查
+      await bubbleImg.evaluate(el => el.click());
+      await page.waitForSelector('#lightbox:not(.hidden)', { timeout: 5000 });
+      lightboxOpened = true;
+    } catch (_) { lightboxOpened = false; }
+  }
+  if (lightboxOpened) {
     await snap('lightbox');
     await page.evaluate(() => { const b = document.getElementById('lightbox'); if (b) b.click(); });
     await sleep(200);
   } else {
-    manifest.skipped.push({ item: 'lightbox', state: 'seeded', width: vp.width, reason: '聊天流里没有可点的内联图气泡（.bubble-image-inline img），灯箱入口没出现' });
+    manifest.skipped.push({
+      item: 'lightbox', state: 'seeded', width: vp.width,
+      reason: (await bubbleImg.count())
+        ? '有内联图气泡但点不开灯箱（可能还在补图重绘）'
+        : '聊天流里没有可点的内联图气泡（.bubble-image-inline img），灯箱入口没出现',
+    });
   }
 
   // —— 世界状态卡二级视图 · 空世界（直接开一个新故事：世界卡是空表单，「保存世界卡」默认禁用） ——
@@ -816,6 +862,11 @@ async function runSeeded(page, snap, vp, manifest) {
     A.createStoryImmediate('chat');
   });
   await sleep(800);
+  // 开新故事前如果弹了「先把这一幕存好」的确认框，先确认掉，否则挡住底下的点击
+  if (await page.locator('#modal-confirm:not(.hidden)').count()) {
+    await page.click('#cf-ok');
+    await sleep(500);
+  }
   await openHudMenu(page);
   await page.click('#btn-story-prefs');
   await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 }).catch(() => {

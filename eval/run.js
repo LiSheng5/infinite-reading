@@ -135,7 +135,7 @@ function checkHeuristic(story) {
 
 /* ----------  角色卡 + 用户画像校验 ----------
  * 角色卡：自造一张 V2（tEXt `chara`）与一张 V3（iTXt `ccv3`）PNG，验证解析 / 字段映射 / 世界卡对接 / CRC 护栏；
- *        再验 rp 组装带卡与关系、choice 组装不带（不涨常驻预算）。
+ *        再验带卡聊天组装带卡与关系、choice 组装不带（不涨常驻预算）。
  * 画像：按需求注入 Top-N + 一行摘要、条数 / 长度封顶、开关语义、合并去重、离线本地提取。
  * PNG 的 CRC 用评测里独立实现（表驱动），避免和被测解析器共用同一份代码。 */
 
@@ -230,14 +230,24 @@ function checkCardProfile() {
     !RoleCard.parsePNG(bad) && !RoleCard.parsePNG(Buffer.from('not a png at all')) && !RoleCard.parsePNG(null),
     'ok');
 
-  /* —— rp 组装：角色卡 + 关系常驻，choice 不带 —— */
-  const storyRp = Store.newStory({ mode: 'rp', premise: '角色扮演：沈砚', characterCard: card2 });
-  Context.mergeWorld(storyRp.world, { relationship: { stage: '初次见面', bonds: ['旧书店的雨天'], notes: '彼此都在试探' } });
-  const rpText = Context.messagesToText(Context.assembleAI1(storyRp, '你这里有什么书？'));
-  push('rp 组装：角色卡 + 示例对话 + 关系记忆进系统提示词',
-    rpText.indexOf('[角色卡]') !== -1 && rpText.indexOf('性格：冷淡、话少') !== -1
-      && rpText.indexOf('口吻') !== -1 && rpText.indexOf('[你们的关系]') !== -1 && rpText.indexOf('旧书店的雨天') !== -1,
+  /* —— 带卡聊天组装：角色卡 + 关系常驻，choice 不带 —— */
+  const storyCard = Store.newStory({ mode: 'chat', premise: '角色扮演：沈砚', characterCard: card2 });
+  Context.mergeWorld(storyCard.world, { relationship: { stage: '初次见面', bonds: ['旧书店的雨天'], notes: '彼此都在试探' } });
+  const cardText = Context.messagesToText(Context.assembleAI1(storyCard, '你这里有什么书？'));
+  push('带卡聊天组装：角色卡 + 示例对话 + 关系记忆进系统提示词',
+    cardText.indexOf('[角色卡]') !== -1 && cardText.indexOf('性格：冷淡、话少') !== -1
+      && cardText.indexOf('口吻') !== -1 && cardText.indexOf('[你们的关系]') !== -1 && cardText.indexOf('旧书店的雨天') !== -1,
     'ok');
+  push('带卡聊天：历史里的旧（做）/（说）/（导演）内层标记被剥掉',
+    (() => {
+      const st = Store.newStory({ mode: 'chat', characterCard: card2 });
+      st.messages.push(
+        { role: 'user', content: '[玩家行动] （做）推门进去' },
+        { role: 'assistant', content: '「门没锁。」' },
+      );
+      const t = Context.messagesToText(Context.assembleAI1(st, '继续'));
+      return t.indexOf('（做）') === -1 && t.indexOf('推门进去') !== -1;
+    })(), 'ok');
 
   const storyChoice = Store.newStory({ mode: 'choice', premise: 'x', characterCard: card2 });
   const chText = Context.messagesToText(Context.assembleAI1(storyChoice, '继续'));
@@ -250,14 +260,14 @@ function checkCardProfile() {
     { text: '我住在城南', kind: 'fact' },
     { text: '我在写一本小说', kind: 'fact' },
   ];
-  const profText = Context.messagesToText(Context.assembleAI1(storyRp, '墙角有一只很大的蜘蛛', { profile: entries }));
+  const profText = Context.messagesToText(Context.assembleAI1(storyCard, '墙角有一只很大的蜘蛛', { profile: entries }));
   const profLines = profText.split('\n').filter(l => l.indexOf('· ') === 0);
   push('画像：命中话题的条目被注入、无关条目不进（Top-N 精确）',
     profText.indexOf('[关于玩家] 画像 4 条') !== -1 && profLines.length === 1 && profLines[0].indexOf('我怕蜘蛛') !== -1,
     profLines.join(' / ') || '无');
 
   push('画像：关闭（不传）时零注入',
-    Context.messagesToText(Context.assembleAI1(storyRp, '你这里有什么书？')).indexOf('[关于玩家]') === -1, 'ok');
+    Context.messagesToText(Context.assembleAI1(storyCard, '你这里有什么书？')).indexOf('[关于玩家]') === -1, 'ok');
 
   const hitAll = Context.profileBlock(entries, '蜘蛛、雨天、城南、小说都聊到了', 99);
   const lines = hitAll.split('\n').filter(l => l.indexOf('· ') === 0);
@@ -270,8 +280,8 @@ function checkCardProfile() {
   push('画像：块长封顶', capped.length <= Context.PROFILE_MAX_CHARS, capped.length + ' 字');
 
   push('画像：开关语义（all / 按模式）',
-    Context.profileEnabledFor('all', 'choice') && Context.profileEnabledFor({ rp: true }, 'rp')
-      && !Context.profileEnabledFor({ rp: true }, 'chat') && !Context.profileEnabledFor({}, 'rp'),
+    Context.profileEnabledFor('all', 'choice') && Context.profileEnabledFor({ chat: true }, 'chat')
+      && !Context.profileEnabledFor({ chat: true }, 'choice') && !Context.profileEnabledFor({}, 'chat'),
     'ok');
 
   const merged = Context.mergeProfile([{ text: '我怕蜘蛛', kind: 'fact' }], [{ text: '我怕蜘蛛', kind: 'taboo' }, { text: '我喜欢雨天', kind: 'preference' }]);
@@ -319,7 +329,7 @@ function checkCardProfile() {
   push('中文键契约：人物 / 地点 / 时间 / 伏笔 → world（下游链路不用改）',
     cn && cn.world && cn.world.place === '便利店' && cn.world.time === '凌晨三点'
       && cn.world.threads[0] === '挑便宜的就走' && cn.world.characters[0].name === '周叙', 'ok');
-  push('中文键契约：英文键回包（chat / rp / 旧存档）原样透传',
+  push('中文键契约：英文键回包（聊天 / 旧存档）原样透传',
     Context.normalizeAIReply({ narration: 'x', choices: [] }).narration === 'x', 'ok');
 
   const storyCn = Store.newStory({ mode: 'choice', premise: 'x' });
@@ -332,7 +342,7 @@ function checkCardProfile() {
     cnText.indexOf('"旁白":"门开了。"') !== -1 && cnText.indexOf('"narration"') === -1, 'ok');
 
   /* —— 组装分层（主函数只保留顺序，每层一个 append）：选项逐个生效、互不串层 —— */
-  const layerStory = Store.newStory({ mode: 'rp', premise: '角色扮演：沈砚', characterCard: card2 });
+  const layerStory = Store.newStory({ mode: 'chat', premise: '角色扮演：沈砚', characterCard: card2 });
   layerStory.messages.push(
     { role: 'user', content: '[玩家行动] 第一句' },
     { role: 'assistant', content: JSON.stringify({ narration: '第一句答' }) },

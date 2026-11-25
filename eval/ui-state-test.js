@@ -199,8 +199,8 @@ async function main() {
     if (uiOn) {
       const fn = new Function('story', uiOn[1]);
       eq(fn({ mode: 'choice' }), true, 'branchUiOn：剧情模式为真');
-      eq(fn({ mode: 'chat' }), false, 'branchUiOn：对话模式为假');
-      eq(fn({ mode: 'rp' }), false, 'branchUiOn：扮演模式为假');
+      eq(fn({ mode: 'chat' }), false, 'branchUiOn：聊天模式为假');
+      eq(fn({ mode: 'chat', characterCard: { name: '沈砚' } }), false, 'branchUiOn：有卡聊天同样为假');
       eq(fn(null), false, 'branchUiOn：没有故事为假');
     }
     ok(/A\.reg\(\{[\s\S]*?branchUiOn/.test(branch), 'branchUiOn 已登记进 A');

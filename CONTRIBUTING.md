@@ -1,6 +1,6 @@
 # 贡献指南
 
-先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（39 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
+先说最重要的一条：**这个项目需要构建，但不需要后端**。`npm ci` 之后用 `npm run dev` 起 Vite dev server 改代码；`npm test` 跑全量离线套件（44 个 `eval/*` 门禁 + 类型检查），**不联网、不花钱**。
 
 感谢你愿意花时间。本文包含四部分：**贡献流程（一~八）**、**行为准则（九）**、**安全说明（十）**、**第三方资源与许可（十一）**；后三部分按需查阅。
 
@@ -46,7 +46,7 @@ css/motion.css          动效政策收口 + @keyframes 唯一定义点 + 暂停
 eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
 eval/_harness.js        门禁共用脚手架：check / finish / run / loadEsm / localMs（不单独跑，不算门禁）
-eval/*-test.js          39 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / capability-scope / schema / tree / prefs / backup-pack / store-images / platform / proposals / writeback / features / ui-state / reply-text / zip / 生视频转发 / 客户端重连 / 侧车 …
+eval/*-test.js          44 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / capability-scope / schema / tree / prefs / chat-mode / backup-pack / store-images / platform / proposals / writeback / features / ui-state / reply-text / zip / 生视频转发 / 客户端重连 / 侧车 …
 sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events
 manifest.webmanifest / sw.js / src/pwa.js   PWA：清单（颜色字段是 __IR_THEME_COLOR__ 占位，构建期从 --bg 展开）、Service Worker、注册
 icons/                  应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
@@ -60,7 +60,7 @@ tools/                  构建与验收脚本（版本号同步、单文件打�
 ## 三、动手前请先跑一遍自检
 
 ```bash
-npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 39 个 eval 门禁 + 结构门禁 + tsc
+npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 44 个 eval 门禁 + 结构门禁 + tsc
 ```
 
 它的组成与用途：

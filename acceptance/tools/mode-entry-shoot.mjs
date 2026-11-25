@@ -8,13 +8,16 @@
  * 用法：先 npm run build:single，再 node acceptance/tools/mode-entry-shoot.mjs
  *
  * 覆盖的验收点（两种宽度 390 / 1280 各跑一遍）：
- *   · 扮演开局 → 先到「选卡」视图（导入大卡 / 自己写一张）；窄屏整屏 sheet、选卡视图无页脚；
+ *   · 首页与「新故事」弹窗都只有两张模式卡：剧情 / 聊天（原「扮演」并入聊天）；
+ *   · 聊天开局 → 空对话引导页（模式说明 + 能力芯片 + 「添加角色卡（可选）」），没有做 / 说 / 导演；
+ *   · 「添加角色卡」先到「选卡」视图（导入 PNG / 自己写一张）；窄屏整屏 sheet、选卡视图无页脚；
  *   · 「自己写一张」→ 编辑视图（名字 + 开场白直给，其余折叠）；名字必填就地红字 + 聚焦；
  *   · 折叠区「有内容自动展开」：导入 / 编辑已有卡时自动打开，摘要行给已填提示；
  *   · 导入 PNG 成功 → 自动进编辑视图、内容正确、来源提示「已导入：<文件名>」；
- *   · 「开始扮演」建 rp 故事（卡存进故事）；编辑已有卡直接进编辑视图，文案「保存角色卡」；
+ *   · 保存后卡挂到当前聊天（mode 仍是 chat、开场白进日志）；本对话设置里编辑已有卡直接进编辑视图，
+ *     文案「保存角色卡」；
  *   · 窄屏键盘代理：视口压矮后底部主按钮仍在视口内且可点（真键盘无法在无头环境复现，用缩高代理）。
- *   · 三个开局页的文案与样式一致：标题「新故事 · 模式名」+ ≤18 字的一句话说明（同一张文案表）、
+ *   · 两个开局页的文案与样式一致：标题「新故事 · 模式名」+ ≤18 字的一句话说明（同一张文案表）、
  *     折叠块同用「更多设定（可选）」一份组件、主按钮贴右下、低动效档展开与高亮直接跳变。
  *
  * 只新增文件，不改任何现有源码；页面一律 file:// 打开构建出的单文件产物，不联网。
@@ -205,16 +208,14 @@ async function runWidth(browser, vp, manifest, png) {
   const text = (sel) => page.locator(sel).textContent();
   const hidden = (sel) => page.locator(sel).evaluate(el => el.classList.contains('hidden') || getComputedStyle(el).display === 'none');
   const detailOpen = (sel) => page.locator(sel).evaluate(el => el.open);
-  // 三个开局页共用的口径：标题 = 「新故事 · 模式名」，说明 ≤18 字、不带标点结尾（判断句读感一致）
+  // 两个开局页共用的口径：标题 = 「新故事 · 模式名」，说明 ≤18 字（判断句读感一致）
   const ENTRY_TITLE = {
     choice: '新故事 · 剧情',
-    chat: '新故事 · 智能体',
-    rp: '新故事 · 扮演',
+    chat: '新故事 · 聊天',
   };
   const ENTRY_DESC = {
     choice: '先搭个舞台，故事从这里生长',
     chat: '有事直说，它替你去办',
-    rp: '以一张角色卡登场，玩的是关系',
   };
   const titleIs = async (sel, mode) => {
     const t = ((await text(sel)) || '').trim();
@@ -245,40 +246,75 @@ async function runWidth(browser, vp, manifest, png) {
   try {
     await openApp(page);
 
-    /* —— 扮演开局 → 选卡视图 —— */
-    await page.click('#screen-start .mode-card[data-mode="rp"]');
+    /* —— 首页：只有两张模式卡 —— */
+    await check('首页两张模式卡：剧情 / 聊天（没有「扮演」）', async () => {
+      const modes = await page.locator('#start-modes .mode-card').evaluateAll(els => els.map(e => e.dataset.mode));
+      return (modes.length === 2 && modes.join(',') === 'choice,chat') ? '' : '模式卡=' + modes.join(',');
+    });
+    await snap('start-modes', { note: '首页：两张模式卡（剧情 / 聊天），原「扮演」已并入聊天' });
+
+    /* —— 聊天开局：空对话的引导页 —— */
+    await page.click('#screen-start .mode-card[data-mode="chat"]');
+    await page.waitForSelector('#screen-game:not(.hidden)', { timeout: 8000 });
+    await page.waitForSelector('.agent-intro', { timeout: 8000 }).catch(() => {});
+    await sleep(500);
+    await check('聊天开局进阅读页、出现「能做什么」引导', async () =>
+      (await page.locator('.agent-intro').count()) ? '' : '引导块没渲染');
+    await check('聊天引导首行是模式说明（≤18 字）', async () => descIs('.agent-intro .entry-desc', 'chat'));
+    await check('空聊天没有做 / 说 / 导演开关', async () => hidden('#kind-switch'));
+    await check('新建聊天默认无卡、不预置本对话开关', async () => {
+      const st = await page.evaluate(() => {
+        const S = window.__IR_TEST__.App.state.story;
+        return S ? { mode: S.mode, card: !!S.characterCard, tools: S.prefs && S.prefs.tools } : null;
+      });
+      if (!st) return '没有故事';
+      if (st.mode !== 'chat') return 'mode=' + st.mode;
+      if (st.card) return '默认不该带卡';
+      return st.tools ? '默认不该预置 tools' : '';
+    });
+    await check('引导页有「添加角色卡（可选）」入口', async () =>
+      (await page.locator('.agent-card-entry button').count()) ? '' : '入口没渲染');
+    await snap('mode-chat-intro', { note: '聊天开局 · 空对话的「能做什么」引导（含「添加角色卡（可选）」）' });
+
+    /* —— 添加角色卡 → 选卡视图 —— */
+    await page.click('.agent-card-entry button');
     await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 });
     await sleep(400);
-    await check('扮演开局先到选卡视图', async () =>
-      (await hidden('#rc-view-pick')) ? '选卡块被隐藏' :
-      (await hidden('#rc-view-edit')) ? '' : '编辑块不该显示');
+    await check('添加角色卡先进选卡视图', async () =>
+      (await hidden('#rc-view-pick')) ? '选卡块被隐藏' : (await hidden('#rc-view-edit')) ? '' : '编辑块不该显示');
     await check('选卡视图没有页脚', async () =>
       (await page.locator('#modal-card .modal-foot').isVisible()) ? '页脚应整条收起' : '');
-    await check('选卡视图标题「新故事 · 扮演」', async () => titleIs('#card-modal-title', 'rp'));
-    await check('选卡视图一句话说明（≤18 字）', async () => descIs('#rc-view-pick .entry-desc', 'rp'));
-    await snap('card-pick', { note: '扮演开局 · 选卡视图（导入大卡 / 自己写一张）' });
+    await check('选卡视图标题「添加角色卡」', async () => {
+      const t = ((await text('#card-modal-title')) || '').trim();
+      return t === '添加角色卡' ? '' : '标题=' + t;
+    });
+    await check('选卡视图一句话说明', async () => {
+      const t = ((await text('#rc-view-pick .entry-desc')) || '').trim();
+      return t === 'TA 是谁、怎么说话，由这张卡定。' ? '' : '说明=' + t;
+    });
+    await snap('card-pick', { note: '聊天 · 添加角色卡 · 选卡视图（导入 PNG / 自己写一张）' });
 
     /* —— 自己写一张 → 编辑视图 —— */
     await page.click('#btn-rc-write');
     await sleep(350);
     await check('「自己写一张」进编辑视图', async () =>
       (await hidden('#rc-view-edit')) ? '编辑块没显示' : (await hidden('#rc-view-pick')) ? '' : '选卡块该隐藏');
-    await check('新建场景保存钮「开始扮演」', async () => {
+    await check('保存钮「添加角色卡」（给当前聊天加卡）', async () => {
       const t = ((await text('#btn-rc-save')) || '').trim();
-      return t === '开始扮演' ? '' : '按钮文案=' + t;
+      return t === '添加角色卡' ? '' : '按钮文案=' + t;
     });
     await check('从选卡走过来的编辑视图有「← 选卡」', async () =>
       (await hidden('#btn-rc-back')) ? '返回按钮没显示' : '');
-    await check('新建的来源提示是「只属于这次扮演」口径', async () => {
+    await check('新建的来源提示是「只属于这次对话」口径', async () => {
       const t = (await text('#card-source-hint')) || '';
-      return t.indexOf('只属于这次扮演') >= 0 ? '' : '提示=' + t;
+      return t.indexOf('只属于这次对话') >= 0 ? '' : '提示=' + t;
     });
     await check('空卡的折叠区默认收起', async () =>
       (await detailOpen('#rc-more')) ? '折叠区不该展开' : '');
     await check('折叠块措辞「更多设定（可选）」', async () => foldWording('#rc-more'));
-    await check('主按钮「开始扮演」在右下', async () =>
+    await check('主按钮「添加角色卡」在右下', async () =>
       primaryRightBottom('#modal-card', '#btn-rc-save'));
-    await snap('card-edit-new', { note: '扮演 · 编辑视图（自己写一张：名字 + 开场白直给）' });
+    await snap('card-edit-new', { note: '聊天 · 角色卡编辑视图（自己写一张：名字 + 开场白直给）' });
 
     /* —— 必填就地提示 —— */
     await page.click('#btn-rc-save');
@@ -303,7 +339,7 @@ async function runWidth(browser, vp, manifest, png) {
       const t = (await text('#rc-more-sum')) || '';
       return t.indexOf('已填性格') >= 0 ? '' : '摘要=' + t;
     });
-    await snap('card-edit-filled', { note: '扮演 · 编辑视图（展开「更多设定（可选）」）' });
+    await snap('card-edit-filled', { note: '聊天 · 编辑视图（展开「更多设定（可选）」）' });
 
     /* —— 返回选卡再「自己写一张」：自己敲的内容原样保留 —— */
     await page.click('#btn-rc-back');
@@ -317,27 +353,61 @@ async function runWidth(browser, vp, manifest, png) {
       return v === '周叙' ? '' : '名字=' + v;
     });
 
-    /* —— 开始扮演：rp 故事建出来、卡存进故事、开场白进日志 —— */
+    /* —— 保存：卡挂到当前聊天，开场白进日志（不新建故事） —— */
     await page.click('#btn-rc-save');
     await sleep(700);
-    await check('「开始扮演」建出 rp 故事（卡 + 开场白入档）', async () => {
+    await check('保存后卡加到当前聊天：mode 仍是 chat、卡与开场白入档', async () => {
       const st = await page.evaluate(() => {
         const S = window.__IR_TEST__.App.state.story;
-        return S ? { mode: S.mode, cardName: S.characterCard && S.characterCard.name, types: S.log.map(l => l.type) } : null;
+        return {
+          mode: S.mode,
+          name: S.characterCard && S.characterCard.name,
+          narrations: (S.log || []).filter(l => l.type === 'narration').map(l => l.text),
+        };
       });
-      if (!st) return '没有故事';
-      if (st.mode !== 'rp') return 'mode=' + st.mode;
-      if (st.cardName !== '周叙') return '卡名=' + st.cardName;
-      return st.types.indexOf('narration') >= 0 ? '' : '开场白没进日志';
+      if (st.mode !== 'chat') return 'mode=' + st.mode;
+      if (st.name !== '周叙') return '卡名=' + st.name;
+      return st.narrations.some(t => t.indexOf('这么晚') >= 0) ? '' : '开场白没进日志';
     });
+    await check('有卡后输入框占位符收成「说点什么……」', async () => {
+      const p = await page.locator('#player-input').getAttribute('placeholder');
+      return p === '说点什么……' ? '' : '占位符=' + p;
+    });
+    await check('有卡后仍没有做 / 说 / 导演开关', async () => hidden('#kind-switch'));
+    await snap('chat-with-card', { note: '聊天 · 加卡之后：开场白进日志、引导消失' });
+
+    /* —— 本对话设置：角色卡区块 + 编辑已有卡 —— */
+    await page.evaluate(() => { const b = document.getElementById('btn-hud-more'); if (b) b.click(); });
+    await page.waitForSelector('#hud-more-menu:not(.hidden)', { timeout: 5000 });
+    await page.click('#btn-story-prefs');
+    await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
+    await sleep(300);
+    await check('聊天设置里有「角色卡」区块：编辑 / 移除在场（有卡时「添加」收起）', async () => {
+      const shown = async (sel) => !(await hidden(sel));
+      const add = await shown('#btn-add-card'), edit = await shown('#btn-edit-card'), rm = await shown('#btn-remove-card');
+      if (add) return '有卡时不该显示「添加角色卡」';
+      return (edit && rm) ? '' : '编辑／移除没显示';
+    });
+    await page.click('#btn-edit-card');
+    await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 });
+    await sleep(450);
+    await check('编辑已有卡直接进编辑视图', async () =>
+      (await hidden('#rc-view-edit')) ? '编辑块没显示' : (await hidden('#rc-view-pick')) ? '' : '选卡块该隐藏');
+    await check('编辑已有卡保存钮「保存角色卡」', async () => {
+      const t = ((await text('#btn-rc-save')) || '').trim();
+      return t === '保存角色卡' ? '' : '按钮文案=' + t;
+    });
+    await check('编辑已有卡没有「← 选卡」', async () =>
+      (await hidden('#btn-rc-back')) ? '' : '返回按钮不该显示');
+    await check('编辑已有卡的来源提示沿用「改完即生效」', async () => {
+      const t = (await text('#card-source-hint')) || '';
+      return t.indexOf('改完即生效') >= 0 ? '' : '提示=' + t;
+    });
+    await check('编辑已有卡折叠区按内容自动展开', async () =>
+      (await detailOpen('#rc-more')) ? '' : '卡里带性格，折叠区该展开');
+    await snap('card-edit-existing', { note: '聊天 · 编辑已有角色卡（直接进编辑视图）' });
 
     /* —— 导入 PNG → 自动进编辑视图（内容正确 / 来源提示 / 折叠自动展开） —— */
-    await page.click('#btn-back-home');
-    await page.waitForSelector('#screen-start:not(.hidden)');
-    await sleep(400);
-    await page.click('#screen-start .mode-card[data-mode="rp"]');
-    await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 });
-    await sleep(400);
     await page.setInputFiles('#file-card', { name: '周叙.png', mimeType: 'image/png', buffer: png });
     await page.waitForFunction(() => {
       const el = document.getElementById('rc-view-edit');
@@ -357,35 +427,7 @@ async function runWidth(browser, vp, manifest, png) {
     });
     await check('有内容的折叠区自动展开', async () =>
       (await detailOpen('#rc-more')) ? '' : '折叠区该自动展开');
-    await snap('card-import-edit', { note: '扮演 · 导入 PNG 后的编辑视图（内容已灌、折叠自动展开）' });
-
-    await page.click('#btn-rc-save');
-    await sleep(700);
-
-    /* —— 编辑已有卡：直接进编辑视图、文案「保存角色卡」、无「← 选卡」 —— */
-    await page.evaluate(() => { const b = document.getElementById('btn-hud-more'); if (b) b.click(); });
-    await page.waitForSelector('#hud-more-menu:not(.hidden)', { timeout: 5000 });
-    await page.click('#btn-story-prefs');
-    await page.waitForSelector('#story-prefs:not(.hidden)', { timeout: 8000 });
-    await sleep(300);
-    await page.click('#btn-edit-card');
-    await page.waitForSelector('#modal-card:not(.hidden)', { timeout: 8000 });
-    await sleep(450);
-    await check('编辑已有卡直接进编辑视图', async () =>
-      (await hidden('#rc-view-edit')) ? '编辑块没显示' : (await hidden('#rc-view-pick')) ? '' : '选卡块该隐藏');
-    await check('编辑已有卡保存钮「保存角色卡」', async () => {
-      const t = ((await text('#btn-rc-save')) || '').trim();
-      return t === '保存角色卡' ? '' : '按钮文案=' + t;
-    });
-    await check('编辑已有卡没有「← 选卡」', async () =>
-      (await hidden('#btn-rc-back')) ? '' : '返回按钮不该显示');
-    await check('编辑已有卡的来源提示沿用「改完即生效」', async () => {
-      const t = (await text('#card-source-hint')) || '';
-      return t.indexOf('改完即生效') >= 0 ? '' : '提示=' + t;
-    });
-    await check('编辑已有卡折叠区按内容自动展开', async () =>
-      (await detailOpen('#rc-more')) ? '' : '导入卡带可选字段，折叠区该展开');
-    await snap('card-edit-existing', { note: '扮演 · 编辑已有卡（直接进编辑视图）' });
+    await snap('card-import-edit', { note: '聊天 · 导入 PNG 后的编辑视图（内容已灌、折叠自动展开）' });
 
     /* —— 窄屏键盘代理：视口压矮后底部主按钮仍可点 —— */
     if (vp.width === 390) {
@@ -408,7 +450,7 @@ async function runWidth(browser, vp, manifest, png) {
     await page.click('#prefs-close');
     await sleep(250);
 
-    /* —— 顺带补拍另外两个开局页（剧情向导 / 智能体引导），三种模式一页不落 —— */
+    /* —— 剧情开局：向导页（另一个开局页，一页不落） —— */
     await page.click('#btn-back-home');
     await page.waitForSelector('#screen-start:not(.hidden)');
     await sleep(400);
@@ -423,11 +465,14 @@ async function runWidth(browser, vp, manifest, png) {
       if (t !== '下一步：试画（可跳过）') return '按钮文案=' + t;
       return primaryRightBottom('#modal-wizard', '#btn-wz-start');
     });
-    await check('低动效档：折叠展开不跑动画（直接跳变）', async () => {
+    await check('低动效档：折叠展开直接跳变（动画时长压到 0）', async () => {
+      // 动效只有 rich 一档：系统「减少动态效果」是唯一静默例外，靠 prefers-reduced-motion
+      // 把 animation-duration / transition-duration 压到 0，动画名仍保留（fadeIn 这类淡入不撤名）
       await page.click('#wz-more summary');
       await sleep(250);
-      const name = await page.locator('#wz-more > .fold-body').evaluate(el => getComputedStyle(el).animationName);
-      return name === 'none' ? '' : 'animationName=' + name;
+      const dur = await page.locator('#wz-more > .fold-body').evaluate(el => getComputedStyle(el).animationDuration);
+      const over = dur.split(',').map(s => parseFloat(s) * (s.indexOf('ms') >= 0 ? 0.001 : 1)).filter(n => n > 0.001);
+      return over.length ? 'animationDuration=' + dur : '';
     });
     await check('低动效档：起草回填高亮时长收成 0s（跳变）', async () => {
       const dur = await page.locator('#wz-world').evaluate((el) => {
@@ -444,15 +489,31 @@ async function runWidth(browser, vp, manifest, png) {
     await page.click('#btn-close-wizard');
     await sleep(300);
 
-    await page.click('#screen-start .mode-card[data-mode="chat"]');
+    /* —— 书架 →「新故事」弹窗：同样两张模式卡 —— */
+    await page.click('#btn-start-shelf');
+    await page.waitForSelector('#screen-shelf:not(.hidden)', { timeout: 8000 });
+    await sleep(300);
+    await page.click('#btn-new-story');
+    await page.waitForSelector('#modal-new:not(.hidden)', { timeout: 8000 });
+    await sleep(300);
+    await check('新故事弹窗两张模式卡：剧情 / 聊天', async () => {
+      const modes = await page.locator('#modal-new .mode-card').evaluateAll(els => els.map(e => e.dataset.mode));
+      return (modes.length === 2 && modes.join(',') === 'choice,chat') ? '' : '模式卡=' + modes.join(',');
+    });
+    await snap('modal-new', { note: '新故事弹窗：两张模式卡（剧情 / 聊天）' });
+    await page.click('#modal-new .mode-card[data-mode="chat"]');
     await page.waitForSelector('#screen-game:not(.hidden)', { timeout: 8000 });
-    await page.waitForSelector('.agent-intro', { timeout: 8000 }).catch(() => {});
     await sleep(500);
-    await check('智能体新对话出现「能做什么」引导', async () =>
-      (await page.locator('.agent-intro').count()) ? '' : '引导块没渲染');
-    await check('智能体引导首行是模式说明（≤18 字）', async () =>
-      descIs('.agent-intro .entry-desc', 'chat'));
-    await snap('mode-agent-intro', { note: '智能体开局 · 空对话的「能做什么」引导' });
+    await check('弹窗里点聊天卡 → 直接开一局空聊天', async () => {
+      const st = await page.evaluate(() => {
+        const S = window.__IR_TEST__.App.state.story;
+        return S ? { mode: S.mode, card: !!S.characterCard, empty: !(S.log || []).length } : null;
+      });
+      if (!st) return '没有故事';
+      if (st.mode !== 'chat') return 'mode=' + st.mode;
+      if (st.card) return '新聊天不该带卡';
+      return st.empty ? '' : '新聊天该是空的';
+    });
   } catch (e) {
     manifest.checks.push({ width: vp.width, label: '整轮流程中断', ok: false, detail: String((e && e.stack) || e) });
     log('  PASS ERROR', String((e && e.stack) || e));
