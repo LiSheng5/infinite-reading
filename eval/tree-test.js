@@ -22,8 +22,6 @@
  *  16. switchTo：存档点回档落点 + active 记忆对齐（树侧）；
  *  17. store 集成：SCHEMA=3、migrateStory 透传 tree、serializeStory 不裁树、
  *      saveStory / loadStory 往返、imageIdsOf / knownImageIds 计入全树图集（用例 7 / 8）；
- *  18. 迁移补测（用例 6）：末条旁白 versions>1 展开成兄弟（meta.approx）、
- *      旧存档点 sp.turn → nodeId 映射、幂等（连跑两次深相等）。
  *  19.  增补：站在非叶子继续 = 新分支（commit 以 head 为 parent）、
  *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏、
  *      seal 的 entries 起点（commit 记 meta.logFrom；log 被裁掉前缀后仍收进 postTurn 尾巴、
@@ -577,90 +575,6 @@ function headTo(story, nodeId) {
     return sc.thumb === 'data:image/jpeg;base64,P' && sc.remoteUrl === 'https://cdn/old.mp4'
       && old.log[0].thumb === 'data:image/jpeg;base64,P' && old.log[0].remoteUrl === 'https://cdn/old.mp4';
   })());
-}
-
-/* ---------------- 迁移补测（用例 6）：versions>1 展开成兄弟 + 存档点映射 ---------------- */
-
-// 18. 末条旁白 versions>1 展开成兄弟（meta.approx）、旧存档点 sp.turn → nodeId、幂等
-{
-  const s = newStory();
-  s.premise = '在雨夜的车站。';
-  s.log = [
-    { type: 'player', text: '行动 1', kind: 'do', ts: 1 },
-    { type: 'narration', text: '第 1 幕旁白', versions: ['第 1 幕旁白'], activeVersion: 0, ts: 2 },
-    { type: 'player', text: '行动 2', kind: 'do', ts: 3 },
-    {
-      type: 'narration', text: '第 2 幕旁白（B 版）',
-      versions: ['第 2 幕旁白（A 版）', '第 2 幕旁白（B 版）', '第 2 幕旁白（C 版）'], activeVersion: 1, ts: 4,
-    },
-    { type: 'narration', text: '（AI 走神了，点「↻ 重试」或再试一次吧。）', versions: [], ts: 5 },
-  ];
-  s.messages = [
-    { role: 'user', content: '[设定]' + s.premise + '\n\n[玩家行动]（做）行动 1' },
-    { role: 'assistant', content: JSON.stringify({ narration: '第 1 幕旁白', choices: ['选项一'] }) },
-    { role: 'user', content: '[玩家行动]（做）行动 2' },
-    { role: 'assistant', content: JSON.stringify({ narration: '第 2 幕旁白（B 版）', choices: ['选项二'] }) },
-  ];
-  s.turn = 2;
-  s.world.time = '第三天';
-  s.savepoints = [
-    { id: 'sp-1', name: '第 1 回合后', turn: 1 },
-    { id: 'sp-2', name: '第 2 回合后', turn: 2 },
-    { id: 'sp-x', name: '对不上的', turn: 99 },
-    { id: 'sp-keep', name: '已有 nodeId 不动', turn: 2, nodeId: 'keep-me' },
-  ];
-
-  const t = T.ensure(s);
-  const ids = T.pathOf(s, t.head);
-  const head = t.nodes[t.head];
-  const parent = t.nodes[head.parent];
-  check('versions 展开：链长不变（根 + 2 个 turn 节点）', ids.length === 3 && t.nodes[t.root].kind === 'root', ids.length);
-  check('versions 展开：head = activeVersion 那一版（B 版）',
-    head.entries.some(e => e && e.text === '第 2 幕旁白（B 版）'));
-  check('versions 展开：head 状态 = 当前 State', head.sid === t.nodes[t.root].sid
-    && t.states[head.sid].world.time === '第三天');
-  check('versions 展开：其余版本变兄弟、兄弟序 = 版本序', (() => {
-    const sibs = T.siblings(s, t.head);
-    return parent.children.length === 3 && sibs.length === 3 && sibs.indexOf(t.head) === 1;
-  })(), parent.children.length);
-
-  const sibA = t.nodes[parent.children[0]];
-  const sibC = t.nodes[parent.children[2]];
-  check('versions 展开：兄弟是近似节点（meta.approx / assistantMsg 只有 narration）', (() => {
-    const ja = JSON.parse(sibA.assistantMsg.content);
-    return sibA.meta.approx === true && sibC.meta.approx === true
-      && eq(Object.keys(ja), ['narration']) && ja.narration === '第 2 幕旁白（A 版）'
-      && JSON.parse(sibC.assistantMsg.content).narration === '第 2 幕旁白（C 版）';
-  })());
-  check('versions 展开：兄弟同 action、sid 复用 head 的',
-    eq(sibA.action, head.action) && sibA.sid === head.sid && sibC.sid === head.sid);
-  check('versions 展开：兄弟条目 = 行动 + 本版旁白（nid 各归各）', (() => {
-    return sibA.entries.length === 2 && sibA.entries[0].text === '行动 2' && sibA.entries[0] !== head.entries[0]
-      && sibA.entries[1].text === '第 2 幕旁白（A 版）' && sibA.entries[1].nid === sibA.id;
-  })());
-
-  // 幂等：再跑两次，树与存档点都深相等（含已映射的 sp.nodeId）
-  const before = JSON.stringify({ tree: s.tree, savepoints: s.savepoints });
-  T.ensure(s);
-  T.ensure(s);
-  check('versions 展开 + 存档点映射：幂等（连跑两次树与存档点深相等）',
-    JSON.stringify({ tree: s.tree, savepoints: s.savepoints }) === before);
-
-  check('存档点映射：sp.turn → nodeId（链上同 turn 的节点）',
-    s.savepoints[0].nodeId === ids[1] && s.savepoints[1].nodeId === t.head,
-    s.savepoints[0].nodeId + '/' + s.savepoints[1].nodeId);
-  check('存档点映射：对不上保持无 nodeId、已有 nodeId 不动',
-    !s.savepoints[2].nodeId && s.savepoints[3].nodeId === 'keep-me');
-
-  const h1 = T.switchSibling(s, t.head, -1);
-  check('切到近似兄弟：log / messages 换成本版旁白', !!h1 && h1.id === sibA.id
-    && s.log[s.log.length - 1].text === '第 2 幕旁白（A 版）'
-    && JSON.parse(s.messages[s.messages.length - 1].content).narration === '第 2 幕旁白（A 版）');
-  check('切到近似兄弟：世界卡沿用（sid 复用 head 的）', s.world.time === '第三天');
-  const h2 = T.switchSibling(s, sibA.id, +1);
-  check('切回 activeVersion：落回 B 版，选项跟着回来', !!h2 && h2.id === t.head
-    && s.log[s.log.length - 1].text === '第 2 幕旁白（B 版）'
-    && eq(JSON.parse(s.messages[s.messages.length - 1].content).choices, ['选项二']));
 }
 
 /* ---------------- 19.  增补：任意节点继续 / 分叉 ---------------- */

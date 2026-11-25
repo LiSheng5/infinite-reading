@@ -10,8 +10,7 @@
  * 零依赖、全模块可引用的小函数收敛在这里一处实现，其它模块只调用、不再各写一份。
  *
  * API（本期）：
- *   ensure(story)            建树 / 校验（幂等）；无树的旧档降级建线性链，
- *                            末条旁白 versions>1 展开成兄弟、旧存档点 sp.turn→nodeId 映射
+ *   ensure(story)            建树 / 校验（幂等）；无树的旧档降级建线性链（不丢当前 log / messages）
  *   begin(story)             回合开始：记下 logMark（在 pushLog 之前调）
  *   commit(story, opts)      回合成功落一个 turn 节点，head 前移
  *   seal(story, nodeId)      回合结算后封存：entries 再切片、算 msgFloor、存 State
@@ -252,11 +251,10 @@ import type { Story, StoryTree } from './schema.ts';
 
   /* ---------------- ensure：建树 / 校验（幂等） ---------------- */
 
-  // 无树旧档 → 线性链（迁移细则见）：
+  // 无树旧档 → 线性链：
   //   - 根节点 sid = 当前 State（旧档没有更早的历史状态）；
   //   - 按 messages 成对 + log 对应条目生成 turn 节点，链只覆盖现存的回合；
-  //   - 只有 head 的 sid 是真实当前 State（复用根节点的 sid），更早的节点 sid = null；
-  //   - 末条旁白 versions > 1 → 其余版本展开成 head 的兄弟节点（expandVersions）。
+  //   - 只有 head 的 sid 是真实当前 State（复用根节点的 sid），更早的节点 sid = null。
   function buildLinear(story) {
     const tree = emptyTree();
     const root = makeNode({ kind: 'root', turn: 0, sealed: true });
@@ -340,67 +338,7 @@ import type { Story, StoryTree } from './schema.ts';
       const nd = tree.nodes[id];
       if (nd !== head && nd.kind === 'turn') nd.msgFloor = 0;
     }
-    expandVersions(tree);      // 末条旁白 versions>1 展开成兄弟（须在窗口算完之后）
     return tree;
-  }
-
-  // 末条旁白 versions > 1 → 把其余版本展开成 head 的兄弟节点（旧版本栈退役）。
-  // 兄弟是**近似**节点：同 action、assistantMsg 只有 {narration}、标 meta.approx、sid 复用 head 的；
-  // 兄弟序 = 版本序，activeVersion 那一版留在链上当 head。只有迁移（buildLinear）会走到这里。
-  function expandVersions(tree) {
-    const head = tree.nodes[tree.head];
-    if (!head || head.kind !== 'turn' || !head.parent || !tree.nodes[head.parent]) return;
-    let entry = null;
-    for (let i = head.entries.length - 1; i >= 0; i--) {
-      const e = head.entries[i];
-      if (e && e.type === 'narration') { entry = e; break; }
-    }
-    const vs = entry && Array.isArray(entry.versions) ? entry.versions.filter(v => typeof v === 'string') : [];
-    if (vs.length < 2) return;
-    let av = (entry.activeVersion == null) ? vs.length - 1 : +entry.activeVersion;
-    if (!(av >= 0 && av < vs.length)) av = vs.length - 1;
-
-    const parent = tree.nodes[head.parent];
-    const actEntry = head.entries.find(e => e && (e.type === 'player' || e.type === 'choice' || e.type === 'agent')) || null;
-    const ordered = [];
-    for (let i = 0; i < vs.length; i++) {
-      if (i === av) { ordered.push(head.id); continue; }   // activeVersion 决定哪个是 head
-      const sib = makeNode({
-        kind: 'turn', parent: parent.id,
-        action: clone(head.action),
-        userMsg: head.userMsg || null,                       // 同一条玩家行动（与 retryLast 复用 userMsg 同口径）
-        assistantMsg: { role: 'assistant', content: JSON.stringify({ narration: vs[i] }) },
-        sealed: true, turn: head.turn, ts: head.ts,
-        meta: { approx: true },
-      });
-      sib.sid = head.sid;                                    // sid 复用 head 的（状态无从分辨版本）
-      if (actEntry) sib.entries.push(clone(actEntry));       // 该版旁白是近似的，行动条目克隆一份各自持有
-      sib.entries.push({ type: 'narration', text: vs[i], versions: [vs[i]], activeVersion: 0, ts: entry.ts || head.ts, nid: sib.id });
-      if (head.msgSnap) {
-        // 窗口退化快照的近似：末条 assistant 换成本版，其余不动
-        sib.msgSnap = head.msgSnap.map((m, k) =>
-          (k === head.msgSnap.length - 1 && sameMsg(m, head.assistantMsg)) ? sib.assistantMsg : m);
-      }
-      tree.nodes[sib.id] = sib;
-      ordered.push(sib.id);
-    }
-    parent.children = ordered;
-    parent.active = head.id;
-  }
-
-  // 旧存档点（无 nodeId）用 sp.turn 对应到链上同 turn 的节点；对不上就保持无 nodeId。
-  // 幂等：只补缺失的 nodeId，已有的与补不上的都不动。
-  function mapSavepoints(story, tree) {
-    const sps = Array.isArray(story.savepoints) ? story.savepoints : null;
-    if (!sps || !sps.length || !tree || !tree.nodes) return;
-    const chain = pathNodes(tree, tree.head);
-    for (const sp of sps) {
-      if (!sp || typeof sp !== 'object' || sp.nodeId) continue;
-      const turn = +sp.turn;
-      if (!(turn >= 0)) continue;
-      const hit = chain.find(n => +n.turn === turn);
-      if (hit) sp.nodeId = hit.id;
-    }
   }
 
   function ensure(story: Story) {
@@ -408,12 +346,10 @@ import type { Story, StoryTree } from './schema.ts';
     const t = story.tree;
     if (t && t.v === TREE_V && t.nodes && t.nodes[t.root] && t.nodes[t.head]) {
       if (!t.states || typeof t.states !== 'object') t.states = {};
-      mapSavepoints(story, t);        // 旧存档点 sp.turn → nodeId（只补缺失，幂等）
       return t;                       // 合法树直接用（幂等）
     }
     if (t) console.warn('Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不丢）');
     story.tree = buildLinear(story);
-    mapSavepoints(story, story.tree);
     return story.tree;
   }
 
