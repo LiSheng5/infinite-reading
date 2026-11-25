@@ -119,7 +119,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **禁令**：真实失败（网络 / 模型 / 存储 / 侧车）绝不允许空 catch 静默掉。`eval/error-policy-test.js` 静态扫描 `src/`：try 里出现 `ChatProviders` / `ImageProviders` / `Sidecar` / `Store` / `Storage` / `fetch` / `adapter.chat|generate|poll` 等真实失败源的 catch，必须命中上报出口（`report*` / `toast` / `console.warn` / 抛回 / `failureEntry` / `persistFail` / `markFailed`）或带说明注释；扫描面与反向自检（构造一个静默吞掉 Sidecar 失败的片段必须报警）都在同一门禁里。
 
-实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；界面时序类验收（toast 样式、重试入口、console 前缀）不进自动化测试，只做手动检查，记录随手动验收写进 `docs/manual_checks.md`（仓库当前没有该文件，不要把它当既有清单引用）。
+实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；界面时序类验收（toast 样式、重试入口、console 前缀）不进自动化测试，只做手动检查，记录随手动验收写进 `docs/manual_checks.md`。
 
 ## 3. 一回合的完整调用链
 

@@ -44,6 +44,9 @@
   function closeUsageOnEsc(e) {
     if (usageOpen && e.key === 'Escape') usageOpen = false;
   }
+  // 手动压缩：点击直接执行（不弹确认，toast 里 8 秒内可撤销）；
+  // 执行中 / 不可用都由按钮自己置灰（compactView），这里不重复判
+  function runCompact() { A().compactNow(); }
 
   // 「开始第一幕」：与旧 renderOpeningHint 的按钮闭包同语义
   function runOpening() {
@@ -160,7 +163,16 @@
               <p class="ctx-bubble-main">{u.error ? '这次估算没算出来，原因已留在浏览器控制台。' : u.detail}</p>
               {#if u.lastUsage}<p class="ctx-bubble-usage">{u.lastUsage}</p>{/if}
               {#if !u.error}<p class="ctx-bubble-note">估算值不含你还没输入的那一句，与实际发送略有偏差。</p>{/if}
-              <!-- 气泡底部留给「压缩现在」按钮 -->
+              <!-- 手动压缩按钮：路径随书记员可用性标注；不可用置灰并在下方写明原因 -->
+              {#if read.chat.compact}
+                {@const c = read.chat.compact}
+                <div class="ctx-bubble-foot">
+                  <button type="button" class="ui-btn ctx-compact-btn" disabled={c.disabled} onclick={runCompact}>
+                    {#if c.running}压缩中…{:else}压缩较早的对话（{c.scribe ? '书记员' : '本地摘要，质量较低'}）{/if}
+                  </button>
+                  {#if c.disabled && !c.running && c.reason}<p class="ctx-bubble-reason">{c.reason}</p>{/if}
+                </div>
+              {/if}
             </div>
           {/if}
         </div>

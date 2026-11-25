@@ -22,6 +22,28 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   const UNDO_MS = 8000;   // toast 上的「撤销」窗口
   let lastUndo = null;    // { storyId, snapshot }：只保留最近一次手动压缩（toast 同时只有一条）
+  let running = false;    // 这次手动压缩正在执行（区别于回合生成的 S.busy）：按钮显示「压缩中…」
+
+  // toast 里的「约 A → B token」：与指示器同一口径（buildAssembleOpts dry + estimateTokensOf）。
+  // 只是说明文字：算不出来就退回不带 token 的提示，不挡压缩本身。
+  function estTokens(story) {
+    try {
+      const built = A.buildAssembleOpts('', { dry: true });
+      return Context.estimateTokensOf(Context.assembleAI1(story, '', built.asmOpts));
+    } catch (e) {
+      return 0;
+    }
+  }
+  const fmtN = (n) => Number(Math.round(+n || 0)).toLocaleString('en-US');
+
+  // 指示器气泡里「压缩较早的对话」按钮的状态：原因复用前置检查的同一套判定（不复制一份）；
+  // path 给按钮标注走哪条路（书记员 / 本地摘要质量低）。
+  function compactStatus() {
+    const path = A.scribeUsable() ? 'scribe' : 'local';
+    if (running) return { ok: false, running: true, reason: '', path: path };
+    const gate = compactPrecheck();
+    return { ok: gate.ok, running: false, reason: gate.ok ? '' : gate.reason, path: path };
+  }
 
   // 前置检查：返回 { ok:true, plan } 或 { ok:false, reason }。
   // reason 直接给按钮展示；检查本身只读（planCompression 不改 story）。
@@ -64,6 +86,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
       world: clone(story.world),
     };
     const useScribe = !!A.scribeUsable();
+    const estBefore = estTokens(story);
+    running = true;
     S.busy = true;
     renderChat();
     try {
@@ -90,6 +114,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       }
       // 树是真源：head 已 sealed，先同步 State / 窗口，再 saveAll；留痕走 pushLate
       Tree.resyncHead(story);
+      const estAfter = estTokens(story);
       const entry = scribeErr
         ? failureEntry('compress', scribeErr, {
           summary: '手动压缩：' + result.compressedTurns + ' 幕压入摘要栈（本地摘要，质量较低；书记员失败已退回）',
@@ -102,10 +127,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
       Tree.pushLate(story, A.treeHeadNodeId(), entry);
       saveAll();
       lastUndo = { storyId: sid, snapshot: snapshot };
+      // 完成提示：幕数 + 走的路径（本地质量低要写明）+ token 前后（约 A → B，与指示器同口径）
+      const pathText = path === 'scribe' ? '书记员' : (scribeErr ? '本地摘要，质量较低；书记员失败已退回' : '本地摘要，质量较低');
+      const range = (estBefore > 0 && estAfter > 0)
+        ? ('，约 ' + fmtN(estBefore) + ' → ' + fmtN(estAfter) + ' token')
+        : '';
       toast(
-        '已压缩 ' + result.compressedTurns + ' 幕（'
-          + (path === 'scribe' ? '书记员' : (scribeErr ? '本地摘要，质量较低；书记员失败已退回' : '本地摘要，质量较低'))
-          + '）',
+        '已压缩 ' + result.compressedTurns + ' 幕（' + pathText + '）' + range,
         false, true,
         { label: '撤销', ms: UNDO_MS, onClick: () => A.compactUndo() }
       );
@@ -115,6 +143,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       reportUserFailure('手动压缩', e, { hint: '可再点一次「压缩较早的对话」' });
       return { ok: false, reason: '压缩失败：' + shortError(e) };
     } finally {
+      running = false;
       S.busy = false;
       renderChat();
     }
@@ -140,4 +169,4 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return true;
   }
 
-  A.reg({ compactNow, compactUndo });
+  A.reg({ compactNow, compactUndo, compactStatus });

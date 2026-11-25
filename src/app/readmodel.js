@@ -293,6 +293,18 @@ import { A } from './core.js';
     return view;
   }
 
+  // 手动压缩按钮（用量气泡底部）：可用性 / 原因 / 路径都取 compact.js 的 compactStatus
+  // （与压缩执行同一套前置判定），界面层不再判一遍；执行中按钮显示「压缩中…」。
+  function compactView() {
+    const st = A.compactStatus();
+    return {
+      running: !!st.running,
+      disabled: !st.ok,
+      reason: st.reason || '',
+      scribe: st.path === 'scribe',
+    };
+  }
+
   /* ================= renderChat 整模型（旧 renderChat 的同步语义） ================= */
 
   function readChatModel() {
@@ -312,10 +324,12 @@ import { A } from './core.js';
       inspiration: false,
       inspirationCount: '',
       usage: null,      // 上下文用量指示器（usageView；无故事 = 不显示）
+      compact: null,    // 气泡底部的手动压缩按钮（compactView；随 usage 一起出现）
     };
     const story = S.story;
     if (!story) return m;
     m.usage = usageView();
+    m.compact = compactView();
     const log = story.log || [];
     log.forEach((e, i) => { m.entries.push(entryModel(e, i)); });
 

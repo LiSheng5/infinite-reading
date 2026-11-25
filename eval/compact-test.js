@@ -158,6 +158,7 @@ async function main() {
   A.treeHeadNodeId = () => A.state.story.tree.head;
   A.applyProfileEntries = () => {};
   A.scribeUsable = () => false;
+  A.buildAssembleOpts = () => ({ asmOpts: {} });   // toast 的「约 A → B token」估算（round.js 不在本测试）
   const S = A.state;
   const mk = (id) => { const s = newStory('choice', 0); s.id = id; return s; };
   const snap = (s) => JSON.stringify({ m: s.messages, s: s.summaries, w: s.world });
@@ -169,6 +170,7 @@ async function main() {
     let r = await A.compactNow();
     H.check('compactNow 无故事 → 拒绝「未进入故事」',
       r.ok === false && r.reason === '未进入故事' && S.busy === false, JSON.stringify(r));
+    H.check('compactStatus 同因（无故事）', A.compactStatus().reason === '未进入故事', A.compactStatus().reason);
 
     const busy = mk('busy-story');
     T.ensure(busy);
@@ -177,6 +179,7 @@ async function main() {
     r = await A.compactNow();
     H.check('compactNow busy → 拒绝「正在生成」且不清别人占的 busy',
       r.ok === false && r.reason === '正在生成' && S.busy === true, JSON.stringify(r));
+    H.check('compactStatus 同因（正在生成）', A.compactStatus().reason === '正在生成', A.compactStatus().reason);
     S.busy = false;
 
     const hist = mk('hist-story');
@@ -188,6 +191,7 @@ async function main() {
     r = await A.compactNow();
     H.check('compactNow head 非叶子 → 拒绝「当前在历史位置，先回到最新」',
       r.ok === false && r.reason === '当前在历史位置，先回到最新' && S.busy === false, JSON.stringify(r));
+    H.check('compactStatus 同因（历史位置）', A.compactStatus().reason === '当前在历史位置，先回到最新', A.compactStatus().reason);
 
     const empty = mk('empty-story');
     T.ensure(empty);
@@ -195,6 +199,8 @@ async function main() {
     r = await A.compactNow();
     H.check('compactNow 无可压内容 → 拒绝「没有可压的内容」',
       r.ok === false && r.reason === '没有可压的内容' && S.busy === false, JSON.stringify(r));
+    H.check('compactStatus 同因（无可压）+ 本地路径标注',
+      A.compactStatus().reason === '没有可压的内容' && A.compactStatus().path === 'local', A.compactStatus().reason);
   }
 
   /* 5.2 本地兜底：只留 keep 条、摘要栈增长、留痕走 pushLate、resyncHead 重算窗口 */
@@ -206,6 +212,11 @@ async function main() {
     const beforeM = st.messages.length;
     const beforeS = st.summaries.length;
     const r = await A.compactNow();
+    const toastText = document.querySelector('#toast-text').textContent;
+    const toastAct = document.querySelector('#toast-action');
+    H.check('完成提示 = 幕数 + 路径 + 约 A → B token',
+      /^已压缩 \d+ 幕（本地摘要，质量较低），约 [\d,]+ → [\d,]+ token$/.test(toastText), toastText);
+    H.check('toast 带「撤销」动作', toastAct.textContent === '撤销', toastAct.textContent);
     A.hideToast();
     H.check('compactNow 本地路径成功并返回计数',
       r.ok === true && r.path === 'local' && r.compressedTurns > 0 && r.messagesRemoved > 0, JSON.stringify(r));
@@ -260,12 +271,19 @@ async function main() {
     S.story = sc;
     S.busy = false;
     A.scribeUsable = () => true;
-    A.scribeCompress = async () => ({ parsed: { summaries: ['【书记员】摘要'], world: null, profile: [] }, err: '' });
+    let midStatus = null;
+    A.scribeCompress = async () => {
+      midStatus = A.compactStatus();                            // 等书记员期间按钮应显示「压缩中…」
+      return { parsed: { summaries: ['【书记员】摘要'], world: null, profile: [] }, err: '' };
+    };
     let r = await A.compactNow();
     A.hideToast();
     H.check('书记员可用 → 走书记员并压入其摘要',
       r.ok === true && r.path === 'scribe' && sc.summaries.indexOf('【书记员】摘要') >= 0
         && sc.messages.length === Context.DEFAULT_KEEP_MESSAGES, JSON.stringify(r));
+    H.check('执行中 compactStatus.running=true 且不可再点',
+      !!midStatus && midStatus.running === true && midStatus.ok === false, JSON.stringify(midStatus));
+    H.check('书记员可用时按钮标注书记员路径', A.compactStatus().path === 'scribe', A.compactStatus().path);
 
     const fb = mk('fallback-story');
     for (let i = 1; i <= 6; i++) playTurn(fb, '行动' + i, '第' + i + '幕');
