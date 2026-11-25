@@ -24,8 +24,8 @@ node sidecar/server.mjs --show-token   # 再次查看 token
 启动后：
 
 1. 终端里会打印 `token`，把它复制到应用「设置 → 本地服务 → token」；
-2. 服务只绑 `127.0.0.1:4319`（回环地址），**局域网 / 外网都访问不到**；
-3. 前端会探测 `http://127.0.0.1:4319/health`，探测通过后三个功能的开关才会亮起。
+2. 服务只绑本机回环地址，默认端口 `4319`（`IR_SIDECAR_PORT` 可覆盖；数据目录默认 `sidecar/data`，`IR_SIDECAR_DATA_DIR` 可覆盖——单测与多实例就是这样隔离的），**局域网 / 外网都访问不到**；
+3. 前端会探测 `http://127.0.0.1:4319/health`（端口改过就用新端口，前端按设置里的地址探测），探测通过后三个功能的开关才会亮起。
 
 > Windows 旧版 `cmd.exe` 若把中文显示成乱码，先执行一次 `chcp 65001` 切到 UTF-8；Windows Terminal / PowerShell 7 通常无需处理。
 
@@ -33,9 +33,26 @@ node sidecar/server.mjs --show-token   # 再次查看 token
 
 本项目按**单进程**设计：重复启动会被拒绝（锁文件 `sidecar/data/.lock` + 端口占用双重检测），这样定时触发不会被跑两遍。请勿同时启动多个实例。
 
+## 接口一览
+
+路由表在 `server.mjs` 的 `ROUTES`（另有 `/health` 与 SSE 连接两个入口单独处理）。除 `/health` 外全部要 Bearer token（SSE 走一次性 ticket，见下）：
+
+| 分组 | 路由 |
+|---|---|
+| 健康与配置 | `GET /health`（免 token）、`GET /api/config`、`PUT /api/config` |
+| 事件推送 | `POST /api/events/ticket`、`GET /api/events?ticket=…`（SSE） |
+| 定时主动 | `GET /api/triggers`、`POST /api/triggers`、`POST /api/triggers/:id/confirm`、`POST /api/triggers/:id/cancel`、`POST /api/schedule/pause`、`GET /api/pending`、`POST /api/pending/:id/ack` |
+| 邮件 | `POST /api/email/send`、`POST /api/email/draft`、`GET /api/email/drafts`、`POST /api/email/drafts/:id/send`、`DELETE /api/email/drafts/:id`、`GET /api/email/audit` |
+| 购物支付 | `POST /api/payment/intents`、`POST /api/payment/intents/:id/approve`、`POST /api/payment/intents/:id/deny`、`POST /api/payment/intents/:id/charge`、`POST /api/payment/intents/:id/paid`、`GET /api/payment/transactions`、`POST /api/payment/summary`、`GET /api/payment/receipt/:id`、`GET /api/payment/mandates`、`POST /api/payment/mandates` |
+
+提示：`POST /api/triggers` 不认请求体里的 `source`——HTTP 一律按「模型发起」处理（新建待确认、改不动已确认的行）；「用户在场」只有进程内的 `opts.asUser` 能给。
+
 ## 配置与安全
 
-- 白名单、额度、每日上限、免打扰时段、token **只存在** `sidecar/data/config.json`，是这些安全项的唯一真源；前端设置页只是它的编辑界面。
+- 白名单、额度、每日上限、免打扰时段、token **只存在** `sidecar/data/config.json`，是这些安全项的唯一真源；前端设置页只是它的编辑界面。文件里的旋钮（`config.mjs` 的 `defaultConfig`）不止这五项：
+  - `email`：`provider`（`mock` / `resend`）、`from`、`resendApiKey`、`allowlist`、`dailyLimit`；
+  - `schedule`：`quietHours`、`dailyCap`、`missedPolicy`（`SKIP` / `RUN_ONCE` / `RUN_ALL`，页面关闭期间的补跑策略）、`paused`；
+  - `payment`：`provider`（`mock` / `manual-order`）、`currency`、`perTx` / `daily` / `monthly`、`autoApprove`（免确认额度）、`cooldownMin`、`merchantAllowlist` / `merchantBlocklist`、`categoryAllowlist` / `categoryBlocklist`、`budgets`。
 - 配置文件 `config.json` 权限为 `600`（POSIX）；Windows 上 `mode:0o600` 无效，写盘时会用 `icacls` 尽力收紧为仅当前用户可读写。`sidecar/data/` 已加入 `.gitignore`，不会进版本库。
 - 除 `/health` 外所有接口都需要 `Authorization: Bearer <token>`；目的是防本机其它程序或网页乱调你的服务。SSE（`/api/events`）例外：`EventSource` 带不了请求头，token 也不进 URL，改为先 `POST /api/events/ticket` 用 Bearer 换一张 30 秒有效的一次性 ticket 再连接。
 - token 可自行改成本机口令：**任意非空字符串**（≤256 字符）都接受，改完即时生效（应用「设置 → 本地服务」里同步改）；只有缺失或置空才会重新生成，并在终端打一行提示。

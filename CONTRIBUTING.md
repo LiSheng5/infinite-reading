@@ -35,8 +35,8 @@ npm run dev     # 开发服务器（热更新）
 ```
 index.html              单页骨架：只留挂载容器（旧 DOM 已删）+ 图标 sprite + 唯一入口 <script type="module" src="src/main.js">
 src/main.js             唯一入口：应用层 → 各屏 → 组合根 → PWA（import 顺序即依赖顺序）
-src/app/                界面行为层（21 个 ES module + 组合根 main.js）：事件绑定 / 回合编排 / 渲染推进 / 弹窗流程；A.state 共享状态 + A.reg 注册表
-src/core/               核心逻辑（TS，Node 可 require）：providers / context / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / version
+src/app/                界面行为层（25 个 ES module + 组合根 main.js）：事件绑定 / 回合编排 / 渲染推进 / 弹窗流程；A.state 共享状态 + A.reg 注册表
+src/core/               核心逻辑（25 个 TS 模块 + 仅类型声明的 globals.d.ts，Node 可 require）：providers / context / ctxusage / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / writeBack / confirmQueue / errors / modelCapabilities / version
 src/ui/                 基础组件库（Svelte 5）+ 动效 / 切屏 / 弹窗栈 / 视图过渡内核
 src/screens/            7 个屏幕的组件与 $state 模块：home / settings / storyPrefs / shelf / read / branch / modal
 css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角 / 表单字号 --fs-field）；:root 之外不写颜色字面量
@@ -47,12 +47,12 @@ eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
 eval/_harness.js        门禁共用脚手架：check / finish / run / loadEsm / localMs（不单独跑，不算门禁）
 eval/*-test.js          44 个门禁：tokens / css-structure / comments / error-policy / motion / settings-ids / capability-scope / schema / tree / prefs / chat-mode / backup-pack / store-images / platform / proposals / writeback / features / ui-state / reply-text / zip / 生视频转发 / 客户端重连 / 侧车 …
-sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events
+sidecar/                可选本地服务（Node 进程，零第三方依赖）：server / scheduler / cron / email / payment / payment-policy / config / db / events / statuses / util
 manifest.webmanifest / sw.js / src/pwa.js   PWA：清单（颜色字段是 __IR_THEME_COLOR__ 占位，构建期从 --bg 展开）、Service Worker、注册
 icons/                  应用图标（由 tools/make-icons.mjs 生成，产物随仓库提交）
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx 托管 dist/site）
 启动.bat                Windows 一键启动（构建 + 本地服务）
-tools/                  构建与验收脚本（版本号同步、单文件打包、图标生成、本地服务器、video-proxy.mjs），不属于运行时代码
+tools/                  构建与验收脚本（版本号同步 sync-version、单文件打包 bundle-single-file、图标生成 make-icons、本地服务器 serve.py / serve.ps1、video-proxy、WCAG 对比度 contrast-check、裸调用检查 check-free-calls（白名单 free-calls-allow.json）、压测树 make-big-tree），不属于运行时代码
 ```
 
 架构与数据流的细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
@@ -101,7 +101,7 @@ npm test        # = 版本号一致性 + 配色/令牌/动效护栏 + 44 个 eva
 
 ```bash
 echo 0.13.0 > VERSION      # 1) 改真源
-npm run sync:version       # 2) 同步 package.json / package-lock.json 与 README 徽章/「当前版本」行
+npm run sync:version       # 2) 同步 package.json / package-lock.json 与 README.md / README.en.md 的徽章与「当前版本」行
 ```
 
 `node tools/sync-version.mjs --check`（`npm test` 第一步）会守三条红线：占位符不许丢（`sw.js` / 首页 / `version.ts` / `index.html` 四处）、`?v=` 不许回来、`src/` 与 `sw.js` 里不许出现当前版本的字面量；同步目标文件缺失或命中数不对一律报错，不算通过。
@@ -119,12 +119,12 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 1. Fork → 建分支（`feat/xxx`、`fix/xxx`）→ 改代码 → `npm test` + `npm run build` 本地自检 → 提 PR。
 2. 一个 PR 只做一件事。提交信息用 `feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 前缀，一句话说清「改了什么、为什么」。
 3. PR 里请写：**改了什么**、**为什么**、**怎么验证的**（贴 `npm test` 的结果最好；界面改动请附 390 / 1280 两个宽度的前后截图）。
-4. CI 会跑语法检查、结构门禁、版本号、离线评测、构建与产物自检；红了请先修再请人 review。
+4. CI 会跑语法检查、结构门禁、版本号、离线评测、构建与产物自检，以及一部分功能单测——**不是** `npm test` 的全量清单（哪些门禁只在本地跑见 `.github/workflows/ci.yml` 与 `package.json` 的 `test` 链）；红了请先修再请人 review。提交前请在本地跑完整的 `npm test`。
 5. 新增用户可见功能请同步更新 `README.md` 与（必要时）`ARCHITECTURE.md`。
 
 ## 八、想帮忙但不知道从哪下手
 
-- README 末尾的 Backlog 就是任务池；挑一个开着 Issue 的来。
+- 任务池就是 Issue 列表：挑一个开着 Issue 的来；没有合适的就自己开一个（有模板）。
 - 内容也是贡献：`.irstory.json` 故事、角色卡、开局包——不需要写代码。
 - 文档纠错、错误提示「人话化」、README 翻译，同样有价值。
 
@@ -210,11 +210,11 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 
 | 事项 | 说明 | 应对 |
 |---|---|---|
-| 只绑回环地址 | 服务只监听 `127.0.0.1:4319`，局域网 / 外网都访问不到 | 不要把绑定地址改成 `0.0.0.0`——那是另一个风险等级，本项目不做 |
-| 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json`，**导出备份时无条件剥离**（即使勾选带上 API Key 也不带它） | 防的是「本机其它进程 / 网页乱调你的服务」（DNS rebinding 是 127.0.0.1 上真实存在的攻击面）。别把 token 贴到公开地方 |
-| 只认本机来源（Host + Origin） | 每个请求先校验 `Host` 只接受 `127.0.0.1 / localhost / [::1]`（否则 403 `BAD_HOST`），再校验 `Origin` 只接受本机页面（别的站点 403 `ORIGIN_NOT_ALLOWED`）；`file://` 的字面量 `null` 只对**带 token / SSE ticket** 的请求回显 CORS，`/health` 与预检例外 | Host 是 DNS rebinding 的**唯一识别点**：攻击页在浏览器侧与本机同源，连 CORS 都不触发，只靠 CORS 兜是兜不住的。`Origin: null` 与任意站点的沙箱 iframe 在浏览器侧完全一样（实测都是 `Origin: null` + `Sec-Fetch-Site: cross-site`），所以它不再「一律放行」——没有 token 的页面读不到任何响应。机器名 / 局域网 IP 打开的页面用不了侧车三件套，请用 localhost 打开 |
-| 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`（Windows 上 `mode:0o600` 无效，启动写盘时会用 `icacls` 把 `config.json` 收紧为仅当前用户可读写，失败不阻断），`sidecar/data/` 已加入 `.gitignore`；仓库自带的静态服务（`启动.bat` / `tools/serve.py` / `tools/serve.ps1`）对 `sidecar/data/` 与 `.git/` 统一拒绝 | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥；自己起别的静态服务时也要排除这两个目录 |
-| SSE 走短时效一次性 ticket | `EventSource` 不能自定义请求头，token 也**不进 URL**（会进代理 / 访问日志 / Referer）：先 `POST /api/events/ticket`（Bearer）换一张 30 秒有效、一次性 ticket，再以 `/api/events?ticket=…` 连接 | 服务端日志**不记录 token、不记录邮件正文**；ticket 用掉即删，连接数有上限（超限 429） |
+| 只绑回环地址 | 服务只监听 `127.0.0.1`，默认端口 `4319`（可用 `IR_SIDECAR_PORT` 覆盖，数据目录可用 `IR_SIDECAR_DATA_DIR` 覆盖，见 `sidecar/config.mjs`），局域网 / 外网都访问不到 | 不要把绑定地址改成 `0.0.0.0`——那是另一个风险等级，本项目不做 |
+| 本地 token | 除 `/health` 外所有接口都要求 `Authorization: Bearer <token>`；token 首启随机生成在 `sidecar/data/config.json`，**导出备份时无条件剥离**（即使勾选带上 API Key 也不带它） | 防的是「本机其它进程 / 网页乱调你的服务」。别把 token 贴到公开地方 |
+| 只认本机来源（Host + Origin） | `Host` 只接受回环地址（否则 403 `BAD_HOST`），`Origin` 只接受本机页面（否则 403 `ORIGIN_NOT_ALLOWED`）；`file://` 的 `Origin: null` 只在请求带 token / SSE ticket 时才回 CORS 头 | Host 是 DNS rebinding 的**唯一识别点**（攻击页在浏览器侧与本机同源，连 CORS 都不触发）；`Origin: null` 与任意站点的沙箱 iframe 无法区分，所以不再「一律放行」。逐条口径与实测见 `sidecar/README.md` 的「配置与安全」 |
+| 配置与库是明文 | `config.json`（含 token、邮件密钥）与 SQLite 库都是本地明文文件，权限 `600`（Windows 上用 `icacls` 尽力收紧），`sidecar/data/` 已加入 `.gitignore`；仓库自带的静态服务（`启动.bat` / `tools/serve.py` / `tools/serve.ps1`）对 `sidecar/data/` 与 `.git/` 统一拒绝 | 与「API Key 明文存 IndexedDB」同等级的取舍；共享设备上别填密钥；自己起别的静态服务时也要排除这两个目录 |
+| SSE 走短时效一次性 ticket | `EventSource` 不能自定义请求头，token 也**不进 URL**：先 `POST /api/events/ticket`（Bearer）换一张 30 秒有效、一次性 ticket，再以 `/api/events?ticket=…` 连接 | 服务端日志**不记录 token、不记录邮件正文**；ticket 用掉即删，连接数有上限（超限 429） |
 | 支付策略不是「防你自己」 | 策略在**代码层**强制执行（单笔 / 每日 / 每月上限、商户与品类名单、冷静期、agent 预算隔离、**长期授权范围 mandate 强制**：下单必须挂在用户签发的授权上，agent 与币种由服务端按授权 / 配置映射，不采信请求体自报），且 AI 拿不到任何支付凭证 | 你拥有本机文件，理论上可以改配置或改代码绕过。它的价值是**防误操作 + 可审计**，不是防用户自己。**AI 可能出错，请设置合理额度** |
 | 不做支付 App 自动化 | 本期只有「模拟支付」与「仅生成订单，由你在微信 / 支付宝里手动付款」两种模式 | 绝不对任何支付 App 做自动化或绕过，绝不保存支付密码；不接真实支付回调 |
 | 邮件白名单是后端硬校验 | 不在白名单里的收件人只能落成草稿，必须由你确认后才发出 | 每次发送 / 建草稿 / 被拒都写审计（只记事实，不记正文全文） |
@@ -242,13 +242,13 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 
 ### 依赖与第三方资源
 
-运行时代码**没有任何第三方 JS 依赖**，也没有远程字体 / 图标；构建与测试依赖（Vite / Svelte / TypeScript / Playwright）的清单与许可见本文「[十一、第三方资源与许可](#十一第三方资源与许可)」。若发现某处引入了带已知漏洞的资源，请按上面的渠道告知我们。
+运行时依赖清单与许可统一登记在本文「[十一、第三方资源与许可](#十一第三方资源与许可)」；若发现某处引入了带已知漏洞的资源，请按上面的渠道告知我们。
 
 ---
 
 ## 十一、第三方资源与许可
 
-本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`src/` 下的代码均为本项目原创（Svelte 运行时会被编译进产物，见下表），只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。**可选本地服务（`sidecar/`）同样零第三方依赖**，只用 Node 内置能力（`node:http`、`node:sqlite`、`node:fs`、`node:crypto`）。
+本项目的**运行时代码没有任何第三方 JavaScript 依赖**：`src/` 下的代码均为本项目原创（Svelte 运行时会被编译进产物，见下表），只依赖浏览器原生 API（`fetch`、`localStorage`、`FileReader`、`createImageBitmap` 等）。
 
 运行时不加载任何第三方字体或图标：字体走系统自带栈（没有远程 `<link>`），图标是本地 sprite 与 `tools/make-icons.mjs` 生成的 PNG。若将来引入字体文件，请把文件与对应许可文本一并放入仓库并在本节登记。
 
@@ -293,6 +293,6 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 |---|---|---|---|
 | `nodemailer` | SMTP 发信（浏览器与 `fetch` 都做不到） | MIT | 计划中（邮件二期） |
 
-如上表所示，本项目刻意**不引入** `express`、`croner` 等常见库：HTTP 路由只有十几个、cron 解析只有几十行，自写更符合本项目的零依赖取舍。
+如上表所示，本项目刻意**不引入** `express`、`croner` 等常见库：HTTP 路由只有二十来条、cron 解析只有几十行，自写比多一份依赖更划算。
 
 如你认为本清单有遗漏或不准确之处，欢迎提 Issue 指出。

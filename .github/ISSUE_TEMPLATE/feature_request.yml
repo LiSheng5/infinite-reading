@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        提之前可以先看一眼 [README 的 Backlog](../README.md) 和 [`docs/NOTES.md`](../docs/NOTES.md) 的路线图，可能已经列上了。
+        提之前可以先搜一下现有 Issue（含已关闭的），可能已经有人提过；架构与取舍见 [`ARCHITECTURE.md`](../ARCHITECTURE.md)。
   - type: dropdown
     id: kind
     attributes:
@@ -45,5 +45,5 @@ body:
     attributes:
       label: 请确认这个建议与本项目的约束不冲突
       options:
-        - label: 它可以在纯前端、零构建、零依赖、无后端的前提下实现（或你说明了需要的取舍）
+        - label: 它可以在纯前端、零运行时依赖、无后端的前提下实现（构建期依赖可以有，见 CONTRIBUTING.md 第十一节；或你说明了需要的取舍）
           required: true

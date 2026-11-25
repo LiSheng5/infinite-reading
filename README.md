@@ -86,7 +86,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 安全与边界（详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的「安全说明」）：
 
-- 服务**只监听 `127.0.0.1`**（局域网 / 外网访问不到），除健康检查外都要 token；按「单进程」设计，重复启动会被拒绝。
+- 服务**只监听 `127.0.0.1`**（局域网 / 外网访问不到），除健康检查外都要 token（SSE 例外：先用 token 换一张 30 秒一次性 ticket，见 `sidecar/README.md`）；按「单进程」设计，重复启动会被拒绝。
 - 额度、白名单、免打扰时段、token 的**唯一真源是 `sidecar/data/config.json`**，它们不会回存到浏览器里——AI 也就无从改写。
 - 支付策略是**防误操作 + 可审计**，不是「防你自己」：你拥有本机文件，理论上可以改配置或代码绕过。
 - **不做任何对微信 / 支付宝 App 的自动化或绕过，也不保存支付密码**；不接真实支付回调。
@@ -111,7 +111,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 走法 | 命令 / 操作 | 适合 |
 |---|---|---|
 | 本地服务 | 双击 `启动.bat`（Windows）或 `npx serve dist/site` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
-| 单文件 | `npm run bundle` → `dist/ir.html`（约 640 KB） | 发给别人：一个 HTML 文件，双击即玩 |
+| 单文件 | `npm run bundle` → `dist/ir.html`（约 708 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
 | 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 24：内置 `node:sqlite`，见 `sidecar/README.md`） |
@@ -147,7 +147,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `src/core/zip.ts` | 零依赖手写 ZIP：带原图的全量备份打包 / 解包 |
 | `src/core/roleCard.ts` | 角色卡（SillyTavern PNG 解析） |
 | `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认留空；厂商形参走「自定义请求参数」） |
-| `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 21 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
+| `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 25 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
 | `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗卡片 / 视图过渡） |
 | `src/core/sidecar.ts` + `src/core/features.ts` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `src/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |

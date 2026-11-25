@@ -13,7 +13,7 @@ body:
     attributes:
       label: 版本
       description: 见根目录 `VERSION` 文件，或开始页脚「无限阅读 vX.Y.Z」
-      placeholder: 0.12.0
+      placeholder: 0.14.0
     validations:
       required: true
   - type: dropdown
@@ -22,7 +22,7 @@ body:
       label: 打开方式
       description: 不同方式的数据不互通，很多"数据不见了"其实是换了打开方式
       options:
-        - 双击 index.html（file://）
+        - 双击 dist/single/index.html（file://）
         - 本地静态服务（localhost）
         - 在线 Demo / 部署在其它域名
         - 其他（在下方说明）
