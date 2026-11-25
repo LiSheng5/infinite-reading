@@ -59,6 +59,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   function tree() { return (S.story && S.story.tree) || null; }
+  // 分支入口的唯一开关：只有剧情模式（choice）露出分支相关入口；
+  // 书架行菜单 / 搜索兜底 / HUD「分支」都只调它，不各写一遍 mode === 'choice'
+  function branchUiOn(story) {
+    return !!(story && story.mode === 'choice');
+  }
   function nodeOf(id) {
     const t = tree();
     return (t && t.nodes && t.nodes[id]) || null;
@@ -734,5 +739,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     openBranch,
     closeBranch,
     updateHistoryBar,
+    branchUiOn,
   });
 

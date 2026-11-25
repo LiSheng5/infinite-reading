@@ -94,7 +94,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/layout.js` | 布局状态：`#screen-game` 的 `data-layout`、字号 / 宽度 / 密度三档、舞台收起与沉浸模式 | `effectiveLayout`、`applyLayout`、`bindSplitter` |
 | `src/app/settings.js` | 设置表单读回、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`testConnection`、`renderStoryPanels` |
 | `src/app/prefsui.js` | 设置分层界面：分组导航（桌面左导航 / 窄屏下钻）、模型库管理、本对话设置面板 | `initSettingsNav`、`renderModelProfiles`、`renderStoryPrefs`、`openStoryPrefs` |
-| `src/app/branch.js` | 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作 | `initBranch`、`openBranch`、`closeBranch`、`updateHistoryBar` |
+| `src/app/branch.js` | 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作 | `initBranch`、`openBranch`、`closeBranch`、`updateHistoryBar`、`branchUiOn` |
 | `src/app/main.js`（保留） | 组合根：安装弹窗外壳、事件绑定、启动 | `bind`、`init` |
 
 **三条约定**：
@@ -234,7 +234,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - `forkBefore(story, nodeId)`：`switchTo(node.parent)`（站在这一回合发生之前），返回 `{ok, action:{type,text,kind,sent}}` 供输入框预填（`setComposerText(text, kind)`，不触发发送）；根节点与开局节点（`action.type === 'opening'`）返回 `{ok:false, reason}`。
 - `canResume(story, nodeId)`（纯函数）：节点 `sid === null`（旧档迁移来的早期回合，状态未知）→ `false`。`project` 对 `sid === null` 保持当前状态不动，所以**所有会落到这类节点的继续 / 分叉入口都要拦**（面板按钮置灰，落点含「改我说的」的 parent）。
 
-**分支页（`src/app/branch.js` + `src/core/treeLayout.ts`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 直接开分支页选中该节点（**不**自动 `switchTo`）。
+**分支页（`src/app/branch.js` + `src/core/treeLayout.ts`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 剧情模式直接开分支页选中该节点（**不**自动 `switchTo`）；对话 / 扮演没有分支入口（HUD 行菜单 / 搜索兜底统一由 `A.branchUiOn(story)` 判定，仅 `mode === 'choice'` 为真），只提示「该结果在其他版本里」。
 
 **布局算法分四段**：`buildKids`（children 表：防环 / 剔除自引用 / 补 parent 指针）→ `assignRows`（BFS 行号 + 唯一父指针 + `tracePath` 出的 root→head 路径）→ `packLanes`（泳道：主干 lane 0，支线按子树行区间贪心打包，`rangeMemo` / `forkQueue` 只在这一段内）→ `foldChains` + `geometryOf`（折叠与几何）。`layerTree` 只剩十来行装配，四段各自在 `eval/treelayout-test.js` 第 10 节有单测（同一入参 → 同一出参、不改入参）；改布局先跑该节，失败点能直接定位到段。
 

@@ -193,6 +193,23 @@ async function main() {
        closeBranchBody.indexOf('setBranchBackdrop(false)') < closeBranchBody.indexOf('branchTrapRelease()'),
       'closeBranch 先撤 inert、再还焦点');
 
+    /* 分支入口的模式开关：唯一的 branchUiOn（真值表）+ 三个入口都只调它 */
+    const uiOn = branch.match(/function branchUiOn\(story\)\s*\{([\s\S]*?)\n  \}/);
+    ok(!!uiOn, 'branch.js 有唯一的模式判定 branchUiOn');
+    if (uiOn) {
+      const fn = new Function('story', uiOn[1]);
+      eq(fn({ mode: 'choice' }), true, 'branchUiOn：剧情模式为真');
+      eq(fn({ mode: 'chat' }), false, 'branchUiOn：对话模式为假');
+      eq(fn({ mode: 'rp' }), false, 'branchUiOn：扮演模式为假');
+      eq(fn(null), false, 'branchUiOn：没有故事为假');
+    }
+    ok(/A\.reg\(\{[\s\S]*?branchUiOn/.test(branch), 'branchUiOn 已登记进 A');
+    const shelfSrc = stripComments(read('src/app/shelf.js'));
+    ok(shelfSrc.indexOf('A.branchUiOn(') >= 0, '书架行菜单 / 搜索兜底走 A.branchUiOn');
+    ok(shelfSrc.indexOf("mode === 'choice'") < 0, '书架不各写 mode === \'choice\'');
+    ok(stripComments(read('src/app/main.js')).indexOf('A.branchUiOn(') >= 0,
+      'HUD「分支」入口走 A.branchUiOn');
+
     /* 聊天图 / 缩略图带 onclick 的同时必须可聚焦、可键盘触发 */
     const imgs = [];
     for (const rel of ['src/screens/read/ChatBubble.svelte', 'src/screens/read/ReadScreen.svelte']) {

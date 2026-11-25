@@ -171,12 +171,14 @@ import { A, saveAll, toast } from './core.js';
     };
     add('重命名', () => renameStory(it.id));
     add('重新生成标题', () => regenTitle(it.id));
-    // 书架行「⋯」→「分支」：先打开该对话再叠分支页
-    add('分支', () => {
-      if (S.story && S.story.id === it.id) { A.openBranch({}); return; }
-      openStory(it.id);
-      A.openBranch({});
-    });
+    // 书架行「⋯」→「分支」：仅剧情模式露出；先打开该对话再叠分支页
+    if (A.branchUiOn(it)) {
+      add('分支', () => {
+        if (S.story && S.story.id === it.id) { A.openBranch({}); return; }
+        openStory(it.id);
+        A.openBranch({});
+      });
+    }
     add('导出', () => { if (A.openExport) A.openExport(it.id); });
     add('删除', () => removeStory(it.id));
     row.appendChild(menu);
@@ -476,7 +478,8 @@ import { A, saveAll, toast } from './core.js';
   }
 
   // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮（已做）；
-  // 否则 → 打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续）
+  // 否则（仅在剧情模式）打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续）；
+  // 对话 / 扮演没有分支入口 → 只提示结果在别的版本里，不跳转
   function scrollToHit(nid) {
     setTimeout(() => {
       const sel = '#chat-scroll [data-nid="' + escAttr(nid) + '"]';
@@ -486,8 +489,10 @@ import { A, saveAll, toast } from './core.js';
         el.classList.remove('hit-flash');
         void el.offsetWidth;
         el.classList.add('hit-flash');
-      } else {
+      } else if (A.branchUiOn(S.story)) {
         A.openBranch({ selectId: nid });
+      } else {
+        toast('该结果在其他版本里');
       }
     }, 80);   // 等 enterGame 把聊天区渲染出来
   }

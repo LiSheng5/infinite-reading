@@ -121,7 +121,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#btn-immersive-exit').onclick = e => { if (e) e.stopPropagation(); A.exitImmersive(); };
 
     // 顶栏「⋯」/ 输入区「＋」：打开前先刷新菜单项状态
-    $('#btn-hud-more').onclick = e => { e.stopPropagation(); A.toggleMenu($('#btn-hud-more'), $('#hud-more-menu')); };
+    $('#btn-hud-more').onclick = e => {
+      e.stopPropagation();
+      // 「分支」只在剧情模式露出（与书架行菜单 / 搜索兜底共用 A.branchUiOn）
+      const branchItem = $('#btn-branch');
+      if (branchItem) branchItem.classList.toggle('hidden', !A.branchUiOn(S.story));
+      A.toggleMenu($('#btn-hud-more'), $('#hud-more-menu'));
+    };
     $('#btn-more-actions').onclick = e => { e.stopPropagation(); A.toggleMenu($('#btn-more-actions'), $('#feature-menu')); };
     document.addEventListener('click', e => {
       if (e.target.closest && e.target.closest('.menu-item')) { A.closeMenus(); return; }
