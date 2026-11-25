@@ -51,7 +51,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/version.ts` | 版本号唯一读口（`__IR_VERSION__` 构建注入，Node 下降级 `dev`） | `APP_VERSION` |
 | `src/ui/*.svelte` + `src/ui/*.js` | 基础组件库（图标 / 按钮 / 字段 / 弹窗卡片 …）与 DOM 端动效、切屏、弹窗栈、视图过渡内核 | `Icon`、`Button`、`ModalCard`、`Nav.showScreen`、`openModal`、`runTransition` |
 | `src/screens/{home,settings,storyPrefs,shelf,read,branch,modal}` | 7 个屏幕的 Svelte 组件 + 各自的状态模块（`$state`）；每个目录的 `index.js` 只声明「容器 → 组件」，挂载三步（取容器 / `replaceChildren` / `data-impl="svelte"` + `mount`）共用 `src/screens/_mount.js` 的 `mountScreen` 一份；容器的 `hidden` 开关仍归界面层 | `HomeScreen.svelte`、`SettingsScreen.svelte`、`ReadScreen.svelte`、`mountScreen` |
-| `src/app/*.js`（21 个 + 组合根 `src/app/main.js`） | 界面行为层：事件绑定、回合编排、渲染推进、弹窗流程（见 §2.1） | `A.reg({...})` 注册，调用方 `A.xxx()` |
+| `src/app/*.js`（22 个 + 组合根 `src/app/main.js`） | 界面行为层：事件绑定、回合编排、渲染推进、弹窗流程（见 §2.1） | `A.reg({...})` 注册，调用方 `A.xxx()` |
 | `src/main.js` / `sw.js` / `src/pwa.js` | 唯一入口 / Service Worker（构建期注入预缓存清单与缓存版本）/ PWA 注册 | `installShell()`、`install` / `fetch` |
 | `eval/*.js` / `tools/*.mjs` | 离线评测与构建 / 验收脚本（不改产品代码） | `eval/run.js`、`tools/sync-version.mjs` |
 | `sidecar/`（Node 进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
@@ -84,6 +84,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/wizard.js` | 开局向导 | `openWizard`、`draftWizard`、`startFromWizard` |
 | `src/app/turn.js` | AI1 剧情回合；书记员任务；工具护栏；重试与分支 | `streamAI1`、`parseAIReply`、`postTurn`、`retryLast`、`switchSiblingFromBubble` |
 | `src/app/round.js` | 回合编排：`callAI1` / 玩家行动 / 开场 / 工具执行 / 旁白收尾 | `callAI1`、`sendPlayerAction`、`runOpening`、`finishNarration`、`pushLog` |
+| `src/app/compact.js` | 手动压缩（回合之外）：前置检查、书记员双职或本地兜底、`resyncHead` 写回、toast 撤销 | `compactNow`、`compactUndo` |
 | `src/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
 | `src/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
 | `src/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench`、`forceRedrawByCard`（后两个是同一实现 `redraw({ byCard })` 的薄入口） |
@@ -118,7 +119,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **禁令**：真实失败（网络 / 模型 / 存储 / 侧车）绝不允许空 catch 静默掉。`eval/error-policy-test.js` 静态扫描 `src/`：try 里出现 `ChatProviders` / `ImageProviders` / `Sidecar` / `Store` / `Storage` / `fetch` / `adapter.chat|generate|poll` 等真实失败源的 catch，必须命中上报出口（`report*` / `toast` / `console.warn` / 抛回 / `failureEntry` / `persistFail` / `markFailed`）或带说明注释；扫描面与反向自检（构造一个静默吞掉 Sidecar 失败的片段必须报警）都在同一门禁里。
 
-实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；`docs/manual_checks.md` 只有界面时序类验收（toast 样式、重试入口、console 前缀）。
+实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；界面时序类验收（toast 样式、重试入口、console 前缀）不进自动化测试，只做手动检查，记录随手动验收写进 `docs/manual_checks.md`（仓库当前没有该文件，不要把它当既有清单引用）。
 
 ## 3. 一回合的完整调用链
 
@@ -280,6 +281,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | **主模型配置走 `resolveChatCfg`** | `src/core/prefs.ts`：`resolveChatCfg`；`src/app/models.js`：`chatCfg` / `chatContextWindow`；`src/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
 | **工具集 = 全局可用性 ∩ `prefs.tools`** | `src/app/round.js`：`callAI1` 的 `toolAllowed` 过滤；`src/core/prefs.ts`：`toolCategory` | 对话里可单独关掉「下单 / 邮件 / …」，默认跟随全局；其它对话不受影响 |
 | **手改派生数据后 `resyncState`** | `src/core/tree.ts`：`resyncState`；`src/app/settings.js`：`saveWorldFromForm` | 树是真源、`project` 会用 head 的内联状态覆盖 `world / summaries / …`——手改世界卡后必须把 head 的状态换成当前值，否则下次进故事 / 切分支会把编辑回滚掉 |
+| **回合之外压缩后 `resyncHead`** | `src/core/tree.ts`：`resyncHead`（`resyncState` + 按当前 `messages` 重算窗口） | 手动压缩改的是 `messages / summaries`，而 head 已 `sealed`：只同步 State 不重算 `msgFloor / msgSnap`，切分支或重进故事会按旧窗口展开，把已压进摘要的消息重新塞回请求、与摘要重叠（`eval/tree-test.js` 用例 20 固定切兄弟往返与存档重进） |
 | **打开分支页只读树** | `src/app/branch.js`：`openBranch` | 分支页渲染**不得** `ensure` 写盘 / 改 `active` / `project`——只有面板操作经 `Tree.switchTo` / `forkBefore` 改树 |
 | **`canResume` 拦住 `sid === null` 的落点** | `src/core/tree.ts`：`canResume`；`src/app/branch.js`：`renderPanel` / `opResume` / `opFork` | `project` 对 `sid === null` 保持当前状态——落到这种节点世界卡 / 摘要是错的；「改我说的」的落点是 **parent**，同样要过 `canResume` |
 | **分支页流光只挂一条 path** | `src/app/branch.js`：`render`（`pathEdgeD`）；`css/branch.css`：`.branch-flow` | 循环动画预算 ≤ 3（流光 / head 呼吸 / 选中脉冲），每条边单独加动画会炸掉预算 |
@@ -345,6 +347,8 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
 
 **用量指示器**（对话输入区常驻）：只读，与压缩判定同源——`src/core/ctxusage.ts` 用 `estimateTokensOf(assembleAI1(story, '', opts))` 估算「下一轮请求」的 token、用 `compressThreshold(window)` 取自动压缩线（不另写一套估算、不硬编码比例），组装选项走 `src/app/round.js` 的 `buildAssembleOpts` dry 口径（不写回合字段、不消费 🧠 一次性开关、不触发会改 story 的压缩）。估算失败界面显示「—」，原因走 `reportBackgroundFailure` 留 console。
+
+**手动压缩与树**（回合之外，head 已 `sealed`）：压缩成功后必须 `Tree.resyncHead(story)` 再 `saveAll()`——它在 `resyncState` 之外，还按当前 `messages` 重算 head 的 `msgFloor / msgSnap`；否则切分支 / 重进故事会按旧窗口展开，把已压进摘要的消息重新塞回请求。`resyncHead` 只改 head，head 不是叶子时禁止手动压缩（后代各自持有自己的 State 与窗口）。留痕条目走 `Tree.pushLate`，不走 `story.log.push`。
 
 ## 7. 评测如何做
 

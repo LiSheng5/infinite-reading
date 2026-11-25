@@ -26,6 +26,7 @@
  *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏、
  *      seal 的 entries 起点（commit 记 meta.logFrom；log 被裁掉前缀后仍收进 postTurn 尾巴、
  *      完全对不上时保留原 entries 并警告）。
+ *  20. 回合之外手动压缩后 resyncHead：窗口重算 + 切兄弟往返 / 存档重进，messages / summaries 一致。
  *
  * 用法：node eval/tree-test.js
  */
@@ -36,6 +37,7 @@ const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const T = core('tree').Tree;
 const S = core('store').Store;
+const C = core('context').Context;
 if (!T) {
   console.error('加载失败：Tree 导出缺失');
   process.exit(1);
@@ -752,6 +754,60 @@ function headTo(story, nodeId) {
     node.entries.map(e => e.text || e.tool).join('|'));
   check(' seal：log 完全对不上 → 留一条 console.warn（不再静默）',
     warns.some(x => x.indexOf('找不到本回合条目') >= 0), warns.join(' | '));
+}
+
+// 20. 回合之外手动压缩：resyncHead 重算窗口，切兄弟往返 / 存档重进都一致
+{
+  const s = newStory();
+  s.id = 'manual-compact';
+  playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
+  playTurn(s, { text: '行动 2', narration: '第 2 幕旁白' });
+  const a = playTurn(s, { text: '行动 3', narration: 'A 版第 3 幕', world: { place: 'A 线' } });
+  const b = retryTurn(s, { text: '行动 3', narration: 'B 版第 3 幕', world: { place: 'B 线' } });
+  check('手动压缩就位：head 在 B 线叶子、已封存', s.tree.head === b.id && b.sealed === true && b.children.length === 0);
+
+  // 模拟「压缩现在」：回合之外 force 压掉前 2 个回合，只留最近 1 对消息
+  const aWindow = { floor: a.msgFloor, snap: a.msgSnap };
+  const r = C.compressStory(s, { force: true, keepMessages: 2 });
+  check('手动压缩：force 在已封存节点上照压（删 4 条）', !!r && r.messagesRemoved === 4, JSON.stringify(r));
+  check('手动压缩：压缩后 messages 只剩最近 1 对', s.messages.length === 2, s.messages.length);
+  const msgsAfter = s.messages.slice();
+  const sumsAfter = s.summaries.slice();
+
+  T.resyncHead(s);
+  check('resyncHead：窗口按当前 messages 重算（floor = 2、无快照）',
+    b.msgFloor === 2 && b.msgSnap === null, b.msgFloor + '/' + JSON.stringify(b.msgSnap));
+  check('resyncHead：State 同步（summaries 落进 head.sid）',
+    eq(s.tree.states[b.sid].summaries, sumsAfter));
+  check('resyncHead：不动兄弟节点的窗口',
+    a.msgFloor === aWindow.floor && a.msgSnap === aWindow.snap, a.msgFloor);
+
+  // 留痕条目：回合之外只能走 pushLate（直接 story.log.push 的条目不属于任何节点）
+  const entry = { type: 'tool', tool: 'compress', summary: '手动压缩：2 幕压入摘要栈（本地）', ts: 99 };
+  T.pushLate(s, b.id, entry);
+  check('留痕：pushLate 插在 head 末条之后', s.log[s.log.length - 1] === entry && b.entries[b.entries.length - 1] === entry);
+
+  // 切到兄弟分支再切回：窗口与摘要不得被旧快照回滚
+  const hA = T.switchSibling(s, b.id, -1);
+  check('切到兄弟：head 落到 A 线、窗口恢复 3 对', !!hA && hA.id === a.id && s.messages.length === 6, s.messages.length);
+  const hB = T.switchSibling(s, a.id, +1);
+  check('切回压缩分支：head 回到 B 线', !!hB && hB.id === b.id);
+  check('切回压缩分支：messages 与压缩后逐条一致', eq(s.messages, msgsAfter), JSON.stringify(s.messages));
+  check('切回压缩分支：summaries 与压缩后一致', eq(s.summaries, sumsAfter), JSON.stringify(s.summaries));
+  check('切回压缩分支：留痕条目随投影还在', s.log[s.log.length - 1] === entry);
+
+  // 存档 → 退出重进（loadStory）→ 投影仍是压缩后的窗口与摘要
+  S.saveStory(s);
+  const l = S.loadStory(s.id);
+  check('重进：树合法、不重建', !!l && T.ensure(l) === l.tree);
+  T.project(l);
+  check('重进：messages 与压缩后逐条一致', eq(l.messages, msgsAfter), JSON.stringify(l.messages));
+  check('重进：summaries 与压缩后一致', eq(l.summaries, sumsAfter), JSON.stringify(l.summaries));
+  check('重进：再切兄弟往返仍一致', (() => {
+    const h1 = T.switchSibling(l, l.tree.head, -1);
+    const h2 = h1 ? T.switchSibling(l, h1.id, +1) : null;
+    return !!h2 && eq(l.messages, msgsAfter) && eq(l.summaries, sumsAfter);
+  })(), JSON.stringify(l.messages));
 }
 
 /* ---------------- 依赖装配（静态 import） ---------------- */

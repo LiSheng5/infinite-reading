@@ -23,6 +23,7 @@
  *   forkBefore(story, nodeId)  落到该回合发生之前（= parent），返回原玩家行动
  *   canResume(story, nodeId)  该节点能否作为「继续 / 分叉」的落点（sid 未知则不行）
  *   pushLate(story, nodeId, entry|scene)  晚到条目 / 画面：写节点；在路径上再同步进投影
+ *   resyncHead(story)        回合之外改了 messages / summaries（手动压缩）后：同步 head 的 State 并按当前窗口重算
  *   imageIdsOf(tree)         全树（含非当前分支）引用到的原图 id
  *
  *   - 条目与消息对象**按引用共享**（project 不 clone 它们）：log 条目的就地修改
@@ -452,6 +453,21 @@ import type { Story, StoryTree } from './schema.ts';
     return head.sid;
   }
 
+  // 回合之外改过 messages / summaries（手动压缩）后调用：head 已 sealed，
+  // 只同步 State 不重算窗口的话，切分支 / 重进故事仍按旧 msgFloor 展开，
+  // 会与压缩后的摘要重叠甚至把已压入摘要的消息重新塞回请求。
+  // 只改 head：head 不是叶子时调用方必须先拒绝（后代各自持有自己的 State 与窗口）。
+  function resyncHead(story: Story) {
+    const tree = ensure(story);
+    const head = tree.nodes[tree.head];
+    if (!head) return null;
+    resyncState(story);
+    const w = computeWindow(tree, head, Array.isArray(story.messages) ? story.messages : []);
+    head.msgFloor = w.msgFloor;
+    head.msgSnap = w.msgSnap;
+    return head;
+  }
+
   function project(story: Story) {
     const tree = ensure(story);
     const path = pathNodes(tree, tree.head);
@@ -661,7 +677,7 @@ import type { Story, StoryTree } from './schema.ts';
   // 根级纯工具（零依赖、全模块可引用）：genId / clone / sleep / plainReply 的唯一口径
   const Tree = {
     LOG_WINDOW, SCENE_WINDOW, SAVEPOINT_KEEP,
-    ensure, begin, commit, seal, project, pathOf, resyncState,
+    ensure, begin, commit, seal, project, pathOf, resyncState, resyncHead,
     siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
     pushLate, imageIdsOf,
   };

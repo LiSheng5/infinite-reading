@@ -165,8 +165,9 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
 
   let toastTimer = null;
   // 同一时刻只保留一条提示（后来者替换前者）：文本写进 #toast-text，
-  // 错误提示额外给一个关闭按钮，其余情况不吃鼠标事件（pointer-events: none）。
-  function toast(msg, isErr, long) {
+  // 错误提示额外给一个关闭按钮；action 给一条可点动作（如压缩后的「撤销」），
+  // 其余情况不吃鼠标事件（pointer-events: none）。
+  function toast(msg, isErr, long, action) {
     const el = $('#toast');
     const text = $('#toast-text');
     if (text) text.textContent = msg;
@@ -174,9 +175,20 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     el.classList.toggle('error', !!isErr);
     const close = $('#toast-close');
     if (close) close.classList.toggle('hidden', !isErr);
+    const act = $('#toast-action');
+    const hasAct = !!(action && action.label && typeof action.onClick === 'function');
+    if (act) {
+      act.classList.toggle('hidden', !hasAct);
+      if (hasAct) {
+        act.textContent = action.label;
+        act.onclick = () => { hideToast(); action.onClick(); };
+      } else {
+        act.onclick = null;
+      }
+    }
     el.classList.remove('hidden');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, long ? 7000 : 3500);
+    toastTimer = setTimeout(hideToast, (action && action.ms) || (long ? 7000 : 3500));
   }
   function hideToast() {
     clearTimeout(toastTimer);

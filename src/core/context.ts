@@ -1092,8 +1092,9 @@
    * 触发条件：
    *   ① 积压条数 > maxMessages（兜底，容量未知时也保证有界）；
    *   ② 组装后的 token 估算 > contextWindow × 0.7（容量来自能力登记表或用户手填）。
+   *   ③ opts.force（手动压缩）：忽略 ①②，固定保留最近 keep 条（成对、最少 2）。
    * @param {object} story 当前故事状态（只读输入）
-   * @param {object} [opts] { keepMessages, maxMessages, maxSummaries, summarize, contextWindow }
+   * @param {object} [opts] { keepMessages（短名 keep）, maxMessages, maxSummaries, summarize, contextWindow, force }
    * @returns {null|{compressedTurns, messagesRemoved, summaries}}
    */
   // 压缩阈值（纯函数，-8）：contextWindow × 70%；0 = 容量未知（回退按条数压缩）。
@@ -1104,6 +1105,15 @@
     return Math.floor(cw * COMPRESS_RATIO);
   }
 
+  // 手动压缩（force）的保留条数：默认 8；消息成对，故保留数取偶数、最少 2 条。
+  function forceKeep(opts) {
+    const raw = opts && (opts.keepMessages !== undefined ? opts.keepMessages : opts.keep);
+    if (raw === undefined || raw === null || raw === '') return DEFAULT_KEEP_MESSAGES;
+    const k = Math.floor(Number(raw));
+    if (!Number.isFinite(k)) return DEFAULT_KEEP_MESSAGES;
+    return Math.max(2, k - (k % 2));
+  }
+
   // 压缩判定与切分（纯函数，同步）：返回 { candidate, groups } 或 null。
   // 运行时（src/app/round.js）用它决定「交给书记员模型压」还是「本地兜底压」，评测也走它，避免两份判定。
   // opts.estimatedTokens：调用方手上已有「组装结果的 token 估算」时直接传入
@@ -1111,6 +1121,15 @@
   function planCompression(story, opts) {
     opts = opts || {};
     if (!story || !Array.isArray(story.messages)) return null;
+    if (opts.force) {
+      // 手动压缩：两个自动触发条件都不看，只保留最近 keep 条，其余全压
+      const keep = forceKeep(opts);
+      const cut = story.messages.length - keep;
+      if (cut <= 0) return null;                                  // 没有可压的内容
+      const candidateF = story.messages.slice(0, cut);
+      const plainF = (story.mode === 'chat' || story.mode === 'rp');
+      return { candidate: candidateF, groups: plainF ? groupByTurns(candidateF) : groupScenes(candidateF) };
+    }
     const keep0 = opts.keepMessages || fitWindow(story.messages, opts.contextWindow);
     const max = opts.maxMessages || Math.max(DEFAULT_MAX_MESSAGES, keep0 * 2);
     let overBudget = false;

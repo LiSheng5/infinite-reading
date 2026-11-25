@@ -179,6 +179,25 @@ import { A, renderChat, saveAll, toast } from './core.js';
     };
   }
 
+  // 书记员压缩（双职）的唯一网络实现：只发请求 + 解析，不写任何状态。
+  // runSmartCompress（回合收尾的自动压缩）与 src/app/compact.js（手动压缩）共用；
+  // 失败原因交回调用方——两边的上报口径不同（后台降级 / 用户刚点的按钮）。
+  async function scribeCompress(groups) {
+    const cfg = resolveSub('scribe');
+    try {
+      const raw = await ChatProviders[cfg.provider].chat(cfg, [
+        { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
+        { role: 'user', content: buildCompressInput(groups) },
+      ]);
+      const parsed = parseScribeCompress(raw);
+      if (!parsed || !parsed.summaries.length) return { parsed: null, err: '回包解析失败或未给出摘要' };
+      return { parsed: parsed, err: '' };
+    } catch (e) {
+      // 原因交回调用方上报（自动 / 手动两条路的出口不同）
+      return { parsed: null, err: errorText(e) };
+    }
+  }
+
   // 模型压缩（双职）：返回 null 表示「未触发 / 不可用 / 失败」→ 调用方走本地兜底。
   // 异步写回契约：结果只写回发起时那本；错误可观测：失败留 {tool:'scribe', error}。
   async function runSmartCompress() {
@@ -186,20 +205,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const sid = S.story.id;
     const plan = Context.planCompression(S.story, { contextWindow: A.chatContextWindow() });
     if (!plan) return null;
-    const cfg = resolveSub('scribe');
-    let parsed = null;
-    let err = '';
-    try {
-      const raw = await ChatProviders[cfg.provider].chat(cfg, [
-        { role: 'system', content: SCRIBE_COMPRESS_SYSTEM },
-        { role: 'user', content: buildCompressInput(plan.groups) },
-      ]);
-      parsed = parseScribeCompress(raw);
-      if (!parsed || !parsed.summaries.length) { err = '回包解析失败或未给出摘要'; parsed = null; }
-    } catch (e) {
-      err = errorText(e);
-      parsed = null;
-    }
+    const rc = await scribeCompress(plan.groups);
+    const parsed = rc.parsed;
+    const err = rc.err;
     if (err) {
       // 失败不再静默——留痕让「世界卡没更新」可归因；返回 null 让 postTurn 走本地摘要兜底
       reportBackgroundFailure('scribe', err, { note: '压缩+校对失败（退回本地摘要）' });
@@ -745,5 +753,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
     r.finished.then(finish, finish);
   }
 
-  A.reg({ parseAIReply, applyToolCall, absorbReply, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
+  A.reg({ parseAIReply, applyToolCall, absorbReply, scribeUsable, scribeCompress, refreshRollingStyleByModel, postTurn, pushNarrationEntry, assistantMessage, resetLiveDelta, finishLiveDelta, updateLiveReasoning, noToolsFor, renderNoToolsHint, toolList, streamAI1, lastNarrationIndex, lastActionEntry, choicesFromHead, treeHeadNodeId, nodeIdOwningEntry, nodeIdOwningScene, retryLast, switchSiblingFromBubble });
 

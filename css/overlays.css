@@ -411,6 +411,21 @@ label input.inline-num {
   animation: var(--an-leafInX) var(--m-dur-base) var(--ease-spring) both;
 }
 .toast.error { border-left-color: var(--danger, var(--ink)); color: var(--ink); }
+.toast-action {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.toast-action:hover { color: var(--ink); }
 .toast-close {
   pointer-events: auto;
   flex: 0 0 auto;

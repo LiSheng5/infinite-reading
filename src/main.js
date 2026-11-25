@@ -30,6 +30,7 @@ import './app/painter.js';
 import './app/video.js';
 import './app/turn.js';
 import './app/round.js';
+import './app/compact.js';
 import './app/render.js';
 import './app/readmodel.js';
 import './app/layout.js';
