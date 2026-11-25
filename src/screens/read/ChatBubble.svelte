@@ -8,7 +8,7 @@
  * 开合跨 renderChat 保留，只在条目离开 log（切分支 / 窗口滑出 / 换故事）随组件销毁才复位。
    * 点击动作直连应用层注册表（src/app/core.js 的 A）。
    *
-   * ⚠ 模板必须紧凑书写（兄弟节点间零空白）：.bubble 是 white-space: pre-wrap（style.css），
+   * ⚠ 模板必须紧凑书写（兄弟节点间零空白）：.bubble 是 white-space: pre-wrap（css/read.css），
    *   Svelte 在 {#if} 锚点两侧留下的 " " 空白文本节点会被渲染成空行 / 行首空格，
    *   把文字整体推歪（换行点漂移）。注释不渲染，可作行内分隔。 */
   import Icon from '../../ui/Icon.svelte';

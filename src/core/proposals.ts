@@ -238,7 +238,8 @@ import { genId as rootGenId } from './tree.ts';
     return { status: status, result: (p && p.result) || null };
   }
 
-  // 落到等待态 / 终态：摘掉在途标记再记状态（状态迁移只走这里，别手改 p.status）
+  // 落到等待态 / 终态：摘掉在途标记再记状态。除 claimSecond 的 awaiting → executing 外，
+  // 状态只在这里改，别手写 p.status。
   function release(p, status) {
     if (p) { inFlight.delete(p); p.status = status; }
     return settled(p, status);
@@ -403,8 +404,7 @@ import { genId as rootGenId } from './tree.ts';
     if (!p) return { status: 'missing' };
     const st = reconcile(p, timeOf(now));
     if (st === STATUS.PENDING || st === STATUS.AWAITING) {
-      p.status = STATUS.DENIED;
-      inFlight.delete(p);
+      release(p, STATUS.DENIED);   // 状态迁移统一走 release（摘在途标记 + 记终态）
       await cleanupLeftovers(p, S);
       return settled(p, STATUS.DENIED);
     }

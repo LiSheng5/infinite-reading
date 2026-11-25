@@ -472,7 +472,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
     S.settings = Store.loadSettings();
     A.watchStageVisibility();           // Ken Burns 离屏暂停
-    installShell();                     // 11 个弹窗搬进唯一的壳层（幂等）
+    installShell();                     // 12 个弹窗搬进唯一的壳层（幂等）
     bind();
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）

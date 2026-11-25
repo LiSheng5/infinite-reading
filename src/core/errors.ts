@@ -6,8 +6,10 @@
  *      调用方保留原重试入口（app 侧 reportUserFailure）；
  *   ② 纯后台降级（书记员 / 画师 / 摘要 / 标题 / 视频转存）→ console.warn 留原因，
  *      需要故事内归因时再落一条 {type:'tool', error} 留痕（本模块的 failureEntry）；
- *   ③ 清理 / 探测 / 解析兜底（abort、focus、revokeObjectURL、坏 JSON）→ 允许吞，
- *      但 catch 里必须写清「为什么可以忽略」，不许空 catch。
+ *   ③ 清理 / 探测 / 解析兜底（abort、focus、revokeObjectURL、坏 JSON）→ 允许吞。
+ *      「不许静默」只针对真实失败源：eval/error-policy-test.js 的扫描面是 try 里调用了
+ *      网络 / 模型 / 存储的 catch（MEANINGFUL 名单），这些必须上报或写清为什么可以忽略；
+ *      纯清理类 catch 不在扫描面内，能省则省，别把真实失败混进去当清理吞掉。
  *
  * 本模块只做文本归一与留痕数据的拼装，不碰 DOM / toast / 存储：
  * app 侧的真实出口在 src/app/core.js，纯逻辑部分由 eval/error-policy-test.js 单测。

@@ -57,7 +57,9 @@ import { sleep } from './tree.ts';
     if (e && e.name === 'TimeoutError') {
       return '请求超时（' + Math.round((Number(e.timeoutMs) || PROBE_TIMEOUT_MS) / 1000) + ' 秒）：接口一直没有响应，稍后再试一次。';
     }
-    if (e && (e.name === 'AbortError' || /abort/i.test(msg))) return '连接超时（' + Math.round(PROBE_TIMEOUT_MS / 1000) + ' 秒）：地址不可达，或被网络 / 代理挡住了。';
+    // AbortError 只说明「被中断」，不写死秒数：探测超时本身走上面的 TimeoutError（带 timeoutMs），
+    // 正式聊天的空闲 / 总超时（60 秒 / 600 秒）不经过这里，由回合层自己收尾。
+    if (e && (e.name === 'AbortError' || /abort/i.test(msg))) return '连接被中断（超时或被取消）：地址不可达，或被网络 / 代理挡住了。';
     if (e instanceof TypeError) return '连不上这个地址：可能是 Base URL 写错、断网，或该接口不允许浏览器直连（CORS）。对策：换一家允许浏览器直连的服务商；或自己起一个本地反向代理把请求转过去，Base URL 填代理地址（MiniMax 生图 / 生视频可直接跑 node tools/video-proxy.mjs）。';
     return '请求失败：' + (msg || '未知错误');
   }

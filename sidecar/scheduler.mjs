@@ -262,8 +262,9 @@ export function createScheduler(deps) {
       return fail('TRIGGER_LOCKED');
     }
 
-    // status 只由 confirmTrigger / cancelTrigger 改；upsert 不再写 status，
-    // 免得「改内容」这一步顺带把状态挪了。
+    // status 只在新建时按 source 决定（model → pending_confirm，用户手建 → active）；
+    // update 的 SQL 不写 status 列，免得「改内容」这一步顺带把状态挪了——
+    // 已有行的状态只由 confirmTrigger / cancelTrigger 改。
     const status = existing ? existing.status : (source === 'model' ? TRIGGER.PENDING_CONFIRM : TRIGGER.ACTIVE);
     const nextAt = (status === TRIGGER.ACTIVE && enabled)
       ? (sameContent && existing.next_at != null ? Number(existing.next_at) : initialNext(type, spec, t0))
@@ -332,7 +333,8 @@ export function createScheduler(deps) {
     return info.changes > 0;
   }
 
-  /* 处理所有已到点的触发器（幂等；虚拟时钟测试直接调它） */
+  /* 处理所有已到点的触发器。每个到点触发器都会 INSERT trigger_fires 并发 trigger.fire 事件，
+   * 随后把 next_at 推进到下一档，所以同一到点时刻不会重复推送（虚拟时钟测试直接调它）。 */
   function tick() {
     if (stopped) return { fired: 0, due: 0 };
     const cfg = getConfig() || {};

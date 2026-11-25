@@ -4,6 +4,7 @@
  * 职责：把 story.tree 算成分支页画布要的几何数据。不碰 DOM、不联网、无副作用：
  *   TreeLayout.compute(tree, opts)
  *     opts: { collapseRun: 8, laneW: 36, rowH: 44, labelLen: 24,
+ *             padX: 64, padY: 32, labelW: 260, corner: 18,
  *             selected, bookmarks, expanded, expandAll }   // 后四项为视图态（不进存档）
  *     → { nodes:[{ id, x, y, lane, row, onPath, isHead, isFork, collapsedCount?, label }],
  *         edges:[{ from, to, path:[[x,y]…], onPath }],

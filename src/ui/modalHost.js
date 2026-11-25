@@ -4,12 +4,12 @@
  * 为什么要有这个文件：旧版「弹窗怎么开、怎么叠、怎么关」的规则散在两处——
  *   · src/app/core.js 里的 modalStack / openModal / closeModal / dismissModal / closeTopModal（栈与层级）
  *   · src/app/main.js 里的 Esc 与遮罩点击绑定（按 modalStack 引用判「是不是最上层」）
- * 要把 11 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
+ * 要把 12 个弹窗换成 Svelte 重写、还要给开合接视图过渡，必须先有**一个地方**
  * 知道「弹窗有哪几个、当前叠了几层、外壳在哪」，否则过渡内核没有稳定的收口点。
  *
  *   · 本文件 = 弹窗登记表 + 栈 / 层级 / 互斥 / 关窗语义的唯一实现 + 外壳的挂载 + 开合过渡
  *   · 外壳 = installShell() 就地建的两层 display:contents 容器（只做「层」，不画任何像素）
- *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；11 个弹窗共用同一份）
+ *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；12 个弹窗共用同一份）
  *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
  *   · （弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *

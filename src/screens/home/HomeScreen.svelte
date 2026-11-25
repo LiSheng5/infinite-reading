@@ -1,7 +1,7 @@
 <script>
  /* 首页（Svelte 5 重写）
    * 版式：双纽线符号 → 「继续上次」→ 两张模式卡 → 底部文字入口 → 版本文字。
-   * 主视觉每次打开随机播一颗：光流版（InfinityStage）或逐格版（GridStage）——
+   * 主视觉在挂载时随机选一颗（本屏只在启动时挂载一次，之后只切 hidden，刷新才重新随机）：光流版（InfinityStage）或逐格版（GridStage）——
    * 两者同一位置、同一体量，都是 canvas 逐字粒子、无底板、角标与控件，
    * rich 档自动循环，其余档停在静态帧；无 JS 时 index.html 的兜底仍是 art.js 的静态字符画。
    * 动作直连应用层注册表（src/app/core.js 的 A）。 */
@@ -13,7 +13,7 @@
 
   const VERSION = __IR_VERSION__;   // 构建注入（vite.config.mjs 的 define）：版本号不再手写
 
-  // 随机播一颗：每次打开首页只挂载其中一个（另一颗的 canvas 不创建、不跑帧）
+  // 随机选一颗：组件挂载那一刻定下来（刷新才重新随机），另一颗的 canvas 不创建、不跑帧
   const useGridStage = Math.random() < 0.5;
 
   const A = () => appApi;

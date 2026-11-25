@@ -11,7 +11,7 @@
    * src/ui/modalHost.js 的弹窗栈。
    *
    * 索引 / 关闭钮的 id 由各调用方传进来：legacy 界面层按 id 绑定，一个都不能少；
-   * 不传 closeId 就不画关闭钮（当前 11 个弹窗都传）。
+   * 不传 closeId 就不画关闭钮（当前 12 个弹窗都传）。
    * onclose 只给「关闭动作就在组件里」的弹窗用（导出 / 向导）；其余仍由 src/app/main.js
    * 按 #btn-close-* 绑 onclick，因此这里必须允许 onclose 为空。 */
   import IconButton from './IconButton.svelte';

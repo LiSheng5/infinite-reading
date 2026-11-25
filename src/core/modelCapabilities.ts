@@ -13,8 +13,8 @@
  * （`cfg.extraParams`，形如 reasoning_effort=high、thinking.type=disabled、quality=hd），
  * 在 `src/core/providers.ts` 里最后并入请求体，同名键优先级最高。
  *
- * 用户自己填的窗口永远优先（`cfg.contextWindow > 0` 时直接用它，不查表）；表里没有就返回 0，
- * 上层按条数兜底压缩，功能一样完整。
+ * 用户自己填的窗口永远优先（`cfg.contextWindow > 0` 时直接用它，不查表）；表里查不到返回 null
+ * （`contextWindowOf` 口径），调用方按「未知窗口」处理：提示手填，压缩退回按条数兜底。
  *
  * 需要预填：在下面按 `{ provider, model, contextWindow }` 加一行即可，逻辑不用动——
  * 但默认留空，避免跟着厂商模型变动一直维护。
