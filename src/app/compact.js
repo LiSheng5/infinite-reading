@@ -60,17 +60,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return { ok: true, plan: plan };
   }
 
-  // 书记员回包写回：与 turn.js 的 runSmartCompress 同口径（摘要 / 窗口 / 世界卡 / 画像）
-  function applyScribe(story, plan, parsed) {
-    story.summaries = (story.summaries || []).concat(parsed.summaries);
-    story.messages = story.messages.slice(plan.candidate.length);
-    Context.trimSummaries(story.summaries, Context.DEFAULT_MAX_SUMMARIES);
-    if (parsed.world) Context.mergeWorld(story.world, parsed.world, { allowEmpty: true });
-    if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);
-    story.world.scribeAt = Date.now();
-    return { compressedTurns: parsed.summaries.length, messagesRemoved: plan.candidate.length, summaries: story.summaries.length };
-  }
-
   // 手动压缩：返回 { ok:true, compressedTurns, messagesRemoved, path, fallback } 或
   // { ok:false, reason }（前置检查拒绝 / 换故事丢弃 / 失败）。执行期间占 S.busy，finally 必清。
   async function compactNow() {
@@ -104,7 +93,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
           scribeErr = rc.err;
           reportBackgroundFailure('compact', rc.err, { note: '手动压缩：书记员失败（退回本地摘要）' });
         } else {
-          result = applyScribe(story, plan, rc.parsed);
+          result = Context.applyScribeResult(story, plan, rc.parsed, A.applyProfileEntries);
           path = 'scribe';
         }
       }

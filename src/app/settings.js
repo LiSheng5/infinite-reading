@@ -18,7 +18,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
     // 可选本地服务：这里只同步「怎么连它」（端口 + token）；额度 / 白名单等安全项由侧车 config.json 提供
     const sc = S.settings.sidecar || {};
-    if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || 4319;
+    if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || Sidecar.DEFAULT_PORT;
     if ($('#s-sidecar-token')) $('#s-sidecar-token').value = sc.token || '';
     $('#s-chat-base').value = S.settings.chat.baseUrl;
     $('#s-chat-model').value = S.settings.chat.model;
@@ -127,7 +127,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function applyFormToSettings() {
     // 连接信息写回前端设置；安全项（额度 / 白名单）不在这里，走 saveFeatureConfig → 侧车
     S.settings.sidecar = {
-      port: Number(($('#s-sidecar-port') || {}).value) || 4319,
+      port: Number(($('#s-sidecar-port') || {}).value) || Sidecar.DEFAULT_PORT,
       token: (($('#s-sidecar-token') || {}).value || '').trim(),
     };
     if (Sidecar) Sidecar.configure(S.settings.sidecar);

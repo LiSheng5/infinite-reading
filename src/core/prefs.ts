@@ -22,9 +22,21 @@
 
   const CHOICES_VALUES = ['tray', 'always'];
   const LAYOUT_VALUES = ['auto', 'split', 'stack', 'immersive'];
-  const FONT_VALUES = ['sm', 'md', 'lg'];
-  const WIDTH_VALUES = ['narrow', 'standard', 'wide'];
-  const DENSITY_VALUES = ['compact', 'standard'];
+
+  /* 字号 / 宽度 / 密度的档位表 = 唯一真源：键就是档位名，值就是写到 #screen-game 的
+   * CSS 变量（--font-scale / --content-w / --density）。名单从表键派生，界面照表取数值——
+   * 加一档只改这里，不会再出现「prefs 判非法、界面又不认识」的两份名单。 */
+  const FONT_SCALE = { sm: 0.92, md: 1, lg: 1.12 };
+  const CONTENT_WIDTH = { narrow: '620px', standard: '760px', wide: '920px' };
+  const DENSITY = { compact: 0.82, standard: 1 };
+  const FONT_VALUES = Object.keys(FONT_SCALE);
+  const WIDTH_VALUES = Object.keys(CONTENT_WIDTH);
+  const DENSITY_VALUES = Object.keys(DENSITY);
+
+  /* 分栏比例：拖拽 / 滑块 / 存档归一同一组界（每栏最小约 28%） */
+  const SPLIT_MIN = 0.28;
+  const SPLIT_MAX = 0.72;
+  const SPLIT_DEFAULT = 0.5;
 
   // 凭证形字段名（大小写不敏感，任意嵌套层级一律剥掉）：安全红线
   const SECRET_KEY_RE = /^(api[-_]?key|key|token|base[-_]?url|password|secret|authorization|access[-_]?token|refresh[-_]?token)$/i;
@@ -38,9 +50,10 @@
   function boolOf(v) {
     return typeof v === 'boolean' ? v : undefined;
   }
-  function ratioOf(v) {
+  // 分栏比例夹值：非法 / ≤0 → undefined（调用方各自决定回落），其余夹到 [SPLIT_MIN, SPLIT_MAX]
+  function clampSplitRatio(v) {
     const r = +v;
-    return (Number.isFinite(r) && r > 0) ? Math.max(0.28, Math.min(0.72, r)) : undefined;
+    return (Number.isFinite(r) && r > 0) ? Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, r)) : undefined;
   }
 
   /* 页面布局键（story.prefs.ui 与 settings.ui 共用）：
@@ -48,7 +61,7 @@
    *   fallback —— 「跟随全局」时的值（settings.ui 缺这个键时用） */
   const UI_RULES = {
     layout: { take: oneOf(LAYOUT_VALUES), fallback: () => 'auto' },
-    splitRatio: { take: ratioOf, fallback: () => 0.5 },
+    splitRatio: { take: clampSplitRatio, fallback: () => SPLIT_DEFAULT },
     imageCollapsed: { take: boolOf, fallback: () => false },
     fontScale: { take: oneOf(FONT_VALUES), fallback: () => 'md' },
     width: { take: oneOf(WIDTH_VALUES), fallback: () => 'standard' },
@@ -326,6 +339,9 @@
   const Prefs = {
     TOOL_KEYS,
     SECRET_KEY_RE,
+    LAYOUT_VALUES,
+    FONT_SCALE, CONTENT_WIDTH, DENSITY,
+    SPLIT_MIN, SPLIT_MAX, SPLIT_DEFAULT, clampSplitRatio,
     toolCategory,
     stripSecrets,
     sanitizePrefs,

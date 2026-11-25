@@ -10,15 +10,12 @@
    *   · 墨色是画布内容色，按 tokens.css 的 --inf-deep / --accent / --inf-light 取同一族蓝。
    */
   import { onMount } from 'svelte';
+  import { mountCanvas, readInkRamp, rampAt, INK_RAMP_FALLBACK } from '../../ui/canvasStage.js';
 
   let gridEl;
   let canvasEl;
   let ctx = null;
 
-  let isPlaying = false;
-  let needsRender = true;
-  let rafId = 0;
-  let lastTime = 0;
   let accumulator = 0;
   let frame = 0;
 
@@ -42,33 +39,13 @@
   const FRAME_MS = 1000 / 12;
   const LOOP_FRAMES = 96;
 
-  /* 画布内容色（白底可读的墨蓝），与 --inf-light / --accent / --inf-deep 同一族 */
-  const COLOR_STOPS = [
-    [0.0, 96, 165, 250],
-    [0.5, 37, 99, 235],
-    [1.0, 30, 58, 138],
-  ];
+  /* 画布内容色（白底可读的墨蓝）：与光流版共用 src/ui/canvasStage.js 的色带读取，
+   * 三色来自 :root 的 --inf-light / --accent / --inf-deep——改令牌两颗主视觉一起变，
+   * 不会一边读令牌、一边写死 RGB 而漂色 */
+  let ramp = INK_RAMP_FALLBACK;
 
   function clamp(value, min, max) {
     return value < min ? min : value > max ? max : value;
-  }
-
-  function colorAt(value) {
-    const v = clamp(value, 0, 1);
-    for (let i = 1; i < COLOR_STOPS.length; i += 1) {
-      const right = COLOR_STOPS[i];
-      if (v <= right[0]) {
-        const left = COLOR_STOPS[i - 1];
-        const span = right[0] - left[0];
-        const t = span === 0 ? 0 : (v - left[0]) / span;
-        return [
-          Math.round(left[1] + (right[1] - left[1]) * t),
-          Math.round(left[2] + (right[2] - left[2]) * t),
-          Math.round(left[3] + (right[3] - left[3]) * t),
-        ];
-      }
-    }
-    return COLOR_STOPS[COLOR_STOPS.length - 1].slice(1);
   }
 
   function layoutMetrics() {
@@ -102,8 +79,8 @@
     const mono = window.getComputedStyle(canvasEl).getPropertyValue('--font-mono').trim();
     glyphFont = mono || glyphFont;
 
+    ramp = readInkRamp();
     layoutMetrics();
-    needsRender = true;
   }
 
   function rotationFor(phase) {
@@ -244,7 +221,7 @@
 
         const glyph = cellGlyph[cellIndex] || '.';
         /* 白底上整条色带压在深蓝一侧，最淡的一格也要看得出墨 */
-        const color = colorAt(0.45 + 0.55 * ((energy - 0.48) / 0.52));
+        const color = rampAt(0.45 + 0.55 * ((energy - 0.48) / 0.52), ramp);
         const alpha = clamp(0.74 + cellDepth[cellIndex] * 0.1 + energy * 0.16, 0.78, 1);
         const x = gridX + colIndex * cellW + cellW / 2;
         const y = gridY + rowIndex * cellH + cellH / 2;
@@ -258,41 +235,19 @@
 
     const headCellX = gridX + headCol * cellW;
     const headCellY = gridY + headRow * cellH;
+    const accentRGB = ramp[1][0] + ',' + ramp[1][1] + ',' + ramp[1][2];
     ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(37, 99, 235, 0.07)';
+    ctx.fillStyle = 'rgba(' + accentRGB + ', 0.07)';
     ctx.fillRect(headCellX + 1, headCellY + 1, cellW - 2, cellH - 2);
-    ctx.strokeStyle = 'rgba(37, 99, 235, 0.5)';
+    ctx.strokeStyle = 'rgba(' + accentRGB + ', 0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(Math.round(headCellX) + 0.5, Math.round(headCellY) + 0.5, Math.round(cellW), Math.round(cellH));
 
-    ctx.fillStyle = 'rgb(30, 58, 138)';
+    ctx.fillStyle = 'rgb(' + ramp[2][0] + ',' + ramp[2][1] + ',' + ramp[2][2] + ')';
     ctx.font = '500 ' + fontSize.toFixed(2) + 'px ' + glyphFont;
     ctx.fillText('@', headCellX + cellW / 2, headCellY + cellH / 2);
 
     ctx.restore();
-  }
-
-  function tick(now) {
-    rafId = window.requestAnimationFrame(tick);
-    if (!lastTime) lastTime = now;
-    const delta = Math.min(now - lastTime, 200);
-    lastTime = now;
-
-    if (isPlaying) {
-      accumulator += delta;
-      let advanced = false;
-      while (accumulator >= FRAME_MS) {
-        accumulator -= FRAME_MS;
-        frame += 1;
-        advanced = true;
-      }
-      if (advanced) needsRender = true;
-    }
-
-    if (needsRender) {
-      render();
-      needsRender = false;
-    }
   }
 
   onMount(() => {
@@ -300,45 +255,25 @@
     ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    const html = document.documentElement;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-    /* 页面不可见 / 系统「减少动态效果」时停在当前帧（仍是一整颗逐格 ∞） */
-    function syncMotion() {
-      isPlaying = !reducedMotion.matches
-        && !html.hasAttribute('data-paused')
-        && !document.hidden;
-      accumulator = 0;
-      lastTime = 0;
-      needsRender = true;
-    }
-
-    const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
-    document.addEventListener('visibilitychange', syncMotion);
-    reducedMotion.addEventListener('change', syncMotion);
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => resize())
-      : null;
-    if (resizeObserver) resizeObserver.observe(gridEl);
-    else window.addEventListener('resize', resize);
-
-    resize();
-    syncMotion();
-    /* 先同步画一张静态帧：页面在后台（rAF 被暂停）时，挂载也立刻有逐格 ∞ */
-    render();
-    needsRender = false;
-    rafId = window.requestAnimationFrame(tick);
-
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      motionObserver.disconnect();
-      document.removeEventListener('visibilitychange', syncMotion);
-      reducedMotion.removeEventListener('change', syncMotion);
-      if (resizeObserver) resizeObserver.disconnect();
-      else window.removeEventListener('resize', resize);
-    };
+    // 挂载脚手架统一在 src/ui/canvasStage.js（含「页面不可见 / 减少动效 / 分支页挂起」的停帧）；
+    // staticFrame 让后台标签页（rAF 被暂停）挂载时也立刻有一整颗逐格 ∞
+    return mountCanvas({
+      target: gridEl,
+      resize: resize,
+      draw: render,
+      staticFrame: true,
+      onMotion: () => { accumulator = 0; },
+      step: (deltaMs) => {
+        accumulator += deltaMs;
+        let advanced = false;
+        while (accumulator >= FRAME_MS) {
+          accumulator -= FRAME_MS;
+          frame += 1;
+          advanced = true;
+        }
+        return advanced;
+      },
+    });
   });
 </script>
 

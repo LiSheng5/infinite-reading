@@ -6,6 +6,8 @@
  *
  *   applyPaused(root, doc)   页面不可见 → html[data-paused]
  *   suspendLoops(el)         子树挂起（分支页打开 / 舞台换画时暂停底下循环），返回恢复函数
+ *   isSuspended(el)          该元素是否已被挂起（页面不可见 / data-paused / 祖先 data-loops-paused）
+ *                            ——CSS 循环与 canvas 逐帧组件共用这一份判定
  * holdLoops() 过渡期循环冻结：暂停所有正在跑的真实 DOM 循环，返回解冻函数
  *
  * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（旧版的机制，原样保留）。
@@ -44,7 +46,7 @@ export function suspendLoops(el) {
         if (anim.playState !== 'paused') continue;
         const target = anim.effect && anim.effect.target;
         if (target && target.isConnected === false) continue;
-        if (isCssSuspended(target)) continue;
+        if (isSuspended(target)) continue;
         anim.play();
       } catch (_) {}
     }
@@ -88,14 +90,17 @@ function isLoopAnimation(anim) {
   }
 }
 
-// 已被 CSS 规则挂起的循环（页面不可见 / 分支页打开 / 预算排队）：不要接管。
+// 元素是否已被挂起：页面不可见 / html[data-paused] / 自身或祖先 data-loops-paused / data-loop="wait"。
+// CSS 规则与 canvas 逐帧组件都走这一份，免得「CSS 停了、canvas 还在跑」。
 // 为什么不能只看 playState：分支页 open 与 VT 的 update 在同一帧里改 DOM，属性刚写上时
 // 样式重算还没把 playState 变成 paused，捕获阶段会把它当成「正在跑」；过渡收尾 play()
 // 又会盖掉 animation-play-state: paused，结果分支页开着、底下环境光却在跑。
-function isCssSuspended(target) {
+export function isSuspended(target) {
+  if (typeof document === 'undefined') return true;
+  if (document.hidden) return true;
+  if (document.documentElement.dataset.paused) return true;
   if (!target) return false;
   try {
-    if (document.documentElement.dataset.paused) return true;
     let node = target.nodeType === 1 ? target : target.parentElement;
     while (node && node !== document.documentElement) {
       if (node.hasAttribute && (node.hasAttribute('data-loops-paused') || node.getAttribute('data-loop') === 'wait')) return true;
@@ -114,7 +119,7 @@ function captureRunningLoops() {
       if (anim.playState !== 'running') continue;   // 已停着的（data-paused / 预算排队）不接管
       if (isViewTransitionAnimation(anim) || !isLoopAnimation(anim)) continue;
       if (frozenLoops.indexOf(anim) >= 0) continue;
-      if (isCssSuspended(anim.effect && anim.effect.target)) continue;   // 见 isCssSuspended 注释
+      if (isSuspended(anim.effect && anim.effect.target)) continue;   // 见 isSuspended 注释
       anim.pause();
       frozenLoops.push(anim);
     } catch (_) {}
@@ -131,7 +136,7 @@ function resumeFrozenLoops() {
       const target = anim.effect && anim.effect.target;
       if (target && target.isConnected === false) continue;
       // 过渡期间又挂起了（分支页 open 的 data-loops-paused 等）：保持暂停，别用 play() 盖掉 CSS 的挂起
-      if (isCssSuspended(target)) { try { anim.pause(); } catch (_) {} continue; }
+      if (isSuspended(target)) { try { anim.pause(); } catch (_) {} continue; }
       anim.play();
     } catch (_) {}
   }

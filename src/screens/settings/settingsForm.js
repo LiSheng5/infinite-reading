@@ -31,6 +31,8 @@
  * 文案里允许 <b> <code> <br> 三种行内标记（Inline.svelte 解析）；用户 / 模型内容永不进这里。
  */
 
+import { Sidecar } from '../../core/sidecar.ts';
+
 // —— Base URL 下拉（dl-base-url）：常见服务商速选；不内置模型名（省得跟着厂商变动维护）——
 export const BASE_URL_OPTIONS = [
   ['https://open.bigmodel.cn/api/paas/v4', '国内 · 智谱 GLM（BigModel，对话 + CogView 生图）'],
@@ -435,7 +437,7 @@ export const GROUPS = [
         nodes: [
           { k: 'text', id: 'sidecar-state', cls: 'hint', text: '未启动' },
           { k: 'grid2', items: [
-            { k: 'field', id: 's-sidecar-port', label: '端口', type: 'number', attrs: { min: '1', max: '65535' }, placeholder: '4319' },
+            { k: 'field', id: 's-sidecar-port', label: '端口', type: 'number', attrs: { min: '1', max: '65535' }, placeholder: String(Sidecar.DEFAULT_PORT) },
             { k: 'field', id: 's-sidecar-token', label: 'token', type: 'text', spellcheck: false, placeholder: '启动本地服务时终端会打印' },
           ] },
           { k: 'row', items: [

@@ -28,8 +28,9 @@ const global = globalThis as any;
 
 import type { Story, StoryPack, StoryPrefs, BackupImageEntry } from './schema.ts';
 import { Storage } from './storage.ts';
-import { genId as rootGenId, plainReply, Tree } from './tree.ts';
+import { genId as rootGenId, plainReply, stripUserAction, Tree } from './tree.ts';
 import { Prefs } from './prefs.ts';
+import { Sidecar } from './sidecar.ts';
 import { Search } from './search.ts';
 import { APP_VERSION } from './version.ts';
 
@@ -39,6 +40,8 @@ import { APP_VERSION } from './version.ts';
   const SCHEMA = 3;
   // .irstory 导出包格式版本（与 story 形状版本是两套编号）；更低的包不再兼容
   const PACK_SCHEMA = 2;
+  // 工具护栏保留条数：显式 400 拒 tools 的模型最多记这么多条（写入与加载归一同一口径）
+  const NO_TOOLS_KEEP = 20;
 
   const KEYS = {
     settings: 'ir:settings',
@@ -312,7 +315,7 @@ import { APP_VERSION } from './version.ts';
       // 出图时机（trigger）已下线——不再写入；旧档里的该键不再迁移
       // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
       // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
-      sidecar: { port: 4319, token: '' },
+      sidecar: { port: Sidecar.DEFAULT_PORT, token: '' },
       // 数据安全：备份时间戳（7 天没备份就提醒一次；提醒本身每天最多一次）
       lastBackupAt: 0,
       lastBackupRemindAt: 0,
@@ -410,7 +413,7 @@ import { APP_VERSION } from './version.ts';
         out.showReasoning = ('showReasoning' in raw) ? !!raw.showReasoning : d.showReasoning;
         out.toolsEnabled = raw.toolsEnabled === 'off' ? 'off' : 'on';
         out.noTools = Array.isArray(raw.noTools)
-          ? raw.noTools.filter(x => x && x.baseUrl && x.model).slice(-20).map(x => ({ baseUrl: String(x.baseUrl), model: String(x.model), at: +x.at || 0 }))
+          ? raw.noTools.filter(x => x && x.baseUrl && x.model).slice(-NO_TOOLS_KEEP).map(x => ({ baseUrl: String(x.baseUrl), model: String(x.model), at: +x.at || 0 }))
           : [];
         out.stylePreset = raw.stylePreset || d.stylePreset;
         out.styleCustom = raw.styleCustom || '';
@@ -427,14 +430,14 @@ import { APP_VERSION } from './version.ts';
         let ratio = +rawUi.splitRatio;
         if (!Number.isFinite(ratio) || ratio <= 0) ratio = d.ui.splitRatio;
         out.ui = {
-          layout: ['auto', 'split', 'stack', 'immersive'].indexOf(rawUi.layout) >= 0 ? rawUi.layout : d.ui.layout,
-          splitRatio: Math.max(0.28, Math.min(0.72, ratio)),
+          layout: Prefs.LAYOUT_VALUES.indexOf(rawUi.layout) >= 0 ? rawUi.layout : d.ui.layout,
+          splitRatio: Prefs.clampSplitRatio(ratio) || Prefs.SPLIT_DEFAULT,
           imageCollapsed: !!rawUi.imageCollapsed,
           choices: rawUi.choices === 'always' ? 'always' : 'tray',
-          // 字号 / 宽度 / 密度默认（令牌驱动；非法值回默认）
-          fontScale: ['sm', 'md', 'lg'].indexOf(rawUi.fontScale) >= 0 ? rawUi.fontScale : d.ui.fontScale,
-          width: ['narrow', 'standard', 'wide'].indexOf(rawUi.width) >= 0 ? rawUi.width : d.ui.width,
-          density: ['compact', 'standard'].indexOf(rawUi.density) >= 0 ? rawUi.density : d.ui.density,
+          // 字号 / 宽度 / 密度默认（令牌驱动；档位名单与数值都在 Prefs，非法值回默认）
+          fontScale: Object.prototype.hasOwnProperty.call(Prefs.FONT_SCALE, rawUi.fontScale) ? rawUi.fontScale : d.ui.fontScale,
+          width: Object.prototype.hasOwnProperty.call(Prefs.CONTENT_WIDTH, rawUi.width) ? rawUi.width : d.ui.width,
+          density: Object.prototype.hasOwnProperty.call(Prefs.DENSITY, rawUi.density) ? rawUi.density : d.ui.density,
         };
       },
     },
@@ -987,11 +990,9 @@ import { APP_VERSION } from './version.ts';
         if (e && e.type === 'narration' && e.text) text = String(e.text);
       }
     }
-    text = String(text)
-      .replace(/^\[设定\][\s\S]*?\n\n/, '')
-      .replace(/^\[玩家行动\]\s*/, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    // 玩家文本剥壳走 tree.ts 的 stripUserAction（唯一实现：外壳 + 内层做/说/导演标记），
+    // 这里只再折叠空白并按字符裁剪（摘要只展示前 60 字）
+    text = stripUserAction(text).replace(/\s+/g, ' ').trim();
     const a = Array.from(text);
     return a.length > 60 ? a.slice(0, 60).join('') : text;
   }
@@ -1235,6 +1236,7 @@ import { APP_VERSION } from './version.ts';
 
   const Store = {
       SCHEMA, PACK_SCHEMA, KEYS,
+      NO_TOOLS_KEEP,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
       migrateSettings, migrateProfiles, migrateStory, storyTooOld, storyPackTooOld, serializeStory,

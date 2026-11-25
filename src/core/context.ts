@@ -1200,10 +1200,17 @@
     return { candidate: candidate, groups: plain ? groupByTurns(candidate) : groupScenes(candidate) };
   }
 
+  // 摘要栈上限的合法值：合并单位是最旧两幕，所以上限至少 2；缺省 / 非法一律回默认。
+  // 不用 `||` 兜底——传 0 会被悄悄换成默认值，等于把调用方的意图吞掉。
+  function summaryStackMax(maxSummaries) {
+    const n = Math.floor(+maxSummaries);
+    return (Number.isFinite(n) && n >= 2) ? n : DEFAULT_MAX_SUMMARIES;
+  }
+
   // 摘要栈超限：递归合并最旧两幕（越老越模糊）
-  function trimSummaries(list, maxSummaries) {
+  function trimSummaries(list, maxSummaries?) {
     const arr = list || [];
-    const max = maxSummaries || DEFAULT_MAX_SUMMARIES;
+    const max = summaryStackMax(maxSummaries);
     while (arr.length > max) arr.splice(0, 2, mergeSummaries(arr[0], arr[1]));
     return arr;
   }
@@ -1231,6 +1238,24 @@
     story.messages = story.messages.slice(plan.candidate.length);
     trimSummaries(story.summaries, opts.maxSummaries);
     return { compressedTurns: scenes, messagesRemoved: plan.candidate.length, summaries: story.summaries.length };
+  }
+
+  /* 书记员回包写回的唯一实现：回合收尾的自动压缩（src/app/turn.js 的 runSmartCompress）与
+   * 回合之外的手动压缩（src/app/compact.js）共用——摘要入栈 / 窗口前移 / 摘要栈合并 /
+   * 世界卡整卡合并（允许清空）/ 画像提取 / scribeAt 六步同口径，别再各写一份。
+   * 画像写入门控由调用方注入（同 absorbToolCalls 的约定：不传 = 不收集）。 */
+  function applyScribeResult(story, plan, parsed, applyProfile?) {
+    story.summaries = (story.summaries || []).concat(parsed.summaries);
+    story.messages = story.messages.slice(plan.candidate.length);
+    trimSummaries(story.summaries);
+    if (parsed.world) mergeWorld(story.world, parsed.world, { allowEmpty: true });
+    if (parsed.profile && parsed.profile.length && typeof applyProfile === 'function') applyProfile(parsed.profile);
+    story.world.scribeAt = Date.now();
+    return {
+      compressedTurns: parsed.summaries.length,
+      messagesRemoved: plan.candidate.length,
+      summaries: story.summaries.length,
+    };
   }
 
   /* ----------------  启发式注入 ----------------
@@ -1977,6 +2002,7 @@
     estimateTokens, playerContent,
     topThreads, buildSummaryLine, worldCardText, mergeWorld, localScribe,
     sceneSlot, localSummarize, mergeSummaries, compressThreshold, planCompression, trimSummaries, compressStory,
+    applyScribeResult,
     assembleAI1, messagesToText, estimateContextTokens, estimateTokensOf,
     slimReply, narrationEntry, assistantEntry, toolSummary, absorbToolCalls,
   };

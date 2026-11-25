@@ -12,11 +12,12 @@ import { A, saveAll } from './core.js';
   const S = A.state;
   const { $, Store, persistSettings } = A;
 
-  const LAYOUTS = ['auto', 'split', 'stack', 'immersive'];
-  // 字号 / 宽度 / 密度：三档映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
-  const FONT_SCALE = { sm: 0.92, md: 1, lg: 1.12 };
-  const CONTENT_W = { narrow: '620px', standard: '760px', wide: '920px' };
-  const DENSITY = { compact: 0.82, standard: 1 };
+  // 布局档位 / 字号 / 宽度 / 密度的名单与数值都取自 Prefs（唯一真源），本文件不再各存一份：
+  // 三档只映射到令牌（--font-scale / --content-w / --density），不为每档写一套样式
+  const LAYOUTS = Prefs.LAYOUT_VALUES;
+  const FONT_SCALE = Prefs.FONT_SCALE;
+  const CONTENT_W = Prefs.CONTENT_WIDTH;
+  const DENSITY = Prefs.DENSITY;
 
   function uiState() {
     if (!S.settings.ui || typeof S.settings.ui !== 'object') S.settings.ui = Store.defaultSettings().ui;
@@ -142,8 +143,8 @@ import { A, saveAll } from './core.js';
       if (!S.story || effectiveLayout() !== 'split') return;
       const rect = $('#game-layout').getBoundingClientRect();
       const p = (clientX - rect.left) / Math.max(1, rect.width);
-      // 每栏最小约 28%
-      writeUi({ splitRatio: Math.max(0.28, Math.min(0.72, p)) });
+      // 夹值口径在 Prefs（每栏最小约 28%），拖拽与滑块不再各写一份边界
+      writeUi({ splitRatio: Prefs.clampSplitRatio(p) });
       applyLayout();
       if (touch && touch.preventDefault) touch.preventDefault();
     };

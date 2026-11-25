@@ -632,25 +632,35 @@ import { A, renderChat, saveAll, toast } from './core.js';
     ), '');
   }
 
+  /* 档位选项 = Prefs 里的档位名单（唯一真源）+ 本文件的显示文案；
+   * 名单加了新档位而文案没跟上时回落到档位名，不会静默少一行 */
+  function tierOptions(values, labels) {
+    return values.map((v) => [v, labels[v] || v]);
+  }
+  const LAYOUT_LABELS = {
+    auto: '自动（宽屏双栏 / 窄屏堆叠）', split: '双栏（左文右图）',
+    stack: '堆叠（图在上、文在下）', immersive: '沉浸（画面铺满）',
+  };
+  const FONT_LABELS = { sm: '小', md: '中', lg: '大' };
+  const WIDTH_LABELS = { narrow: '窄', standard: '标准', wide: '宽' };
+  const DENSITY_LABELS = { compact: '紧凑', standard: '标准' };
+
   function layoutChoiceRow() {
     const box = document.createElement('div');
     box.className = 'prefs-row';
-    box.appendChild(prefRow('ui.layout', '页面布局', () => sel([
-      ['auto', '自动（宽屏双栏 / 窄屏堆叠）'],
-      ['split', '双栏（左文右图）'],
-      ['stack', '堆叠（图在上、文在下）'],
-      ['immersive', '沉浸（画面铺满）'],
-    ], P().effective(S.settings, S.story, 'ui').layout, (v) => {
-      setPref('ui.layout', v); saveAll(); renderStoryPrefs(); A.applyLayout();
-    }, 'p-layout'), ''));
+    box.appendChild(prefRow('ui.layout', '页面布局', () => sel(
+      tierOptions(P().LAYOUT_VALUES, LAYOUT_LABELS),
+      P().effective(S.settings, S.story, 'ui').layout, (v) => {
+        setPref('ui.layout', v); saveAll(); renderStoryPrefs(); A.applyLayout();
+      }, 'p-layout'), ''));
     box.appendChild(prefRow('ui.splitRatio', '双栏比例', () => {
       const s = document.createElement('input');
       s.id = 'p-split';
       s.type = 'range';
-      s.min = '0.28'; s.max = '0.72'; s.step = '0.02';
-      s.value = String(P().effective(S.settings, S.story, 'ui').splitRatio || 0.5);
+      s.min = String(P().SPLIT_MIN); s.max = String(P().SPLIT_MAX); s.step = '0.02';
+      s.value = String(P().effective(S.settings, S.story, 'ui').splitRatio || P().SPLIT_DEFAULT);
       s.oninput = () => {
-        setPref('ui.splitRatio', Math.max(0.28, Math.min(0.72, +s.value)));
+        setPref('ui.splitRatio', P().clampSplitRatio(+s.value));
         A.applyLayout();
       };
       s.onchange = () => { saveAll(); renderStoryPrefs(); };
@@ -669,15 +679,15 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const box = document.createElement('div');
     box.className = 'prefs-row';
     const ui = P().effective(S.settings, S.story, 'ui');
-    box.appendChild(prefRow('ui.fontScale', '字号', () => sel([
-      ['sm', '小'], ['md', '中'], ['lg', '大'],
-    ], ui.fontScale, (v) => { setPref('ui.fontScale', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-font'), ''));
-    box.appendChild(prefRow('ui.width', '内容宽度', () => sel([
-      ['narrow', '窄'], ['standard', '标准'], ['wide', '宽'],
-    ], ui.width, (v) => { setPref('ui.width', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-width'), ''));
-    box.appendChild(prefRow('ui.density', '密度', () => sel([
-      ['compact', '紧凑'], ['standard', '标准'],
-    ], ui.density, (v) => { setPref('ui.density', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-density'), ''));
+    box.appendChild(prefRow('ui.fontScale', '字号', () => sel(
+      tierOptions(Object.keys(P().FONT_SCALE), FONT_LABELS),
+      ui.fontScale, (v) => { setPref('ui.fontScale', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-font'), ''));
+    box.appendChild(prefRow('ui.width', '内容宽度', () => sel(
+      tierOptions(Object.keys(P().CONTENT_WIDTH), WIDTH_LABELS),
+      ui.width, (v) => { setPref('ui.width', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-width'), ''));
+    box.appendChild(prefRow('ui.density', '密度', () => sel(
+      tierOptions(Object.keys(P().DENSITY), DENSITY_LABELS),
+      ui.density, (v) => { setPref('ui.density', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-density'), ''));
     return box;
   }
 

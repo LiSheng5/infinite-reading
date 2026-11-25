@@ -39,28 +39,33 @@ import { A, saveAll, toast } from './core.js';
     return String(s == null ? '' : s).replace(/([\\"])/g, '\\$1');
   }
 
-  function relTime(ts) {
-    if (!ts) return '';
+  /* 时间分档的唯一口径：行上的「刚刚 / N 分钟前 / N 小时前 / 昨天 / N 天前 / 具体时间」与
+   * 分组键「今天 / 昨天 / 过去 7 天 / 更早」都从这一次计算里取，不再各算一遍今天零点。 */
+  function timeBucket(ts) {
     // 时钟回拨 / 未来时间戳会给出负差值（显示「-3 分钟前」）：负值与非法值一律归「刚刚」
     let diff = Date.now() - ts;
     if (!Number.isFinite(diff) || diff < 0) diff = 0;
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    if (ts >= startOfToday) return Math.floor(diff / 3600000) + ' 小时前';
-    if (ts >= startOfToday - DAY) return '昨天';
-    if (ts >= startOfToday - 7 * DAY) return Math.floor((startOfToday - ts) / DAY) + ' 天前';
+    const key = ts >= startOfToday ? 'today'
+      : ts >= startOfToday - DAY ? 'yesterday'
+        : ts >= startOfToday - 7 * DAY ? 'week' : 'older';
+    return { key: key, diff: diff, startOfToday: startOfToday };
+  }
+
+  function relTime(ts) {
+    if (!ts) return '';
+    const bucket = timeBucket(ts);
+    if (bucket.diff < 60000) return '刚刚';
+    if (bucket.diff < 3600000) return Math.floor(bucket.diff / 60000) + ' 分钟前';
+    if (bucket.key === 'today') return Math.floor(bucket.diff / 3600000) + ' 小时前';
+    if (bucket.key === 'yesterday') return '昨天';
+    if (bucket.key === 'week') return Math.floor((bucket.startOfToday - ts) / DAY) + ' 天前';
     return fmtTime(ts);
   }
 
   function groupKeyOf(ts) {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    if (ts >= startOfToday) return 'today';
-    if (ts >= startOfToday - DAY) return 'yesterday';
-    if (ts >= startOfToday - 7 * DAY) return 'week';
-    return 'older';
+    return timeBucket(ts).key;
   }
 
  // 屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）

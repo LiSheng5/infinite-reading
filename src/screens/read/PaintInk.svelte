@@ -12,15 +12,12 @@
    *   · 纸面底色 / 纸纹 / 暗角走 tokens.css 的 --ink-* 令牌，逐字墨色是画布内容色。
    */
   import { onMount } from 'svelte';
+  import { mountCanvas } from '../../ui/canvasStage.js';
 
   let inkEl;
   let canvasEl;
   let ctx = null;
 
-  let isPlaying = false;
-  let needsRender = true;
-  let rafId = 0;
-  let lastTime = 0;
   let accumulator = 0;
   let frame = 0;
 
@@ -165,7 +162,6 @@
     glyphFont = mono || glyphFont;
 
     layoutMetrics();
-    needsRender = true;
   }
 
   function rotationFor(phase) {
@@ -420,73 +416,30 @@
     ctx.restore();
   }
 
-  function tick(now) {
-    rafId = window.requestAnimationFrame(tick);
-    if (!lastTime) lastTime = now;
-    const delta = Math.min(now - lastTime, 200);
-    lastTime = now;
-
-    if (isPlaying) {
-      accumulator += delta;
-      let advanced = false;
-      while (accumulator >= FRAME_MS) {
-        accumulator -= FRAME_MS;
-        frame += 1;
-        advanced = true;
-      }
-      if (advanced) needsRender = true;
-    }
-
-    if (needsRender) {
-      render();
-      needsRender = false;
-    }
-  }
-
   onMount(() => {
     if (!inkEl || !canvasEl) return;
     ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    const html = document.documentElement;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-    /* 页面不可见 / 系统「减少动态效果」时停在当前帧（仍是一张完整的纸墨 ∞） */
-    function syncMotion() {
-      isPlaying = !reducedMotion.matches
-        && !html.hasAttribute('data-paused')
-        && !document.hidden;
-      accumulator = 0;
-      lastTime = 0;
-      needsRender = true;
-    }
-
-    const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
-    document.addEventListener('visibilitychange', syncMotion);
-    reducedMotion.addEventListener('change', syncMotion);
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => resize())
-      : null;
-    if (resizeObserver) resizeObserver.observe(inkEl);
-    else window.addEventListener('resize', resize);
-
-    resize();
-    syncMotion();
-    /* 先同步画一张静态帧：页面在后台（rAF 被暂停）时，挂载也立刻有纸墨 ∞ */
-    render();
-    needsRender = false;
-    rafId = window.requestAnimationFrame(tick);
-
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      motionObserver.disconnect();
-      document.removeEventListener('visibilitychange', syncMotion);
-      reducedMotion.removeEventListener('change', syncMotion);
-      if (resizeObserver) resizeObserver.disconnect();
-      else window.removeEventListener('resize', resize);
-    };
+    // 挂载脚手架统一在 src/ui/canvasStage.js（含「页面不可见 / 减少动效 / 分支页挂起」的停帧）；
+    // staticFrame 让后台标签页（rAF 被暂停）挂载时也立刻有一张完整的纸墨 ∞
+    return mountCanvas({
+      target: inkEl,
+      resize: resize,
+      draw: render,
+      staticFrame: true,
+      onMotion: () => { accumulator = 0; },
+      step: (deltaMs) => {
+        accumulator += deltaMs;
+        let advanced = false;
+        while (accumulator >= FRAME_MS) {
+          accumulator -= FRAME_MS;
+          frame += 1;
+          advanced = true;
+        }
+        return advanced;
+      },
+    });
   });
 </script>
 

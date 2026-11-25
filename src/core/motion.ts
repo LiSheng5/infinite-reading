@@ -19,6 +19,12 @@
  * ::view-transition-* 的时长只走 --m-dur-vt-*。 */
 
 
+  /* 同屏同时运行的循环动画上限：#busy-line + Ken Burns + 环境光 / 分支页流光 + head 呼吸 + 选中脉冲。
+   * 一组 = 同名 keyframes 的错相多实例。
+   * 没有运行时登记队列：预算由设计固定，由 acceptance/tools/motion-probe.mjs 实测校验。
+   * 这是唯一取值处：rich 档的 loopBudget 直接引用它，导出面也导它，不再各写一个 3。 */
+  var LOOP_BUDGET = 3;
+
   /* rich 政策（的可执行形态；收口值同时落在 css/motion.css 的 --m-* 上）：
    *   maxOpacityMs  透明度变化的时长上限
    *   maxShiftMs    短位移的时长上限
@@ -26,13 +32,8 @@
    *   loops         是否允许循环动画
    *   loopBudget    同屏循环动画上限（组） */
   var TIERS = {
-    rich: { maxOpacityMs: 420, maxShiftMs: 220, maxColorMs: 220, loops: true, loopBudget: 3 },
+    rich: { maxOpacityMs: 420, maxShiftMs: 220, maxColorMs: 220, loops: true, loopBudget: LOOP_BUDGET },
   };
-
-  /* 同屏同时运行的循环动画上限：#busy-line + Ken Burns + 环境光 / 分支页流光 + head 呼吸 + 选中脉冲。
-   * 一组 = 同名 keyframes 的错相多实例。
-   * 没有运行时登记队列：预算由设计固定，由 acceptance/tools/motion-probe.mjs 实测校验。 */
-  var LOOP_BUDGET = 3;
 
   /* 逐动画行为声明表（与 css/motion.css 的 @keyframes、--an-* 名表一一对应）：
    *   none  不跑

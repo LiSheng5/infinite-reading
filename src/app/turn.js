@@ -220,18 +220,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     let out = null;
     WriteBack.writeBackIfSameStory(S.story, sid, (story) => {
-      story.summaries = (story.summaries || []).concat(parsed.summaries);
-      story.messages = story.messages.slice(plan.candidate.length);
-      Context.trimSummaries(story.summaries, Context.DEFAULT_MAX_SUMMARIES);
-      if (parsed.world) Context.mergeWorld(story.world, parsed.world, { allowEmpty: true });
-      if (parsed.profile && parsed.profile.length) A.applyProfileEntries(parsed.profile);
-      story.world.scribeAt = Date.now();
+      // 写回走 Context 的唯一实现（手动压缩用同一份，摘要栈 / 窗口 / 世界卡 / 画像口径不会漂）
+      const res = Context.applyScribeResult(story, plan, parsed, A.applyProfileEntries);
       story.log.push({
         type: 'tool', tool: 'scribe',
         summary: '压缩 ' + parsed.summaries.length + ' 幕 + 校对：' + ((parsed.diff || []).join('；') || '无事实变更'),
         ts: Date.now(),
       });
-      out = { compressedTurns: parsed.summaries.length, messagesRemoved: plan.candidate.length };
+      out = { compressedTurns: res.compressedTurns, messagesRemoved: res.messagesRemoved };
     });
     return out;
   }
@@ -445,7 +441,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!cfg || !cfg.model) return;
     S.settings.noTools = (S.settings.noTools || []).filter(x => noToolsKey(x) !== noToolsKey(cfg));
     S.settings.noTools.push({ baseUrl: String(cfg.baseUrl || ''), model: String(cfg.model || ''), at: Date.now() });
-    if (S.settings.noTools.length > 20) S.settings.noTools = S.settings.noTools.slice(-20);
+    // 上限与加载归一同一常量（Store.NO_TOOLS_KEEP），两边都写一次 20 的旧形态已删
+    if (S.settings.noTools.length > Store.NO_TOOLS_KEEP) S.settings.noTools = S.settings.noTools.slice(-Store.NO_TOOLS_KEEP);
     saveAll();
     renderNoToolsHint();
   }

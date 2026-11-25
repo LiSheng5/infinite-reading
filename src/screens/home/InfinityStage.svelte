@@ -13,15 +13,12 @@
    *     画布内容色不算 UI 配色，但仍然跟着令牌走，不在脚本里另抄一份色值。
    */
   import { onMount } from 'svelte';
+  import { mountCanvas, readInkRamp, rampAt, INK_RAMP_FALLBACK } from '../../ui/canvasStage.js';
 
   let canvasEl;
 
   let ctx = null;
-  let isPlaying = false;
-  let needsRender = true;
   let clock = 0;
-  let lastFrame = 0;
-  let rafId = 0;
   let width = 0;
   let height = 0;
   let dpr = 1;
@@ -31,56 +28,13 @@
   const TAU = Math.PI * 2;
   const LOOP_SECONDS = 8.4;
   const GLYPHS = ['.', ':', '+', '*', '#'];
-  const STOP_AT = [0, 0.55, 1];
 
-  /* 解析失败时的退路：值与 tokens.css 的 --inf-light / --accent / --inf-deep 一致 */
-  let ramp = [
-    [96, 165, 250],
-    [37, 99, 235],
-    [30, 58, 138],
-  ];
+  /* 画布色带：三色从 :root 的 --inf-light / --accent / --inf-deep 读（与格线版共用
+   * src/ui/canvasStage.js 的同一份实现），读不到才用与 tokens.css 同值的退路 */
+  let ramp = INK_RAMP_FALLBACK;
 
   function clamp(value, min, max) {
     return value < min ? min : value > max ? max : value;
-  }
-
-  function parseColor(raw, fallback) {
-    const value = String(raw).trim();
-    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
-    if (hex) {
-      const h = hex[1].length === 3
-        ? hex[1][0] + hex[1][0] + hex[1][1] + hex[1][1] + hex[1][2] + hex[1][2]
-        : hex[1];
-      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-    }
-    const rgb = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(value);
-    return rgb ? [+rgb[1], +rgb[2], +rgb[3]] : fallback;
-  }
-
-  function readRamp() {
-    const styles = window.getComputedStyle(document.documentElement);
-    ramp = [
-      parseColor(styles.getPropertyValue('--inf-light'), ramp[0]),
-      parseColor(styles.getPropertyValue('--accent'), ramp[1]),
-      parseColor(styles.getPropertyValue('--inf-deep'), ramp[2]),
-    ];
-  }
-
-  function colorAt(value) {
-    const v = clamp(value, 0, 1);
-    for (let i = 1; i < STOP_AT.length; i += 1) {
-      if (v <= STOP_AT[i]) {
-        const left = ramp[i - 1];
-        const right = ramp[i];
-        const t = (v - STOP_AT[i - 1]) / (STOP_AT[i] - STOP_AT[i - 1]);
-        return [
-          Math.round(left[0] + (right[0] - left[0]) * t),
-          Math.round(left[1] + (right[1] - left[1]) * t),
-          Math.round(left[2] + (right[2] - left[2]) * t),
-        ];
-      }
-    }
-    return ramp[2];
   }
 
   function project(t, rotation, scale, centerX, centerY) {
@@ -125,9 +79,8 @@
     canvasEl.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     sampleCount = Math.round(clamp(width * 0.34, 110, 210));
-    needsRender = true;
 
-    readRamp();
+    ramp = readInkRamp();
     const mono = window.getComputedStyle(canvasEl).getPropertyValue('--font-mono').trim();
     glyphFont = mono || glyphFont;
   }
@@ -184,7 +137,7 @@
       energy = clamp(energy, 0.2, 1);
 
       const glyphIndex = Math.min(GLYPHS.length - 1, Math.floor(energy * GLYPHS.length));
-      const color = colorAt(0.28 + energy * 0.72);
+      const color = rampAt(0.28 + energy * 0.72, ramp);
       const fontSize = baseFontSize * (0.68 + depthNorm * 0.31 + energy * 0.13);
       const fade = (energy - 0.2) / 0.8;
       /* 白底上没有叠加发光兜底，波谷也留 0.3 左右的不透明度，整颗 ∞ 才始终看得出形状 */
@@ -206,10 +159,11 @@
 
     const headPoint = project(loopPhase * TAU, layout.rotation, layout.scale, layout.centerX, layout.centerY);
     const headRadius = Math.max(24, baseFontSize * 4.2);
+    const accentRGB = ramp[1][0] + ',' + ramp[1][1] + ',' + ramp[1][2];
     const glow = ctx.createRadialGradient(headPoint.x, headPoint.y, 0, headPoint.x, headPoint.y, headRadius);
-    glow.addColorStop(0, 'rgba(37, 99, 235, 0.1)');
-    glow.addColorStop(0.45, 'rgba(37, 99, 235, 0.04)');
-    glow.addColorStop(1, 'rgba(37, 99, 235, 0)');
+    glow.addColorStop(0, 'rgba(' + accentRGB + ', 0.1)');
+    glow.addColorStop(0.45, 'rgba(' + accentRGB + ', 0.04)');
+    glow.addColorStop(1, 'rgba(' + accentRGB + ', 0)');
     ctx.save();
     ctx.fillStyle = glow;
     ctx.fillRect(headPoint.x - headRadius, headPoint.y - headRadius, headRadius * 2, headRadius * 2);
@@ -222,7 +176,7 @@
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
       if (item.energy > 0.55) {
-        ctx.shadowColor = 'rgba(37, 99, 235, ' + (item.energy * 0.26).toFixed(3) + ')';
+        ctx.shadowColor = 'rgba(' + accentRGB + ', ' + (item.energy * 0.26).toFixed(3) + ')';
         ctx.shadowBlur = item.size * (0.2 + item.energy * 0.6);
       } else {
         ctx.shadowBlur = 0;
@@ -242,28 +196,11 @@
     const headSize = baseFontSize * 1.45;
     ctx.globalAlpha = 0.82 + pulse * 0.18;
     ctx.fillStyle = 'rgb(' + ramp[2][0] + ',' + ramp[2][1] + ',' + ramp[2][2] + ')';
-    ctx.shadowColor = 'rgba(37, 99, 235, 0.55)';
+    ctx.shadowColor = 'rgba(' + accentRGB + ', 0.55)';
     ctx.shadowBlur = headSize * 1.9;
     ctx.font = '400 ' + headSize.toFixed(2) + 'px ' + glyphFont;
     ctx.fillText('@', headPoint.x, headPoint.y);
     ctx.restore();
-  }
-
-  function tick(now) {
-    rafId = window.requestAnimationFrame(tick);
-    if (!lastFrame) lastFrame = now;
-    const delta = Math.min((now - lastFrame) / 1000, 0.05);
-    lastFrame = now;
-
-    if (isPlaying) {
-      clock += delta;
-      needsRender = true;
-    }
-
-    if (needsRender) {
-      render();
-      needsRender = false;
-    }
   }
 
   onMount(() => {
@@ -271,40 +208,18 @@
     ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    const html = document.documentElement;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-    /* 页面不可见 / 系统「减少动态效果」时停在当前帧 */
-    function syncMotion() {
-      isPlaying = !reducedMotion.matches
-        && !html.hasAttribute('data-paused')
-        && !document.hidden;
-      needsRender = true;
-    }
-
-    const motionObserver = new MutationObserver(syncMotion);
-    motionObserver.observe(html, { attributes: true, attributeFilter: ['data-paused'] });
-    document.addEventListener('visibilitychange', syncMotion);
-    reducedMotion.addEventListener('change', syncMotion);
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => resize())
-      : null;
-    if (resizeObserver) resizeObserver.observe(canvasEl);
-    else window.addEventListener('resize', resize);
-
-    resize();
-    syncMotion();
-    rafId = window.requestAnimationFrame(tick);
-
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      motionObserver.disconnect();
-      document.removeEventListener('visibilitychange', syncMotion);
-      reducedMotion.removeEventListener('change', syncMotion);
-      if (resizeObserver) resizeObserver.disconnect();
-      else window.removeEventListener('resize', resize);
-    };
+    // 挂载脚手架（节拍 / 暂停判定 / 尺寸观察 / 清理）统一在 src/ui/canvasStage.js：
+    // 页面不可见、系统「减少动态效果」、分支页挂起时停在当前帧
+    return mountCanvas({
+      target: canvasEl,
+      resize: resize,
+      draw: render,
+      staticFrame: true,
+      step: (deltaMs) => {
+        clock += deltaMs / 1000;
+        return true;
+      },
+    });
   });
 </script>
 

@@ -167,7 +167,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
       rollingStyle: clone(s.rollingStyle || {}),
       characterCard: clone(s.characterCard || null),
       userProfile: clone(s.userProfile || []),
-      painterThread: clone((s.painterThread || []).slice(-20)),
+      // 裁剪窗口与 State 投影同口径（Tree.PAINTER_THREAD_KEEP），不再抄一个 20
+      painterThread: clone((s.painterThread || []).slice(-Tree.PAINTER_THREAD_KEEP)),
       // 剥掉全尺寸 src、只留缩略图；裁剪窗口直接引用 Tree.SCENE_WINDOW（与 serializeStory 同口径），
       // 否则 5 个存档点各存一份原图会撑爆存储，且窗口字面量改一处漏一处会导致回档丢画面
       scenes: clone((s.scenes || []).slice(-Tree.SCENE_WINDOW).map(sc => Object.assign({}, sc, { src: undefined }))),

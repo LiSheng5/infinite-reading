@@ -331,7 +331,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       const SC = Sidecar;
       if (!SC) return;
       S.settings.sidecar = {
-        port: Number(($('#s-sidecar-port') || {}).value) || 4319,
+        port: Number(($('#s-sidecar-port') || {}).value) || Sidecar.DEFAULT_PORT,
         token: (($('#s-sidecar-token') || {}).value || '').trim(),
       };
       persistSettings();
