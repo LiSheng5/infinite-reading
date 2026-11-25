@@ -3,12 +3,13 @@
 /*
  * 无限阅读 · 上下文用量描述门禁（不联网、不开浏览器）
  *
- * 守四件事：
+ * 守五件事：
  *   1. level 边界：ok / warn / over 恰在边界上逐个判定；窗口未知 → unknown；三种模式都算得出；
  *   2. tokens 与 estimateTokensOf(assembleAI1(story, '', opts)) 逐字一致（估算与实发同源）；
  *   3. dry 零副作用：buildAssembleOpts('', { dry: true }) 前后 S.pendingInject、
  *      S.turnUsage、story.log.length 不变（指示器只读，绝不消费 🧠 一次性开关、不留痕）；
- *   4. memo：key 不变不重算、key 变了才重算，key 对每个输入逐项敏感。
+ *   4. 分层明细：opts.trace 不改组装结果、连续覆盖全部消息、不塞私有字段，各层之和 == 整体估算；
+ *   5. memo：key 不变不重算、key 变了才重算，key 对每个输入逐项敏感。
  *
  * 用法：node eval/ctxusage-test.js
  */
@@ -147,7 +148,42 @@ function main() {
   A.buildAssembleOpts('艾莉在吗', {});
   H.check('真发路径照旧消费 🧠 开关并留痕', S.pendingInject === false && S.story.log.length === logLen + 2, S.story.log.length);
 
-  /* ---------- 4. memo ---------- */
+  /* ---------- 4. 分层明细（opts.trace）：不改组装结果，且各层之和 == 整体估算 ---------- */
+  const plainKeys = ['system', 'persistent', 'summary', 'history', 'user'];
+  const toolKeys = ['system', 'persistent', 'summary', 'tools', 'history', 'user'];
+  for (const mode of ['choice', 'chat', 'rp']) {
+    for (const opts of combos) {
+      const st = newStory(mode);
+      st.messages.push({ role: 'user', content: '走' }, { role: 'assistant', content: '{"旁白":"雨更大了。","选项":[]}' });
+      st.summaries.push('【第一幕】雨夜车站｜凌晨｜发生｜伏笔：埋下「未寄出的信」');
+      const trace = [];
+      const traced = Context.assembleAI1(st, '', Object.assign({}, opts, { trace: trace }));
+      const plain = Context.assembleAI1(st, '', opts);
+      const tag = mode + ' ' + JSON.stringify(opts).slice(0, 40);
+      H.check('不传 / 传 trace 的组装结果逐字一致（' + tag + '）',
+        JSON.stringify(traced) === JSON.stringify(plain));
+      H.check('trace 连续覆盖全部消息（' + tag + '）', (() => {
+        let cursor = 0;
+        for (const t of trace) {
+          if (!t || t.from !== cursor || t.to <= t.from || t.to > traced.length) return false;
+          cursor = t.to;
+        }
+        return cursor === traced.length;
+      })(), JSON.stringify(trace));
+      H.check('trace 不往消息里塞私有字段（' + tag + '）',
+        traced.every(m => Object.keys(m).every(k => k === 'role' || k === 'content')));
+      const u = describeContextUsage(st, opts);
+      const expectKeys = Array.isArray(opts.tools) && opts.tools.length ? toolKeys : plainKeys;
+      H.check('分层键按拼装顺序（' + tag + '）',
+        JSON.stringify(u.layers.map(l => l.key)) === JSON.stringify(expectKeys),
+        JSON.stringify(u.layers.map(l => l.key)));
+      const sum = u.layers.reduce((a, l) => a + l.tokens, 0);
+      H.check('各层 token 之和 == 整体估算（' + tag + '）', sum === u.tokens, sum + ' ≠ ' + u.tokens);
+      H.check('每层都有可读标签（' + tag + '）', u.layers.every(l => l.label && l.tokens > 0));
+    }
+  }
+
+  /* ---------- 5. memo ---------- */
   {
     const st = newStory('choice');
     const opts = { contextWindow: 32000, tools: ['update_memory'], profile: ['喜欢甜食'] };

@@ -288,6 +288,13 @@ import { A } from './core.js';
         ? ('上一轮服务商实报 ' + fmtNum(u.lastUsage.total) + ' token（输入 ' + fmtNum(u.lastUsage.prompt)
           + ' · 输出 ' + fmtNum(u.lastUsage.completion) + '）')
         : '',
+      // 分层明细（点开气泡才可见）：各层 token 由 core 按前缀差分摊分，之和恒等于 tokens
+      layers: (u.layers || []).map(l => ({
+        key: l.key,
+        label: l.label,
+        tokens: fmtNum(l.tokens),
+        pct: u.tokens > 0 ? Math.min(100, Math.round(l.tokens / u.tokens * 1000) / 10) : 0,
+      })),
     };
     lastUsageView = view;
     return view;

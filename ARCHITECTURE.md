@@ -346,7 +346,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
 
-**用量指示器**（对话输入区常驻）：只读，与压缩判定同源——`src/core/ctxusage.ts` 用 `estimateTokensOf(assembleAI1(story, '', opts))` 估算「下一轮请求」的 token、用 `compressThreshold(window)` 取自动压缩线（不另写一套估算、不硬编码比例），组装选项走 `src/app/round.js` 的 `buildAssembleOpts` dry 口径（不写回合字段、不消费 🧠 一次性开关、不触发会改 story 的压缩）。估算失败界面显示「—」，原因走 `reportBackgroundFailure` 留 console。
+**用量指示器**（对话输入区常驻）：只读，与压缩判定同源——`src/core/ctxusage.ts` 用 `estimateTokensOf(assembleAI1(story, '', opts))` 估算「下一轮请求」的 token、用 `compressThreshold(window)` 取自动压缩线（不另写一套估算、不硬编码比例），组装选项走 `src/app/round.js` 的 `buildAssembleOpts` dry 口径（不写回合字段、不消费 🧠 一次性开关、不触发会改 story 的压缩）。估算失败界面显示「—」，原因走 `reportBackgroundFailure` 留 console。气泡里另列**分层明细**（系统提示 / 常驻设定 / 前情摘要 / 工具说明 / 历史对话 / 本轮输入）：`assembleAI1` 的可选 `opts.trace` 只记录每层占 `messages` 的下标区间，不传时返回值、顺序与性能不变；各层 token 由 `estimateTokensOf` 的**前缀差分**摊分（`C(to) − C(from)`），相邻层首尾相接，因此各层之和恒等于整体估算，估算仍只有一套。
 
 **手动压缩与树**（回合之外，head 已 `sealed`）：压缩成功后必须 `Tree.resyncHead(story)` 再 `saveAll()`——它在 `resyncState` 之外，还按当前 `messages` 重算 head 的 `msgFloor / msgSnap`；否则切分支 / 重进故事会按旧窗口展开，把已压进摘要的消息重新塞回请求。`resyncHead` 只改 head，head 不是叶子时禁止手动压缩（后代各自持有自己的 State 与窗口）。留痕条目走 `Tree.pushLate`，不走 `story.log.push`。
 

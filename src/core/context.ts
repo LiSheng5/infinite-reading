@@ -1648,6 +1648,15 @@
     omitSummaryLine?: boolean;
     /** 模型上下文窗口（token；未知则退回固定窗口） */
     contextWindow?: number;
+    /** 分层追踪：传入空数组则记录各层在 messages 里的下标区间（不传 = 零开销、行为不变） */
+    trace?: AssembleTraceEntry[];
+  }
+
+  /** 分层追踪条目：一层占 messages 的下标区间 [from, to)；用于指示器的分层明细 */
+  export interface AssembleTraceEntry {
+    layer: string;
+    from: number;
+    to: number;
   }
 
   /** 一次组装的共享上下文：story / mode / opts / playerAction 只解析一次，append 函数不再各自兜底。 */
@@ -1773,23 +1782,38 @@
    */
   function assembleAI1(story, playerAction, opts?: AssembleOpts) {
     const ctx = assembleCtx(story, playerAction, opts);
-    const out: Array<{ role: string; content: any }> = [{
+    const trace = (ctx.opts && Array.isArray(ctx.opts.trace)) ? ctx.opts.trace : null;
+    const out: Array<{ role: string; content: any }> = [];
+    // 分层追踪：只记每层在 out 里的下标区间，不改任何拼装顺序。trace 为 null 时 begin / close
+    // 是空操作，返回值、顺序与不传 trace 时逐字一致（分层 token 由调用方按前缀差分摊分）。
+    const begin = () => (trace ? out.length : 0);
+    const close = (layer: string, from: number) => {
+      if (trace && out.length > from) trace.push({ layer: layer, from: from, to: out.length });
+    };
+
+    let from = begin();
+    out.push({
       role: 'system',
       // rp 无角色卡（导入 / 旧档可能产生）时换降级提示，别让指令指向不存在的卡
       content: ctx.opts.system || systemForMode(ctx.mode, { noCharacterCard: !ctx.story.characterCard }),
-    }];
-    appendPersistentBlocks(out, ctx);
-    appendSummaryBlocks(out, ctx);
-    appendToolBlock(out, ctx.opts.tools);
-    appendHistory(out, ctx);
+    });
+    close('system', from);
+
+    from = begin(); appendPersistentBlocks(out, ctx); close('persistent', from);
+    from = begin(); appendSummaryBlocks(out, ctx); close('summary', from);
+    from = begin(); appendToolBlock(out, ctx.opts.tools); close('tools', from);
+    from = begin(); appendHistory(out, ctx); close('history', from);
+
     const preUser: string[] = [];
     appendInjectedBlocks(preUser, ctx);
     const action = playerContent(ctx.story.premise, ctx.playerAction, ctx.opts);
+    from = begin();
     out.push({
       role: 'user',
       content: (preUser.length ? preUser.join('\n\n') + '\n\n' : '')
         + (ctx.mode === 'chat' ? stripKindMarker(action) : action),   // chat 不带内层标记
     });
+    close('user', from);
     return out;
   }
 

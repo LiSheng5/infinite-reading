@@ -512,6 +512,24 @@
 .ctx-bubble p:last-child { margin-bottom: 0; }
 .ctx-bubble .ctx-bubble-usage,
 .ctx-bubble .ctx-bubble-note { color: var(--ink-dim); }
+/* 分层明细：标题下每层一行（名称 / 占整体的细条 / token 数）；只读展示，无动效 */
+.ctx-layers {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.ctx-bubble .ctx-layers-title { margin: 0 0 4px; color: var(--ink-dim); }
+.ctx-layer { display: flex; align-items: center; gap: 8px; }
+.ctx-layer-label { flex: none; width: 56px; color: var(--ink-dim); }
+.ctx-layer-track {
+  flex: 1; min-width: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.ctx-layer-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.ctx-layer-num { flex: none; min-width: 52px; text-align: right; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 /* 气泡底部的手动压缩按钮：整行按钮（置灰走 .ui-btn:disabled）；不可用原因一行小字。
    触屏高度跟随 responsive.css 的 .ui-btn 44px 规则，气泡朝上弹（键盘 / 底部系统栏遮不住）。 */
 .ctx-bubble-foot { margin-top: 10px; }

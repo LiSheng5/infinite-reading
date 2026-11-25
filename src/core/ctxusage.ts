@@ -8,6 +8,9 @@
  * 实体命中注入（空串匹配不到实体词），所以界面上标「≈」。
  * 不走 buildAI1Request（src/app/round.js）：它会消费 🧠 一次性开关、写回合字段、
  * 超预算时真的改 story 压缩——指示器只读，一样都不能碰。
+ *
+ * 分层明细：同一次 assembleAI1 顺手拿 opts.trace 的层区间，token 用 estimateTokensOf 的
+ * 前缀差分摊分（各层之和恒等于整体估算）；trace 只写本地数组，不往消息里塞任何字段。
  */
 import { Context } from './context.ts';
 
@@ -18,6 +21,13 @@ export interface UsageReport {
   total: number;
   cached?: number;
   reasoning?: number;
+}
+
+/** 一层上下文占用的估算（分层明细用）；layers 之和恒等于整体 tokens */
+export interface CtxLayer {
+  key: string;
+  label: string;
+  tokens: number;
 }
 
 export interface CtxUsage {
@@ -32,6 +42,8 @@ export interface CtxUsage {
   level: 'ok' | 'warn' | 'over' | 'unknown';
   /** 最近一条旁白条目上的实报用量；没有就 null */
   lastUsage: UsageReport | null;
+  /** 分层明细（系统 / 常驻 / 摘要 / 工具 / 历史 / 本轮输入）；拿不到 trace 时为空数组 */
+  layers: CtxLayer[];
 }
 
 /* warn 线取阈值的 85%：离自动压缩只剩一步（发送前会自动压一轮）之前先给一档预警，
@@ -43,7 +55,10 @@ const WARN_DEN = 20;
 /** 上下文用量描述（纯函数、零副作用）：opts = Context.assembleAI1 的组装选项 */
 export function describeContextUsage(story: any, opts?: any): CtxUsage {
   const o = opts || {};
-  const tokens = Context.estimateTokensOf(Context.assembleAI1(story || {}, '', o));
+  // 同一次组装顺手拿分层区间：trace 只写调用方自己的数组，消息体不夹带私有字段
+  const trace: Array<{ layer: string; from: number; to: number }> = [];
+  const messages = Context.assembleAI1(story || {}, '', Object.assign({}, o, { trace: trace }));
+  const tokens = Context.estimateTokensOf(messages);
   const cw = +o.contextWindow;
   const window = Number.isFinite(cw) && cw > 0 ? cw : 0;
   const threshold = Context.compressThreshold(window);
@@ -53,7 +68,43 @@ export function describeContextUsage(story: any, opts?: any): CtxUsage {
   else if (tokens >= threshold) level = 'over';
   else if (tokens * WARN_DEN >= threshold * WARN_NUM) level = 'warn';
   else level = 'ok';
-  return { tokens: tokens, window: window, threshold: threshold, ratio: ratio, level: level, lastUsage: lastNarrationUsage(story) };
+  return {
+    tokens: tokens, window: window, threshold: threshold, ratio: ratio, level: level,
+    lastUsage: lastNarrationUsage(story),
+    layers: layerBreakdown(messages, trace),
+  };
+}
+
+const LAYER_LABEL: { [k: string]: string } = {
+  system: '系统提示',
+  persistent: '常驻设定',
+  summary: '前情摘要',
+  tools: '工具说明',
+  history: '历史对话',
+  user: '本轮输入',
+};
+
+/* 分层明细：对每层区间做 estimateTokensOf 的前缀差分（C(to) − C(from)）。
+ * 相邻层首尾相接时逐层相加会 telescope 回 C(messages.length)，也就是整体 tokens——
+ * 「各层之和 == 整体估算」是构造出来的，不靠四舍五入凑数；估算仍只有 estimateTokensOf 一套。
+ * trace 缺失或有缺口时返回空数组：宁可没有明细，也不展示对不上的数。 */
+function layerBreakdown(messages: any[], trace: any[]): CtxLayer[] {
+  if (!Array.isArray(trace) || !trace.length) return [];
+  let cursor = 0;
+  for (const t of trace) {
+    if (!t || t.from !== cursor || t.to <= t.from || t.to > messages.length) return [];
+    cursor = t.to;
+  }
+  if (cursor !== messages.length) return [];
+  const out: CtxLayer[] = [];
+  let prev = 0;
+  for (const t of trace) {
+    const cum = Context.estimateTokensOf(messages.slice(0, t.to));
+    const n = cum - prev;
+    prev = cum;
+    if (n > 0) out.push({ key: t.layer, label: LAYER_LABEL[t.layer] || t.layer, tokens: n });
+  }
+  return out;
 }
 
 // 最近一条旁白条目上的 usage（服务商实报）：旧档 / 服务商没上报就是 null，没有 0 冒充

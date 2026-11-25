@@ -163,6 +163,19 @@
               <p class="ctx-bubble-main">{u.error ? '这次估算没算出来，原因已留在浏览器控制台。' : u.detail}</p>
               {#if u.lastUsage}<p class="ctx-bubble-usage">{u.lastUsage}</p>{/if}
               {#if !u.error}<p class="ctx-bubble-note">估算值不含你还没输入的那一句，与实际发送略有偏差。</p>{/if}
+              <!-- 分层明细（点开气泡才看）：各层 token 之和等于上面的整体估算；拿不到 trace 就不显示 -->
+              {#if !u.error && u.layers && u.layers.length}
+                <div class="ctx-layers" role="group" aria-label="上下文分层明细">
+                  <p class="ctx-layers-title">分层明细（估算）</p>
+                  {#each u.layers as l (l.key)}
+                    <div class="ctx-layer">
+                      <span class="ctx-layer-label">{l.label}</span>
+                      <span class="ctx-layer-track" aria-hidden="true"><span class="ctx-layer-fill" style:width={l.pct + '%'}></span></span>
+                      <span class="ctx-layer-num">{l.tokens}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
               <!-- 手动压缩按钮：路径随书记员可用性标注；不可用置灰并在下方写明原因 -->
               {#if read.chat.compact}
                 {@const c = read.chat.compact}
