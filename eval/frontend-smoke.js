@@ -175,8 +175,9 @@ async function main() {
     const chatNone = namesOf2(Ctx.toolsForMode('chat', { schedule: false, email: false, payment: false }));
     check('门控：chat + email/payment 开启 → 含 email_propose / payment_propose',
       chatAll.indexOf('email_propose') >= 0 && chatAll.indexOf('payment_propose') >= 0, chatAll.join(','));
-    check('门控：rp 即便传了 true 也不下发邮件 / 下单工具',
-      rpAll.indexOf('email_propose') < 0 && rpAll.indexOf('payment_propose') < 0, rpAll.join(','));
+    check('门控：旧 rp 值并入 chat——邮件 / 下单跟随开关（清单与 chat 相同）',
+      rpAll.join(',') === chatAll.join(',') && rpAll.indexOf('email_propose') >= 0 && rpAll.indexOf('payment_propose') >= 0,
+      rpAll.join(','));
     check('门控：choice 即便传了 true 也不下发邮件 / 下单工具',
       choiceAll.indexOf('email_propose') < 0 && choiceAll.indexOf('payment_propose') < 0, choiceAll.join(','));
     check('门控：chat 但标志为假 → 不含邮件 / 下单工具',
@@ -195,7 +196,8 @@ async function main() {
     const choiceSys = Ctx.systemForMode('choice');
     check('systemForMode(chat)：不含（做）标记说明', chatSys.indexOf('（做）') < 0, chatSys.slice(0, 40));
     check('systemForMode(chat)：是智能体系统提示（含「智能助手」）', /智能助手/.test(chatSys));
-    check('systemForMode(rp)：仍含标记说明', rpSys.indexOf('（做）') >= 0 && rpSys.indexOf(Ctx.KIND_MARK_HINT_SHORT) >= 0);
+    check('systemForMode(rp)：旧值并入 chat（无标记说明，与无卡 chat 逐字相同）',
+      rpSys === chatSys && rpSys.indexOf('（做）') < 0);
     check('systemForMode(choice)：仍是剧情 JSON 契约（逐字未动）',
       choiceSys.indexOf('旁白') >= 0 && choiceSys.indexOf('场景切换') >= 0 && choiceSys.indexOf('（做）') >= 0
       && choiceSys === Ctx.systemForMode('choice', {}));

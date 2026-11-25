@@ -5,7 +5,8 @@
  * 运行时（src/app/main.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
  *
  * 组装（常驻注入与动态窗口）：
- *   [system]  AI1 系统提示词（按 mode：choice / chat / rp；rp 无卡时用降级提示）
+ *   [system]  AI1 系统提示词（剧情 = JSON 契约；聊天 = 核心助手段 + 可选工具段 / 角色段，
+ *             按 {hasCard, tools} 拼装，无卡无工具就是纯助手）
  *   [system]  [风格基调]（≤120 字）+ [故事设定（常驻）]（≤400 字）——此前 styleTone 只影响画面、
  *             premise 只在开局一回合在场，地基信息随摘要合并流失
  *   [system]  常驻摘要行：「{地点}｜{时间}｜在场：{names}｜伏笔：{最重要的2条}」
@@ -43,7 +44,7 @@
 
   /* ---------------- 系统提示词（按模式） ----------------
    * 剧情模式（choice）：中文字段 JSON 契约；
-   * 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出。 */
+   * 聊天（chat，含旧「扮演」归一后的档）：极简提示词 + 纯文本输出。 */
 
   const COMMON_OPEN = '你是这部视觉小说的旁白，同时扮演故事世界里除玩家以外的所有角色。玩家的输入自由度极高，必须顺着玩家的任何行动把故事讲下去，不要拒绝、不要出戏、不要建议「该做什么」。玩家可能随时表达对后续发展的期望，顺着编织、保持合理，不必生硬照办。';
 
@@ -64,24 +65,49 @@
     '- 保持前后剧情连贯，记住之前发生的事；只输出 JSON。',
   ].join('\n');
 
-  /* 对话 / 扮演（chat / rp）：极简提示词 + 纯文本输出。
-   * 这两个模式不再走 JSON 契约——世界卡由 update_memory 工具 + 书记员定时校对维护，
+  /* 聊天（chat，原「对话 / 扮演」合并）：极简提示词 + 纯文本输出，按 {hasCard, tools} 三段拼装：
+   *   核心助手段（共用）→ 工具段（只写实际下发的工具，没下发就不提）→ 角色段（有卡才带）。
+   * 聊天不再走 JSON 契约——世界卡由 update_memory 工具 + 书记员定时校对维护，
    * 画面参考取旁白原文（src/app/ 下的 parseAIReply / absorbReply 有对应兜底）；
-   * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，不写进这里。 */
+   * 「工具怎么用」由 assembleAI1 自动追加的 [可用工具] 块交代，系统提示只报能力面。 */
 
-  // 智能体模式（原「对话」）：通用助手 + 更全的工具集（画图 / 记事 / 定时 / 邮件 / 下单）。
-  // 发邮件与花钱只是「提案」：用户在界面上确认前不得声称已完成（红线在 src/core/proposals.ts 落地）。
-  const CHAT_SYSTEM = '你是用户的智能助手。回答直接、简洁，用中文。需要时可以使用你拥有的能力（画图、记事、定时提醒、写邮件、下单），但不要在回复里提「工具」「函数」。发邮件和花钱只是向用户提出请求：先用一两句话说明你要做什么，由用户在界面上确认；在用户确认之前，不要说已经发出或已经付款。';
+  // 核心助手段：无卡无工具时就是全部提示词（体量钉在旧智能体提示词之下）
+  const CHAT_CORE = '你是用户的智能助手。回答直接、简洁，用中文。';
 
-  // 扮演模式：同 CHAT_SYSTEM 的定位，多一句人设锚定与两条硬规则（不出戏 / 不替玩家行事）
-  const RP_SYSTEM = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：你就是角色卡里的那个人（名字、性格、说话方式都以角色卡为准）。保持角色不出戏，也不要替玩家说话或行动；每次回应 2~6 句中文。';
+  // 角色段：仅 hasCard 拼上。扮演锚定沿旧扮演提示词——卡里的人 + 2~6 句体量锚定，
+  // 「不出戏 / 不替玩家行事」两条硬规则一并保留；无卡就是普通助手，不再降级自拟角色。
+  const CHAT_ROLE = '现在你在进行角色扮演：你就是角色卡里的那个人（名字、性格、说话方式都以角色卡为准）。保持角色不出戏，也不要替玩家说话或行动；每次回应 2~6 句中文。';
 
-  // rp 无角色卡（导入 / 旧档可能产生）：指令不能指向不存在的卡，改为自拟并钉住
-  const RP_SYSTEM_FALLBACK = '你是这部作品的伴读者 AI，现在在这里进行角色扮演：这部作品还没有角色卡，请按故事设定自拟你要扮演的角色，之后每一轮都保持这个角色不变，也不要替玩家说话或行动；每次回应 2~6 句中文。';
+  // 工具段的能力面类目（顺序固定：画图 → 记事 → 定时提醒 → 写邮件 → 下单）。
+  // 只列「本轮实际下发的工具名」命中的类目——没下发的类目一个字不提，
+  // 提示词与请求体不出现「说了有、实际没有」的岔子，也省 token。
+  const CHAT_TOOL_CATEGORIES = [
+    { key: 'image', label: '画图', names: ['request_image'] },
+    { key: 'memory', label: '记事', names: ['recall_world_state', 'recall_style_card', 'update_memory'] },
+    { key: 'schedule', label: '定时提醒', names: ['schedule_once', 'schedule_heartbeat', 'schedule_cron', 'list_triggers', 'cancel_trigger'] },
+    { key: 'email', label: '写邮件', names: ['email_propose'] },
+    { key: 'payment', label: '下单', names: ['payment_propose'] },
+  ];
 
-  // 对话 / 扮演的提示词保持极简：只补一句输入类型说明（与剧情模式同一条规则的短版）。
-  // chat（智能体）不再下发做 / 说 / 导演，因此 chat 的系统提示不附这条说明（防模型复述标记）。
-  const KIND_MARK_HINT_SHORT = '输入前的（做）/（说）/（导演）是输入类型标记（分别是行动 / 说的话 / 世界里的既成事实），不要复述标记本身。';
+  // 邮件 / 下单是高风险副作用动作：只在对应工具实际在场时附提案红线
+  // （完整口径见 EMAIL_POLICY_TEXT / PAYMENT_POLICY_TEXT，执行侧红线在 src/core/proposals.ts）。
+  const PROPOSAL_RED_LINE = '发邮件和花钱只是向用户提出请求：先用一两句话说明你要做什么，由用户在界面上确认；在用户确认之前，不要说已经发出或已经付款。';
+
+  // 聊天系统提示词拼装：段间直接相接（各段自带句读），拼接顺序固定利于请求前缀缓存。
+  function chatSystem(opts?) {
+    const o = opts || {};
+    const tools = Array.isArray(o.tools) ? o.tools : [];
+    const parts = [CHAT_CORE];
+    if (tools.length) {
+      const present = CHAT_TOOL_CATEGORIES.filter(c => c.names.some(n => tools.indexOf(n) >= 0));
+      if (present.length) {
+        parts.push('需要时可以使用你拥有的能力（' + present.map(c => c.label).join('、') + '），但不要在回复里提「工具」「函数」。');
+        if (present.some(c => c.key === 'email' || c.key === 'payment')) parts.push(PROPOSAL_RED_LINE);
+      }
+    }
+    if (o.hasCard) parts.push(CHAT_ROLE);
+    return parts.join('');
+  }
 
   // 切换兼容：旧「扮演」存档读成「聊天」后，历史用户消息里可能带着内层标记，而聊天的系统提示
   // 不再解释它们（模型会照着复述）——组装聊天历史时剥掉 [玩家行动] 之后紧跟的那一个标记。
@@ -91,14 +117,16 @@
     return s.replace(/(\[玩家行动\] )（(?:做|说|导演)）/, '$1');
   }
 
-  // 聊天类：'chat' 与尚未归一的旧 'rp'（做 / 说 / 导演只属于剧情，聊天一律不带内层标记）
+  // 聊天类：'chat' 与尚未归一的旧 'rp'（做 / 说 / 导演只属于剧情，聊天一律不带内层标记，
+  // 也不在系统提示里解释这些标记——合并后读写链路都以 'chat' 为准，这里只是收编旧值的兜底）
   function isChatKind(mode) {
     return mode === 'chat' || mode === 'rp';
   }
 
+  // 系统提示词：剧情走 JSON 契约；聊天（含旧 'rp' 归一后的档）按 {hasCard, tools} 拼装。
+  // tools 传本轮实际下发的工具名清单（与 [可用工具] 块同源）；不传就当作无工具。
   function systemForMode(mode, opts?) {
-    if (mode === 'chat') return CHAT_SYSTEM;
-    if (mode === 'rp') return ((opts && opts.noCharacterCard) ? RP_SYSTEM_FALLBACK : RP_SYSTEM) + KIND_MARK_HINT_SHORT;
+    if (isChatKind(mode)) return chatSystem(opts);
     return STORY_RULES;
   }
 
@@ -215,9 +243,9 @@
     },
   };
 
-  // 对话 / 扮演的直出变体：模型自己写生图提示词，不转画师子代理。
-  // 剧情模式不再下发 request_image（作画只能点按钮），画师变体 REQUEST_IMAGE_TOOL 已删除；
-  // chat / rp 的直出变体保持不变（工具名仍是 request_image，frontend-smoke 对工具名集合的断言继续成立）。
+  // 聊天的直出变体：模型自己写生图提示词，不转画师子代理。
+  // 剧情模式不下发 request_image（作画只能点按钮），画师变体 REQUEST_IMAGE_TOOL 已删除；
+  // 聊天的直出变体保持不变（工具名仍是 request_image，frontend-smoke 对工具名集合的断言继续成立）。
   const REQUEST_IMAGE_DIRECT_TOOL = {
     type: 'function',
     function: {
@@ -266,14 +294,14 @@
 
   // AI1 全量工具（召回 + 写记忆），一起下发。
   // 剧情模式不再有 request_image——作画只能由用户点 🎨 触发；
-  // 对话 / 扮演走直出变体（prompt），工具名不变
+  // 聊天走直出变体（prompt），工具名不变
   const TOOLS_AI1 = TOOLS_RECALL.concat([UPDATE_MEMORY_TOOL]);
   const TOOLS_AI1_DIRECT = TOOLS_RECALL.concat([REQUEST_IMAGE_DIRECT_TOOL, UPDATE_MEMORY_TOOL]);
   const TOOL_NAMES_AI1 = TOOLS_AI1.map(t => t.function.name);
   const MAX_TOOL_CALLS_PER_TURN = 2;   // 每轮上限 2 次
 
   /* ---------------- 调度工具（模型主动行动） ----------------
-   * 只在「对话 / 扮演」模式、且本地服务在线且后端已开启调度时才下发（见 toolsForMode）。
+   * 只在聊天模式、且本地服务在线且后端已开启调度时才下发（见 toolsForMode）。
    * 调用后触发器进入「待确认」，必须由用户在界面上点确认才生效 ——
    * 模型可以「安排」，但不能让主动行为自己落地。 */
 
@@ -363,7 +391,7 @@
   function isScheduleTool(name) { return SCHEDULE_TOOL_SET.has(String(name)); }
 
   const SCHEDULE_POLICY_TEXT = [
-    '主动联系（只在对话 / 扮演模式可用）：',
+    '主动联系（只在聊天模式可用）：',
     '用户说到「到点提醒我」「明天再来找我」「过几小时问问我在干嘛」这类将来才发生的事，就用 schedule_once / schedule_heartbeat / schedule_cron 安排；',
     'name 是这次安排的身份：同名会覆盖旧安排，不会重复；prompt 写到点时你要做什么，reason 写为什么这个时候找他（用户会看到）；',
     '这些只是「提案」，用户确认后才生效；用 list_triggers 看已有什么安排，用 cancel_trigger 取消。',
@@ -431,14 +459,17 @@
 
   // 按模式 / 能力取工具清单：剧情模式恒定不变（不追加调度 / 邮件 / 下单 / 作画工具）。
   // choice 不含 request_image（剧情作画只能点按钮）；
-  // chat / rp 的 request_image 用直出变体（模型自己写提示词、不请画师）。
-  // 邮件 / 下单是高风险副作用动作：只在 chat（智能体）下发——rp / choice 即便传了 true 也不给。
+  // 聊天（含旧 'rp' 归一的档）的 request_image 用直出变体（模型自己写提示词、不请画师）。
+  // 邮件 / 下单是高风险副作用动作：不再与模式绑定（有无卡都一样），只由调用方传入的
+  // 本对话有效开关决定（默认值在 prefs 解析层定：有卡且未显式开启时为关）；剧情模式仍一律不给。
+  // 拼接顺序固定（base → 调度 → 邮件 → 下单），不因开关组合变化，利于请求前缀缓存。
   function toolsForMode(mode, opts) {
     opts = opts || {};
-    const wantSchedule = !!opts.schedule && (mode === 'chat' || mode === 'rp');
-    const wantEmail = !!opts.email && mode === 'chat';
-    const wantPayment = !!opts.payment && mode === 'chat';
-    const base = (mode === 'chat' || mode === 'rp') ? TOOLS_AI1_DIRECT : TOOLS_AI1;
+    const chat = isChatKind(mode);
+    const wantSchedule = !!opts.schedule && chat;
+    const wantEmail = !!opts.email && chat;
+    const wantPayment = !!opts.payment && chat;
+    const base = chat ? TOOLS_AI1_DIRECT : TOOLS_AI1;
     let out = base;
     if (wantSchedule) out = out.concat(SCHEDULE_TOOLS as any);
     if (wantEmail) out = out.concat(EMAIL_TOOLS);
@@ -1053,7 +1084,7 @@
     return groups;
   }
 
-  // chat / rp 纯文本没有 scene_change：按固定条数切幕（4 条 = 2 个回合），
+  // 聊天纯文本没有 scene_change：按固定条数切幕（4 条 = 2 个回合），
   // 避免整个积压被压成一条摘要，保留「越老越模糊」的层次
   const PLAIN_SCENE_MESSAGES = 4;
   function groupByTurns(msgs, size?) {
@@ -1132,7 +1163,7 @@
       const cut = story.messages.length - keep;
       if (cut <= 0) return null;                                  // 没有可压的内容
       const candidateF = story.messages.slice(0, cut);
-      const plainF = (story.mode === 'chat' || story.mode === 'rp');
+      const plainF = isChatKind(story.mode);
       return { candidate: candidateF, groups: plainF ? groupByTurns(candidateF) : groupScenes(candidateF) };
     }
     const keep0 = opts.keepMessages || fitWindow(story.messages, opts.contextWindow);
@@ -1164,8 +1195,8 @@
     const boundary = lastSceneStart(candidate);
     if (boundary > 0) candidate = candidate.slice(0, boundary);
     if (!candidate.length) return null;
-    // chat / rp 纯文本恒无 scene_change，按回合数切幕（groupByTurns）代替按场景切
-    const plain = (story.mode === 'chat' || story.mode === 'rp');
+    // 聊天纯文本恒无 scene_change，按回合数切幕（groupByTurns）代替按场景切
+    const plain = isChatKind(story.mode);
     return { candidate: candidate, groups: plain ? groupByTurns(candidate) : groupScenes(candidate) };
   }
 
@@ -1313,11 +1344,11 @@
   }
 
   /* ---------------- 角色卡 / 关系记忆 / 用户画像 ----------------
-   * rp 模式玩的是「关系」：角色卡常驻（学口吻）+ 关系记忆常驻 + 用户画像按需（Top-N）。
+   * 有卡的聊天玩的是「关系」：角色卡常驻（学口吻）+ 关系记忆常驻 + 用户画像按需（Top-N）。
    * 画像防 token 爆炸的三条：存储无上限、注入有预算、常驻只有一行摘要。
    */
 
-  const CHAR_CARD_MAX_CHARS = 1200;      // 角色卡块上限（rp 常驻，全文截断控体积）
+  const CHAR_CARD_MAX_CHARS = 1200;      // 角色卡块上限（聊天有卡时常驻，全文截断控体积）
   const CARD_OPENING_MAX_CHARS = 300;
   const CARD_EXAMPLE_MAX_CHARS = 600;
   const RELATIONSHIP_MAX_CHARS = 240;
@@ -1332,7 +1363,7 @@
     return t.length > max ? (t.slice(0, max) + '…') : t;
   }
 
-  // 角色卡全文（rp 常驻；开场白交代第一幕、示例对话只喂口吻，都截断控体积）
+  // 角色卡全文（聊天有卡时常驻；开场白交代第一幕、示例对话只喂口吻，都截断控体积）
   function characterCardText(card) {
     if (!card) return '';
     const lines = ['[角色卡]'];
@@ -1347,7 +1378,7 @@
     return text.length > CHAR_CARD_MAX_CHARS ? (text.slice(0, CHAR_CARD_MAX_CHARS) + '\n…') : text;
   }
 
-  // 关系记忆（世界卡 relationship 区块；chat / rp 常驻，choice 靠召回）
+  // 关系记忆（世界卡 relationship 区块；聊天常驻，choice 靠召回）
   function relationshipBlock(world) {
     const r = (world && world.relationship) || {};
     const parts = [];
@@ -1514,7 +1545,7 @@
    * 模型按中文键回包（旁白 / 人物 / 地点 / 时间 / 伏笔 / 画面 / 场景切换 / 选项），
    * 这里映射回 narration / world / scene_summary / scene_change / choices，
    * 压缩、书记员、世界卡合并等下游链路一律不用改。
-   * 旧英文键（narration / world / …）与 chat / rp 模式原样透传，向后兼容旧存档。 */
+   * 旧英文键（narration / world / …）与聊天模式原样透传，向后兼容旧存档。 */
   function normalizeAIReply(j) {
     if (!j || typeof j !== 'object') return j;
     // 没有中文键 → 原样返回（英文契约 / 旧存档）
@@ -1575,7 +1606,7 @@
     return JSON.stringify(out);
   }
 
-  // chat / rp 纯文本契约：存档里的 assistant 消息仍是 {"narration":"…"} 包装，
+  // 聊天纯文本契约：存档里的 assistant 消息仍是 {"narration":"…"} 包装，
   // 组装进请求体前拍平成正文——否则模型看到历史里全是 JSON，会照着继续输出 JSON
   function toPlainHistory(content) {
     let j = null;
@@ -1594,7 +1625,7 @@
 
   // 手动层「🧠 注入记忆」：完整世界卡 + 设定 + 视觉设定卡直接注入，并要求先复述处境再继续。
   // 定案：不走 tool_choice（DeepSeek 思考模式不支持），客户端直接注入，跨模型一致、零额外往返。
-  // rp 的完整记忆还包括角色卡；开启画像时再带一行画像摘要。
+  // 有卡的聊天完整记忆还包括角色卡；开启画像时再带一行画像摘要。
   function forceInjectBlock(story, playerAction, opts) {
     story = story || {};
     if (playerAction && typeof playerAction === 'object' && !opts) { opts = playerAction; playerAction = ''; }
@@ -1604,11 +1635,12 @@
     if (w) parts.push('【世界状态卡】\n' + w);
     const premise = String(story.premise || '').trim();
     if (premise) parts.push('【故事设定】\n' + premise);
-    if (story.characterCard && story.mode === 'rp') {
+    // 角色卡只看卡本身（hasCard），不再看模式名；剧情模式不走这里（有自己的 JSON 人物契约）
+    if (story.characterCard && isChatKind(story.mode)) {
       const ct = characterCardText(story.characterCard);
       if (ct) parts.push('【角色卡】\n' + ct);
     }
-    const rb = (story.mode === 'chat' || story.mode === 'rp') ? relationshipBlock(story.world) : '';
+    const rb = isChatKind(story.mode) ? relationshipBlock(story.world) : '';
     if (rb) parts.push(rb);
     if (opts.profile && opts.profile.length) {
       const pb = profileBlock(opts.profile, playerAction || '');
@@ -1690,12 +1722,13 @@
     // premise 此前只在开局一回合在场，地基设定随摘要合并流失——改为常驻摘要
     const premise = String(story.premise || '').trim();
     if (premise) parts.push({ role: 'system', content: '[故事设定（常驻）]\n' + clip(premise, PREMISE_MAX_CHARS) });
-    // rp 角色卡常驻；chat / rp 关系记忆常驻（choice 靠召回工具，不占常驻预算）
-    if (ctx.mode === 'rp' && story.characterCard) {
+    // 聊天有卡才常驻角色卡（hasCard 只看卡本身，不看模式名——有没有卡的差异不再用模式表达）；
+    // 聊天关系记忆常驻（choice 靠召回工具，不占常驻预算，剧情人物走 JSON 契约自报）
+    if (story.characterCard && isChatKind(ctx.mode)) {
       const ct = characterCardText(story.characterCard);
       if (ct) parts.push({ role: 'system', content: ct });
     }
-    if (ctx.mode === 'chat' || ctx.mode === 'rp') {
+    if (isChatKind(ctx.mode)) {
       const rb = relationshipBlock(story.world);
       if (rb) parts.push({ role: 'system', content: rb });
     }
@@ -1731,7 +1764,7 @@
   }
 
   // 历史层：窗口内的 messages（reasoning 等私有字段留在存档、不进请求体）；
-  // assistant 历史按 mode 归一（存档不动），chat 还要剥掉旧 rp 消息里的内层标记。
+  // assistant 历史按 mode 归一（存档不动），聊天还要剥掉旧扮演消息里的内层标记。
   function appendHistory(out, ctx: AssembleCtx) {
     const opts = ctx.opts;
     const msgs = ctx.story.messages || [];
@@ -1799,8 +1832,12 @@
     let from = begin();
     out.push({
       role: 'system',
-      // rp 无角色卡（导入 / 旧档可能产生）时换降级提示，别让指令指向不存在的卡
-      content: ctx.opts.system || systemForMode(ctx.mode, { noCharacterCard: !ctx.story.characterCard }),
+      // 聊天按 {hasCard, tools} 拼装（无卡 = 普通助手，不再有「自拟角色」的降级提示）；
+      // tools 与 [可用工具] 块同源，系统提示的能力面与实际下发保持一致
+      content: ctx.opts.system || systemForMode(ctx.mode, {
+        hasCard: !!ctx.story.characterCard,
+        tools: ctx.opts.tools,
+      }),
     });
     close('system', from);
 
@@ -1872,7 +1909,7 @@
     return m;
   }
 
-  // 工具留痕文案（per-tool 摘要；chat / rp 没有画师，措辞中立）
+  // 工具留痕文案（per-tool 摘要；聊天没有画师，措辞中立）
   function toolSummary(name, args) {
     if (name === 'update_memory') return args.text ? ('更新记忆：' + args.text) : '更新记忆';
     if (name === 'recall_world_state') return '查阅了世界状态卡';
@@ -1912,7 +1949,7 @@
     DEFAULT_KEEP_MESSAGES, DEFAULT_MAX_MESSAGES, DEFAULT_MAX_SUMMARIES,
     TONE_MAX_CHARS, PREMISE_MAX_CHARS,
     WINDOW_MIN_MESSAGES, WINDOW_MAX_MESSAGES, WINDOW_TOKEN_RATIO, fitWindow,
-    systemForMode, RP_SYSTEM_FALLBACK,
+    systemForMode, chatSystem, CHAT_CORE, CHAT_ROLE, PROPOSAL_RED_LINE, CHAT_TOOL_CATEGORIES,
     PAINTER_SYSTEM, PAINTER_CHAT_SYSTEM, PAINTER_STYLES_SYSTEM, PAINTER_CARD_SYSTEM,
     PAINTER_VIDEO_SYSTEM,
     RECALL_RECENT_PLOT_TOOL, storySettingText,
@@ -1921,7 +1958,7 @@
     TOOLS_AI1, TOOLS_AI1_DIRECT, TOOL_NAMES_AI1, MAX_TOOL_CALLS_PER_TURN,
     SCHEDULE_TOOLS, TOOL_NAMES_SCHEDULE, SCHEDULE_POLICY_TEXT, toolsForMode, toolNamesForMode, isScheduleTool,
     EMAIL_TOOLS, PAYMENT_TOOLS, TOOL_NAMES_PROPOSAL, EMAIL_POLICY_TEXT, PAYMENT_POLICY_TEXT,
-    isProposalTool, stripKindMarker, KIND_MARK_HINT_SHORT,
+    isProposalTool, stripKindMarker,
     TOOL_POLICY_TEXT, TOOL_POLICY_IMAGE, toolPolicyText, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
     styleCardText, styleCardTextForText, rollingStyleText, painterAnchorText, textAnchorText,
     PAINTER_RECENT_TURNS, PAINTER_RECENT_LINE_CHARS,

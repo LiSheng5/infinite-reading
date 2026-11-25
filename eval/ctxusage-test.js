@@ -3,13 +3,16 @@
 /*
  * 无限阅读 · 上下文用量描述门禁（不联网、不开浏览器）
  *
- * 守五件事：
+ * 守六件事：
  *   1. level 边界：ok / warn / over 恰在边界上逐个判定；窗口未知 → unknown；三种模式都算得出；
  *   2. tokens 与 estimateTokensOf(assembleAI1(story, '', opts)) 逐字一致（估算与实发同源）；
  *   3. dry 零副作用：buildAssembleOpts('', { dry: true }) 前后 S.pendingInject、
  *      S.turnUsage、story.log.length 不变（指示器只读，绝不消费 🧠 一次性开关、不留痕）；
  *   4. 分层明细：opts.trace 不改组装结果、连续覆盖全部消息、不塞私有字段，各层之和 == 整体估算；
  *   5. memo：key 不变不重算、key 变了才重算，key 对每个输入逐项敏感。
+ *   6. 聊天提示词省 token：hasCard × 工具开关四组合的 system / tools 字符数快照与上界
+ *      （无卡无工具不超旧智能体提示词、有卡无工具不超旧扮演提示词加助手段、
+ *       空工具数组请求体不带 tools 字段）。
  *
  * 用法：node eval/ctxusage-test.js
  */
@@ -47,7 +50,7 @@ function padToTarget(story, opts, target) {
   return describeContextUsage(story, opts);
 }
 
-function main() {
+async function main() {
   /* ---------- 1. level 边界 ---------- */
   // 窗口 20000 → 阈值 14000 → warn 线 = 85% × 阈值 = 11900（整数边界，浮点不抖）
   const CW = 20000;
@@ -210,6 +213,113 @@ function main() {
       ['画像签名', usageMemoKey(st, 'n1', { contextWindow: 32000, tools: ['update_memory'], profile: ['别的'] })],
     ];
     for (const [name, k] of sensitive) H.check('key 对' + name + '敏感', k !== base, k);
+  }
+
+  /* ---------- 6. 聊天提示词省 token（hasCard × 工具开关四组合快照） ---------- */
+  // 聊天（原智能体 / 扮演合并）的系统提示词按 {hasCard, tools} 三段拼装：核心助手段 +
+  // 工具段（只写实际下发的类目）+ 角色段（有卡才带）。这里把四种组合的 system / tools
+  // 字符数钉成快照，并守住三条线：
+  //   ① 无卡 + 无工具：system 不超合并前智能体提示词，且不提任何工具与（做）/（说）/（导演）；
+  //   ② 有卡 + 无工具：system 不超合并前扮演提示词加共用助手段；
+  //   ③ 请求里工具数组为空时请求体不带 tools 字段（providers 的 chat 适配器）。
+  {
+    // 合并前提示词全文长度（旧 CHAT_SYSTEM / RP_SYSTEM，作为回归上界）
+    const OLD_CHAT_SYSTEM_CHARS = 133;
+    const OLD_RP_SYSTEM_CHARS = 90;
+    const CARD = {
+      name: '沈砚', appearance: '黑发，旧毛衣', personality: '冷淡、话少',
+      scene: '深夜旧书店', opening: '「门没锁。」', exampleDialogue: '「书不卖。」', systemNote: '保持克制。',
+    };
+    const namesOf = list => list.map(t => t.function.name);
+    const fullTools = Context.toolsForMode('chat', { schedule: true, email: true, payment: true });
+    const combos = [
+      { name: '无卡 + 无工具', hasCard: false, tools: [], snapSystem: 22, snapToolsJson: 2 },
+      { name: '无卡 + 全工具', hasCard: false, tools: fullTools, snapSystem: 133, snapToolsJson: 4359 },
+      { name: '有卡 + 无工具', hasCard: true, tools: [], snapSystem: 97, snapToolsJson: 2 },
+      { name: '有卡 + 全工具', hasCard: true, tools: fullTools, snapSystem: 208, snapToolsJson: 4359 },
+    ];
+    const systems = {};
+    for (const c of combos) {
+      const names = namesOf(c.tools);
+      const system = Context.systemForMode('chat', { hasCard: c.hasCard, tools: names });
+      systems[c.name] = system;
+      H.check('快照 ' + c.name + '（system ' + system.length + ' 字 / tools JSON ' + JSON.stringify(c.tools).length + ' 字）',
+        system.length === c.snapSystem && JSON.stringify(c.tools).length === c.snapToolsJson,
+        'system ' + system.length + ' / json ' + JSON.stringify(c.tools).length);
+      // 组装结果与快照同源：system 首条就是拼装产物，空工具不出现 [可用工具] 块
+      const st = Object.assign(newStory('chat'), c.hasCard ? { characterCard: CARD } : {});
+      const msgs = Context.assembleAI1(st, '你好', { tools: names });
+      const toolBlock = msgs.filter(m => String(m.content).indexOf('[可用工具]') === 0).length;
+      H.check('组装：' + c.name + ' 的 system 首条与快照一致、[可用工具] 块随工具出现',
+        msgs[0].content === system && toolBlock === (names.length ? 1 : 0),
+        'block=' + toolBlock);
+    }
+
+    // ① 无卡 + 无工具：不超旧智能体提示词；不出现任何工具与做 / 说 / 导演的描述
+    const plain = systems['无卡 + 无工具'];
+    H.check('无卡无工具：system ≤ 合并前智能体提示词（' + plain.length + ' ≤ ' + OLD_CHAT_SYSTEM_CHARS + '）',
+      plain.length <= OLD_CHAT_SYSTEM_CHARS, plain);
+    H.check('无卡无工具：不提任何工具 / 能力面',
+      ['工具', '函数', '画图', '记事', '定时', '邮件', '下单', '提案'].every(w => plain.indexOf(w) < 0), plain);
+    H.check('无卡无工具：不出现（做）/（说）/（导演）标记说明',
+      ['（做）', '（说）', '（导演）'].every(w => plain.indexOf(w) < 0), plain);
+
+    // ② 有卡 + 无工具：不超旧扮演提示词 + 共用助手段；角色锚定在场（卡里的人 + 2~6 句）
+    const role = systems['有卡 + 无工具'];
+    H.check('有卡无工具：system ≤ 合并前扮演提示词 + 助手段（' + role.length + ' ≤ ' + (OLD_RP_SYSTEM_CHARS + Context.CHAT_CORE.length) + '）',
+      role.length <= OLD_RP_SYSTEM_CHARS + Context.CHAT_CORE.length, role);
+    H.check('有卡无工具：角色锚定在场（角色卡里的人 / 2~6 句）',
+      role.indexOf('角色卡里的那个人') >= 0 && role.indexOf('2~6 句') >= 0, role);
+
+    // 工具段只写实际下发的类目：全工具时列出五类；只开邮件时只列「记事、写邮件」并附提案红线
+    H.check('无卡全工具：能力面列全五类且不超旧智能体提示词',
+      systems['无卡 + 全工具'].indexOf('画图、记事、定时提醒、写邮件、下单') >= 0
+      && systems['无卡 + 全工具'].length <= OLD_CHAT_SYSTEM_CHARS, systems['无卡 + 全工具']);
+    const emailOnly = Context.systemForMode('chat', {
+      tools: namesOf(Context.toolsForMode('chat', { email: true })),
+    });
+    H.check('只开邮件：只列命中的类目（base 的画图、记事 + 写邮件），没下发的类目不提',
+      emailOnly.indexOf('画图、记事、写邮件') >= 0 && emailOnly.indexOf('定时提醒') < 0
+      && emailOnly.indexOf('下单') < 0, emailOnly);
+    const emailNoImage = Context.systemForMode('chat', { tools: ['recall_world_state', 'email_propose'] });
+    H.check('工具清单没有画图时能力面也不提画图',
+      emailNoImage.indexOf('画图') < 0 && emailNoImage.indexOf('记事、写邮件') >= 0, emailNoImage);
+    H.check('只开邮件：提案红线随之出现（高风险动作在场才提）',
+      emailOnly.indexOf(Context.PROPOSAL_RED_LINE) >= 0, emailOnly.slice(0, 60));
+    const memoryOnly = Context.systemForMode('chat', { tools: ['recall_world_state', 'update_memory'] });
+    H.check('只开记忆：没有邮件 / 下单时不附提案红线',
+      memoryOnly.indexOf('确认') < 0 && memoryOnly.indexOf('记事') >= 0, memoryOnly);
+
+    // 工具拼接顺序固定：不因开关组合变化（base → 调度 → 邮件 → 下单），利于请求前缀缓存
+    const orderBase = namesOf(Context.toolsForMode('chat', {}));
+    H.check('工具顺序固定：开关组合不改变拼接顺序',
+      namesOf(Context.toolsForMode('chat', { email: true })).join(',')
+        === orderBase.concat(['email_propose']).join(',')
+      && namesOf(Context.toolsForMode('chat', { payment: true })).join(',')
+        === orderBase.concat(['payment_propose']).join(',')
+      && namesOf(Context.toolsForMode('chat', { email: true, payment: true })).join(',')
+        === orderBase.concat(['email_propose', 'payment_propose']).join(','));
+
+    // ③ 请求里工具数组为空 → 请求体不带 tools 字段（providers 侧的同一道门）
+    {
+      const { ChatProviders } = core('providers');
+      const chat = ChatProviders['openai-compatible'].chat;
+      const CFG = { baseUrl: 'https://api.invalid/v1', apiKey: 'k', model: 'm' };
+      const bodies = [];
+      const realFetch = global.fetch;
+      global.fetch = async (url, init) => {
+        bodies.push(JSON.parse(init.body));
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      };
+      try {
+        await chat(Object.assign({}, CFG, { tools: [] }), [{ role: 'user', content: 'x' }]);
+        await chat(Object.assign({}, CFG, { tools: Context.toolsForMode('chat', { email: true }) }), [{ role: 'user', content: 'x' }]);
+      } finally { global.fetch = realFetch; }
+      H.check('请求体：工具数组为空时不带 tools 字段、非空时才带',
+        bodies.length === 2 && !('tools' in bodies[0]) && Array.isArray(bodies[1].tools) && bodies[1].tools.length === 5,
+        JSON.stringify(bodies.map(b => (b.tools || []).length)));
+    }
   }
 }
 
