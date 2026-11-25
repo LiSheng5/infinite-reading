@@ -182,7 +182,7 @@ export function ensureDataDir() {
 
 /*
  * Windows 上 mode:0o600 基本无效（只影响只读位），文件权限实际取决于 ACL：
- * 这里 best-effort 用 icacls 把 config.json（含 token / 邮件密钥）收紧为「仅当前用户可读写」。
+ * 这里 best-effort 用 icacls 把 config.json（含 token；启用邮件后还有密钥）收紧为「仅当前用户可读写」。
  * 失败不拦写盘（无 icacls / 权限不足时保持原样），POSIX 走 0o600。
  */
 function tightenWindowsAcl(file) {

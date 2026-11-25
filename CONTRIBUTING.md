@@ -21,7 +21,7 @@ npm run dev     # 开发服务器（热更新）
 
 | 方式 | 命令 / 操作 | 说明 |
 |---|---|---|
-| 多文件产物 | `npm run build:site` → `npx serve dist/site` | 与 GitHub Pages / Docker 同一份产物，PWA 可安装 |
+| 多文件产物 | `npm run build:site` → `npm run serve`（`npx serve`，开发期工具，首次需联网） | 与 GitHub Pages / Docker 同一份产物，PWA 可安装 |
 | 单文件产物 | `npm run build:single` → 双击 `dist/single/index.html` | `file://` 的真实形态（JS/CSS/图片全内联） |
 | 二次打包 | `npm run bundle` → `dist/ir.html` | 把单文件产物复制成对外发布的名字 |
 | 一键启动 | 双击 `启动.bat`（Windows） | 没有产物会先构建，再起本地服务（Python 优先，退回 `tools/serve.ps1`） |

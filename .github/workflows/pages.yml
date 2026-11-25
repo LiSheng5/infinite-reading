@@ -1,6 +1,6 @@
 name: Deploy demo to GitHub Pages
 
-# 在线 Demo：纯静态站点，直接部署仓库根目录。
+# 在线 Demo：纯静态站点，只发布构建产物 dist/site（不是仓库根目录）。
 # 部署后：https://LiSheng5.github.io/infinite-reading/
 # 启用方式：仓库 Settings → Pages → Build and deployment → Source 选「GitHub Actions」。
 

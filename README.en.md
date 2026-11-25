@@ -44,7 +44,7 @@ cd infinite-reading
 
    Then run it — either way works:
    - **Single file**: double-click `dist/single/index.html` (JS / CSS / icons all inlined into one HTML, `file://` works; `npm run bundle` copies it to `dist/ir.html`)
-   - **Local server** (more robust, recommended): `npx serve dist/site` or `python -m http.server 8000 --directory dist/site`
+   - **Local server** (more robust, recommended): `python tools/serve.py` (bundled, offline; on Windows just double-click `启动.bat`); with Node installed you can also use `npm run serve` (`npx serve`, a dev-only tool that downloads on first run)
    - **Development**: `npm run dev` (Vite dev server with HMR; ship the built output)
 2. Click **⚙ Connect a model** and fill in **Base URL** (pick from the dropdown or type your own), **API Key**, and **model name**. Image models are configured the same way.
 3. **Click one of the two mode cards to start** — Story (uses the premise box) or Chat (a tool-using assistant: draw, remember, schedule, draft email, buy — the last two need your confirmation) — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode. A new chat opens empty; its intro page offers an optional "add character card" entry.
@@ -100,7 +100,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 
 | Way | Command / action | Good for |
 |---|---|---|
-| Local server | `npx serve dist/site` (or `启动.bat` on Windows) | Daily use: avoids the `file://` CORS and storage split |
+| Local server | `启动.bat` on Windows, or `python tools/serve.py` | Daily use: avoids the `file://` CORS and storage split |
 | Single file | `npm run bundle` → `dist/ir.html` (~708 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |

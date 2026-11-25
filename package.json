@@ -15,7 +15,8 @@
   "//": {
     "test": "全量离线套件（清单即此行的 && 链；check:version 已挂在头里）。跑它 = 回归门禁",
     "test:features": "局部快速回归（仅侧车/前端子集，非全量）",
-    "test:shelf": "局部快速回归（仅书架/搜索子集，非全量）"
+    "test:shelf": "局部快速回归（仅书架/搜索子集，非全量）",
+    "serve": "开发期可选工具：首次需联网拉 npx 包，默认监听所有网卡；只想本机访问请用 python tools/serve.py 或 启动.bat"
   },
   "scripts": {
     "serve": "npx serve dist/site",
