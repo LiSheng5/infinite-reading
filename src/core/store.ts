@@ -284,14 +284,15 @@ import { APP_VERSION } from './version.ts';
         provider: 'minimax-video', baseUrl: '', apiKey: '', model: '',
         duration: 5, resolution: '768P', ratio: '16:9', extraParams: '',
       },
-      userProfile: { enabled: { choice: false, chat: false, rp: false }, scope: 'global' },
+      // 用户画像开关默认全关，按模式单独开（'choice' / 'chat'；原「扮演」'rp' 已并入聊天）
+      userProfile: { enabled: { choice: false, chat: false }, scope: 'global' },
       // 界面布局：auto = 宽 ≥ 900px 双栏，否则堆叠；immersive 只能由用户进入
       ui: {
         layout: 'auto',          // auto | split | stack | immersive
         splitRatio: 0.5,         // 双栏比例（每栏最小约 28%）
         imageCollapsed: false,   // 舞台收起（聊天占满）
         choices: 'tray',         // 选项显示：tray（默认收起）| always（内联）
-        // 扮演 / 智能体的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
+        // 聊天的字号 / 宽度 / 密度默认（本对话可覆盖；令牌驱动）
         fontScale: 'md',         // sm | md | lg
         width: 'standard',       // narrow | standard | wide
         density: 'standard',     // compact | standard

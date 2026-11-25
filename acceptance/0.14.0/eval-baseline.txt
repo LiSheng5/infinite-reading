@@ -181,7 +181,7 @@ css-structure-test：全部通过
   ok  扫描面包含 index.html
 
 [2] 注释规模（防止扫描失效后假绿）
-  ok  注释行 7734 行（>= 1500）
+  ok  注释行 7735 行（>= 1500）
 
 [3] 外部编号 / 断句残留
   ok  无外部编号与断句残留
@@ -422,7 +422,7 @@ titles-test：全部通过（45 项）
   ✔ 静态：titles 的 assistantText 本地副本已删
 
 回复纯文本口径：51/51 通过
-  [perf] 搜索首次构建（50 故事 × 500 节点）：297ms；单次查询：4ms
+  [perf] 搜索首次构建（50 故事 × 500 节点）：246ms；单次查询：2ms
   ok  query：中文子串命中  [{"nid":"n1","snippet":"走向货架 第八个货架尽头有一张旧照片。","ranges":[[2,4],[8,10]]}]
   ok  query：多词 AND（都命中）
   ok  query：多词 AND（缺一词 → 无结果）
@@ -444,12 +444,12 @@ titles-test：全部通过（45 项）
   ok  增量：更新一个对话后只重建该 id（builds +1）  [builds=4 base=3]
   ok  增量：更新后能搜到新内容
   ok  增量：删除后搜不到
-  ok  性能：50 × 500 节点一次查询 < 500ms（Node）  [build=297ms query=4ms docs=50 nodes=25000]
+  ok  性能：50 × 500 节点一次查询 < 500ms（Node）  [build=246ms query=2ms docs=50 nodes=25000]
   ok  buildDoc：坏 JSON 当纯文本、不抛错  [坏 json 行动 {"narration": 没写完的]
   ok  query：坏 JSON 文档也能搜
 search-test：全部通过（24 项）
   ok  newStory：chat 默认 titleAuto=true、标题「新对话」  [title=雨夜便利店 titleAuto=true]
-  ok  saveStory：索引条目含 mode / turn / titleAuto / snippet  [{"id":"smwvwo28w1t11","title":"雨夜便利店","updatedAt":1795597966688,"thumb":null,"mode":"chat","turn":3,"titleAuto":true,"snippet":"门铃响了，店员抬头看了一眼。","profileId":""}]
+  ok  saveStory：索引条目含 mode / turn / titleAuto / snippet  [{"id":"smwvx04bp1fhf","title":"雨夜便利店","updatedAt":1795598529253,"thumb":null,"mode":"chat","turn":3,"titleAuto":true,"snippet":"门铃响了，店员抬头看了一眼。","profileId":""}]
   ok  saveStory：snippet 取最近一条旁白纯文本  [门铃响了，店员抬头看了一眼。]
   ok  saveStory：没有本对话模型时 profileId 记空串  [""]
   ok  saveStory：索引条目记录 story.prefs.profileId  ["p_alpha"]
@@ -457,8 +457,8 @@ search-test：全部通过（24 项）
   ok  saveStory：剧情新故事 titleAuto=false
   ok  迁移：旧索引补齐 1 条（缺字段的那条）  [{"patched":1,"total":3,"anomalies":[{"id":"gone-id","reason":"missing-story"},{"id":"","reason":"bad-entry"}]}]
   ok  迁移：异常条目被如实记录（无 id / 故事丢失）  [[{"id":"gone-id","reason":"missing-story"},{"id":"","reason":"bad-entry"}]]
-  ok  迁移：补齐后条目含 mode / turn / titleAuto / snippet  [{"id":"smwvwo28y45ew","title":"旧对话","updatedAt":111,"thumb":null,"mode":"chat","turn":5,"titleAuto":false,"snippet":"旧档里的一句旁白。","profileId":""}]
-  ok  迁移：坏条目与丢失故事从索引剔除  [["smwvwo28y45ew"]]
+  ok  迁移：补齐后条目含 mode / turn / titleAuto / snippet  [{"id":"smwvx04br4du9","title":"旧对话","updatedAt":111,"thumb":null,"mode":"chat","turn":5,"titleAuto":false,"snippet":"旧档里的一句旁白。","profileId":""}]
+  ok  迁移：坏条目与丢失故事从索引剔除  [["smwvx04br4du9"]]
   ok  迁移：再跑一次是空操作（幂等）  [{"patched":0,"total":1,"anomalies":[]}]
   ok  删除前：索引与搜索文档都在
   ok  deleteStory：索引同步清理
@@ -736,7 +736,7 @@ ui-state-test：全部通过
   ✔ 请求体：工具数组为空时不带 tools 字段、非空时才带
 
 上下文用量门禁：120/120 通过
-(node:10708) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
+(node:16636) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to D:\infinite-reading\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -792,7 +792,7 @@ To eliminate this warning, add "type": "module" to D:\infinite-reading\package.j
   ✔ 等书记员期间换故事 → 丢弃结果、不落盘
 
 手动压缩（force + compactNow）门禁：48/48 通过
-(node:15540) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
+(node:12328) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to D:\infinite-reading\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -947,9 +947,9 @@ Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不�
 ✓ 切换还原：world 回到 A 线状态  → A 线
 ✓ 切换还原：log / messages 跟着换
 ✓ switchSibling(+1)：切回 B 线并还原
-✓ siblings：两兄弟含自身、按创建序  → ["nmwvwo4lr1zlzu","nmwvwo4ls21got"]
+✓ siblings：两兄弟含自身、按创建序  → ["nmwvx06ic1zuq9","nmwvx06ic215s4"]
 ✓ 深分支就位：head 在 A 线末端
-✓ active 下探：切到兄弟后落在 B 线末端 s3，不是 s2  → nmwvwo4ls28hk2
+✓ active 下探：切到兄弟后落在 B 线末端 s3，不是 s2  → nmwvx06id28rrw
 ✓ active 下探：投影是 B 线第 3 幕
 ✓ active 下探：切回落在 A 线叶子 n3，不是兄弟本身 n2
 ✓ 切换不动树结构
@@ -993,7 +993,7 @@ Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不�
 ✓ serializeStory：视频 scene 字段白名单保留
 ✓ pendingVideos：serializeStory / migrateStory 保留
 ✓  switchTo 到非叶子不下探：head 就落在 n2
-✓  非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）  → nmwvwo4lz3go8d,nmwvwo4lz3ikl3
+✓  非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）  → nmwvx06il3gdko,nmwvx06il3ibuu
 ✓  parent.active 指向新节点
 ✓  原有孩子与其子树不变
 ✓  forkBefore：head 落到 parent
@@ -1002,9 +1002,9 @@ Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不�
 ✓  forkBefore：未知节点返回 ok:false
 ✓  forkBefore：开局节点返回 ok:false  → 开局回合不能改写
 ✓  forkBefore：开局节点拒绝时不动 head
-✓  latestLeaf：沿 active 下探到叶子  → nmwvwo4m03s8xa
+✓  latestLeaf：沿 active 下探到叶子  → nmwvx06im3szyw
 ✓  latestLeaf：叶子就是自己
-✓  latestLeaf：无 active 时取最后一个孩子  → nmwvwo4m03rhmv
+✓  latestLeaf：无 active 时取最后一个孩子  → nmwvx06im3rb3o
 ✓  latestLeaf：未知节点返回 null
 ✓  canResume：正常节点 → true
 ✓  canResume：sid === null → false
@@ -1019,7 +1019,7 @@ Tree：story.tree 不合法，降级重建线性链（当前 log / messages 不�
 ✓  seal：commit 把 entries 起点记进 meta.logFrom  → 2
 ✓  seal：首条被裁掉时按末条找回起点，收进 postTurn 条目  → 行动 2|第 2 幕旁白|scribe
 ✓  seal：log 完全对不上 → entries 保持原样  → 新的
-✓  seal：log 完全对不上 → 留一条 console.warn（不再静默）  → Tree.seal：当前 log 里找不到本回合条目，entries 保持原样（node=nmwvwo4m14ijyb）
+✓  seal：log 完全对不上 → 留一条 console.warn（不再静默）  → Tree.seal：当前 log 里找不到本回合条目，entries 保持原样（node=nmwvx06in4icmz）
 ✓ 手动压缩就位：head 在 B 线叶子、已封存
 ✓ 手动压缩：force 在已封存节点上照压（删 4 条）  → {"compressedTurns":1,"messagesRemoved":4,"summaries":1}
 ✓ 手动压缩：压缩后 messages 只剩最近 1 对  → 2
@@ -1075,7 +1075,7 @@ tree-test：151/151 通过
   ✓ 6. 标签：<script> 原样出现在文本里（无转义）
   ✓ 6. 标签：输出里没有拼好的 HTML / innerHTML
   ✓ 7. 确定性：同输入两次输出深相等
-  ✓ 8. 规模：2001 节点（≥2000）布局 < 500ms（实测 10ms）
+  ✓ 8. 规模：2001 节点（≥2000）布局 < 500ms（实测 8ms）
   ✓ 8. 规模：输出节点数 > 0
   ✓ 9. 空树：返回可渲染的最小结果
   ✓ 9. 空对象：返回可渲染的最小结果
@@ -1253,7 +1253,7 @@ treelayout-test：全部通过
   ✔ 聊天默认态：解析出的开关里四类「测试中」为关、记忆为开
 
 聊天模式门禁：22/22 通过
-(node:8232) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
+(node:16756) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/src/ui/motion.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to D:\infinite-reading\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1677,9 +1677,9 @@ capability-scope-test：全部通过
   ✔ upsert 安全：用户自己 upsert 可以改，状态保持 active
 
 调度器单测：63/63 通过
-(node:13316) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:9740) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:21748) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:13604) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
   ✔ 未开启：拒绝并返回 EMAIL_DISABLED
   ✔ 未开启：审计留痕（denied）
@@ -1730,7 +1730,7 @@ capability-scope-test：全部通过
   ✔ D22 草稿失败：不计入当日已发
 
 邮件单测：47/47 通过
-(node:12784) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:12688) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
   ✔ 未开启：GATEWAY_DISABLED
   ✔ 金额为 0：BAD_AMOUNT
@@ -2879,7 +2879,7 @@ sidecar 冒烟测试：60/60 通过
   ok  saveAll 被 17 个 app 模块命名 import（≥10）
   ok  toast 被 19 个 app 模块命名 import（≥10）
 app-structure-test：全部通过
-(node:12040) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/eval/app-structure-test.js is not specified and it doesn't parse as CommonJS.
+(node:18180) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///D:/infinite-reading/eval/app-structure-test.js is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to D:\infinite-reading\package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
