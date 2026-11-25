@@ -95,7 +95,7 @@ function commentsOf(text) {
 }
 
 /* ---------------- 1. 外部编号 ---------------- */
-const DOC_NAMES = /(ARCHITECTURE(?:\.md)?|README(?:\.en)?\.md|CONTRIBUTING\.md|RELEASE_NOTES\.md|sidecar\/README\.md)\s*$/;
+const DOC_NAMES = /(ARCHITECTURE(?:\.md)?|README(?:\.en)?\.md|CONTRIBUTING\.md|sidecar\/README\.md)\s*$/;
 
 const RULES = [
   { re: /任务书/, why: '外部任务书编号：把结论就地写清，或改引仓内文档' },
