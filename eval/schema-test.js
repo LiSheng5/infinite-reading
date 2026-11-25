@@ -240,46 +240,13 @@ function part4() {
   const msIdem = diffFields(ms, msAgain, 'settings');
   check('设置归一幂等（再归一次逐字段不变）', msIdem.length === 0, msIdem.slice(0, 3).join(' || '));
 
-  // —— 4.3 旧键（infinite-reading-v1:*）→ migrateLegacy ——
-  const mem = new Map();
-  global.localStorage = {
-    getItem: k => (mem.has(k) ? mem.get(k) : null),
-    setItem: (k, v) => { mem.set(k, String(v)); },
-    removeItem: k => { mem.delete(k); },
-    key: i => Array.from(mem.keys())[i] || null,
-    get length() { return mem.size; },
-  };
-  mem.set('infinite-reading-v1:story', JSON.stringify({
-    title: 'v0.1 故事', premise: '老前提',
-    log: [{ type: 'narration', text: '开场', ts: 1 }],
-  }));
-  mem.set('infinite-reading-v1:settings', JSON.stringify({
-    chat: { provider: 'openai-compatible', baseUrl: 'https://y', apiKey: 'sk-v1', model: 'old' },
-  }));
-  // 旧档迁移依赖内存态 store：先 boot 再迁（幂等标记未写过就一定迁）
-  Store.boot().then(() => {
-    const res = Store.migrateLegacy();
-    check('v0.1 旧键迁移返回 storyId', !!(res && res.storyId), JSON.stringify(res));
-    const st = res && res.storyId ? Store.loadStory(res.storyId) : null;
-    check('v0.1 故事迁移后过 schema 校验', !!st && Schema.checkStory(st).length === 0,
-      st ? Schema.checkStory(st).slice(0, 3).join(' | ') : '（读不到）');
-    const s2 = Store.loadSettings();
-    check('v0.1 设置迁移生效（model=old）', s2 && s2.chat && s2.chat.model === 'old', JSON.stringify(s2 && s2.chat));
-    const again = Store.migrateLegacy();
-    check('v0.1 迁移幂等（第二次跳过）', again === null, JSON.stringify(again));
-
-    // —— 4.4 tree.ensure：无树的故事 → 线性链，且过 schema ——
-    const plain = Store.migrateStory({ schema: Store.SCHEMA, id: 'lin1', title: '线性', log: [{ type: 'player', text: '走', ts: 1 }] });
-    Tree.ensure(plain);
-    const pt = Schema.checkStory(plain);
-    check('无树故事 ensure 后过检（线性链）', pt.length === 0 && plain.tree && plain.tree.root,
-      pt.slice(0, 3).join(' | '));
-
-    done();
-  }).catch(e => {
-    check('v0.1 迁移流程', false, String(e));
-    done();
-  });
+  // —— 4.3 tree.ensure：无树的故事 → 线性链，且过 schema ——
+  const plain = Store.migrateStory({ schema: Store.SCHEMA, id: 'lin1', title: '线性', log: [{ type: 'player', text: '走', ts: 1 }] });
+  Tree.ensure(plain);
+  const pt = Schema.checkStory(plain);
+  check('无树故事 ensure 后过检（线性链）', pt.length === 0 && plain.tree && plain.tree.root,
+    pt.slice(0, 3).join(' | '));
+  done();
 }
 
 function done() {

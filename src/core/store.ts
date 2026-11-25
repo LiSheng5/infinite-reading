@@ -8,7 +8,8 @@
  *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 src/core/tree.ts）
  *  - 主库 = IndexedDB（见 src/core/storage.ts）：解除 localStorage 约 5MB 的天花板，
  *    原图以 Blob 存 images store，不再转成 base64 塞进文本
- *  - 旧档（infinite-reading-v1:*）自动迁移，不覆盖旧数据（可回退）
+ *  - 不再兼容旧版本存档 / 旧版导出文件（localStorage 时代的 ir:* 数据与
+ *    infinite-reading-v1:* 旧键都不再迁移；门槛见 storyTooOld / storyPackTooOld）
  *
  * 【内存优先】为什么这么写：
  *   localStorage 是同步的，IndexedDB 是异步的。若把 API 改成 async，src/app/ 下几十处
@@ -16,12 +17,11 @@
  *   所以 boot() 时一次性把数据读进内存，之后所有 API **保持同步签名**：
  *   读 = 读内存；写 = 改内存 + 后台异步落盘（失败走 onPersistError 回调提示）。
  *
- * 【迁移】localStorage → IndexedDB 是一次性的、幂等的：
- *   读源 → 写入 → 读回校验 → 全通过才写标记 ir:migrated-v3。
- *   任何一步失败都不写标记、不改动 localStorage，并让本次会话退回 localStorage 模式运行。
- *   成功后 localStorage 里的旧数据**原样保留**（作为回退快照，只增不减），所以不会丢档。
+ * 【回退】IndexedDB 用不了（Node 评测 / 老浏览器 / 被其它标签页占用）时，本次会话退回
+ *   localStorage / 进程内内存运行：功能一致，只是容量仍受约 5MB 限制。新安装直接以
+ *   IndexedDB 为主库，不再做 localStorage → IndexedDB 的一次性搬运。
  *
- * 纯逻辑、零依赖；以 ES module 导出，Node 亦可加载（评测 / 迁移自测用：
+ * 纯逻辑、零依赖；以 ES module 导出，Node 亦可加载（评测用：
  * 没有 indexedDB 与 localStorage 时自动走进程内内存，行为与旧版一致）。
  */
 const global = globalThis as any;
@@ -46,15 +46,6 @@ import { APP_VERSION } from './version.ts';
     story: id => 'ir:story:' + id,
     current: 'ir:current',
     userProfile: 'ir:user-profile',
-    migrated: 'ir:migrated-v2',
-  };
-
-  const MIGRATED_V3 = 'ir:migrated-v3';           // localStorage → IndexedDB 迁移标记
-
-  // 旧键，只读、不删（迁移失败还能退回旧版本）
-  const LEGACY = {
-    settings: 'infinite-reading-v1:settings',
-    story: 'infinite-reading-v1:story',
   };
 
   /* ---------------- 存储后端：IndexedDB 优先，失败退回 localStorage ---------------- */
@@ -172,21 +163,6 @@ import { APP_VERSION } from './version.ts';
     }
     delLS(KEYS.story(id));
   }
-  function readFlag(key) {
-    if (useIDB) return !!MEM.kv[key];
-    return !!rawLS(key);
-  }
-  function writeFlag(key, on) {
-    if (useIDB) {
-      MEM.kv[key] = on ? 1 : null;
-      track(Storage.put('kv', key, on ? 1 : null).catch(persistFail));
-      return;
-    }
-    // 与 writeLSJSON 同一告警口径：配额满等失败不再静默吞掉
-    try { if (on) ls().setItem(key, '1'); else ls().removeItem(key); }
-    catch (e) { console.warn('写入失败（可能超出本地存储限额）', key, e); }
-  }
-
   // ID 生成统一走 tree 的 genId：不再各写时间戳+随机变体。
   // 默认前缀 's'（故事），需要别的前缀时显式传（如 genId('pf')）。
   function genId(prefix?) {
@@ -734,51 +710,7 @@ import { APP_VERSION } from './version.ts';
     return e;
   }
 
-  /* ---------------- boot：装载内存 + localStorage → IndexedDB 一次性迁移 ---------------- */
-
-  // 把 localStorage 里的 ir:* 存档整体搬进 IndexedDB。
-  // 幂等（有标记就跳过）；先写后校验，全通过才写标记；任何失败都抛出去交给 boot() 决定。
-  async function migrateLocalStorageToIDB() {
-    const report = { stories: 0, settings: false, userProfile: false, skipped: false };
-
-    if (await Storage.get('kv', MIGRATED_V3)) { report.skipped = true; return report; }
-
-    const settings = readLSJSON(KEYS.settings);
-    const profile = readLSJSON(KEYS.userProfile);
-    const rawIndex = readLSJSON(KEYS.index);
-    const index = Array.isArray(rawIndex) ? rawIndex : [];
-    const currentId = rawLS(KEYS.current);
-    const legacyFlag = !!rawLS(KEYS.migrated);
-
-    const pairs = [];
-    for (const it of index) {
-      if (!it || !it.id) continue;
-      const raw = readLSJSON(KEYS.story(it.id));
-      if (raw) pairs.push([it.id, raw]);
-    }
-
-    // ① 写入
-    if (settings) { await Storage.put('kv', KEYS.settings, settings); report.settings = true; }
-    if (profile) { await Storage.put('kv', KEYS.userProfile, profile); report.userProfile = true; }
-    if (index.length) await Storage.put('kv', KEYS.index, index);
-    if (currentId) await Storage.put('kv', KEYS.current, currentId);
-    if (legacyFlag) await Storage.put('kv', KEYS.migrated, 1);
-    for (const [id, raw] of pairs) await Storage.put('stories', id, raw);
-    report.stories = pairs.length;
-
-    // ② 校验：读回来对一遍，对不上就当迁移失败（宁可不迁移，也不能丢档）
-    if (settings && !(await Storage.get('kv', KEYS.settings))) throw new Error('校验失败：设置没写进 IndexedDB');
-    if (index.length && (await Storage.get('kv', KEYS.index) || []).length !== index.length) {
-      throw new Error('校验失败：故事索引条数与 localStorage 不一致');
-    }
-    for (const [id] of pairs) {
-      if (!(await Storage.get('stories', id))) throw new Error('校验失败：故事 ' + id + ' 没写进 IndexedDB');
-    }
-
-    // ③ 全部通过 → 写标记（下次启动直接跳过；localStorage 原样保留当回退快照）
-    await Storage.put('kv', MIGRATED_V3, { at: Date.now(), stories: report.stories });
-    return report;
-  }
+  /* ---------------- boot：装载内存 ---------------- */
 
   // 「被另一个标签页挡住」是瞬时状态（对方升级完就解除），与「库坏了 / 浏览器不支持」要分开：
   // 前者仍可重试，后者才该安静地降级。
@@ -787,20 +719,8 @@ import { APP_VERSION } from './version.ts';
   }
 
   async function boot() {
-    const out: any = { backend: 'localstorage', migrated: null, error: null, blocked: false };
+    const out: any = { backend: 'localstorage', error: null, blocked: false };
     if (!hasIDB) return out;                       // Node / 老浏览器：与旧版行为一致
-
-    try {
-      out.migrated = await migrateLocalStorageToIDB();
-    } catch (e) {
-      useIDB = false;                              // 迁移失败：退回 localStorage，数据一处不动
-      out.error = String((e && e.message) || e);
-      out.blocked = isBlockedError(e);
-      bootError = out.error;
-      bootBlocked = out.blocked;
-      console.warn('IndexedDB 迁移失败，已退回 localStorage 模式（原数据未改动）：', e);
-      return out;
-    }
 
     // 读一次 IndexedDB 进内存；失败先重试（打开瞬断 / 版本切换都可能只是暂时的）。
     // 「被别的标签页挡住」多给一次更长的等待：对方升级完就恢复，不值得直接判死整个会话。
@@ -808,19 +728,17 @@ import { APP_VERSION } from './version.ts';
     let lastErr: any = null;
     for (let attempt = 0; attempt <= RETRY_MS.length; attempt++) {
       try {
-        const [settings, index, current, profile, flag, storyPairs] = await Promise.all([
+        const [settings, index, current, profile, storyPairs] = await Promise.all([
           Storage.get('kv', KEYS.settings),
           Storage.get('kv', KEYS.index),
           Storage.get('kv', KEYS.current),
           Storage.get('kv', KEYS.userProfile),
-          Storage.get('kv', KEYS.migrated),
           Storage.entries('stories'),
         ]);
         MEM.kv[KEYS.settings] = settings || null;
         MEM.kv[KEYS.index] = Array.isArray(index) ? index : [];
         MEM.kv[KEYS.current] = (typeof current === 'string' && current) ? current : null;
         MEM.kv[KEYS.userProfile] = Array.isArray(profile) ? profile : [];
-        MEM.kv[KEYS.migrated] = flag ? 1 : null;
         MEM.stories.clear();
         for (const [id, raw] of storyPairs) MEM.stories.set(id, raw);
         out.backend = 'indexeddb';
@@ -1280,36 +1198,10 @@ import { APP_VERSION } from './version.ts';
   }
   function loadCurrent() { return loadStory(getCurrentId()); }
 
-  /* ---------------- 旧档迁移 ---------------- */
-
-  function migrateLegacy() {
-    if (readFlag(KEYS.migrated)) return null;
-    const result = { storyId: null, settings: false };
-
-    const legacyStory = readLSJSON(LEGACY.story);   // 旧键只在 localStorage 里
-    if (legacyStory) {
-      const st = migrateStory(legacyStory);
-      if (st) {
-        st.id = st.id || genId();
-        saveStory(st);
-        setCurrentId(st.id);
-        result.storyId = st.id;
-      }
-    }
-
-    if (!readKV(KEYS.settings)) {
-      const legacySettings = readLSJSON(LEGACY.settings);
-      if (legacySettings) { saveSettings(migrateSettings(legacySettings)); result.settings = true; }
-    }
-
-    writeFlag(KEYS.migrated, true);
-    return result;
-  }
-
   function clearAll() {
     try {
       const ids = listIndex().map(x => x && x.id).filter(Boolean);
-      for (const k of [KEYS.settings, KEYS.index, KEYS.current, KEYS.userProfile, KEYS.migrated]) {
+      for (const k of [KEYS.settings, KEYS.index, KEYS.current, KEYS.userProfile]) {
         if (useIDB) { delete MEM.kv[k]; track(Storage.del('kv', k).catch(() => {})); }
         else delLS(k);
       }
@@ -1320,7 +1212,7 @@ import { APP_VERSION } from './version.ts';
   }
 
   const Store = {
-      SCHEMA, PACK_SCHEMA, KEYS, LEGACY, MIGRATED_V3,
+      SCHEMA, PACK_SCHEMA, KEYS,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
       migrateSettings, migrateProfiles, migrateStory, storyTooOld, storyPackTooOld, serializeStory,
@@ -1331,7 +1223,7 @@ import { APP_VERSION } from './version.ts';
       listIndex, storySnippet, ensureIndexComplete,
       loadUserProfile, saveUserProfile,
       getCurrentId, setCurrentId, loadCurrent,
-      migrateLegacy, clearAll,
+      clearAll,
 
       // 存储后端（IndexedDB 主库 + 回退）
       boot, flush, storageInfo,

@@ -468,8 +468,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     // 原图是 Blob、异步取的：取到后把画面与缩略图重画一遍
     Store.setImageReadyHandler(() => { A.renderStage(); A.renderThumbs(); });
 
-    Store.migrateLegacy();            // 旧档 → （幂等）
-    S.settings = Store.loadSettings();  // 迁移后重新读取
+    S.settings = Store.loadSettings();
     A.watchStageVisibility();           // Ken Burns 离屏暂停
     installShell();                     // 11 个弹窗搬进唯一的壳层（幂等）
     bind();
@@ -498,7 +497,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
       toast('另一个标签页正在使用本地库（可能正在升级），这次先用原来的存储方式：关掉其它标签页后刷新，就能换回 IndexedDB；数据没丢。', true, true);
     } else if (info && info.error) {
       toast('本地存储升级未完成（IndexedDB 用不了），已退回原来的存储方式：数据没丢，但容量仍是约 5MB。', true, true);
-    } else if (info && info.backend === 'indexeddb' && info.migrated && !info.migrated.skipped && info.migrated.stories) {
-      toast('已把 ' + info.migrated.stories + ' 个故事迁移到 IndexedDB：容量不再受 5MB 限制。旧数据仍原样保留在本机，可随时回退。', false, true);
     }
   })();

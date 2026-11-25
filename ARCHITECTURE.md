@@ -170,11 +170,11 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 | store | 内容 | 键 |
 |---|---|---|
-| `kv` | 小数据：设置 / 索引 / 当前故事 / 画像 / 迁移标记 | 见下表 |
+| `kv` | 小数据：设置 / 索引 / 当前故事 / 画像 | 见下表 |
 | `stories` | 单个故事的完整档案（原图除外） | story id |
 | `images` | 原图 Blob（`{ blob, meta, at }`） | imageId（`img:<sceneId>`） |
 
-`kv` 里的键名沿用 localStorage 时代的 `ir:` 前缀（迁移时原样搬，不重命名）：
+`kv` 里的键名沿用 localStorage 时代的 `ir:` 前缀：
 
 | 键 | 内容 |
 |---|---|
@@ -182,10 +182,8 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `ir:story-index` | 书架索引：`{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet }`（`snippet` 每次 `saveStory` 重算；旧索引条目由 `Store.ensureIndexComplete` 幂等补齐） |
 | `ir:current` | 上次打开的故事 id |
 | `ir:user-profile` | 跨故事的玩家画像条目 |
-| `ir:migrated-v2` | v0.1 → v0.2 迁移标记 |
-| `ir:migrated-v3` | localStorage → IndexedDB 迁移标记（**只在 IndexedDB 的 `kv` 里**） |
 
-`localStorage` 现在只承担两件事：① 升级前的旧数据（**只读，迁移后原样保留当回退快照，不再写入**）；② `infinite-reading-v1:*` 旧版键（仅用于一次性迁移）。
+`localStorage` 只在 IndexedDB 用不了时作为本次会话的回退后端（容量仍约 5MB）；**不再做 localStorage → IndexedDB 的一次性搬运，也不再读取 `infinite-reading-v1:*` 旧键**——旧版本存档与旧版导出文件一律不再兼容（见 §4.2 兼容边界）。
 
 ### 4.2 story schema（`Store.newStory`；`SCHEMA` = 3，分支树起）
 
@@ -200,7 +198,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - **兼容边界**：只接受 `schema = 3` 的 story 存档；更低的旧存档（v0.12.0 之前）与旧导出包在导入 / 读取时明确提示「存档版本过旧，不再支持」，**不半加载**（旧字段转换步骤已删除，见 `Store.storyTooOld` / `storyPackTooOld`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 `Tree.LOG_WINDOW`（120）条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 `Tree.SCENE_WINDOW`（12）张、`savepoints` 只保留末 `Tree.SAVEPOINT_KEEP`（5）个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。裁剪窗口的唯一口径在 `src/core/tree.ts` 顶部常量（store 与书架导出一律引用导出值），**不要在别处写字面量**。落盘快照**深拷贝**、`migrateStory` 入口同样先深拷贝——「已保存」内存快照不会被现场就地修改带脏，异步 put 也不会写进未 save 的现场。
 - `pendingVideos[]`（生视频，v0.12.0）：已提交、未出结果的异步任务（`taskId` 等）；切档 / 刷新后由 `src/app/video.js` 据此**续轮询同一任务**（不重复提交），完成 / 取消 / 过期后从数组移除。
-- 当前形状由 `migrateStory` / `migrateSettings` 归一（`migrateStory` 深拷贝后原样保留 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与归一函数**。两个函数是**声明式步骤表**（`STORY_STEPS` / `SETTINGS_STEPS`）：每步 `{ since, what, when, apply }` 各自标出所属版本、幂等判据与动作，主函数只剩 `runSteps` 执行器；顺序即版本顺序（后一步读到前一步的 `out`），新增归一往表尾加一条即可，不需要重读已有步骤。表里只做当前形状的组装 / 清洗 / 补默认值，旧版本字段转换已删除。`migrateLegacy` 仍负责 `infinite-reading-v1:*` 旧键的一次性迁移。
+- 当前形状由 `migrateStory` / `migrateSettings` 归一（`migrateStory` 深拷贝后原样保留 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与归一函数**。两个函数是**声明式步骤表**（`STORY_STEPS` / `SETTINGS_STEPS`）：每步 `{ since, what, when, apply }` 各自标出所属版本、幂等判据与动作，主函数只剩 `runSteps` 执行器；顺序即版本顺序（后一步读到前一步的 `out`），新增归一往表尾加一条即可，不需要重读已有步骤。表里只做当前形状的组装 / 清洗 / 补默认值，旧版本字段转换已删除。
 
 ### 4.3 对外交换格式
 
