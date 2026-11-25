@@ -1,5 +1,5 @@
 /*
- * 无限阅读 · 存档层（story schema v3 + 旧档迁移 + IndexedDB 主库）
+ * 无限阅读 · 存档层（story schema v3 + 当前形状归一 + IndexedDB 主库）
  *
  * 职责：所有存档读写都走这里，避免散落各处。
  *  - 存储前缀统一 ir:（settings / story:<id> / story-index / current / user-profile）
@@ -34,8 +34,11 @@ import { Search } from './search.ts';
 import { APP_VERSION } from './version.ts';
 
 
-  // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 Tree.ensure
+  // schema v3 = v2 + story.tree（分支树）；migrateStory 只透传 tree，建树 / 校验在 Tree.ensure。
+  // 低于当前版本的 story 存档不再兼容（旧字段转换步骤已删除），由 storyTooOld 判出后明确拒绝。
   const SCHEMA = 3;
+  // .irstory 导出包格式版本（与 story 形状版本是两套编号）；更低的包不再兼容
+  const PACK_SCHEMA = 2;
 
   const KEYS = {
     settings: 'ir:settings',
@@ -327,7 +330,7 @@ import { APP_VERSION } from './version.ts';
       noTools: [],            // 护栏：显式 400 拒绝 tools 的模型（baseUrl+model）记住后不再下发
       stylePreset: 'anime',   // 视觉设定卡之前的兜底画风
       styleCustom: '',
-      // 出图时机（trigger）下线——不再写入；旧档里的值原样留在存档（不读、不删）
+      // 出图时机（trigger）已下线——不再写入；旧档里的该键不再迁移
       // 可选本地服务（sidecar）：这里只存「怎么连它」（端口 + token）。
       // 额度 / 白名单 / 每日上限等安全项不在这里，唯一真源在侧车 config.json。
       sidecar: { port: 4319, token: '' },
@@ -380,14 +383,15 @@ import { APP_VERSION } from './version.ts';
     return out;
   }
 
-  /* ---------------- 旧档迁移：声明式步骤表 ----------------
-   * 迁移原先是两个「顺序脚本」（migrateSettings ~110 行、migrateStory ~55 行）：改一处就得读完
-   * 整段，还得自己在脑子里排出「这行属于哪个版本」。现在改成有序步骤表——每步自带
-   * `since`（该形状来自哪一版）、`what`（迁什么）、`when`（幂等判据）、`apply`（动作），
-   * 主函数只剩执行器。约定：
+  /* ---------------- 加载归一：声明式步骤表 ----------------
+   * 步骤原先写在一个「顺序脚本」里：改一处就得读完整段，还得自己在脑子里排出
+   * 「这行属于哪个版本」。现在改成有序步骤表——每步自带 `since`（该形状来自哪一版）、
+   * `what`（做什么）、`when`（幂等判据）、`apply`（动作），主函数只剩执行器。约定：
+   *  - 只做当前形状的组装 / 清洗 / 补默认值；更早版本存档的旧字段转换已删除
+   *    （读不出当前必需字段的过旧文件由 storyTooOld 判出并明确拒绝，不做半加载）；
    *  - 顺序有意义：表按版本升序读，后一步读到的是前一步写好的 out；
-   *  - 幂等：when 只问「数据是否已是新形状」，二次迁移整表跳过（schema-test / prefs-test 守着）；
-   *  - 加迁移 = 表尾加一条，已有步骤不用重读。
+   *  - 幂等：when 只问「数据是否已是新形状」，二次归一整表跳过（schema-test / prefs-test 守着）；
+   *  - 加步骤 = 表尾加一条，已有步骤不用重读。
    */
   type MigrateStep<Ctx> = {
     since: string;                     // 该形状自哪一版 / 哪个阶段存在（沿用代码里的编号，不另编 semver）
@@ -433,14 +437,7 @@ import { APP_VERSION } from './version.ts';
         out.styleCustom = raw.styleCustom || '';
       },
     },
-    // trigger（出图时机）停止读写——defaultSettings 不再写它，
-    // 旧值原样留在存档里（不读、不删），与 split / showImage 旧字段同一处理方式
-    {
-      since: 'v0.11.0',
-      what: 'trigger 下线：旧值原样透传（不读、不删）',
-      when: ({ raw }) => 'trigger' in raw,
-      apply: ({ raw, out }) => { out.trigger = raw.trigger; },
-    },
+    // trigger（出图时机）已下线：defaultSettings 不再写它，旧值也不再迁移（旧档的该键随迁移丢弃）
     // 界面布局（新字段一律给默认值）：非法值回落到 auto / 0.5，比例夹在 28%~72%
     {
       since: 'v0.3 – v0.11.0',
@@ -556,19 +553,6 @@ import { APP_VERSION } from './version.ts';
         if (['16:9', '9:16', '1:1'].indexOf(out.video.ratio) < 0) out.video.ratio = '16:9';
       },
     },
-    // 旧档的 image.size 字符串 → aspect/width/height。旧键一律删除（已在 aspect 上的也不留）
-    {
-      since: 'v0.1',
-      what: 'image.size（512x768）→ aspect / width / height，并删掉旧键',
-      when: () => true,
-      apply: ({ raw, out }) => {
-        if (raw.image && raw.image.size && !raw.image.aspect) {
-          const m = String(raw.image.size).match(/(\d+)\s*[x×]\s*(\d+)/i);
-          if (m) { out.image.width = +m[1]; out.image.height = +m[2]; out.image.aspect = 'custom'; }
-        }
-        delete out.image.size;
-      },
-    },
     // 接入向导写入的接入方式标记（幂等归一）：非法值一律回「厂商直连」
     {
       since: '接入向导',
@@ -635,14 +619,14 @@ import { APP_VERSION } from './version.ts';
     };
   }
 
-  /* 故事迁移表：任意旧档 → 当前形状（顺序即版本顺序，幂等） */
+  /* 故事归一表：当前形状 ← 存档（顺序即版本顺序，幂等） */
   type StoryCtx = { raw: any; out: any };
 
   const STORY_STEPS: Array<MigrateStep<StoryCtx>> = [
-    // 旧版基线：newStory 打底 + 各字段「默认值 ← 旧值」，log / scenes 条目就地归一
+    // 基线：newStory 打底 + 各字段「默认值 ← 存档值」，log 条目就地归一
     {
       since: 'v0.2',
-      what: '字段铺默认值（newStory 打底）；log 走 migrateLogEntry、scenes 走 normVideoFields',
+      what: '字段铺默认值（newStory 打底）；log 走 migrateLogEntry',
       when: () => true,
       apply: (c) => {
         const raw = c.raw;
@@ -664,23 +648,17 @@ import { APP_VERSION } from './version.ts';
         out.savepoints = Array.isArray(raw.savepoints) ? raw.savepoints : [];
         out.ui = Object.assign(defaultUi(), raw.ui || {});
         out.turn = raw.turn || 0;
-        out.scenes = Array.isArray(raw.scenes) ? raw.scenes.map(normVideoFields) : [];
+        out.scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
         out.lastBg = raw.lastBg || null;
         out.lastSceneSummary = raw.lastSceneSummary || '';
       },
     },
-    // 旧存档一律 titleAuto=false（保留现有标题）；只有存档里显式记了才沿用
+    // 存档没记 titleAuto 时按 false（保住现有标题）；显式记了才沿用
     {
       since: 'v0.11.0',
-      what: '旧档 titleAuto=false（保住现有标题）；显式记了才沿用',
+      what: 'titleAuto 缺省 false（保住现有标题）；显式记了才沿用',
       when: () => true,
       apply: (c) => { c.out.titleAuto = ('titleAuto' in c.raw) ? !!c.raw.titleAuto : false; },
-    },
-    {
-      since: 'v0.2',
-      what: '画师线程 ai2Thread → painterThread（新键已在就不动）',
-      when: ({ raw }) => !Array.isArray(raw.painterThread) && Array.isArray(raw.ai2Thread),
-      apply: (c) => { c.out.painterThread = c.raw.ai2Thread; },
     },
     // 已提交未出结果的生视频任务（重启 / 切档后恢复轮询用），原样保留
     {
@@ -700,25 +678,13 @@ import { APP_VERSION } from './version.ts';
       apply: (c) => { c.out.world.scene = c.out.lastSceneSummary; },
     },
     // 分支树原样透传（schema v3）：这里不校验、不依赖 Tree——合法性与降级重建由 Tree.ensure 负责
-    // 视频字段归一同样扫一遍树里的 scenes / entries（漏了会留下两种字段名并存）
     {
       since: 'v0.12.0（schema v3）',
-      what: '分支树原样透传 + 树内 scenes / entries 视频字段归一（poster → thumb、videoUrl → remoteUrl）',
+      what: '分支树原样透传',
       when: ({ raw }) => !!raw.tree,
-      apply: (c) => {
-        c.out.tree = c.raw.tree;
-        const tn = c.out.tree.nodes;
-        if (tn && typeof tn === 'object') {
-          Object.keys(tn).forEach(id => {
-            const n = tn[id];
-            if (!n) return;
-            (Array.isArray(n.scenes) ? n.scenes : []).forEach(normVideoFields);
-            (Array.isArray(n.entries) ? n.entries : []).forEach(normVideoFields);
-          });
-        }
-      },
+      apply: (c) => { c.out.tree = c.raw.tree; },
     },
-    // 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的旧档不报错
+    // 本对话偏好：透传并清洗（sanitizePrefs 丢未知键、剥凭证）；无 prefs 的存档不报错
     {
       since: 'v0.11.0',
       what: '本对话偏好 prefs 透传并清洗（丢未知键、剥凭证）；无 prefs 不长出 prefs',
@@ -727,11 +693,24 @@ import { APP_VERSION } from './version.ts';
     },
   ];
 
-  // v1 / 任意旧档 → 当前形状（幂等）：深拷贝后逐条执行 STORY_STEPS
+  // 过旧判定：低于当前 story 形状版本（缺失 schema 的进程内对象不在此列）。
+  // 迁移步骤只做当前形状归一，读不出必需字段的旧档在这里被明确拒绝，不半加载。
+  function storyTooOld(raw: any): boolean {
+    return !!raw && typeof raw === 'object' && typeof raw.schema === 'number' && raw.schema < SCHEMA;
+  }
+  // 过旧导出包（仅 .irstory）：包格式版本低于当前（schema 2）。
+  // .irbackup 是另一套编号（当前 schema 1），不能套用这个门槛。
+  function storyPackTooOld(pack: any): boolean {
+    return !!pack && typeof pack === 'object' && pack.format === 'ir-story'
+      && typeof pack.schema === 'number' && pack.schema < PACK_SCHEMA;
+  }
+
+  // 存档 → 当前形状（幂等）：深拷贝后逐条执行 STORY_STEPS；过旧存档返回 null
   function migrateStory(raw: any): Story | null {
     if (!raw || typeof raw !== 'object') return null;
+    if (storyTooOld(raw)) return null;
     // 先深拷贝再组装：loadStory 拿到的是 MEM 里的「已保存」对象，tree / messages / savepoints 等
-    // 若原样透传引用，现场改动会把已保存快照带脏（normVideoFields 还会就地归一）。拷贝一次，两侧解耦。
+    // 若原样透传引用，现场改动会把已保存快照带脏。拷贝一次，两侧解耦。
     const ctx: StoryCtx = { raw: JSON.parse(JSON.stringify(raw)), out: null };
     return runSteps(STORY_STEPS, ctx).out;
   }
@@ -741,17 +720,10 @@ import { APP_VERSION } from './version.ts';
     return Prefs.sanitizePrefs(raw);
   }
 
-  // 视频条目字段归一：旧档的 poster / videoUrl 就是现在的 thumb / remoteUrl
-  function normVideoFields(o) {
-    if (!o || typeof o !== 'object') return o;
-    if (o.poster && !o.thumb) o.thumb = o.poster;
-    if (o.videoUrl && !o.remoteUrl) o.remoteUrl = o.videoUrl;
-    return o;
-  }
-
+  // 旁白条目归一：versions / activeVersion 是当前格式（context / cards / round 仍在写），
+  // 缺 versions 的条目按现有 text 补齐一版，保留已有 activeVersion（重复归一不丢当前版本）
   function migrateLogEntry(e) {
     if (!e || typeof e !== 'object') return e;
-    normVideoFields(e);
     if (e.type === 'narration') {
       const versions = Array.isArray(e.versions) && e.versions.length ? e.versions : [e.text || ''];
       // 保留已有的 activeVersion（重复迁移/刷新后不丢当前版本）
@@ -966,7 +938,7 @@ import { APP_VERSION } from './version.ts';
    * 整包再过一遍 stripSecrets，任何层级的 apiKey / key / token / baseUrl 一律剥掉。 */
   function buildStoryPack(st: Story, kind: string, images: any[], settings: any): StoryPack {
     const pack: StoryPack = {
-      format: 'ir-story', schema: 2, kind: kind, app: '无限阅读 v' + APP_VERSION,   // 构建注入
+      format: 'ir-story', schema: PACK_SCHEMA, kind: kind, app: '无限阅读 v' + APP_VERSION,   // 构建注入
       title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
@@ -1023,7 +995,13 @@ import { APP_VERSION } from './version.ts';
   }
   function loadStory(id: string): Story | null {
     if (!id) return null;
-    return migrateStory(readStoryRaw(id));
+    const raw = readStoryRaw(id);
+    if (storyTooOld(raw)) {
+      // 过旧存档不半加载：调用方按「故事不存在」处理，日志留痕便于排查
+      console.warn('存档版本过旧，不再支持：' + id + '（schema ' + raw.schema + '）');
+      return null;
+    }
+    return migrateStory(raw);
   }
   function deleteStory(id) {
     if (!id) return;
@@ -1342,10 +1320,10 @@ import { APP_VERSION } from './version.ts';
   }
 
   const Store = {
-      SCHEMA, KEYS, LEGACY, MIGRATED_V3,
+      SCHEMA, PACK_SCHEMA, KEYS, LEGACY, MIGRATED_V3,
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
-      migrateSettings, migrateProfiles, migrateStory, serializeStory,
+      migrateSettings, migrateProfiles, migrateStory, storyTooOld, storyPackTooOld, serializeStory,
       buildStoryPack, sanitizePrefsSafe,
       newStory,
       loadSettings, saveSettings,

@@ -197,9 +197,10 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 - `ui`（随故事记住的界面状态）：只写 `kind`（`do|say|direct`，输入框左侧的做 / 说 / 导演）。旧档里遗留的 `split / showImage / immersive` 读档时由 `Object.assign(defaultUi(), raw.ui)` 原样带过、不读取也不删除（新档不再写）；布局已统一到 `settings.ui`（`layout / splitRatio / imageCollapsed / choices`）。
 - `prefs`（本对话偏好，全部可选、缺省 = 跟随全局）：`profileId`（**只存引用 id，绝不存 apiKey / baseUrl**）+ `profileLabel`（显示用「名称 · 模型名」）、`choices`、`showReasoning`、`tools{image,memory,schedule,email,payment}`、`ui{layout,splitRatio,imageCollapsed,fontScale,width,density}`。`migrateStory` 透传并经 `Prefs.sanitizePrefs` 清洗（丢未知键、剥凭证形字段）；`serializeStory` 落盘同样清洗。`trigger`（出图时机）v0.11.0 起已不在白名单里：旧档 / 旧包里残留的值按未知键丢弃、不报错，也不回写。
 - `tree`（分支树，schema 3 起）：回合树是**唯一真源**（`root / head / nodes / states`），`log / messages / scenes / world / summaries / …` 全是「根 → head」路径的投影（`Tree.project`）。重试 = 在同一父节点下新增兄弟节点；有兄弟的回合用 ‹ n/m › 切换。无 tree 的旧档由 `Tree.ensure` 幂等迁移成线性链（只按现存 messages / log 成对生成节点，不丢当前内容）。
+- **兼容边界**：只接受 `schema = 3` 的 story 存档；更低的旧存档（v0.12.0 之前）与旧导出包在导入 / 读取时明确提示「存档版本过旧，不再支持」，**不半加载**（旧字段转换步骤已删除，见 `Store.storyTooOld` / `storyPackTooOld`）。
 - 写盘前经 `serializeStory` 裁剪：`log` 只保留末 `Tree.LOG_WINDOW`（120）条、图片的 `src` 置空（缩略图另存）、`scenes` 只保留末 `Tree.SCENE_WINDOW`（12）张、`savepoints` 只保留末 `Tree.SAVEPOINT_KEEP`（5）个；**裁剪不作用在 `tree` 上**（树里按节点存着全量条目 / 场景元数据）。裁剪窗口的唯一口径在 `src/core/tree.ts` 顶部常量（store 与书架导出一律引用导出值），**不要在别处写字面量**。落盘快照**深拷贝**、`migrateStory` 入口同样先深拷贝——「已保存」内存快照不会被现场就地修改带脏，异步 put 也不会写进未 save 的现场。
 - `pendingVideos[]`（生视频，v0.12.0）：已提交、未出结果的异步任务（`taskId` 等）；切档 / 刷新后由 `src/app/video.js` 据此**续轮询同一任务**（不重复提交），完成 / 取消 / 过期后从数组移除。
-- 旧存档由 `migrateStory` / `migrateSettings` / `migrateLegacy` 升级（`migrateStory` 深拷贝后原样保留 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与迁移函数**。两个迁移函数是**声明式步骤表**（`STORY_STEPS` / `SETTINGS_STEPS`）：每步 `{ since, what, when, apply }` 各自标出所属版本、幂等判据与动作，主函数只剩 `runSteps` 执行器；顺序即版本顺序（后一步读到前一步的 `out`），新增迁移往表尾加一条即可，不需要重读已有步骤。
+- 当前形状由 `migrateStory` / `migrateSettings` 归一（`migrateStory` 深拷贝后原样保留 `tree`，不校验），**改动结构必须同步升级 `SCHEMA` 与归一函数**。两个函数是**声明式步骤表**（`STORY_STEPS` / `SETTINGS_STEPS`）：每步 `{ since, what, when, apply }` 各自标出所属版本、幂等判据与动作，主函数只剩 `runSteps` 执行器；顺序即版本顺序（后一步读到前一步的 `out`），新增归一往表尾加一条即可，不需要重读已有步骤。表里只做当前形状的组装 / 清洗 / 补默认值，旧版本字段转换已删除。`migrateLegacy` 仍负责 `infinite-reading-v1:*` 旧键的一次性迁移。
 
 ### 4.3 对外交换格式
 
@@ -209,13 +210,13 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `.irbackup.json` | `buildBackupPack` / `doBackupAll` | `{format:'ir-backup', schema:1, app, exportedAt, settings, userProfile, stories[]}`，默认剥掉 API Key |
 | `.irbackup.zip` | `buildBackupZip` / `doBackupAll`（勾选「带上原图」） | 同一个包里两样东西：`ir-backup.json`（同上，`schema:2` 多一份 `images:[{id, path, type, size}]` 清单）+ `images/0001.png…`（原图按二进制原样存放，**不转 base64**）。原图 4 路并发读取，但清单顺序恒按 `ids`（`mapLimit` 按下标归位），文件名编号与串行时逐字一致 |
 
-导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。`.zip` 由 `handleImportFile` 先判扩展名 → `importZipFile` 解包取 `ir-backup.json`，再走同一条 `applyBackupImport(obj, entries)`，原图按清单写回 IndexedDB。
+导入统一走 `handleImportFile` → `applyImport`，按 `format` 分派：备份整体还原、`kind:'premise'` 进开局向导、其余建新档续玩。`.zip` 由 `handleImportFile` 先判扩展名 → `importZipFile` 解包取 `ir-backup.json`，再走同一条 `applyBackupImport(obj, entries)`，原图按清单写回 IndexedDB。**过旧文件明确拒绝**：`.irstory` 的包格式 `schema < 2` 直接提示「存档版本过旧，不再支持」；备份里的 story `schema < 3` 跳过并在还原结果里说明（`.irbackup` 的 `schema:1` 是当前编号，不套用这个门槛）。
 
 ### 4.4 设置分层与模型库（v0.9.0）
 
 **两层设置**：
 
-- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices` + `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 对旧值原样透传、不读不删；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。`chat.thinking`（思考档位）v0.13.0 起同样下线：`defaultSettings` 不再写它，旧档里的值原样带过、不读不删，厂商形参写进 `extraParams`。）
+- **全局设置**（`settings`，跨所有对话）：`chat`（默认主模型）、`profiles[]`（模型库，每条 `{id, name, provider, baseUrl, apiKey, model, temperature, contextWindow, extraParams}`，形状沿用 `chat`；`chat` 本身视作 id `'default'`，不进数组）、`painter / scribe / draft`（子代理，本期仍全局）、`image`、`video`（生视频：`duration / resolution / ratio` 以设置面板控件为唯一来源，`extraParams` 只补其它键）、`stylePreset / styleCustom`（视觉设定卡之前的兜底画风与自定义画风）、`userProfile`、`ui`（`layout / splitRatio / imageCollapsed / choices` + `fontScale / width / density` 默认）、`showReasoning`、`toolsEnabled / noTools`、`sidecar`、备份时间戳。（`trigger`（出图时机）v0.11.0 起下线：`defaultSettings` 不再写它，`migrateSettings` 也不再迁移旧值（旧键随之丢弃）；`story.prefs` 不再收 `trigger`，`sanitizePrefs` 按未知键丢弃、导入旧包不报错。`chat.thinking`（思考档位）v0.13.0 起同样下线：`defaultSettings` 不再写它，旧档里的值原样带过、不读不删，厂商形参写进 `extraParams`。）
 - **本对话设置**（`story.prefs`）：见 §4.2。解析顺序一律 `.effective(settings, story, key)`（本对话覆盖 → 全局默认）；`profileId` 找不到对应 profile 时回退默认并在面板提示「原对话使用的模型 X 在本机不存在」。
 
 **主模型请求配置**：所有发给主模型的请求（回合 / 重试 / 主动消息 / 工具重发）走 `.resolveChatCfg(settings, story)` → `{cfg, source, missing}`，**不再直接读 `settings.chat`**；依赖模型的派生量跟着有效配置走：`chatContextWindow()`（70% 压缩阈值 `Context.compressThreshold`）、`extraParams`、`noTools`（按 `baseUrl + model` 记忆，天然随配置走）。子代理（画师 / 书记员 / 起草）仍走 `resolveSub`（回落 `settings.chat`，本期不变）。回合提交在节点 `meta.model` 记模型名字符串（无密钥 / URL）。

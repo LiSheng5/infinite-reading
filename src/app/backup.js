@@ -194,8 +194,9 @@ import { A, toast } from './core.js';
       { title: '导入备份', okText: '还原' }
     );
     if (!ok) return;
-    let n = 0;
+    let n = 0, old = 0;
     for (const raw of stories) {
+      if (Store.storyTooOld(raw)) { old++; continue; }   // 过旧存档不再兼容：跳过并在结果里明说
       const s2 = Store.migrateStory(raw);
       if (!s2 || !s2.id) continue;
       Store.saveStory(s2);
@@ -223,6 +224,7 @@ import { A, toast } from './core.js';
     A.renderShelf();
     renderStoragePanel();
     toast('已还原备份：' + n + ' 个故事'
+      + (old ? '；有 ' + old + ' 个故事版本过旧，不再支持' : '')
       + (imgs ? ' + ' + imgs + ' 张原图' : '')
       + (lost
         ? '；有 ' + lost + ' 张原图没还原'
@@ -314,6 +316,8 @@ import { A, toast } from './core.js';
   function applyImport(obj) {
     if (obj && obj.format === 'ir-backup') { applyBackupImport(obj); return; }   // 整体备份还原
     if (!obj || obj.format !== 'ir-story') { toast('这不是一个 .irstory.json / .irbackup.json 档案', true, true); return; }
+    // 过旧导出包不再兼容：直接明确拒绝，不半加载
+    if (Store.storyPackTooOld(obj)) { toast('存档版本过旧，不再支持（请用新版本重新导出）', true, true); return; }
     if (obj.kind === 'premise') {
       // 精简设定包 → 预填开局向导（路径①）
       closeModal('modal-new');

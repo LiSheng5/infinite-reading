@@ -55,7 +55,7 @@ function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
 function newStory() {
   return {
-    schema: 2, id: 'test-story', title: '测试', premise: '在雨夜的车站。',
+    schema: S.SCHEMA, id: 'test-story', title: '测试', premise: '在雨夜的车站。',
     mode: 'choice',
     log: [], messages: [], scenes: [],
     world: { place: '车站', time: '雨夜', characters: [], threads: [], relationship: { stage: '', bonds: [], notes: '' }, scene: '', updatedAt: 0, scribeAt: 0 },
@@ -563,17 +563,6 @@ function headTo(story, nodeId) {
     const raw = S.serializeStory(s);
     const back = S.migrateStory(raw);
     return back.pendingVideos.length === 1 && back.pendingVideos[0].taskId === 'tk1';
-  })());
-
-  check('migrateStory：旧字段 poster / videoUrl 归一到 thumb / remoteUrl', (() => {
-    const old = S.migrateStory({
-      id: 'old-vd', title: 'x', mode: 'choice',
-      scenes: [{ id: 'vdOld', kind: 'video', poster: 'data:image/jpeg;base64,P', videoUrl: 'https://cdn/old.mp4', ts: 1 }],
-      log: [{ type: 'video', id: 'vdOld', poster: 'data:image/jpeg;base64,P', videoUrl: 'https://cdn/old.mp4', ts: 1 }],
-    });
-    const sc = old.scenes[0];
-    return sc.thumb === 'data:image/jpeg;base64,P' && sc.remoteUrl === 'https://cdn/old.mp4'
-      && old.log[0].thumb === 'data:image/jpeg;base64,P' && old.log[0].remoteUrl === 'https://cdn/old.mp4';
   })());
 }
 

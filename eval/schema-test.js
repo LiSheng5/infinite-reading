@@ -3,15 +3,15 @@
 /* eval/schema-test.js —— schema 回归测试（验收门禁）
  *
  * 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
- * 旧版本存档仍能迁移」。这里跑**数据层**的同一口径：
+ * 当前形状的存档归一幂等；过旧文件明确拒绝」。这里跑**数据层**的同一口径：
  *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 IR.Schema 校验
  *      ——类型以真实档案形状为准的可执行证明，档案绝不反过来迁就类型；
  *   ② 导入 → 还原 → 导出逐字段一致：夹具 .irstory.json → storyFromPack（真实导入路径）
  *      → saveStory / loadStory（真实存盘往返）→ buildStoryPack（真实导出）→ 与原包逐字段比对
  *      （只忽略 fixture.mjs RULES_STORY 里同一份「注定会变」清单）；
- *   ③ 全量备份往返：backup-plain 的每个 story 迁移 / 序列化稳定、重打包逐字段一致；
- *   ④ 旧档：旧键迁移（migrateLegacy）、schema v2 旧字段（ai2Thread / poster /
- *      videoUrl / image.size / prefs.trigger+apiKey）与旧 provider 别名全部能迁。
+ *   ③ 全量备份往返：backup-plain 的每个 story 归一 / 序列化稳定、重打包逐字段一致；
+ *   ④ 当前形状：narration versions 补齐、prefs 清洗、设置归一与幂等；
+ *      过旧存档（schema < 3）与过旧导出包（schema < 2）明确拒绝，不半加载。
  *
  * 用法：node eval/schema-test.js（任一不过 → 退出码 1）
  */
@@ -181,76 +181,64 @@ function part3() {
   part4();
 }
 
-/* ================= ④ 旧版本存档仍能迁移 ================= */
+/* ================= ④ 当前形状归一 + 过旧文件明确拒绝 ================= */
 function part4() {
-  console.log('[4] 0.11 及更早存档迁移');
-  // —— 4.1 schema v2 旧字段：ai2Thread→painterThread、poster→thumb、videoUrl→remoteUrl、
-  //      narration 无 versions 补齐、image.size 遗留键 ——
-  const oldStory = {
-    schema: 2, id: 'old-011', title: '旧档', mode: 'choice', createdAt: 1, updatedAt: 2,
+  console.log('[4] 当前形状归一 / 过旧存档拒绝');
+  // —— 4.0 过旧存档 / 过旧导出包：明确拒绝，不半加载 ——
+  const tooOld = { schema: 2, id: 'old-011', title: '旧档', mode: 'choice', log: [{ type: 'narration', text: '第一幕', ts: 10 }] };
+  check('过旧存档（schema 2 < 当前 3）不再迁移', Store.migrateStory(tooOld) === null && Store.storyTooOld(tooOld));
+  check('过旧导出包（schema 1 < 当前 2）不再兼容',
+    Store.storyPackTooOld({ format: 'ir-story', schema: 1 })
+      && !Store.storyPackTooOld({ format: 'ir-story', schema: Store.PACK_SCHEMA })
+      && !Store.storyPackTooOld({ format: 'ir-backup', schema: 1 }));
+  check('当前形状的存档照常迁移',
+    !Store.storyTooOld({ schema: Store.SCHEMA })
+      && !!Store.migrateStory({ schema: Store.SCHEMA, id: 'cur', title: '当前', mode: 'choice' }));
+
+  // —— 4.1 当前形状：narration versions 补齐、prefs 清洗、无 tree 不长 tree、幂等 ——
+  const curStory = {
+    schema: Store.SCHEMA, id: 'cur-011', title: '当前档', mode: 'choice', createdAt: 1, updatedAt: 2,
     log: [
       { type: 'narration', text: '第一幕', ts: 10 },
-      { type: 'image', id: 'im1', prompt: 'p', alt: 'a', poster: 'data:image/jpeg;base64,x', videoUrl: 'http://expire/link', ts: 11 },
+      { type: 'image', id: 'im1', prompt: 'p', alt: 'a', thumb: 'data:image/jpeg;base64,x', ts: 11 },
     ],
-    ai2Thread: [{ text: '画师旧线程' }],
-    scenes: [{ id: 'im1', poster: 'data:image/jpeg;base64,x', videoUrl: 'http://expire/link', ts: 12 }],
-    prefs: { apiKey: 'sk-LEAK', trigger: 'turn', profileId: 'pf-1', junk: 1 },
+    prefs: { apiKey: 'sk-LEAK', profileId: 'pf-1', junk: 1 },
   };
-  const m = Store.migrateStory(oldStory);
+  const m = Store.migrateStory(curStory);
   const p = Schema.checkStory(m);
-  check('0.11 旧字段迁移后过 schema 校验', p.length === 0, p.slice(0, 5).join(' | '));
-  check('ai2Thread → painterThread', Array.isArray(m.painterThread) && m.painterThread.length === 1
-    && m.painterThread[0].text === '画师旧线程', JSON.stringify(m.painterThread));
-  check('poster → thumb、videoUrl → remoteUrl（log 条目，旧键原样保留）',
-    m.log[1].thumb === 'data:image/jpeg;base64,x' && m.log[1].remoteUrl === 'http://expire/link'
-    && m.log[1].poster === 'data:image/jpeg;base64,x' && m.log[1].videoUrl === 'http://expire/link',
-    JSON.stringify(m.log[1]));
-  check('poster → thumb、videoUrl → remoteUrl（scenes，旧键原样保留）',
-    m.scenes[0].thumb === 'data:image/jpeg;base64,x' && m.scenes[0].remoteUrl === 'http://expire/link'
-    && m.scenes[0].poster === 'data:image/jpeg;base64,x',
-    JSON.stringify(m.scenes[0]));
+  check('当前形状存档归一后过 schema 校验', p.length === 0, p.slice(0, 5).join(' | '));
   check('narration 无 versions → 补齐 versions/activeVersion',
     Array.isArray(m.log[0].versions) && m.log[0].versions.length === 1 && m.log[0].activeVersion === 0
     && m.log[0].text === m.log[0].versions[0], JSON.stringify(m.log[0]));
-  check('prefs 凭证与旧键剥净（apiKey / trigger / junk）',
-    m.prefs && !('apiKey' in m.prefs) && !('trigger' in m.prefs) && !('junk' in m.prefs)
+  check('prefs 凭证与未知键剥净（apiKey / junk）',
+    m.prefs && !('apiKey' in m.prefs) && !('junk' in m.prefs)
     && m.prefs.profileId === 'pf-1', JSON.stringify(m.prefs));
-  check('无 tree 的旧档不造 tree 字段', !('tree' in m) || m.tree == null, JSON.stringify(Object.keys(m)));
-  // 迁移表整体幂等：旧档迁一次后再迁一次，逐字段不变（某步的 when 写错会在这里爆）
+  check('无 tree 的存档不长出 tree 字段', !('tree' in m) || m.tree == null, JSON.stringify(Object.keys(m)));
+  // 归一表整体幂等：再归一次逐字段不变（某步的 when 写错会在这里爆）
   const mAgain = Store.migrateStory(m);
   const mIdem = diffFields(m, mAgain, 'story');
-  check('旧档迁移整表幂等（再迁一次逐字段不变）', mIdem.length === 0, mIdem.slice(0, 3).join(' || '));
+  check('当前形状归一幂等（再归一次逐字段不变）', mIdem.length === 0, mIdem.slice(0, 3).join(' || '));
 
-  // —— 4.2 旧设置：provider 别名、video 控件折回、trigger 下线、旧 image.size ——
+  // —— 4.2 设置归一：provider 归一、video 控件折回、profiles 补 id ——
   const oldSettings = {
     chat: { provider: 'openai-compatible', baseUrl: 'https://x', apiKey: 'sk-1', model: 'mm' },
-    image: { provider: 'minimax', apiKey: 'sk-2', model: 'i', size: '512x768' },
+    image: { provider: 'minimax', apiKey: 'sk-2', model: 'i' },
     video: { provider: 'minimax', apiKey: 'sk-3', extraParams: 'duration=8, resolution=1080P, ratio=9:16, foo=bar' },
-    trigger: 'turn',
     profiles: [{ name: '无 id' }, { id: 'p2', model: 'm2' }],
   };
   const ms = Store.migrateSettings(oldSettings);
   check('image.provider 旧别名 minimax → minimax-image', ms.image.provider === 'minimax-image', ms.image.provider);
-  check('image.size → aspect/width/height（v0.1 遗留）',
-    ms.image.aspect === 'custom' && ms.image.width === 512 && ms.image.height === 768 && !('size' in ms.image),
-    JSON.stringify(ms.image));
   check('video.provider 旧别名 → minimax-video', ms.video.provider === 'minimax-video', ms.video.provider);
   check('video.extraParams 折回控件（duration/resolution/ratio）且不留同名键',
     ms.video.duration === 8 && ms.video.resolution === '1080P' && ms.video.ratio === '9:16'
     && !/duration/.test(ms.video.extraParams) && /bar/.test(ms.video.extraParams),
     JSON.stringify(ms.video));
-  // trigger（出图时机）停止读写——defaultSettings 不再写它，
-  // 旧档里的值**原样留在存档**（不读、不删）：迁移后仍可见，但默认包里永远没有
-  check('trigger 不读不删（旧档值原样留存，默认包不再写）',
-    ms.trigger === 'turn' && !('trigger' in Store.defaultSettings()),
-    'ms.trigger=' + ms.trigger);
   check('profiles 幂等补 id', Array.isArray(ms.profiles) && ms.profiles.length === 2
     && ms.profiles.every(x => x && typeof x.id === 'string' && x.id), JSON.stringify(ms.profiles));
-  // 迁移表整体幂等：四类旧形状（provider / video / trigger / image.size）都迁过一遍后，
-  // 再迁一次必须逐字段不变——任何一步的 when 写得太宽，这里立刻爆
+  // 归一表整体幂等：再归一次必须逐字段不变——任何一步的 when 写得太宽，这里立刻爆
   const msAgain = Store.migrateSettings(JSON.parse(JSON.stringify(ms)));
   const msIdem = diffFields(ms, msAgain, 'settings');
-  check('设置迁移整表幂等（再迁一次逐字段不变）', msIdem.length === 0, msIdem.slice(0, 3).join(' || '));
+  check('设置归一幂等（再归一次逐字段不变）', msIdem.length === 0, msIdem.slice(0, 3).join(' || '));
 
   // —— 4.3 旧键（infinite-reading-v1:*）→ migrateLegacy ——
   const mem = new Map();
@@ -264,7 +252,6 @@ function part4() {
   mem.set('infinite-reading-v1:story', JSON.stringify({
     title: 'v0.1 故事', premise: '老前提',
     log: [{ type: 'narration', text: '开场', ts: 1 }],
-    ai2Thread: [{ text: '旧画师' }],
   }));
   mem.set('infinite-reading-v1:settings', JSON.stringify({
     chat: { provider: 'openai-compatible', baseUrl: 'https://y', apiKey: 'sk-v1', model: 'old' },
@@ -276,18 +263,16 @@ function part4() {
     const st = res && res.storyId ? Store.loadStory(res.storyId) : null;
     check('v0.1 故事迁移后过 schema 校验', !!st && Schema.checkStory(st).length === 0,
       st ? Schema.checkStory(st).slice(0, 3).join(' | ') : '（读不到）');
-    check('v0.1 故事 ai2Thread 迁移', !!(st && Array.isArray(st.painterThread) && st.painterThread.length === 1),
-      st ? JSON.stringify(st.painterThread) : '');
     const s2 = Store.loadSettings();
     check('v0.1 设置迁移生效（model=old）', s2 && s2.chat && s2.chat.model === 'old', JSON.stringify(s2 && s2.chat));
     const again = Store.migrateLegacy();
     check('v0.1 迁移幂等（第二次跳过）', again === null, JSON.stringify(again));
 
-    // —— 4.4 tree.ensure：旧档无树 → 线性链，且过 schema ——
-    const plain = Store.migrateStory({ id: 'lin1', title: '线性', log: [{ type: 'player', text: '走', ts: 1 }] });
+    // —— 4.4 tree.ensure：无树的故事 → 线性链，且过 schema ——
+    const plain = Store.migrateStory({ schema: Store.SCHEMA, id: 'lin1', title: '线性', log: [{ type: 'player', text: '走', ts: 1 }] });
     Tree.ensure(plain);
     const pt = Schema.checkStory(plain);
-    check('无树旧档 ensure 后过检（线性链）', pt.length === 0 && plain.tree && plain.tree.root,
+    check('无树故事 ensure 后过检（线性链）', pt.length === 0 && plain.tree && plain.tree.root,
       pt.slice(0, 3).join(' | '));
 
     done();
