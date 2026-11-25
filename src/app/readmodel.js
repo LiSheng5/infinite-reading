@@ -15,6 +15,7 @@
 import { Tree } from '../core/tree.ts';
 import { Prefs } from '../core/prefs.ts';
 import { Proposals } from '../core/proposals.ts';
+import { describeContextUsageCached, usageMemoKey } from '../core/ctxusage.ts';
 import { A } from './core.js';
 
 
@@ -223,6 +224,75 @@ import { A } from './core.js';
     return lines;
   }
 
+  /* ================= 上下文用量指示器（只读；估算与实发同源） =================
+   * 数据在 app 层算好随 chat 模型推给组件（read.svelte.js 的 chat.usage）：tokens / 阈值
+   * 都来自 src/core/ctxusage.ts（estimateTokensOf(assembleAI1) 与 compressThreshold），
+   * 不另写一套估算。零副作用：只走 buildAssembleOpts 的 dry 路径——不写回合字段、
+   * 不消费 🧠 一次性开关、不触发会改 story 的预算压缩。
+   * 流式（S.busy / S.live）期间不重算，保持上一次的值，回合结束（postTurn → renderChat）
+   * 才更新；key（故事 / head / 条数 / 窗口 / 工具画像签名）没变就复用上次的模型。 */
+
+  const fmtK = (n) => {
+    const v = Math.round(+n || 0);
+    if (v < 1000) return String(v);
+    return (Math.round(v / 100) / 10) + 'k';   // 一位小数（12.3k），整数不带 .0（128k）
+  };
+  const fmtNum = (n) => Number(Math.round(+n || 0)).toLocaleString('en-US');
+
+  let lastUsageView = null;
+
+  function usageView() {
+    const story = S.story;
+    if (!story) { lastUsageView = null; return null; }
+    if ((S.busy || S.live) && lastUsageView) return lastUsageView;
+    let key = '';
+    let u;
+    try {
+      const built = A.buildAssembleOpts('', { dry: true });   // playerAction 空串 = 下一轮基线
+      key = usageMemoKey(story, A.treeHeadNodeId(), built.asmOpts);
+      if (lastUsageView && lastUsageView.memoKey === key) return lastUsageView;
+      u = describeContextUsageCached(key, story, built.asmOpts);
+    } catch (e) {
+      // 算不出来：界面显示「—」，原因走 reportBackgroundFailure 留 console（不弹 toast、不空 catch）
+      if (lastUsageView && lastUsageView.error && lastUsageView.memoKey === key) return lastUsageView;
+      A.reportBackgroundFailure('上下文用量估算', e);
+      lastUsageView = {
+        memoKey: key, error: true,
+        text: '—', valuetext: '上下文用量估算暂不可用，原因见浏览器控制台',
+      };
+      return lastUsageView;
+    }
+    const known = u.window > 0;
+    const pct = known ? Math.round(u.ratio * 100) : 0;
+    const view = {
+      memoKey: key,
+      error: false,
+      level: u.level,
+      windowKnown: known,
+      tokens: u.tokens,
+      window: u.window,
+      text: (u.level === 'warn' ? '近压缩线 · ' : u.level === 'over' ? '将自动压缩 · ' : '')
+        + (known ? ('≈' + fmtK(u.tokens) + ' / ' + fmtK(u.window)) : ('≈' + fmtK(u.tokens))),
+      barPct: known ? Math.min(100, Math.max(0, u.ratio * 100)) : 0,
+      tickPct: known ? (u.threshold / u.window) * 100 : 0,
+      valuetext: !known
+        ? ('上下文容量未知，约 ' + fmtK(u.tokens) + ' token')
+        : u.level === 'over'
+          ? ('上下文约 ' + pct + '%，已到自动压缩线，发送前会自动压缩较早的对话')
+          : ('上下文约 ' + pct + '%，距自动压缩还有约 ' + fmtK(Math.max(0, u.threshold - u.tokens))),
+      detail: known
+        ? ('下一轮请求约 ' + fmtNum(u.tokens) + ' token，占窗口 ' + pct + '%。超过 ' + fmtNum(u.threshold)
+          + ' token 时，发送前会自动压缩较早的对话。')
+        : ('下一轮请求约 ' + fmtNum(u.tokens) + ' token。当前模型的上下文容量未知（可在设置里手填），这里不显示占比与自动压缩线。'),
+      lastUsage: u.lastUsage
+        ? ('上一轮服务商实报 ' + fmtNum(u.lastUsage.total) + ' token（输入 ' + fmtNum(u.lastUsage.prompt)
+          + ' · 输出 ' + fmtNum(u.lastUsage.completion) + '）')
+        : '',
+    };
+    lastUsageView = view;
+    return view;
+  }
+
   /* ================= renderChat 整模型（旧 renderChat 的同步语义） ================= */
 
   function readChatModel() {
@@ -241,9 +311,11 @@ import { A } from './core.js';
       trayOpen: false,
       inspiration: false,
       inspirationCount: '',
+      usage: null,      // 上下文用量指示器（usageView；无故事 = 不显示）
     };
     const story = S.story;
     if (!story) return m;
+    m.usage = usageView();
     const log = story.log || [];
     log.forEach((e, i) => { m.entries.push(entryModel(e, i)); });
 

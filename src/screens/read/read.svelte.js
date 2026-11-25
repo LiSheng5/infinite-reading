@@ -30,6 +30,7 @@ export const read = $state({
     trayOpen: false,
     inspiration: false,
     inspirationCount: '',
+    usage: null,       // 上下文用量指示器（readmodel 的 usageView：只读估算，流式期间保持旧值）
   },
   thumbs: [],         // [thumbModel]
   thumbsEmpty: true,

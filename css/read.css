@@ -419,6 +419,9 @@
   margin-bottom: 6px;
 }
 .composer-spacer { flex: 1; }
+/* 窄屏只压用量指示器的文字（min-width: 0 + 省略号），「灵感」「更多功能」不让位 */
+.composer-tools > .tool-btn,
+.composer-tools > .menu-wrap { flex: none; }
 .tool-btn {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12.5px;
@@ -442,6 +445,73 @@
   color: var(--on-accent);
   text-align: center;
 }
+/* ---------- 上下文用量指示器（输入区常驻，只读） ----------
+   级别色走令牌（ok=accent / warn / over=danger），窄屏只让文字缩略省略，
+   「灵感」「更多功能」不缩（flex: none），气泡朝上弹（键盘 / 底部系统栏遮不住）。 */
+.ctx-usage { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.ctx-meter-btn {
+  display: inline-flex; align-items: center;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color var(--m-t-color-fast) var(--ease-out), background-color var(--m-t-color-fast) var(--ease-out);
+}
+.ctx-meter-btn:hover { background: var(--accent-soft); }
+.ctx-meter { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ctx-bar {
+  position: relative;
+  flex: none;
+  width: 56px; height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.ctx-bar-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.ctx-bar-fill.is-warn { background: var(--warn); }
+.ctx-bar-fill.is-over { background: var(--danger); }
+.ctx-bar-tick {
+  position: absolute; top: -2px; bottom: -2px;
+  width: 2px; margin-left: -1px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+.ctx-meter-text {
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink-dim);
+}
+.ctx-meter-text.is-ok { color: var(--accent); }
+.ctx-meter-text.is-warn { color: var(--warn); }
+.ctx-meter-text.is-over { color: var(--danger); }
+.ctx-bubble {
+  position: absolute; right: 0; bottom: calc(100% + 6px);
+  width: min(300px, calc(100vw - 32px));
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 12px 14px;
+  z-index: 40;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.75;
+  text-align: left;
+  animation: var(--an-fadeIn) var(--m-dur-fast) var(--ease-out) both;
+}
+.ctx-bubble p { margin: 0 0 6px; color: var(--ink); }
+.ctx-bubble p:last-child { margin-bottom: 0; }
+.ctx-bubble .ctx-bubble-usage,
+.ctx-bubble .ctx-bubble-note { color: var(--ink-dim); }
 .input-row { display: flex; gap: 8px; align-items: center; }
 #player-input {
   flex: 1; min-width: 0;

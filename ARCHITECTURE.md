@@ -344,6 +344,8 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 扮演模式额外常驻角色卡与关系记忆（`characterCardText` / `relationshipBlock`），剧情与对话模式不常驻，避免涨预算。
 
+**用量指示器**（对话输入区常驻）：只读，与压缩判定同源——`src/core/ctxusage.ts` 用 `estimateTokensOf(assembleAI1(story, '', opts))` 估算「下一轮请求」的 token、用 `compressThreshold(window)` 取自动压缩线（不另写一套估算、不硬编码比例），组装选项走 `src/app/round.js` 的 `buildAssembleOpts` dry 口径（不写回合字段、不消费 🧠 一次性开关、不触发会改 story 的压缩）。估算失败界面显示「—」，原因走 `reportBackgroundFailure` 留 console。
+
 ## 7. 评测如何做
 
 `eval/run.js` 只 `require` 纯逻辑模块（`src/core/context.ts` / `store.ts` / `roleCard.ts`），不加载 `src/app/main.js` 与 `src/app/*`，因此**不发任何网络请求**：

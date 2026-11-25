@@ -30,6 +30,7 @@
 /* 触屏：所有可点目标不小于 44px，舞台按钮常显 */
 @media (hover: none) {
   .ui-btn, .tool-btn, .seg-btn, .menu-item, .choice-btn, .tray-btn { min-height: 44px; }
+  .ctx-meter-btn { min-height: 44px; }   /* 上下文用量指示器：触控区域不小于 .tool-btn */
   .seg-btn { min-width: 44px; }
   /* 纯图标按钮跟着变成 44×44 方块（只抬 min-height 会变成 40×44 的竖条） */
   .ui-btn.icon-only { width: 44px; height: 44px; }

@@ -29,6 +29,22 @@
   // 时才挂载。两个 class 都由命令式代码直接改（painter.js / render.js），这里只观察、不反向写。
   let inkActive = $state(false);
 
+  // 上下文用量气泡（非模态）：点按切换；键盘聚焦（:focus-visible）打开；
+  // 点外面或 Esc 关闭（不进弹窗栈，不挡输入）
+  let usageOpen = $state(false);
+  function toggleUsage() { usageOpen = !usageOpen; }
+  function focusUsage(e) {
+    if (e.currentTarget.matches(':focus-visible')) usageOpen = true;
+  }
+  function closeUsageOnWindowClick(e) {
+    if (!usageOpen) return;
+    const inWrap = e.target && e.target.closest ? e.target.closest('.ctx-usage') : null;
+    if (!inWrap) usageOpen = false;
+  }
+  function closeUsageOnEsc(e) {
+    if (usageOpen && e.key === 'Escape') usageOpen = false;
+  }
+
   // 「开始第一幕」：与旧 renderOpeningHint 的按钮闭包同语义
   function runOpening() {
     const a = A();
@@ -70,6 +86,8 @@
     return () => observer.disconnect();
   });
 </script>
+
+<svelte:window onclick={closeUsageOnWindowClick} onkeydown={closeUsageOnEsc} />
 
 <div id="chat-pane" class="chat-pane">
   <div id="chat-scroll" class="chat-scroll">
@@ -116,6 +134,37 @@
         <Icon name="bulb" class="ic-l" /><span>灵感</span><span id="inspiration-count" class="badge" class:hidden={!read.chat.inspiration}>{read.chat.inspirationCount}</span>
       </button>
       <span class="composer-spacer"></span>
+      <!-- 上下文用量指示器（常驻，只读）：细进度条 + 文字，点按 / 聚焦弹出说明气泡（非模态） -->
+      {#if read.chat.usage}
+        {@const u = read.chat.usage}
+        <div class="ctx-usage">
+          <button type="button" class="ctx-meter-btn" aria-expanded={usageOpen}
+                  onclick={toggleUsage} onfocus={focusUsage}>
+            <span class="ctx-meter" role="meter" aria-valuemin="0"
+                  aria-valuemax={u.windowKnown ? u.window : Math.max(u.tokens, 1)}
+                  aria-valuenow={u.tokens} aria-valuetext={u.valuetext}>
+              {#if u.windowKnown}
+                <!-- 阈值刻度线：位置 = 自动压缩线 / 窗口（与压缩判定同一个数，不写死比例） -->
+                <span class="ctx-bar" aria-hidden="true">
+                  <span class="ctx-bar-fill" class:is-warn={u.level === 'warn'} class:is-over={u.level === 'over'} style:width={u.barPct + '%'}></span>
+                  <span class="ctx-bar-tick" style:left={u.tickPct + '%'}></span>
+                </span>
+              {/if}
+              <!-- 级别不只靠颜色：warn / over 换图标 + 前缀词（近压缩线 / 将自动压缩） -->
+              {#if u.level === 'warn' || u.level === 'over'}<Icon name="warn" />{/if}
+              <span class="ctx-meter-text" class:is-ok={u.level === 'ok'} class:is-warn={u.level === 'warn'} class:is-over={u.level === 'over'}>{u.text}</span>
+            </span>
+          </button>
+          {#if usageOpen}
+            <div class="ctx-bubble">
+              <p class="ctx-bubble-main">{u.error ? '这次估算没算出来，原因已留在浏览器控制台。' : u.detail}</p>
+              {#if u.lastUsage}<p class="ctx-bubble-usage">{u.lastUsage}</p>{/if}
+              {#if !u.error}<p class="ctx-bubble-note">估算值不含你还没输入的那一句，与实际发送略有偏差。</p>{/if}
+              <!-- 气泡底部留给「压缩现在」按钮 -->
+            </div>
+          {/if}
+        </div>
+      {/if}
       <!-- 本地服务功能入口：只在「对话 / 扮演」模式出现；未启动时灰显并说明（renderFeatureBar 按 id 收口） -->
       <div class="menu-wrap">
         <button id="btn-more-actions" class="tool-btn hidden" type="button" title="更多功能"
