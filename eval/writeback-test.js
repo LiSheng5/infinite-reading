@@ -71,17 +71,16 @@ console.log('[1] 异步写回契约（src/core/writeBack.ts）');
   eq(WriteBack.writeBackIfSameJob(null, job, () => { jobRan++; }), false, 'job 被置空 → 闸门拒绝');
   eq(jobRan, 1, '置空后写回整段不执行（不再写已置空的任务）');
 
-  // —— 归位式：resolveWriteBackStory / writeBackToStory（画师线程）——
-  eq(WriteBack.resolveWriteBackStory(A2, A), A2, '切走再切回：同 id 新对象 → 认回当前对象（不被旧副本覆盖）');
-  eq(WriteBack.resolveWriteBackStory(B, A), A, '换档 → 写回发起时那本（不写进别的故事）');
-  eq(WriteBack.resolveWriteBackStory(null, A), A, '故事已关 → 写回发起时的对象（由调用方决定落盘）');
-
+  // —— 归位式：writeBackToStory（画师线程）——
   let target = null;
   eq(WriteBack.writeBackToStory(B, A, (st) => { target = st; }), false, 'writeBackToStory 换档 → 返回 false（仍归位写原故事）');
   eq(target, A, '换档时写回落在原故事对象上（回包不丢）');
   target = null;
   eq(WriteBack.writeBackToStory(A2, A, (st) => { target = st; }), true, '同 id 新对象 → 返回 true（可顺手刷新界面）');
-  eq(target, A2, '同 id 时写回落在当前对象上');
+  eq(target, A2, '同 id 时写回落在当前对象上（不被旧副本覆盖）');
+  target = null;
+  eq(WriteBack.writeBackToStory(null, A, (st) => { target = st; }), false, '故事已关 → 返回 false');
+  eq(target, A, '故事已关时写回落在发起时的对象（由调用方决定落盘）');
 }
 
 /* ---------------- ② 静态回归：续体收口 + 书记员错误可观测 ---------------- */

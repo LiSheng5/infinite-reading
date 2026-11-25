@@ -346,7 +346,7 @@
     stripSecrets,
     sanitizePrefs,
     effective, effectiveInfo,
-    resolveChatCfg, profileLabel,
+    resolveChatCfg,
     visibleFor,
     exportPrefs,
   };

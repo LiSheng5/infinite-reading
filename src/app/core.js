@@ -257,15 +257,9 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     return true;
   }
 
- /* ---------- 弹窗栈（→ 收口到 src/ui/modalHost.js） ----------
-   * 十余个弹窗各自独立，截图时「写邮件」和「代为下单」会叠在一起，所以有一个最小统一入口：
-   *   - openModal(id) / closeModal(id) 维护一个栈，后开的总在上面（z-index 由栈序决定）；
-   *   - 功能类弹窗（邮件 / 支付 / 设置里的定时主动）互斥：开一个先关掉其它功能类；
-   *   - 确认弹窗（#modal-confirm）不参与互斥，可以叠在任意弹窗上；
-   *   - Esc 只关最上层（confirm 要走 closeConfirm，才能把 Promise 收掉）。
- * 这套语义搬到 src/ui/modalHost.js（弹窗的唯一入口，卡片见 src/ui/ModalCard.svelte），
-   * 这里只转发：A.modalStack 仍是同一个数组实例（src/app/main.js 的遮罩点击按引用读它），
-   * 现有 id 与 DOM 全部保持不变。 */
+ /* ---------- 弹窗栈（语义在 src/ui/modalHost.js） ----------
+  * 这里只转发：A.modalStack 仍是同一个数组实例（src/app/main.js 的遮罩点击按引用读它），
+  * 现有 id 与 DOM 全部保持不变。 */
   function netErrHint(e) {
     if (e instanceof TypeError) {
       return '网络请求失败：可能是 CORS 限制或地址不可达。建议用本地静态服务打开（如 `npx serve` 或 `python -m http.server`），并检查 Base URL / API Key。';

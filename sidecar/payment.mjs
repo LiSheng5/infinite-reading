@@ -91,7 +91,7 @@ export function createPayment(deps) {
     );
   }
 
-  // 已「占用额度」的金额（待确认的不算，避免空占额度；已确认 / 待人工付款 / 已扣款都算）。
+  // 已「占用额度」的金额：状态口径见上方 COMMITTED。
   // 金额字段一律 *Cents 后缀：单位就是「分」，别让人当元接。
   // SQL 按时间范围 + SUM 聚合，不再全表 SELECT 后 JS 过滤。
   function sums(agent, t0) {

@@ -37,7 +37,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/schema.ts` | 档案形状的类型真源 + 运行时校验（`eval/schema-test.js` 固定） | `Schema.checkStory`、`Schema.checkStoryPack`、`Schema.checkBackupPack`、`Schema.checkTree` |
 | `src/core/prefs.ts` | 本对话偏好（设置分层，**纯逻辑**）：`story.prefs` 清洗、「本对话覆盖 → 全局默认」解析、主模型配置解析、导出剥凭证 | `sanitizePrefs`、`effective` / `effectiveInfo`、`resolveChatCfg`、`visibleFor`、`exportPrefs`、`stripSecrets` |
 | `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认**全空**，不预置厂商数据；厂商形参不进表） | `find`、`contextWindowOf`、`summarize`、`formatWindow` |
-| `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`fromST`、`normalize`、`worldCharacter` |
+| `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`normalize`、`worldCharacter`、`sourceLabel` |
 | `src/core/zip.ts` | 极简 ZIP 读写（**零依赖、手写**）：带原图备份打包 / 解包 | `build`、`read`、`crc32` |
 | `src/core/sidecar.ts` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连（重连与复探共用一条退避链，计时器只有 `probeTimer` 一个、`stop()` 必清，见 `eval/sidecar-client-test.js`） | `probe`、`api`、`on`、`status`、`configure` |
 | `src/core/features.ts` | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`size`、`clear`、`resetSeen` |

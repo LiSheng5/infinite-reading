@@ -106,13 +106,7 @@ import { A, renderChat, toast } from './core.js';
     return adapter.chat(cfg, Context.assembleImporter(task, text, meta), hooks);
   }
 
-  // 纯解析逻辑（模型回包 JSON / 本地兜底规则 / 人物行）已抽到 src/core/importText.ts，
-  // 这里只留界面流；纯解析交给 ImportText，这里只做转发
-  function parseImportJson(raw) { return ImportText.parseImportJson(raw); }
-  function parseImportSummary(raw) { return ImportText.parseImportSummary(raw); }
-  function parseImportResult(raw) { return ImportText.parseImportResult(raw); }
-  function localImport(text) { return ImportText.localImport(text); }
-  function parseImportCharacters(text) { return ImportText.parseImportCharacters(text); }
+  // 纯解析逻辑（模型回包 JSON / 本地兜底规则 / 人物行）在 src/core/importText.ts，这里只留界面流
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式。
   // 行数据在 src/screens/modal/state.svelte.js，charApi 与旧 A.charEditor 同形的 set / get / add。
@@ -147,7 +141,7 @@ import { A, renderChat, toast } from './core.js';
         if (stale && stale()) return '';              // 弹窗已关：不再继续花模型调用
         setImportStatus('合并摘要 · 第 ' + (i + 1) + ' / ' + batches.length + ' 批…');
         const raw = await callImportChat(cfg, 'merge', batches[i].join('\n\n'), undefined, hooks);
-        next.push(parseImportSummary(raw) || batches[i].join(' ').slice(0, 200));
+        next.push(ImportText.parseImportSummary(raw) || batches[i].join(' ').slice(0, 200));
       }
       list = next;
     }
@@ -183,16 +177,16 @@ import { A, renderChat, toast } from './core.js';
           if (stale()) return;                        // 弹窗已关：不再继续花模型调用
           setImportStatus('分段摘要 第 ' + (i + 1) + ' / ' + plan.chunks.length + ' 段…');
           const one = await callImportChat(cfg, 'map', plan.chunks[i], { index: i + 1, total: plan.chunks.length }, hooks);
-          summaries.push(parseImportSummary(one) || String(plan.chunks[i]).slice(0, 120));
+          summaries.push(ImportText.parseImportSummary(one) || String(plan.chunks[i]).slice(0, 120));
         }
         if (stale()) return;
         setImportStatus('合并摘要…');
         const merged = await reduceImportSummaries(cfg, summaries, plan.budget, stale, hooks);
         if (stale()) return;
         setImportStatus('整理成故事设定…');
-        res = parseImportResult(await callImportChat(cfg, 'final', merged, undefined, hooks));
+        res = ImportText.parseImportResult(await callImportChat(cfg, 'final', merged, undefined, hooks));
       } else {
-        res = parseImportResult(await callImportChat(cfg, 'final', raw, undefined, hooks));
+        res = ImportText.parseImportResult(await callImportChat(cfg, 'final', raw, undefined, hooks));
       }
     } catch (e) {
       job.err = (e && e.message) || String(e);
@@ -201,7 +195,7 @@ import { A, renderChat, toast } from './core.js';
 
     if (stale()) return;   // 关窗 / 任务被新任务顶掉：结果不再回写，也不碰已经隐藏的 DOM
     const local = !res;
-    if (local) res = localImport(raw);
+    if (local) res = ImportText.localImport(raw);
     WriteBack.writeBackIfSameJob(S.importJob, job, (j) => {
       j.busy = false;
       j.result = res;

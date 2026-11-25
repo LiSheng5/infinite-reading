@@ -58,10 +58,7 @@ import { A } from './core.js';
 
   // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。
   // 全页背景图已取消——阅读面必须是纯 --bg，图不能透到文字后面。
- // 换画走 Nav.stageArt —— 新旧图同名 stage-art，rich 档是共享元素过渡
-  //（同一元素的旧 / 新快照做补间，过渡期暂停 Ken Burns，结束按档位恢复）。
-  // 换画的两条路都汇到这里：AI 出图后 stagePlaySwap 的 animationend、点缩略图（renderStage → 同一条链）、
-  // 视频场景取封面；同图重复调用（renderStage 反复跑）不再开新的一段。
+  // 换画统一走 Nav.stageArt（过渡形态见 render.js）；同图重复调用不重开一段。
   let stageArtSrc = '';   // 上一次真正落到模糊副本上的 src
   function setStageArt(src) {
     const bd = $('#stage-backdrop');

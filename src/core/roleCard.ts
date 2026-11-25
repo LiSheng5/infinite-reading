@@ -204,8 +204,7 @@ declare const Buffer: any;
   }
 
   const RoleCard = {
-    CARD_FIELDS, SOURCES, TEXT_KEYWORDS,
-    emptyCard, normalize, fromST, parsePNG, readTextChunks,
-    speechHint, worldCharacter, sourceLabel,
+    emptyCard, normalize, parsePNG,
+    worldCharacter, sourceLabel,
   };
   export { RoleCard };

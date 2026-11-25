@@ -1,9 +1,9 @@
 /*
  * 无限阅读 · sidecar 通用小工具（ID 生成 / 日期口径 / JSON 解析收敛）
  *
- * 此前 genId / dayKey / safeJSON 在 payment / email / scheduler 各一份拷贝、num 在
- * payment-policy / payment / config 各一份、列表条数（SQL LIMIT）在 email / payment 各夹一遍
- * ——「修口径要改多处」。这里收敛为单一实现（num / clampInt），各模块 import。
+ * 各模块共用的唯一实现：
+ *   - 失败返回 fail / isFail、ID 生成 genId（前缀区分实体）、安全 JSON safeJSON；
+ *   - 日期口径 dayRange / monthRange、数值收敛 num / clampInt。
  *
  * 错误风格唯一约定：
  *   - 业务失败（输入不合法 / 策略拒绝 / 资源不存在）→ 返回 fail(code) 的 { ok:false, code, message }，不 throw；

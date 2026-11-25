@@ -10,7 +10,7 @@
  *        —— 大块写回（回合续体）前核 id；false = 目标已换，整段写回放弃（不留警告以外的痕迹）。
  *   ② 闸门式 writeBackIfSameStory(current, sid, apply) / writeBackIfSameJob(current, job, apply)
  *        —— 把「回包写回」收敛进回调；目标已换则回调整段不执行。
- *   ③ 归位式 resolveWriteBackStory(current, origin) / writeBackToStory(current, origin, apply)
+ *   ③ 归位式 writeBackToStory(current, origin, apply)
  *        —— 写回「发起时那本」故事（画师线程语义）：换档也照写原故事，切走再切回时按 id
  *          认回当前对象（避免旧副本覆盖存盘）；返回值告知调用方是否仍是当前故事，
  *          不是则由调用方负责离线落盘（Store.saveStory）。
@@ -83,7 +83,6 @@ const WriteBack = {
   writeBackIfSameStory,
   isSameJob,
   writeBackIfSameJob,
-  resolveWriteBackStory,
   writeBackToStory,
 };
 
