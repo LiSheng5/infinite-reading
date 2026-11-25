@@ -12,9 +12,8 @@
 
   let { chat } = $props();
 
-  const A = () => appApi;
   function chipClick(c) {
-    const a = A();
+    const a = appApi;
     if (c.enabled) { a.fillPlayerInput(c.prompt); return; }
     a.openSettings();
     a.openSettingsGroup(c.fixGroup);
@@ -30,6 +29,6 @@
     {/each}
   </div>
   <div class="agent-card-entry">
-    <button type="button" class="ui-btn ghost" onclick={() => A().openCardEditor({ mode: 'new' })}>添加角色卡（可选）</button>
+    <button type="button" class="ui-btn ghost" onclick={() => appApi.openCardEditor({ mode: 'new' })}>添加角色卡（可选）</button>
   </div>
 </div>

@@ -260,7 +260,7 @@ check('ANIMATIONS 每条都有 @keyframes（不多不少）', orphan.length === 
 function derived(name) {
   const spec = ANIMATIONS[name];
   if (spec === 'none') return 'none';
-  if (spec === 'fade') return name;   // 单档：fade 类保持本名（fadeIn / fadeOut / titleSwap）
+  if (spec === 'fade') return name;   // 单档：fade 类保持本名（fadeIn / fadeOut）
   return name;
 }
 

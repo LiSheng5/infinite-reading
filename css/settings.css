@@ -12,22 +12,7 @@
 fieldset.feature-off { opacity: .55; }
 fieldset.feature-off legend { color: var(--ink-dim); }
 
-/* 主动消息：沿用玩家发言的弱化样式，左侧强调线 + 一行轻量标注 */
-.bubble-agent {
-  align-self: stretch;
-  border-left: 2px solid var(--accent-line);
-  padding: 1px 0 1px 13px;
-  color: var(--ink-dim);
-  font-size: 16px;
-  line-height: 1.85;
-}
-.bubble-agent .agent-note {
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ink-faint);
-  letter-spacing: .06em;
-  margin-bottom: 3px;
-}
+/* 主动消息气泡的版式与玩家发言同源，见 css/read.css 的 .bubble-agent */
 
 /* 触发安排 / 台账：一行一条，右侧放操作 */
 .trigger-row, .ledger-row {
@@ -55,22 +40,11 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 .status-pill.denied { border-color: var(--danger); color: var(--danger); }
 
 .pay-result { font-size: 13.5px; line-height: 1.8; color: var(--ink); }
-.pay-result .ok { color: var(--accent); }
-.pay-result .warn { color: var(--danger); }
 
-/* ====================  设置分层：全局设置分组导航 ==================== */
+/* ====================  设置分层：弹窗骨架（定宽 / 分组导航 / 面板） ==================== */
 #modal-settings .modal-card { width: min(880px, 96vw); }
 /* .set-shell 的列宽 / 间距只由两个断点给：≤720 单列、≥721 侧栏 196px（见本文件尾部的分层段） */
-.set-nav { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
-.set-nav-item {
-  text-align: left; padding: 10px 12px; min-height: 40px;
-  border: 1px solid var(--line-soft); background: var(--field-bg);
-  color: var(--ink-dim); border-radius: var(--radius); cursor: pointer;
-  font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em;
-  transition: background var(--m-t-color-fast) var(--ease-out), color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out), transform var(--m-t-shift-fast) var(--ease-out);
-}
-.set-nav-item:hover { background: var(--hover-tint); color: var(--ink); transform: translateX(2px); }
-.set-nav-item.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-deep); }
+.set-nav { position: sticky; top: 0; }
 .set-panels { min-width: 0; }
 .set-panel { animation: var(--an-fadeIn) var(--m-dur-slow) var(--ease-out) both; }
 .set-panel-title {
@@ -158,7 +132,7 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 /* ==================== 面板内下钻 ====================
    一级 = 对话覆盖行 + 故事数据；二级 = 世界状态卡编辑器（#prefs-world，正文内滚 + 底部 sticky 保存栏）。
    切换由 .prefs-scroll[data-view] 收口；窄屏 76vh 底部弹层与桌面停靠面板同一套交互（不做桌面特例）。
-   下钻 / 返回的进场用 leafIn（off 档收成纯透明度、standard 档 ≤160ms 短位移、rich 档全量，见 css/motion.css）。 */
+   下钻 / 返回的进场用 leafIn（见 css/motion.css；reduced-motion 由该文件末尾兜底）。 */
 .prefs-head-world { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .prefs-head .world-back { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .prefs-head .world-title {
@@ -209,15 +183,14 @@ fieldset.feature-off legend { color: var(--ink-dim); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 
-/* 停靠面板：桌面 / 笔记本让出右侧宽度，不遮挡输入区（A.6）。
+/* 停靠面板：桌面 / 笔记本让出右侧宽度，不遮挡输入区。
    让位是布局变化，不做过渡（令牌护栏：transition 不动重排属性）；面板自身的滑入用 transform。 */
 @media (min-width: 721px) {
   #screen-game.prefs-open { margin-right: min(360px, 92vw); }
 }
-/* 窄屏触控目标不小于 40px（A.6；「窄屏所有可点目标不小于 40px」） */
+/* 窄屏触控目标不小于 40px（「窄屏所有可点目标不小于 40px」） */
 @media (max-width: 720px) {
   .ui-btn:where(.hud) { min-width: 40px; min-height: 40px; }
-  .story-prefs .ui-btn:where(.hud) { min-width: 40px; min-height: 40px; }
   .prefs-head .world-back { min-height: 40px; }   /* 面板内下钻：返回也是 ≥40px 的触控目标 */
   .modal select, .modal input[type="text"], .modal input[type="number"],
   .modal input[type="password"], .modal textarea, .modal .ui-btn:where(:not(.hud, .icon-only)) {
@@ -243,9 +216,6 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 /* 窄屏：底部弹层（同的下钻手势感） */
 @media (max-width: 720px) {
   .set-shell { grid-template-columns: 1fr; gap: 0; }
-  .set-shell:not(.detail) .set-panels { display: none; }
-  .set-shell.detail .set-nav { display: none; }
-  .set-nav-item { width: 100%; }
   .story-prefs {
     top: auto; left: 0; right: 0; bottom: 0; width: auto;
     max-height: 76vh; border-left: none;
@@ -258,7 +228,7 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 
 /* ==================== 字号 / 内容宽度 / 密度令牌 ==================== */
 #screen-game { --font-scale: 1; --content-w: 760px; --density: 1; }
-/* 智能体 / 扮演：内容列宽度吃 --content-w（居中） */
+/* 聊天布局：内容列宽度吃 --content-w（居中） */
 #screen-game[data-layout="chat"] .chat-scroll {
   padding-left: max(16px, calc((100% - var(--content-w, 760px)) / 2));
   padding-right: max(16px, calc((100% - var(--content-w, 760px)) / 2));
@@ -269,7 +239,7 @@ fieldset.feature-off legend { color: var(--ink-dim); }
 @media (max-width: 480px) {
   #screen-game .chat-scroll .bubble { font-size: calc(16.5px * var(--font-scale, 1)); }
 }
-/* 密度：气泡间距同时缩（剧情 / 智能体 / 扮演统一） */
+/* 密度：气泡间距同时缩（剧情 / 聊天统一） */
 #screen-game .chat-scroll { gap: calc(22px * var(--density, 1)); }
 @media (max-width: 900px) {
   #screen-game .chat-scroll { gap: calc(18px * var(--density, 1)); }

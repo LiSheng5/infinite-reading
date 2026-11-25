@@ -3,7 +3,7 @@
    * 视觉语言统一在 css/base.css 的 .ui-btn：扁平细边、唯一实心是黑底主按钮（蓝不填主按钮）；
    * variant: default | primary | ghost | danger；size: md | slim —— 都只是修饰类名，不在这里写第二份样式。
    * 本组件只保留「结构」：图标 + 文字一行居中、40px 触屏下限。
-   * 过渡时长走动效模块的档位变量（--m-t-*），off 档自动收成即时 / 80ms 透明度。 */
+   * 过渡时长走动效模块的 --m-t-*（reduced-motion 时由 css/motion.css 兜底压到 0）。 */
   import Icon from './Icon.svelte';
 
   let {

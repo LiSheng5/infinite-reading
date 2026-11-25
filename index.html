@@ -87,8 +87,8 @@
 <div id="app">
 
   <!-- ========== 开始页（应用入口） ==========
-       顶部是只留符号的双纽线主视觉（src/screens/home/InfinityStage.svelte：canvas 逐字粒子）；
-       没有 JS 时 index.html 的兜底仍是同一份 ASCII 字符画的静态深蓝版本，构建期注入；
+       顶部是只留符号的双纽线主视觉（src/screens/home/InfinityStage.svelte / GridStage.svelte 之一，
+       挂载时随机）：canvas 逐字粒子；没有 JS 时 index.html 的兜底仍是同一份 ASCII 字符画的静态深蓝版本，构建期注入；
        两张模式卡即两个开局入口（剧情 / 聊天）；其余入口收成底部一排文字链接。 -->
   <section id="screen-start" class="screen">
     <!-- 正式内容由 src/screens/home 挂载（挂载时 replaceChildren 清掉兜底）。
@@ -104,7 +104,7 @@
   </section>
 
   <!-- ========== 阅读界面：左文右图，各管各的
-       布局只由 #screen-game 的 data-layout 决定：split | stack | immersive。
+       布局只由 #screen-game 的 data-layout 决定：split | stack | immersive | chat（聊天模式固定）。
        输入区只有一个（沉浸态也不另起一套输入）。 ========== -->
   <section id="screen-game" class="screen hidden" data-layout="split">
     <header class="hud">
@@ -148,7 +148,7 @@
   <div id="modal-wizard" class="modal hidden">
   </div>
 
-  <!-- ========== 剧情文本导入（路径②） ========== -->
+  <!-- ========== 剧情文本导入 ========== -->
   <div id="modal-import-text" class="modal hidden">
   </div>
 
@@ -172,7 +172,7 @@
   <div id="modal-connect" class="modal hidden">
   </div>
 
-    <!-- ========== 设置（模型 / 辅助模型 / 画面 / 工具与服务 / 数据 / 外观 / 当前故事） ==========
+    <!-- ========== 设置（模型 / 辅助模型 / 生图与画风 / 工具与服务 / 数据 / 外观） ==========
        版式原则：每个分组只露「必填 + 常改」的字段；高级参数、长说明、单独配置一律折进 <details>
        （src/app/prefsui.js 的 syncAdvPanels 会在已有内容时自动展开）。分组由 settingsForm.js 的 GROUPS 直接渲染，不再按 legend 文字归类。 -->
   <div id="modal-settings" class="modal hidden">
@@ -209,13 +209,13 @@
   <div id="modal-payment" class="modal hidden">
   </div>
 
-<!-- 图片灯箱（chat / rp 内联图点开看大图）：固定遮罩，点遮罩 / Esc 关闭 -->
+<!-- 图片灯箱（聊天布局的内联图点开看大图）：固定遮罩，点遮罩 / Esc 关闭 -->
 <div id="lightbox" class="lightbox hidden" role="dialog" aria-label="查看大图">
   <img id="lightbox-img" alt="">
   <p id="lightbox-alt" class="lightbox-alt"></p>
 </div>
 
-<!-- 唯一入口：加载顺序与依赖见 src/main.js（删掉 legacy 入口与全局 IR 兼容层） -->
+<!-- 唯一入口：加载顺序与依赖见 src/main.js -->
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

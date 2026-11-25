@@ -1,16 +1,13 @@
 /* ==================== 分支页（整页分支树） ====================
- * 整页分支树：泳道布局、节点、面板与流光。
+ * 整页分支树：泳道布局、节点、面板与流光；节点 / 边全部 SVG（createElementNS 构造），颜色只取令牌；
+ * 循环动画只留三条（流光 / head 呼吸 / 选中脉冲），rich 档才开，data-paused 全局暂停。
  * 屏幕样式的一个分片：分支页（整页分支树）；@import 顺序即层叠顺序，勿随意调整。 */
 
-/* ====================  分支页（整页分支树） ====================
-   节点 / 边全部 SVG（createElementNS 构造）；颜色只取令牌；
-   循环动画只留三条（流光 / head 呼吸 / 选中脉冲），rich 档才开，data-paused 全局暂停。 */
 .branch-page {
   position: fixed; inset: 0; z-index: 40;   /* 在内容之上、弹窗（.modal 30+）之下 */
   display: flex; flex-direction: column;
   background: var(--bg);
 }
-.branch-page.enter { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 .branch-top {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 14px; border-bottom: 1px solid var(--line);
@@ -135,25 +132,6 @@ html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
 }
 .branch-panel-actions .ui-btn:where(:not(.hud, .mini, .icon-only)) { width: 100%; min-height: 40px; }
 
-/* —— 历史位置提示条 —— */
-.history-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 10px; margin-bottom: 6px;
-  background: var(--accent-soft); border: 1px solid var(--accent-line);
-  border-radius: var(--radius);
-  font-size: 12.5px; line-height: 1.6; color: var(--accent-deep);
-}
-.history-bar #history-bar-text {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.history-jump {
-  flex-shrink: 0; min-height: 32px; padding: 0 12px;
-  font-family: var(--font-ui); font-size: 12.5px; letter-spacing: .04em;
-  color: var(--accent-deep); background: var(--bg);
-  border: 1px solid var(--accent-line); border-radius: var(--radius); cursor: pointer;
-}
-.history-jump:hover { background: var(--hover-tint); }
-
 /* —— 窄屏（≤720px）：面板改底部弹层、默认藏标签、触控目标 ≥40px —— */
 @media (max-width: 720px) {
   .branch-top { padding: 8px 10px; gap: 6px; }
@@ -170,6 +148,4 @@ html[data-motion="rich"] .branch-node.is-selected .pulse-ring {
     animation: var(--an-prefsUp) var(--m-dur-base) var(--ease-spring) both;
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .history-bar { flex-wrap: wrap; }
-  .history-bar #history-bar-text { white-space: normal; }
 }

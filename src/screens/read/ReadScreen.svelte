@@ -23,8 +23,6 @@
   import { onActivate } from '../../ui/a11y.js';
   import { onMount } from 'svelte';
 
-  const A = () => appApi;
-
   // 作画中的纸墨显影：队列非空（#gen-status 摘掉 hidden）且舞台还没有图（#stage-empty 未 hidden）
   // 时才挂载。两个 class 都由命令式代码直接改（painter.js / render.js），这里只观察、不反向写。
   let inkActive = $state(false);
@@ -46,25 +44,25 @@
   }
   // 手动压缩：点击直接执行（不弹确认，toast 里 8 秒内可撤销）；
   // 执行中 / 不可用都由按钮自己置灰（compactView），这里不重复判
-  function runCompact() { A().compactNow(); }
+  function runCompact() { appApi.compactNow(); }
 
   // 「开始第一幕」：与旧 renderOpeningHint 的按钮闭包同语义
   function runOpening() {
-    const a = A();
+    const a = appApi;
     if (a.state.busy) { a.toast('正在生成中，等这一步结束'); return; }
     a.runOpening();
   }
   // 内联选项（choices=always）：选项文本即玩家行动
-  function sendChoice(c) { A().sendPlayerAction(c, true); }
+  function sendChoice(c) { appApi.sendPlayerAction(c, true); }
   // 托盘选项：点一下收起托盘再发出去（同旧 tray-btn 闭包）
   function pickChoice(c) {
-    const a = A();
+    const a = appApi;
     a.state.choicesTrayOpen = false;
     a.sendPlayerAction(c, true);
   }
   // 缩略条点击 = 选中该场景（同旧 renderThumbs 的 img.onclick 闭包）
   function selectThumb(id) {
-    const a = A();
+    const a = appApi;
     if (!a.state.story) return;
     a.state.story.lastBg = id;
     a.saveAll();
@@ -190,7 +188,7 @@
           {/if}
         </div>
       {/if}
-      <!-- 本地服务功能入口：只在「对话 / 扮演」模式出现；未启动时灰显并说明（renderFeatureBar 按 id 收口） -->
+      <!-- 本地服务功能入口：只在「聊天」布局出现；未启动时灰显并说明（renderFeatureBar 按 id 收口） -->
       <div class="menu-wrap">
         <button id="btn-more-actions" class="tool-btn hidden" type="button" title="更多功能"
                 aria-label="更多功能" aria-haspopup="menu" aria-expanded="false"><Icon name="plus" /></button>

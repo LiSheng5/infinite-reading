@@ -2,7 +2,6 @@
  * 阅读屏的全部结构样式；布局切换只由 #screen-game 的 data-layout 属性决定。
  * 屏幕样式的一个分片：阅读界面（顶栏 · 两栏骨架 · 阅读面 · 输入区 · 舞台 · 布局状态）；@import 顺序即层叠顺序，勿随意调整。 */
 
-/* ==================== 阅读界面 ==================== */
 /* 祖先链每一层都要能收缩，聊天区才能拿到「剩余高度」并滚动 */
 #screen-game {
   display: flex; flex-direction: column; min-height: 0;
@@ -108,10 +107,10 @@
   word-break: break-word;
 }
 /* 旁白就是正文本身：无卡片、无纹理、无背景透图 */
-.bubble-narration { align-self: stretch; text-indent: 0; }
+.bubble-narration { align-self: stretch; }
 
-/* 玩家发言：弱化成一侧细线 + 次要色，并标注「做 / 说 / 导演」 */
-.bubble-player, .bubble-choice {
+/* 玩家发言 / 选项 / 模型主动联系：弱化成一侧细线 + 次要色，并标注「做 / 说 / 导演」 */
+.bubble-player, .bubble-choice, .bubble-agent {
   align-self: stretch;
   border-left: 2px solid var(--line);
   padding: 1px 0 1px 13px;
@@ -119,7 +118,7 @@
   font-size: 16px;
   line-height: 1.85;
 }
-.bubble-player .kind-tag, .bubble-agent .kind-tag {
+.bubble-player .kind-tag {
   display: block;
   font-family: var(--font-ui);
   font-size: 11px;
@@ -129,6 +128,15 @@
   margin-bottom: 2px;
 }
 .bubble-choice { border-left-color: var(--accent-line); color: var(--accent); }
+.bubble-agent { border-left-color: var(--accent-line); }
+/* 主动联系的「谁 / 何时 / 为何找你」标注（settings.js 写 textContent） */
+.bubble-agent .agent-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  letter-spacing: .06em;
+  margin-bottom: 3px;
+}
 
 /* 场景标记行：小缩略图 + 一行 alt（替代聊天里的大图） */
 .bubble-image {
@@ -153,7 +161,6 @@
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--ink-faint);
-  text-indent: 0;
   cursor: pointer;
   overflow: hidden;
   display: -webkit-box;
@@ -163,7 +170,7 @@
 .img-alt-row .ui-btn:where(.mini) { opacity: 0; transition: opacity var(--m-dur-fast) var(--ease-out); flex: 0 0 auto; }
 .bubble-image:hover .ui-btn:where(.mini), .bubble-image:focus-within .ui-btn:where(.mini) { opacity: 1; }
 
-/* 内联图气泡（chat / rp：舞台没了，图直接排在聊天流里；点图开灯箱） */
+/* 内联图气泡（聊天布局：舞台没了，图直接排在聊天流里；点图开灯箱） */
 .bubble-image-inline {
   display: block;
   padding: 6px 0;
@@ -219,7 +226,7 @@
   display: block;
   border: 1px solid var(--accent-line);
   border-left: 2px solid var(--accent);
-  background: var(--bubble-accent-soft);
+  background: var(--accent-soft);
   padding: 12px 14px;
 }
 .proposal-title {
@@ -246,7 +253,7 @@
 }
 .proposal-val {
   flex: 1; min-width: 0;
-  color: var(--bubble-ink);
+  color: var(--ink);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 220px;
@@ -326,7 +333,7 @@
 }
 
 /* 流式思考窗：固定小窗，正文开始后卷成一行 */
-.reason-block.reason-live { max-width: 100%; border-left-color: var(--accent-line); margin-bottom: 12px; }
+.reason-block.reason-live { border-left-color: var(--accent-line); margin-bottom: 12px; }
 .reason-live .reason-panel { max-height: 104px; overflow-y: auto; overscroll-behavior: contain; opacity: 1; }
 .reason-live.collapsed .reason-panel { max-height: 28px; }
 .reason-live.collapsed .reason-text { margin-top: 2px; }
@@ -545,6 +552,26 @@
   font-size: 12.5px;
 }
 .ctx-bubble .ctx-bubble-reason { margin: 6px 0 0; color: var(--ink-dim); }
+
+/* 历史位置提示条（#history-bar，在 composer 里、输入行之上）：head 不是叶子时提醒「继续发送会创建新分支」 */
+.history-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; margin-bottom: 6px;
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  font-size: 12.5px; line-height: 1.6; color: var(--accent-deep);
+}
+.history-bar #history-bar-text {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-jump {
+  flex-shrink: 0; min-height: 32px; padding: 0 12px;
+  font-family: var(--font-ui); font-size: 12.5px; letter-spacing: .04em;
+  color: var(--accent-deep); background: var(--bg);
+  border: 1px solid var(--accent-line); border-radius: var(--radius); cursor: pointer;
+}
+.history-jump:hover { background: var(--hover-tint); }
+
 .input-row { display: flex; gap: 8px; align-items: center; }
 #player-input {
   flex: 1; min-width: 0;
@@ -667,7 +694,8 @@
   z-index: 2;
   background: var(--stage-vignette);
 }
-.stage-img {
+/* 舞台当前图 / 视频：同一套 contain 定位，各自只补底色 */
+.stage-img, .stage-video {
   position: relative;
   z-index: 1;
   max-width: 100%; max-height: 100%;
@@ -686,7 +714,7 @@
   inset: 0;
   z-index: 3;
 }
-/* 舞台空状态引导：出现时淡入；有图后随 .hidden 消失（即时隐藏，无淡出——观感归负责人验收）。 */
+/* 舞台空状态引导：出现时淡入；有图后随 .hidden 即时消失（不淡出） */
 html[data-motion="rich"] .stage-empty {
   animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both;
 }
@@ -694,11 +722,6 @@ html[data-motion="rich"] .stage-empty {
 /* 视频生成进度：与作画胶囊错开一行，两个任务可以同时在跑 */
 .stage-pill-video { top: 48px; }
 .stage-video {
-  position: relative;
-  z-index: 1;
-  max-width: 100%; max-height: 100%;
-  object-fit: contain;
-  display: block;
   background: var(--ink);
   border-radius: var(--radius);
 }
@@ -807,10 +830,7 @@ html[data-motion="rich"] .stage-empty {
   font-family: var(--font-ui); font-size: 12px; letter-spacing: .08em;
   color: var(--ink-dim);
 }
-.char-head span.char-del { flex: 0 0 auto; padding: 0 8px; }
 .char-row { display: flex; gap: 6px; align-items: center; }
-.char-row input { flex: 1 1 0; min-width: 0; }
-.char-row .char-del { flex: 0 0 auto; padding: 0 8px; }
 .char-add { align-self: flex-start; }
 .thumb-empty { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); align-self: center; letter-spacing: .08em; }
 
@@ -871,8 +891,6 @@ html[data-motion="rich"] .stage-empty {
 }
 #screen-game[data-layout="immersive"] .chat-scroll {
   padding: 0 max(18px, calc((100% - 40em) / 2)) 6px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
 }
 #screen-game[data-layout="immersive"] .composer {
   border-top: none;
@@ -881,18 +899,11 @@ html[data-motion="rich"] .stage-empty {
 }
 #screen-game[data-layout="immersive"].text-hidden .chat-pane { opacity: 0; pointer-events: none; }
 
-/* 舞台收起（聊天占满） */
-#screen-game.no-image .image-pane, #screen-game.no-image .splitter { display: none; }
-#screen-game.no-image .chat-pane { width: 100% !important; flex: 1 1 auto; }
-
-/* chat（智能体 / 扮演）：纯聊天布局——没有画面区，聊天列占满宽度 */
-#screen-game[data-layout="chat"] .image-pane,
-#screen-game[data-layout="chat"] .splitter { display: none; }
-#screen-game[data-layout="chat"] .chat-pane { width: 100% !important; flex: 1 1 auto; }
+/* 舞台收起（聊天占满）：手动收图与聊天布局是同一套结果，合并成一条 */
+:is(#screen-game.no-image, #screen-game[data-layout="chat"]) .image-pane,
+:is(#screen-game.no-image, #screen-game[data-layout="chat"]) .splitter { display: none; }
+:is(#screen-game.no-image, #screen-game[data-layout="chat"]) .chat-pane { width: 100% !important; flex: 1 1 auto; }
 #screen-game[data-layout="chat"] #btn-toggle-image { display: none; }
-/* 舞台里的 ✎ / 🎨 / ⛶ 与沉浸出口跟着画面区一起消失（舞台区本身已隐藏，这里兜底） */
-#screen-game[data-layout="chat"] .stage-actions,
-#screen-game[data-layout="chat"] .stage-exit { display: none; }
 
 /* 触屏：没有 hover，舞台按钮常显，触控目标不小于 44px */
 @media (hover: none) {
@@ -901,4 +912,9 @@ html[data-motion="rich"] .stage-empty {
 }
 @media (max-width: 900px) {
   .stage-btn, .stage-exit { width: 44px; height: 44px; font-size: 17px; }
+}
+/* 窄屏：历史提示条的文字可以折行（两条都在一行里放不下） */
+@media (max-width: 720px) {
+  .history-bar { flex-wrap: wrap; }
+  .history-bar #history-bar-text { white-space: normal; }
 }

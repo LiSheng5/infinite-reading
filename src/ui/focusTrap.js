@@ -35,13 +35,13 @@ function visible(el) {
 }
 
 /** 对话框内可 Tab 到的元素，按 DOM 顺序 */
-export function focusables(root) {
+function focusables(root) {
   if (!root || typeof root.querySelectorAll !== 'function') return [];
   return Array.from(root.querySelectorAll(FOCUSABLE)).filter(visible);
 }
 
 /** 把焦点送进 root（默认第一个可聚焦元素）；返回是否成功 */
-export function focusFirst(root, selector) {
+function focusFirst(root, selector) {
   if (!root) return false;
   const wanted = selector ? root.querySelector(selector) : null;
   const target = (wanted && visible(wanted)) ? wanted : focusables(root)[0];

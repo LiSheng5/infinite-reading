@@ -19,7 +19,7 @@
 import { isSuspended } from './motion.js';
 
 // 三档色标的位次（与 tokens.css 的 --inf-* 三色一致）
-export const INK_STOPS = [0, 0.55, 1];
+const INK_STOPS = [0, 0.55, 1];
 
 // 解析失败时的退路：值与 tokens.css 的 --inf-light / --accent / --inf-deep 一致
 export const INK_RAMP_FALLBACK = [
@@ -29,7 +29,7 @@ export const INK_RAMP_FALLBACK = [
 ];
 
 // CSS 颜色（#rgb / #rrggbb / rgb() / rgba()）→ [r, g, b]；认不出就用退路
-export function parseCssColor(raw, fallback) {
+function parseCssColor(raw, fallback) {
   const value = String(raw == null ? '' : raw).trim();
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value);
   if (hex) {

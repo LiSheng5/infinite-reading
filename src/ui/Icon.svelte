@@ -3,6 +3,7 @@
    * 图标本身保持不变：24 网格、1.6 描边、圆头圆角、currentColor；
    * 实心圆点保留元素上的 fill="currentColor"（历史坑：<use> 内部元素吃不到外部 CSS 选择器）。
    * 每个分支的图形与 index.html 的 <symbol id="i-名字"> 逐字一致，由 eval/ui-lib-test.js 对账。
+   * 描边 / 尺寸统一来自 css/icons.css 的 .ic（组件本身输出 class="ic"），这里不写第二份样式。
    * 用法：<Icon name="gear" />；有文字语义时传 label（渲染 role="img" + aria-label），否则 aria-hidden。 */
   let { name, label = null, class: cls = '' } = $props();
 </script>
@@ -45,18 +46,3 @@
 {:else if name === 'spark'}<path d="M12 3.2l2.3 6.5 6.5 2.3-6.5 2.3L12 20.8l-2.3-6.5L3.2 12l6.5-2.3z"/>
 {/if}
 </svg>
-
-<style>
-  /* 与 css/icons.css 的 .ic 同参数：描边随文字色（currentColor），尺寸与描边由本组件的 scoped 样式定（1.15em / 1.6） */
-  svg {
-    width: 1.15em;
-    height: 1.15em;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    flex: none;
-    vertical-align: -0.2em;
-  }
-</style>

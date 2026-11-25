@@ -10,9 +10,8 @@
  *                            ——CSS 循环与 canvas 逐帧组件共用这一份判定
  * holdLoops() 过渡期循环冻结：暂停所有正在跑的真实 DOM 循环，返回解冻函数
  *
- * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画（旧版的机制，原样保留）。
- * 应用层（src/app/core.js）与过渡内核共用这里的实现；原来的 IR 兼容导出已删。 */
-import { Motion } from '../core/motion.ts';
+ * 页面不可见 → html[data-paused]：CSS 统一暂停一切循环动画。
+ * 分工：应用层（src/app/core.js）取 applyPaused；过渡内核（src/ui/viewTransition.js）取 holdLoops。 */
 
 /** 页面不可见 → html[data-paused]（CSS 暂停一切循环动画） */
 export function applyPaused(root, doc) {
@@ -162,5 +161,3 @@ export function holdLoops() {
 export function loopsHeld() {
   return holdDepth > 0;
 }
-
-export { Motion };

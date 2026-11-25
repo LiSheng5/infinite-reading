@@ -12,7 +12,7 @@
    *   · 纸面底色 / 纸纹 / 暗角走 tokens.css 的 --ink-* 令牌，逐字墨色是画布内容色。
    */
   import { onMount } from 'svelte';
-  import { mountCanvas } from '../../ui/canvasStage.js';
+  import { mountCanvas, rampAt } from '../../ui/canvasStage.js';
 
   let inkEl;
   let canvasEl;
@@ -43,16 +43,18 @@
   const PHASE_OFFSET = 0.12;
   const SEED = 0;
 
-  /* 画布内容色（纸墨的深浅），不是 UI 配色：浅到几乎融进纸面 → 近黑的浓墨 */
-  const INK_STOPS = [
-    [0.0, 205, 213, 216],
-    [0.18, 170, 183, 190],
-    [0.36, 124, 146, 159],
-    [0.52, 75, 101, 119],
-    [0.66, 38, 65, 84],
-    [0.8, 18, 42, 60],
-    [0.9, 10, 28, 44],
-    [1.0, 5, 16, 28],
+  /* 画布内容色（纸墨的深浅），不是 UI 配色：浅到几乎融进纸面 → 近黑的浓墨。
+     取色复用 src/ui/canvasStage.js 的 rampAt：钳制到 [0,1] 后按色标线性插值，末档即最深的墨。 */
+  const INK_POS = [0, 0.18, 0.36, 0.52, 0.66, 0.8, 0.9, 1];
+  const INK_RGB = [
+    [205, 213, 216],
+    [170, 183, 190],
+    [124, 146, 159],
+    [75, 101, 119],
+    [38, 65, 84],
+    [18, 42, 60],
+    [10, 28, 44],
+    [5, 16, 28],
   ];
 
   const LETTERS = 'aaeeiioouunnttrrssllccddmmpphhbbggffyywwvvkkxxjq';
@@ -65,23 +67,7 @@
     return value < min ? min : value > max ? max : value;
   }
 
-  function colorAt(value) {
-    const v = clamp(value, 0, 1);
-    for (let i = 1; i < INK_STOPS.length; i += 1) {
-      const right = INK_STOPS[i];
-      if (v <= right[0]) {
-        const left = INK_STOPS[i - 1];
-        const span = right[0] - left[0];
-        const t = span === 0 ? 0 : (v - left[0]) / span;
-        return [
-          Math.round(left[1] + (right[1] - left[1]) * t),
-          Math.round(left[2] + (right[2] - left[2]) * t),
-          Math.round(left[3] + (right[3] - left[3]) * t),
-        ];
-      }
-    }
-    return [11, 29, 46];
-  }
+  const colorAt = (value) => rampAt(value, INK_RGB, INK_POS);
 
   /* 固定种子的伪随机：同一帧号每次画出来一致，切档 / 暂停不会跳形 */
   function mulberry32(seed) {

@@ -46,7 +46,6 @@
     /* —— 单次 —— */
     fadeIn: 'fade',
     fadeOut: 'fade',
-    titleSwap: 'fade',
     leafIn: 'shift',
     leafInX: 'shift',
     prefsIn: 'shift',

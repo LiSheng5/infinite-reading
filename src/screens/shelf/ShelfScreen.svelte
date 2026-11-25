@@ -14,18 +14,16 @@
   import { shelf } from './shelf.svelte.js';
   import { A as appApi } from '../../app/core.js';
 
-  const A = () => appApi;
-
   function openHit(h) {
-    A().openStory(h.id, { focusNodeId: h.focusNid });
+    appApi.openStory(h.id, { focusNodeId: h.focusNid });
   }
 
   // 行 / 命中行键盘（与 rowOf / resultRowOf 的 keydown 同语义）：Enter 打开；Shift+F10 / ContextMenu 菜单
   function rowKey(e, it) {
-    if (e.key === 'Enter') { e.preventDefault(); A().openStory(it.id); }
+    if (e.key === 'Enter') { e.preventDefault(); appApi.openStory(it.id); }
     else if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
       e.preventDefault();
-      A().openRowMenu(e.currentTarget, it);
+      appApi.openRowMenu(e.currentTarget, it);
     }
   }
 
@@ -33,13 +31,13 @@
     if (e.key === 'Enter') { e.preventDefault(); openHit(h); }
     else if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
       e.preventDefault();
-      A().openRowMenu(e.currentTarget, { id: h.id, title: h.rawTitle });
+      appApi.openRowMenu(e.currentTarget, { id: h.id, title: h.rawTitle });
     }
   }
 
   function rowMenu(e, it) {
     e.stopPropagation();
-    A().openRowMenu(e.currentTarget.closest('.shelf-row'), it);
+    appApi.openRowMenu(e.currentTarget.closest('.shelf-row'), it);
   }
 </script>
 
@@ -55,11 +53,11 @@
       <button id="shelf-search-clear" class="ui-btn hud hidden" title="清空搜索" aria-label="清空搜索"><Icon name="x" /></button>
     </div>
     <div class="shelf-actions">
-      <button id="btn-new-story" class="ui-btn primary" onclick={() => A().openModal('modal-new')}><Icon name="plus" class="ic-l" />新建</button>
+      <button id="btn-new-story" class="ui-btn primary" onclick={() => appApi.openModal('modal-new')}><Icon name="plus" class="ic-l" />新建</button>
       <button id="btn-import" class="ui-btn ghost" title="导入 .irstory.json / .irbackup.json / .zip" onclick={() => document.getElementById('file-import').click()}><Icon name="up" class="ic-l" />导入</button>
-      <button id="btn-import-text" class="ui-btn ghost" title="粘贴文本导入" onclick={() => A().openImportText()}>文本导入</button>
-      <button id="btn-shelf-settings" class="ui-btn ghost" title="设置" onclick={() => A().openSettings()}><Icon name="gear" class="ic-l" />设置</button>
-      <button id="btn-shelf-home" class="ui-btn ghost" title="回到首页" onclick={() => A().showStart()}><Icon name="back" class="ic-l" />首页</button>
+      <button id="btn-import-text" class="ui-btn ghost" title="粘贴文本导入" onclick={() => appApi.openImportText()}>文本导入</button>
+      <button id="btn-shelf-settings" class="ui-btn ghost" title="设置" onclick={() => appApi.openSettings()}><Icon name="gear" class="ic-l" />设置</button>
+      <button id="btn-shelf-home" class="ui-btn ghost" title="回到首页" onclick={() => appApi.showStart()}><Icon name="back" class="ic-l" />首页</button>
     </div>
   </header>
 
@@ -72,7 +70,7 @@
                id={'shelf-row-' + it.id} data-story-id={it.id} role="option"
                aria-selected={it.current ? 'true' : 'false'} tabindex="0"
                style={it.delay ? 'animation-delay: ' + it.delay : null}
-               onclick={() => A().openStory(it.id)} onkeydown={(e) => rowKey(e, it)}>
+               onclick={() => appApi.openStory(it.id)} onkeydown={(e) => rowKey(e, it)}>
             <div class="shelf-row-thumb" class:empty={!it.thumb}
                  style={it.thumb ? 'background-image: url(' + JSON.stringify(it.thumb) + ')' : null}>
               {#if !it.thumb}<Icon name={it.icon} />{/if}
@@ -86,7 +84,7 @@
           </div>
         {/each}
         {#if g.capped}
-          <button class="ui-btn ghost shelf-more" onclick={() => A().showAllEarlier()}>展开更多（还有 {g.moreCount} 条）</button>
+          <button class="ui-btn ghost shelf-more" onclick={() => appApi.showAllEarlier()}>展开更多（还有 {g.moreCount} 条）</button>
         {/if}
       {/each}
     {/key}

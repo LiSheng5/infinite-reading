@@ -1,7 +1,7 @@
 /*
  * src/ui/backdrop.js —— 背景「惰性化」收口
  *
- * 为什么要有这个文件：弹窗（11 个 #modal-*，外壳见 src/ui/modalHost.js）与分支页
+ * 为什么要有这个文件：弹窗（12 个 #modal-*，外壳见 src/ui/modalHost.js）与分支页
  * （#branch-page，src/app/branch.js）打开时都会盖住页面，
  * 但**只拦 Tab 不够**：读屏用户仍能浏览被遮罩盖住的页面，读到顶栏按钮、聊天正文。
  * aria-modal 的完整承诺 = 焦点留在对话框内（已由 src/ui/focusTrap.js 做）

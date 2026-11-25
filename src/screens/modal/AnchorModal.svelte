@@ -71,7 +71,3 @@
     </div>
   </div>
 </Card>
-
-<style>
-  .grow { flex: 1 1 auto; min-width: 0; }
-</style>

@@ -2,7 +2,6 @@
  * 会话行、搜索框、分组折叠、「＋ 新建」入口。
  * 屏幕样式的一个分片：书架（会话列表 + 搜索）；@import 顺序即层叠顺序，勿随意调整。 */
 
-/* ==================== 书架（会话列表 + 搜索） ==================== */
 .screen { position: absolute; inset: 0; }
 #screen-shelf { overflow-y: auto; display: flex; justify-content: center; padding: 40px 24px 30px; }
 .shelf-wrap { width: min(880px, 96vw); }
@@ -101,8 +100,6 @@
 
 /* 行进入：错峰淡入上移（rowIn 只在 rich 跑，见 ANIMATIONS.rowIn） */
 html[data-motion="rich"] .shelf-row.row-in { animation: var(--an-rowIn) var(--m-dur-base) var(--ease-out) both; }
-/* 标题打字机结束后的淡入替换（standard 档） */
-.shelf-row-title.title-swap { animation: var(--an-titleSwap) var(--m-dur-base) var(--ease-out) both; }
 
 /* 搜索结果：标题 + 模式 + 时间 + 至多 2 条片段，命中用 mark 高亮 */
 .shelf-results { display: flex; flex-direction: column; }
@@ -127,8 +124,8 @@ mark {
   background: var(--accent-soft); color: var(--ink);
   border-radius: 3px; padding: 0 1px;
 }
-/* 搜索结果 ↔ 分组列表 交叉淡入（rich 档；standard/off 自动降级为短淡入；fadeIn 见动效基座） */
-.fade-swap { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
+/* 搜索结果 ↔ 分组列表 交叉淡入（fadeIn 见动效基座） */
+.shelf-results.fade-swap { animation: var(--an-fadeIn) var(--m-dur-base) var(--ease-out) both; }
 
 /* 搜索结果点进对话：命中消息的短暂高亮（蓝色描边淡出）
    叠加层画描边、只动 opacity（动效等级：只动合成层属性） */

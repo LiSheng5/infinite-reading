@@ -43,7 +43,6 @@
 :root {
   --an-fadeIn: fadeIn;
   --an-fadeOut: fadeOut;
-  --an-titleSwap: titleSwap;
   --an-leafIn: leafIn;
   --an-leafInX: leafInX;
   --an-prefsIn: prefsIn;
@@ -74,7 +73,7 @@
   animation-duration: var(--m-dur-vt-fade);
   animation-timing-function: var(--ease-out);
 }
-/* 组容器：共享元素（的 stage-art）的位置与尺寸补间走这里 */
+/* 组容器：共享元素（stage-art）的位置与尺寸补间走这里 */
 ::view-transition-group(*) {
   animation-duration: var(--m-dur-vt-shift);
   animation-timing-function: var(--ease-out);
@@ -82,7 +81,7 @@
 
 /* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明行为） ====================
    动画属性白名单：transform / opacity / filter / stroke-dashoffset / stroke-dasharray；
-   小面积装饰元素可用上面 @property 注册的自定义属性。不得动画 width / height / top / left /
+   小面积装饰元素可用 @property 注册的自定义属性（目前没有注册任何一条）。不得动画 width / height / top / left /
    margin / box-shadow 等触发重排的属性（eval/tokens-test.js 把这条变成可执行检查）。 */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes leafIn {
@@ -116,7 +115,6 @@
   100% { transform: translate(-3%, -2%) scale(1); }
 }
 @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes titleSwap { from { opacity: .25; } to { opacity: 1; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes prefsIn { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes prefsUp { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }

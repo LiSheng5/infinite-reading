@@ -11,7 +11,7 @@
  *   · 外壳 = installShell() 就地建的两层 display:contents 容器（只做「层」，不画任何像素）
  *   · 卡片外观 = src/ui/ModalCard.svelte（头 / 身 / 脚 + 关闭；12 个弹窗共用同一份）
  *   · src/app/core.js 只转发（App.openModal 等仍是同一批函数，app/ 下其余模块零改动）
- *   · （弹窗开合过渡）已在 openModal / closeModal 里接上 runTransition，调用方一律不动
+ *   · 弹窗开合过渡已在 openModal / closeModal 里接上 runTransition，调用方一律不动
  *
  * 弹窗外壳改造的硬约束是**零视觉变化**，所以外壳不重建弹窗，而是把它们「整块搬」进来：
  *   #app > #app-modals(display:contents) > #modal-shell-host(display:contents) > #modal-*
@@ -24,7 +24,7 @@
  *     叠层只来自这里的内联 z-index；CSS 的 .modal z-index 只是未开窗时的占位值，不参与叠层。
  *   · 互斥：FEATURE_MODALS（邮件 / 支付 / 设置）开一个先关掉其它功能类；确认弹窗不参与互斥。
  *   · Esc：只关最上层；确认弹窗必须走 closeConfirm（收掉 Promise），见 dismissModal。
- *   · 遮罩点击：规则仍写在 src/app/main.js 的绑定里（绑定在 src/app/main.js，本文件不重复实现），
+ *   · 遮罩点击：绑定写在 src/app/main.js（本文件不重复实现），
  *     它读的 modalStack 就是本文件导出的同一个数组实例。
  *   · 焦点还原：迁移前没有（关窗后焦点留在已隐藏的元素上）。后来补上「开第一个弹窗前的那一帧」
  *     的还原，且 focus({ preventScroll:true })——不抢脚本新放的焦点、不触发滚动。
@@ -36,7 +36,7 @@
 
 import { trapFocus } from './focusTrap.js';
 import { setModalBackdrop } from './backdrop.js';
-import { runTransition, transitionSpec, supportsVT, vtDisabled } from './viewTransition.js';
+import { runTransition, transitionSpec, supportsVT, vtDisabled, animatePseudo } from './viewTransition.js';
 // 应用层注册表（循环依赖是安全的：只在 dismissModal 被调用时读，eval 期不取值）
 import { A as appApi } from '../app/core.js';
 
@@ -48,7 +48,7 @@ export const MODAL_IDS = [
 ];
 
 /** 功能类弹窗：互斥（开一个先关掉其它功能类） */
-export const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings'];
+const FEATURE_MODALS = ['modal-email', 'modal-payment', 'modal-settings'];
 
 /** 栈：活的数组实例（core.js 把它挂到 App 上，src/app/main.js 的遮罩点击按引用读它） */
 export const modalStack = [];
@@ -66,7 +66,7 @@ const modalTraps = new Map();   // id → trapFocus 的卸载函数（Tab 不得
 /* ---------- 外壳 ---------- */
 
 /** 外壳根（未安装 / 半挂载时为 null） */
-export function shellHostEl() {
+function shellHostEl() {
   return typeof document === 'undefined' ? null : document.getElementById(SHELL_HOST_ID);
 }
 
@@ -161,7 +161,7 @@ function disarmTrap(id) {
 /* ---------- 栈 ---------- */
 
 /** 是否开着 */
-export function isModalOpen(id) {
+function isModalOpen(id) {
   return modalStack.indexOf(id) >= 0;
 }
 
@@ -188,7 +188,7 @@ function restack() {
  *     免得开着弹窗去切屏时，弹窗被拖进那一层快照里做无意义的自交叉淡入。
  *
  * 为什么关窗在降级路径不做淡出：隐藏必须同步——焦点还原、栈、以及 20 多处调用点「关完立刻判
- * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按「off 档不许 await 后再改 DOM」
+ * 可见性」都是同步语义，淡出则要求把隐藏延后一二百毫秒；按「降级路径不许 await 后再改 DOM」
  * 的同一条理由选同步，只在真有 View Transition 时才演出退场。
  *
  * 开窗那一侧（迁移前的同步语义不能破）：
@@ -274,37 +274,11 @@ function clearNames(id) {
   if (card) { try { card.style.viewTransitionName = ''; } catch (_) {} }
 }
 
-function easeToken() {
-  try {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
-    if (v) return v;
-  } catch (_) {}
-  return 'ease-out';
-}
-
-/* 给快照伪元素挂一段 transform（与第 3 / 6 步 shiftNewSnapshot 同一手法：位移若写成 @keyframes
- * 就要同步 motion.ts 与两份 eval 测试，这一步的改动面不含那三处）。
+/* 给快照伪元素挂一段 transform（与 navigation.js 的 shiftNewSnapshot 共用 animatePseudo）：
+ * 位移若写成 @keyframes 就要同步 motion.ts 与两份 eval 测试。
  * 只动 transform：伪元素自己的淡入淡出仍由 css/motion.css 的 ::view-transition-* 时长收口。 */
 function animateSnapshot(pseudo, frames, ms) {
-  if (!(ms > 0) || typeof document === 'undefined') return;
-  const prev = snapAnims.get(pseudo);
-  if (prev) {
-    try { prev.cancel(); } catch (_) {}
-    snapAnims.delete(pseudo);
-  }
-  let anim;
-  try {
-    anim = document.documentElement.animate(frames, {
-      duration: ms,
-      easing: easeToken(),
-      pseudoElement: pseudo,
-    });
-  } catch (_) {
-    return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
-  }
-  snapAnims.set(pseudo, anim);
-  const done = () => { if (snapAnims.get(pseudo) === anim) snapAnims.delete(pseudo); };
-  try { anim.finished.then(done, done); } catch (_) { done(); }
+  animatePseudo(snapAnims, pseudo, pseudo, frames, ms);
 }
 
 function animateCardIn(id, ms) {
@@ -329,7 +303,7 @@ function animateCardOut(id, ms) {
  * 它会在 update 回调那一帧从 opacity:0 / translateY(10px) 起跑，被新快照原样拍下来 ——
  * 结果是「遮罩淡入、卡片却定格在半透明」两段叠在一起。过渡期挂 animation-name:none，
  * 新快照拍到的就是终态；关窗那一刻再撤（元素正被隐藏，重挂动画不会被看见）。
- * 只对真走 View Transition 的路径做：off 档与降级的淡入仍是原来那条动画（本步不改它的档位政策）。 */
+ * 只对真走 View Transition 的路径做：降级路径的淡入仍是原来那条动画。 */
 const cardResume = new Map();   // id → 撤销「动画让位」的函数
 
 function resumeCard(id) {
@@ -354,7 +328,7 @@ function endModalTransition(id, seq, release) {
   if (seqIs(id, seq)) clearNames(id);
 }
 
-/** 没有过渡时（off / 降级 / 半挂载）的统一回执，形状与 runTransition 的返回值一致 */
+/** 没有过渡时（降级 / 半挂载）的统一回执，形状与 runTransition 的返回值一致 */
 function instantResult(id) {
   return { modal: id, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
 }
@@ -402,7 +376,7 @@ export function openModal(id) {
   }
 
   const plan = planModal();
-  if (!plan.willVT) {                       // off 档 / 降级：内核负责同步换（或整块淡入）
+  if (!plan.willVT) {                       // 降级：内核负责同步换（或整块淡入）
     const r = runTransition('modal', show, { scope: el });
     armTrap(id, el);                        // runTransition 的所有分支都先同步改 DOM，故此处元素已可见
     setModalBackdrop(true);                 // 焦点已在对话框里，才给背景加 inert / aria-hidden
@@ -479,7 +453,7 @@ export function closeModal(id) {
   }
 
   const plan = planModal();
-  if (!plan.willVT) {          // off 档 / 降级：只收敛 DOM（见文件头「为什么降级关窗不做淡出」）
+  if (!plan.willVT) {          // 降级：只收敛 DOM（见文件头「为什么降级关窗不做淡出」）
     hide();
     clearNames(id);
     return instantResult(id);
@@ -523,6 +497,3 @@ export function closeTopModal() {
   dismissModal(modalStack[modalStack.length - 1]);
   return true;
 }
-
-/* 不再导出 ModalHost 兼容对象 / 不再挂 应用层注册表——
- * 应用层直接 import 上面的函数（core.js 一次取齐），外壳由组合根安装。 */

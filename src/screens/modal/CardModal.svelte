@@ -67,7 +67,7 @@
       onclick={() => appApi.showCardView('pick')}>选卡</Button>
 
     <p class="hint" id="card-source-hint"></p>
-    <p class="hint hidden" id="rc-required-hint">先给角色起个名字吧</p>
+    <p class="hint hidden required-hint" id="rc-required-hint">先给角色起个名字吧</p>
 
     <Field label="名字 *" for="rc-name">
       <TextInput id="rc-name" spellcheck="false" placeholder="例如：周叙" />
@@ -114,7 +114,5 @@
     width: 100%; text-align: center; padding: 22px 20px;
   }
   .rc-pick-cards .mode-card b { display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
-  #rc-back { margin-bottom: 10px; }
-  #rc-required-hint { color: var(--danger); margin-bottom: 10px; }
   .rc-import-row { margin-top: 14px; }
 </style>

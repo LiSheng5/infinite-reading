@@ -1,7 +1,7 @@
 /*
  * src/screens/modal/index.js —— 弹窗内容挂载
  *
- * 这里挂 11 个弹窗（轻弹窗 5 个 + 重弹窗 6 个）到各自的 #modal-*；全站共 12 个，
+ * 这里挂 11 个弹窗到各自的 #modal-*（见文件末尾的清单）；全站共 12 个，
  * 第 12 个 #modal-settings 由 src/screens/settings 挂载，这里不重复挂载。
  *
  * 挂法与其他屏一致（共用外壳见 src/screens/_mount.js）：**外层容器不动**，只替换内容。

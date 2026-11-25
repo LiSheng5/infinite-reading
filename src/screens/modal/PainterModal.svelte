@@ -103,6 +103,6 @@
 </Card>
 
 <style>
-  .grow { flex: 1 1 auto; min-width: 0; }
+  /* 工作台里的字段更紧（宽度由全局 .grow 给） */
   .pw-meta-col :global(.field) { margin-bottom: 8px; }
 </style>

@@ -17,29 +17,28 @@
 
   let { entry: e } = $props();
 
-  const A = () => appApi;
   let reasonOpen = $state(false);
 
   // 点图 / 点文字 = 在右侧舞台选中这张（同旧 selectScene / selectVideo）
   function selectScene() {
-    const a = A();
+    const a = appApi;
     if (!a.state.story) return;
     a.state.story.lastBg = e.entry.id;
     a.saveAll();
     a.renderStage();
     a.renderThumbs();
   }
-  function openWorkbench() { A().openWorkbench(e.entry.id); }
-  function openLightbox() { A().openLightbox(e.entry); }
+  function openWorkbench() { appApi.openWorkbench(e.entry.id); }
+  function openLightbox() { appApi.openLightbox(e.entry); }
   function openRemote() {
     try { window.open(e.entry.remoteUrl, '_blank', 'noopener'); } catch (_) {}
   }
-  function retry() { A().retryLast(); }
-  function switchSib(dir) { A().switchSiblingFromBubble(e.nid, dir); }
+  function retry() { appApi.retryLast(); }
+  function switchSib(dir) { appApi.switchSiblingFromBubble(e.nid, dir); }
   // 确认入口只有一个：待二次确认（e.second）也走它 —— 应用层再弹一次带额度的确认，不重新下单
-  function confirmProposal() { A().confirmProposal(e.entry); }
+  function confirmProposal() { appApi.confirmProposal(e.entry); }
   // 拒绝 / 清理残留草稿共用同一个入口
-  function denyProposal() { A().denyProposal(e.entry); }
+  function denyProposal() { appApi.denyProposal(e.entry); }
 </script>
 
 {#if e.kind === 'text'}

@@ -49,12 +49,12 @@ function pad(kind) {
   if (!charRows[kind].length) charRows[kind] = [makeRow(kind, null)];
 }
 
-export function setRows(kind, list) {
+function setRows(kind, list) {
   const rows = (Array.isArray(list) ? list : []).map(v => makeRow(kind, v));
   charRows[kind] = rows.length ? rows : [makeRow(kind, null)];
 }
 
-export function getRows(kind) {
+function getRows(kind) {
   const fields = CHAR_FIELDS[kind] || [];
   return charRows[kind].map(row => {
     const out = {};

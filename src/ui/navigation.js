@@ -1,43 +1,39 @@
 /*
  * src/ui/navigation.js —— 切屏的唯一入口
  *
- * 为什么要有这个文件：旧版「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
- * 直接写 DOM 的（src/app/library.js 的 showShelf / showStart、src/app/render.js 的 enterGame），
- * 「分支页是否盖在上面」又是直接写 documentElement.dataset.branch（src/app/branch.js）。
- * 要给切屏接视图过渡，就必须先有**一个地方**知道「屏幕有哪几块、当前在哪块」，
- * 否则过渡内核没有稳定的收口点。
+ * 为什么要收口：迁移前「哪块屏可见」是靠三处零散的 `classList.add/remove('hidden')`
+ * 直接写 DOM 的（书架 / 开场 / 进入阅读页各一处），「分支页是否盖在上面」又是直接写
+ * documentElement.dataset.branch。要给切屏接视图过渡，就必须先有**一个地方**知道
+ * 「屏幕有哪几块、当前在哪块」，否则过渡内核没有稳定的收口点。
  *
  *   · 本文件 = 屏幕登记表 + 显隐开关 + 分支页标记的唯一写入点（界面层只准从这里切屏）
  *   · src/ui/viewTransition.js = 过渡内核（要不要开 VT、什么时候改 DOM、降级怎么收）
- *   · src/core/motion.ts 的 TRANSITIONS.screen / stageArt = 三档 kind 与时长的唯一声明处
- *   · src/app/*.js（legacy IIFE）经 Nav 调用（旧界面层与 core 模块的既定桥法）
+ *   · src/core/motion.ts 的 TRANSITIONS.screen / stageArt = kind 与时长的唯一声明处
+ *   · src/app/*.js 经 Nav 调用（界面层不直接碰 .hidden / data-branch）
  *
- * 公开 API：
+ * 公开 API（Nav）：
  *   screenEl(name)            屏幕容器（home | shelf | read）
  *   screenVisible(name)       该屏当前是否可见（= 没有 .hidden）
- *   currentScreen()           当前可见的屏名（都没显示时返回 ''）
  *   showScreen(name, mutate)  切到某屏：隐藏其余、显示目标；mutate 里放这次切换要一起做的 DOM 变更
  *   stageArt(mutate)          舞台换画：共享元素 stage-art（新旧模糊副本同名），过渡期暂停 Ken Burns
  *   branchPage(open, mutate)  分支页开合：显隐 + 渲染交给 mutate；关的时候循环挂起等过渡落地再撤
  *   isTransitioning()         视图过渡是否正在跑（rich 的入场动画要等它结束）
- *   setBranchOpen(open)       分支页开合标记（html[data-branch] + data-loops-paused），循环暂停的开关
- *   isBranchOpen()            分支页是否开着
  *
  * 铁律：
  *   · 目标屏已经可见时**不跑过渡**（连点同一入口不该产生快照），mutate 照常执行。
- *   · off 档与 instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动。
+ *   · instant 由 viewTransition 保证同步改 DOM：焦点与滚动位置都不动。
  *   · 屏幕名不认识时退化为「只跑 mutate」，不抛错。
  *   · rich 的「淡入 + 短位移」用 WAAPI 挂在 ::view-transition-new(root) 上（见 shiftNewSnapshot）：
  *     位移不是新增 @keyframes（那要同步 motion.ts 与两个 eval 测试），只是给快照伪元素一段 transform。
  */
-import { runTransition, vtActive } from './viewTransition.js';
+import { runTransition, vtActive, animatePseudo } from './viewTransition.js';
 import { suspendLoops } from './motion.js';
 
 /** 屏幕登记表：名字 → 容器 id（切屏只认这一张表；别处不得再写 '.hidden'） */
-export const SCREENS = { home: 'screen-start', shelf: 'screen-shelf', read: 'screen-game' };
+const SCREENS = { home: 'screen-start', shelf: 'screen-shelf', read: 'screen-game' };
 
-/** 稳定的遍历顺序（显隐一次收敛，避免 A 隐藏 → B 显示之间出现「两屏同时可见」的中间态） */
-const ORDER = ['home', 'shelf', 'read'];
+/** 稳定的遍历顺序（= 登记表的插入序；显隐一次收敛，避免 A 隐藏 → B 显示之间出现「两屏同时可见」的中间态） */
+const ORDER = Object.keys(SCREENS);
 
 const HIDDEN = 'hidden';
 
@@ -58,13 +54,13 @@ export function screenVisible(name) {
 }
 
 /** 当前可见的屏名（都没有时返回 ''） */
-export function currentScreen() {
+function currentScreen() {
   for (const name of ORDER) if (screenVisible(name)) return name;
   return '';
 }
 
 /** 只切显隐（不跑过渡）：把所有屏的 .hidden 一次收敛到目标状态 */
-export function applyScreen(name) {
+function applyScreen(name) {
   for (const key of ORDER) {
     const el = screenEl(key);
     if (el) el.classList.toggle(HIDDEN, key !== name);
@@ -83,14 +79,9 @@ export function showScreen(name, mutate) {
     if (typeof mutate === 'function') mutate();
   };
 
-  // 不认识的名字 / 屏不在 DOM 里：退化为「只跑 mutate」，不抛错也不动画
-  if (!SCREENS[name] || !screenEl(name)) {
-    if (typeof mutate === 'function') mutate();
-    return { screen: name, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
-  }
-
-  // 已经在目标屏：不跑过渡（连点同一个入口不该产生快照），mutate 照常执行
-  if (currentScreen() === name && screenVisible(name)) {
+  // 不认识的名字 / 屏不在 DOM 里 / 已经在目标屏：退化为「只跑 mutate」，
+  // 不抛错也不动画（连点同一个入口不该产生快照）。
+  if (!SCREENS[name] || !screenEl(name) || currentScreen() === name) {
     if (typeof mutate === 'function') mutate();
     return { screen: name, tier: '', kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve() };
   }
@@ -112,7 +103,7 @@ export function showScreen(name, mutate) {
 
 /* ---------- rich 的短位移（切屏 / 分支页开合共用）----------
  * 为什么不在 css/motion.css 里写：位移需要 @keyframes，而 @keyframes 必须同步 src/core/motion.ts
- * 的 ANIMATIONS 与两份 eval 测试；的改动面不含那三处。这里改用 WAAPI
+ * 的 ANIMATIONS 与两份 eval 测试，改动面不止这一处。这里改用 WAAPI
  * 直接给「新快照」伪元素挂一段 transform，只动合成层属性，时长由 runTransition 返回的声明值收口。
  * 浏览器不支持伪元素 WAAPI（pseudoElement）时静默放弃：只剩 css/motion.css 那三条
  * ::view-transition-* 规则给出的交叉淡入（不算失败，验收脚本也不把位移当硬要求）。
@@ -127,30 +118,10 @@ function cancelShift(key) {
   shiftAnims.delete(key);
 }
 
-function easeToken() {
-  try {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
-    if (v) return v;
-  } catch (_) {}
-  return 'ease-out';
-}
-
 function shiftNewSnapshot(key, ms, fromY) {
-  if (!(ms > 0) || typeof document === 'undefined') return;
   cancelShift(key);
-  let anim;
-  try {
-    anim = document.documentElement.animate(
-      [{ transform: 'translateY(' + fromY + 'px)' }, { transform: 'none' }],
-      { duration: ms, easing: easeToken(), pseudoElement: '::view-transition-new(root)' },
-    );
-  } catch (_) {
-    return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
-  }
-  shiftAnims.set(key, anim);
-  // 收掉后清引用（被顶掉 / 被 skip 的 reject 属正常）
-  const done = () => { if (shiftAnims.get(key) === anim) shiftAnims.delete(key); };
-  try { anim.finished.then(done, done); } catch (_) { done(); }
+  animatePseudo(shiftAnims, key, '::view-transition-new(root)',
+    [{ transform: 'translateY(' + fromY + 'px)' }, { transform: 'none' }], ms);
 }
 
 /* ---------- 舞台换画 ----------
@@ -210,7 +181,7 @@ export function stageArt(mutate) {
  * 只用标记不挂起的话，退出阅读页重写后 css 那条 `#screen-game *` 规则迟早要跟着改。 */
 let branchSuspend = null;
 
-export function setBranchOpen(open) {
+function setBranchOpen(open) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   const read = screenEl('read');
@@ -224,11 +195,6 @@ export function setBranchOpen(open) {
       branchSuspend = null;
     }
   }
-}
-
-export function isBranchOpen() {
-  if (typeof document === 'undefined') return false;
-  return document.documentElement.dataset.branch === 'open';
 }
 
 /* ---------- 分支页开合 ----------
@@ -290,17 +256,4 @@ export function isTransitioning() {
 }
 
 /* ---------- 屏幕登记表（应用层直接 import 本文件的 Nav） ---------- */
-export const Nav = {
-  SCREENS,
-  ORDER: ORDER.slice(),
-  screenEl,
-  screenVisible,
-  currentScreen,
-  applyScreen,
-  showScreen,
-  stageArt,
-  branchPage,
-  isTransitioning,
-  setBranchOpen,
-  isBranchOpen,
-};
+export const Nav = { screenEl, screenVisible, showScreen, stageArt, branchPage, isTransitioning };

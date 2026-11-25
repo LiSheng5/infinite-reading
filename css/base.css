@@ -14,7 +14,6 @@ body {
   letter-spacing: .01em;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  color-scheme: light;
 }
 
 /* 表单控件字号统一读令牌：默认值落在元素本身，不会被 label 的 12.5px 继承走；
@@ -118,9 +117,9 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   color: var(--on-danger);
 }
 .ui-btn.primary.stop:hover { background: var(--danger-deep); border-color: var(--danger-deep); color: var(--on-danger); }
-.ui-btn.ghost { background: transparent; border-color: var(--line); color: var(--ink-dim); }
+.ui-btn.ghost { border-color: var(--line); color: var(--ink-dim); }
 .ui-btn.ghost:hover { background: transparent; color: var(--accent); border-color: var(--accent-line); }
-.ui-btn.danger { color: var(--danger); border-color: var(--danger-line); background: transparent; }
+.ui-btn.danger { color: var(--danger); border-color: var(--danger-line); }
 .ui-btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
 .ui-btn.slim { padding: 6px 14px; font-size: 13px; }
 .ui-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -132,7 +131,6 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   font-size: 13px;
   letter-spacing: inherit;
   color: var(--ink-dim);
-  background: transparent;
   border-color: transparent;
   min-width: 34px;
   height: 34px;
@@ -148,13 +146,11 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   font-size: 12px;
   letter-spacing: inherit;
   color: var(--ink-dim);
-  background: transparent;
   border-color: var(--line-strong);
   padding: 4px 10px;
 }
 .ui-btn:where(.mini):hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); transform: translateY(-1px); }
 .ui-btn:where(.mini):active { transform: scale(.97); }
-.ui-btn:where(.mini):disabled { opacity: .4; cursor: not-allowed; }
 
 /* ---- 修饰类 .icon-only：纯图标方形（40×40 触屏下限；图标尺寸见 icons.css） ---- */
 .ui-btn.icon-only {
@@ -168,11 +164,6 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   border-color: transparent;
 }
 .ui-btn.icon-only:hover { color: var(--ink); border-color: var(--line); background: var(--hover-tint); transform: none; }
-.ui-btn.icon-only.bordered { border-color: var(--line-strong); }
-.ui-btn.icon-only.bordered:hover { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
-.ui-btn.icon-only.danger { color: var(--danger); }
-.ui-btn.icon-only.danger:hover { background: var(--danger-soft); border-color: var(--danger-line); }
-.ui-btn.icon-only:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ---- 禁用态收尾：悬停不亮、主按钮保持实心（原 Button.svelte 的作用域规则搬到这里） ---- */
 .ui-btn:disabled:hover { transform: none; background: transparent; border-color: var(--btn-line); color: var(--ink); }
@@ -199,7 +190,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
   margin-top: 8px;
 }
 
-/* 三个开局页共用的「一句话说明」（剧情 / 扮演印在弹窗标题下，智能体印在空对话引导第一行）：
+/* 三个开局页共用的「一句话说明」（剧情向导 / 角色卡印在弹窗标题下，聊天印在空对话引导第一行）：
    字号与字色直接吃 .hint，这里只统一留白——三处各写一遍外边距迟早会漂。 */
 .hint.entry-desc { margin: 0 0 14px; }
 

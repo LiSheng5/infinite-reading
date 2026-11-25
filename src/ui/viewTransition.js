@@ -9,11 +9,12 @@
  *   runTransition(name, mutate, opts) → { name, tier, kind, ms, mode, finished }
  *     name    TRANSITIONS 里的过渡名（未登记的名字按 rich 档默认政策兜底）
  *     mutate  真正改 DOM 的函数（同步执行；不要在它里面 await）
- *     opts    { root = documentElement, scope = #app }  scope 是降级淡入的范围
+ *     opts    { scope = #app }  scope 是降级淡入的范围
  *     mode    'vt'（原生 View Transition）| 'fade'（降级淡入）| 'instant'（同步换、不动画）
  *
  *   supportsVT()            浏览器是否原生支持 document.startViewTransition（纯能力探测）
  *   vtDisabled()            URL 带 ?vt=0 —— 强制降级（验收 / 排障用；file:// 也认）
+ *   animatePseudo()         给快照伪元素挂一段 WAAPI（位移的收口处，见下）
  *   skipActiveTransition()  收掉正在跑的过渡（连续触发前先收，避免快照残留）
  *
  * 铁律：
@@ -45,9 +46,43 @@ export function vtActive() {
   return !!activeVT;
 }
 
-/** 某个过渡动作的声明：{ kind, ms }；未登记的名字按 rich 档默认政策兜底。
- *  第二参数为兼容既有调用方保留，已忽略（运行时只有 rich 一档）。 */
-export function transitionSpec(name, tier) {
+/** 过渡用的缓动：读 :root 的 --ease-out（读不到时退回 CSS 关键字） */
+function easeOut() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ease-out').trim();
+    if (v) return v;
+  } catch (_) {}
+  return 'ease-out';
+}
+
+/**
+ * 给视图过渡的快照伪元素挂一段 WAAPI（切屏 / 分支页 / 弹窗卡片共用）。
+ * 位移若写成 @keyframes 就要同步 src/core/motion.ts 与两份 eval 测试，这里只给伪元素一段 transform。
+ * @param {Map<string, Animation>} store 按 key 记上一段（连点先收，避免叠帧）
+ * @param {string} key 记账键（同一伪元素的多次动画可以分开记）
+ * @param {string} pseudo 伪元素选择器（::view-transition-new(name) 等）
+ */
+export function animatePseudo(store, key, pseudo, frames, ms) {
+  if (!(ms > 0) || typeof document === 'undefined') return;
+  const prev = store.get(key);
+  if (prev) {
+    try { prev.cancel(); } catch (_) {}
+    store.delete(key);
+  }
+  let anim;
+  try {
+    anim = document.documentElement.animate(frames, { duration: ms, easing: easeOut(), pseudoElement: pseudo });
+  } catch (_) {
+    return;   // 伪元素 WAAPI 不可用：只保留交叉淡入，不算失败
+  }
+  store.set(key, anim);
+  // 收掉后清引用（被顶掉 / 被 skip 的 reject 属正常）
+  const done = () => { if (store.get(key) === anim) store.delete(key); };
+  try { anim.finished.then(done, done); } catch (_) { done(); }
+}
+
+/** 某个过渡动作的声明：{ kind, ms }；未登记的名字按 rich 档默认政策兜底。 */
+export function transitionSpec(name) {
   const spec = Motion.TRANSITIONS && Motion.TRANSITIONS[name];
   if (spec && spec.kind) return spec;
   const cap = Motion.TIERS.rich.maxShiftMs;
@@ -65,7 +100,7 @@ function cancelFade() {
 }
 
 /** 收掉正在跑的过渡（连续触发前调用；VT 走 skipTransition，降级淡入走 cancel） */
-export function skipActiveTransition() {
+function skipActiveTransition() {
   if (activeVT) {
     try { if (typeof activeVT.skipTransition === 'function') activeVT.skipTransition(); } catch (_) {}
     activeVT = null;
@@ -75,14 +110,6 @@ export function skipActiveTransition() {
 
 function runNow(mutate) {
   return typeof mutate === 'function' ? mutate() : undefined;
-}
-
-function readEase(scope) {
-  try {
-    const v = getComputedStyle(scope).getPropertyValue('--ease-out').trim();
-    if (v) return v;
-  } catch (_) {}
-  return 'ease-out';
 }
 
 // 降级：先换 DOM，再对范围做一次整块淡入（时长按声明与 rich 档上限取小）
@@ -97,7 +124,7 @@ function downgrade(ctx, mutate, opts) {
   cancelFade();
   let anim;
   try {
-    anim = scope.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur, easing: readEase(scope), fill: 'none' });
+    anim = scope.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur, easing: easeOut(), fill: 'none' });
   } catch (_) {
     return { name, tier, kind: 'instant', ms: 0, mode: 'instant', finished: Promise.resolve(value) };
   }
@@ -118,7 +145,7 @@ function downgrade(ctx, mutate, opts) {
  */
 export function runTransition(name, mutate, opts) {
   const tier = 'rich';
-  const spec = transitionSpec(name, tier);
+  const spec = transitionSpec(name);
   const ctx = { name, tier, kind: spec.kind, ms: spec.ms };
 
   // 声明为即时：同步换 DOM（焦点与滚动位置都不动）
@@ -158,7 +185,7 @@ export function runTransition(name, mutate, opts) {
       }
       if (activeVT === vt) activeVT = null;
     };
-    /* ready 也必须接住：skipTransition()（连点被后一段顶掉 / 的快速切屏）会让它以
+    /* ready 也必须接住：skipTransition()（连点被后一段顶掉）会让它以
      * AbortError 拒绝，没人处理就是一条 unhandledrejection（Chromium 记为 pageerror）。
      * 接真实切屏时实测到，补这一行；finished 那条下面已经有拒绝分支。 */
     try { vt.ready.then(() => {}, () => {}); } catch (_) {}

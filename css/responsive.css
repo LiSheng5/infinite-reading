@@ -62,7 +62,7 @@
   #modal-new .modal-body {
     padding-bottom: max(20px, env(safe-area-inset-bottom));
   }
-  /* 触屏可点目标不小于 40px（A.6 布局验收） */
+  /* 触屏可点目标不小于 40px */
   .shelf-row-more, #shelf-search-clear { min-width: 40px; min-height: 40px; }
 }
 

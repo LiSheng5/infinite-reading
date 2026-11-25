@@ -103,7 +103,7 @@ label {
   letter-spacing: 0.05em;
   margin-bottom: 12px;
 }
-label input, label select {
+label input, label select, label textarea {
   display: block; width: 100%;
   margin-top: 6px;
   font-family: var(--font-ui);
@@ -117,26 +117,11 @@ label input, label select {
   outline: none;
   transition: border-color var(--m-t-color-base) var(--ease-out);
 }
-label input:focus, label select:focus {
+label textarea { line-height: 1.85; resize: vertical; }
+label input:focus, label select:focus, label textarea:focus {
   border-color: var(--accent-line);
   box-shadow: var(--field-inset), 0 0 0 3px var(--accent-soft);
 }
-label textarea {
-  display: block; width: 100%; margin-top: 6px;
-  font-family: var(--font-ui);
-  font-size: var(--fs-field);
-  line-height: 1.85;
-  letter-spacing: .01em;
-  color: var(--ink);
-  background: var(--field-bg);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 8px 10px;
-  outline: none;
-  resize: vertical;
-  transition: border-color var(--m-t-color-base) var(--ease-out);
-}
-label textarea:focus { border-color: var(--accent-line); box-shadow: var(--field-inset), 0 0 0 3px var(--accent-soft); }
 label input:disabled { opacity: 0.45; }
 label input.inline-num {
   display: inline-block; width: 58px; margin: 0 4px;
@@ -165,6 +150,8 @@ label input.inline-num {
 .hint.alert { color: var(--accent); }
 /* 提醒但不拦路（如模型名与列表里的写法不一致）：琥珀色，可忽略、可继续 */
 .hint.warn { color: var(--warn); }
+/* 必填项没填时的红字（角色卡 / 剧情向导共用，由各自的脚本按 id 摘掉 hidden） */
+.required-hint { color: var(--danger); margin-bottom: 10px; }
 /* 「测试连接」结果行：成功 / 需注意 / 失败 */
 .test-row { margin-top: 12px; }
 .test-row .test-state { margin-top: 0; }
@@ -173,6 +160,8 @@ label input.inline-num {
 .test-state.fail { color: var(--danger); }
 .row-inline { display: flex; align-items: center; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
 .row-inline .hint { margin-top: 0; }
+/* 弹性列：行内输入框吃掉剩余宽度（.input-row / .draft-row 共用这一条） */
+.grow { flex: 1 1 auto; min-width: 0; }
 .inline-field { display: block; font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 10px; letter-spacing: 0.05em; }
 .panel-block {
   margin-top: 14px;
@@ -244,7 +233,6 @@ label input.inline-num {
   background: var(--accent-soft);
 }
 .draft-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 6px; }
-.draft-row label { flex: 1; margin-bottom: 0; }
 
 /* 「更多设定（可选）」折叠块：开局弹窗（剧情向导 / 角色卡）共用这一份样式与措辞，
    收起时摘要行给已填提示；有内容时由界面层自动展开（设置页 fold.auto: 'filled' 的思路）。
@@ -291,7 +279,6 @@ label input.inline-num {
   background: var(--paper-3);
 }
 .pw-meta-col { flex: 1; min-width: 0; }
-.pw-meta-col label { margin-bottom: 0; }
 /* 提示词是可读可改的「源码」：等宽，避免中英混排时对齐跳来跳去 */
 #pw-prompt { font-family: var(--font-mono); font-size: var(--fs-field-mono); line-height: 1.8; }
 .pw-thread {
@@ -410,7 +397,7 @@ label input.inline-num {
   /* 旁白是阅读面本身：不做入场位移动画，避免长文重排时跳动 */
   animation: var(--an-leafInX) var(--m-dur-base) var(--ease-spring) both;
 }
-.toast.error { border-left-color: var(--danger, var(--ink)); color: var(--ink); }
+.toast.error { border-left-color: var(--danger, var(--ink)); }
 .toast-action {
   pointer-events: auto;
   flex: 0 0 auto;

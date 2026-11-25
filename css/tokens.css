@@ -129,7 +129,7 @@
   /* 字体栈（全部系统字体，零远程请求） */
   --font-body:    "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
   --font-ui:      system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-title:   "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --font-title:   var(--font-body);
   --font-note:    var(--font-ui);
   --font-cursive: var(--font-body);
   --font-en:      var(--font-ui);
@@ -142,7 +142,4 @@
   --paper-3:        var(--stage);
   --btn-ink:        var(--ink);
   --btn-line:       var(--line-strong);
-  --bubble-ink:          var(--ink);
-  --bubble-accent-soft:  var(--accent-soft);
-  --bubble-accent-line:  var(--accent-line);
 }

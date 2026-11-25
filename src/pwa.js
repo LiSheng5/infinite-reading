@@ -9,16 +9,12 @@
  *   - 老浏览器没有 navigator.serviceWorker
  *   - 注册失败（比如 sw.js 404 / 证书问题）
  */
-(function () {
-  'use strict';
+const host = location.hostname;
+const canRegister = 'serviceWorker' in navigator
+  && (location.protocol === 'https:' || host === 'localhost' || host === '127.0.0.1');
 
-  if (!('serviceWorker' in navigator)) return;
-
-  const host = location.hostname;
-  const okProto = location.protocol === 'https:' || host === 'localhost' || host === '127.0.0.1';
-  if (!okProto) return;
-
+if (canRegister) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => { /* 静默：离线能力是加分项，不是必需项 */ });
   });
-})();
+}

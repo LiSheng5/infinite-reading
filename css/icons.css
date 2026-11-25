@@ -1,10 +1,9 @@
 /* ==================== 图标（手绘 SVG sprite） ====================
  * 图标基类 .ic 与各处的尺寸修饰（颜色一律 currentColor）。
+ * 描边风格统一写在这里：24 网格、1.6 描边、圆头圆角、颜色跟随文字色。
+ * sprite 本体见 index.html 顶部 #ir-icons；注意 <use> 里的元素吃不到外部选择器，实心圆点在 sprite 里用 fill 属性单独写。
  * 屏幕样式的一个分片：图标（手绘 SVG sprite）；@import 顺序即层叠顺序，勿随意调整。 */
 
-/* ==================== 图标（手绘 SVG sprite，见 index.html 顶部 #ir-icons） ====================
-   描边风格统一写在这里：24 网格、1.6 描边、圆头圆角、颜色跟随文字色（currentColor）。
-   注意：<use> 里的元素吃不到外部选择器，实心圆点在 sprite 里用 fill 属性单独写。 */
 .ic {
   width: 1.15em; height: 1.15em;
   fill: none; stroke: currentColor; stroke-width: 1.6;
@@ -27,6 +26,5 @@
 .menu-item:hover .ic { color: var(--accent); }
 .stage-btn .ic, .stage-exit .ic { width: 19px; height: 19px; vertical-align: middle; }
 .toast-close .ic { width: 14px; height: 14px; vertical-align: middle; }
-.mode-chip .ic { width: 13px; height: 13px; vertical-align: -2px; }
 .reason-caret .ic { width: 12px; height: 12px; vertical-align: -2px; }
 .stage-empty .ic { width: 1.1em; height: 1.1em; }

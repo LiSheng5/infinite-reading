@@ -33,7 +33,7 @@
   <p class="hint entry-desc">{appApi.MODE_ENTRY.choice.desc}</p>
 
   <div class="draft-row">
-    <div class="draft-field">
+    <div class="draft-field grow">
       <Field label="一句话起个头" for="wz-draft-input">
         <TextInput id="wz-draft-input" placeholder="例如：雨夜便利店里的十年之约" />
       </Field>
@@ -46,7 +46,7 @@
     <Button id="btn-wz-undo" size="slim" class="hidden" onclick={() => appApi.undoDraft()}>撤销起草</Button>
   </div>
 
-  <p class="hint hidden" id="wz-required-hint">至少填一点世界观、人物或你的角色吧</p>
+  <p class="hint hidden required-hint" id="wz-required-hint">至少填一点世界观、人物或你的角色吧</p>
 
   <Field label="世界观" for="wz-world">
     <Textarea id="wz-world" rows={3} placeholder="时代、地点、规则、气氛……" spellcheck="false" />
@@ -73,10 +73,9 @@
 </Card>
 
 <style>
-  .draft-field { flex: 1 1 auto; min-width: 0; }
+  /* 只需要留住字段的外边距归零；宽度由全局 .grow 给 */
   .draft-field :global(.field) { margin-bottom: 0; }
   /* 起草结果行：提示文字 + 「去接入」「撤销起草」两个行内小按钮 */
   .draft-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .draft-status .hint { margin: 0; flex: 1 1 auto; }
-  #wz-required-hint { color: var(--danger); margin-bottom: 10px; }
 </style>
