@@ -110,29 +110,38 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 调 AI1；带工具时：工具调用 → 留痕 + 副作用 + 单次重发
-  // 拆两段：
-  //   buildAI1Request —— 组装 tools / messages（含偏好解析、工具可用性、预算压缩）
-  //   invokeAI1       —— 调用 + 工具执行 + 单次重发 + 回包兜底
-  function buildAI1Request(playerAction, opts) {
+  // 拆三段：
+  //   buildAssembleOpts —— 组装选项的唯一口径（工具 / 画像 / 窗口；dry = 零副作用只读）
+  //   buildAI1Request   —— 组装 messages（含偏好解析、工具可用性、预算压缩）
+  //   invokeAI1         —— 调用 + 工具执行 + 单次重发 + 回包兜底
+
+  // 组装选项（唯一口径）：真发一轮与上下文用量指示器共用同一份拼法，两边不会漂移。
+  // dry = 只读估算：不写 S.turnModel / S.turnUsage / S.turnAnchor、不留启发式与 🧠 注入的
+  // 留痕、不消费 S.pendingInject（估算要把记忆块算进下一轮基线，但开关要留到真发那下才用掉）；
+  // 发送前的预算压缩也不在这里——那步会改 story，只归 buildAI1Request，dry 调用方拿选项直接估算。
+  // 返回 { asmOpts, cfg, toolsOn, tools }：asmOpts 供 Context.assembleAI1；cfg 是模型配置
+  // （buildAI1Request 据此取 adapter 与工具对象）；toolsOn / tools 是本轮工具下发判定。
+  function buildAssembleOpts(playerAction, opts) {
     opts = opts || {};
+    const dry = !!opts.dry;
     // 主模型配置一律走 resolveChatCfg（本对话 profile → 模型库；缺省 = 默认主模型）
     const resolved = Prefs.resolveChatCfg(S.settings, S.story);
     const cfg = resolved.cfg;
-    S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
-    S.turnUsage = null;              // 本回合 token 用量从零累加（首发 + 工具反馈重发；重试也是新的一回合）
-    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
-
-    S.turnAnchor = { nodeId: null, dead: false };   // 本回合锚点，工具出图任务提交时带上
-    // 启发式注入：玩家输入命中世界卡 / 伏笔实体词 → 本轮自动带上对应条目（与工具召回并行）。
-    // 只在「新回合」留痕（重试不重复记），条目本身由 assembleAI1 注入，用户可在留痕面板看到：静默忽略工具时也照带。
-    const prevEntry = S.story.log[S.story.log.length - 1];
-    if (prevEntry && (prevEntry.type === 'player' || prevEntry.type === 'choice')) {
-      const hit = Context.matchEntityTerms(playerAction, S.story.world);
-      if (hit.terms.length) pushLog({ type: 'tool', tool: 'heuristic', summary: '自动带上相关记忆：' + hit.terms.join('、') });
+    if (!dry) {
+      S.turnModel = cfg.model || '';   // 回合提交时记入 node meta.model（只记模型名，不含密钥 / URL）
+      S.turnUsage = null;              // 本回合 token 用量从零累加（首发 + 工具反馈重发；重试也是新的一回合）
+      S.turnAnchor = { nodeId: null, dead: false };   // 本回合锚点，工具出图任务提交时带上
+      // 启发式注入：玩家输入命中世界卡 / 伏笔实体词 → 本轮自动带上对应条目（与工具召回并行）。
+      // 只在「新回合」留痕（重试不重复记），条目本身由 assembleAI1 注入，用户可在留痕面板看到：静默忽略工具时也照带。
+      const prevEntry = S.story.log[S.story.log.length - 1];
+      if (prevEntry && (prevEntry.type === 'player' || prevEntry.type === 'choice')) {
+        const hit = Context.matchEntityTerms(playerAction, S.story.world);
+        if (hit.terms.length) pushLog({ type: 'tool', tool: 'heuristic', summary: '自动带上相关记忆：' + hit.terms.join('、') });
+      }
     }
     // 🧠 注入记忆（手动层）：一次性，本轮把完整记忆直接压进上下文（不用 tool_choice，定案）
     const forceInject = S.pendingInject;
-    if (forceInject) {
+    if (forceInject && !dry) {
       S.pendingInject = false;
       A.renderInjectHint();
       pushLog({ type: 'system', text: '已注入完整记忆（世界卡 + 设定 + 视觉设定卡）：本轮先复述处境再继续' });
@@ -144,12 +153,21 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const inj = toolInjection();
     const toolsOn = opts.tools !== false && !opts.recall && inj.on;
     const asmOpts = Object.assign({}, opts);
+    delete asmOpts.dry;
     if (toolsOn) {
       asmOpts.tools = inj.tools.map(t => t.function.name);
     }
     if (forceInject) asmOpts.forceInject = true;
     asmOpts.profile = A.activeProfileEntries();   // 画像按开关 / 范围注入（关则空数组，零成本）
     asmOpts.contextWindow = A.chatContextWindow();   // 组装窗口按 token 动态装（context.ts 的 fitWindow）
+    return { asmOpts: asmOpts, cfg: cfg, toolsOn: toolsOn, tools: inj.tools };
+  }
+
+  function buildAI1Request(playerAction, opts) {
+    const built = buildAssembleOpts(playerAction, opts);
+    const cfg = built.cfg;
+    const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
+    const asmOpts = built.asmOpts;
     // 组装时先按本次结果估 token，超预算才压一次并重组（估算直接用本次组装结果，不再另组一份）
     //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
     // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
@@ -171,10 +189,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
       // 纯后台降级：压缩失败不拦回合，最坏按原样发；console 留原因便于归因
       reportBackgroundFailure('回合压缩', e, { note: '按原样发送（最坏超一轮预算）' });
     }
-    const cfgTools = toolsOn
-      ? Object.assign({}, cfg, { tools: inj.tools })
+    const cfgTools = built.toolsOn
+      ? Object.assign({}, cfg, { tools: built.tools })
       : cfg;
-    return { adapter: adapter, cfg: cfg, cfgTools: cfgTools, messages: messages, asmOpts: asmOpts, toolsOn: toolsOn };
+    return { adapter: adapter, cfg: cfg, cfgTools: cfgTools, messages: messages, asmOpts: asmOpts, toolsOn: built.toolsOn };
   }
 
   // 调用 + 重发：流式首调 → 工具执行 → 按需重发（不带工具）→ 回包兜底
@@ -491,5 +509,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
   }
 
-  A.reg({ callAI1, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText, toolInjection, fillPlayerInput });
+  A.reg({ callAI1, buildAssembleOpts, withKindMarker, syncKindSwitch, sendPlayerAction, finishNarration, runOpening, pushLog, setComposerText, toolInjection, fillPlayerInput });
 
