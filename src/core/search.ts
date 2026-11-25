@@ -58,7 +58,6 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
 
   // 助手回复 → 纯文本：唯一实现在 tree.ts 的 plainReply。
   // store.ts 的书架摘要共用同一口径，schema 演进只改一处；静态 import 缺了直接报错不静默降级
-  const plainReply = plainReplyOfTree;
 
   // 玩家行动文本：剥壳与内层（做/说/导演）标记的唯一实现在 tree.ts 的 stripUserAction
   // （索引里不保留输入类型标记——它是元数据，不是可检索的正文）
@@ -86,7 +85,7 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
         if (node.action && node.action.text) parts.push(plainAction(node.action.text));
         var reply = '';
         if (node.assistantMsg && node.assistantMsg.content != null) {
-          reply = plainReply(node.assistantMsg.content);
+          reply = plainReplyOfTree(node.assistantMsg.content);
         }
         if (reply) {
           parts.push(reply);
@@ -278,7 +277,6 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
   const Search = {
     normalize: normalize,
     normWithMap: normWithMap,
-    plainReply: plainReply,
     buildDoc: buildDoc,
     query: query,
     createIndex: createIndex,

@@ -221,14 +221,14 @@ async function main() {
     let allow = false;
     F.attach({ canDeliver: () => allow, deliver: async p => { delivered.push(p.fireId); } });
     F.accept({ fireId: 'f1', prompt: 'a' });
-    check('编排：条件不满足时先排队', F.size() === 1 && delivered.length === 0, F.size() + '/' + delivered.length);
+    check('编排：条件不满足时先排队', F.test.size() === 1 && delivered.length === 0, F.test.size() + '/' + delivered.length);
     allow = true;
     await F.drain();
-    check('编排：条件满足后送出', delivered.length === 1 && F.size() === 0, delivered.length + '/' + F.size());
+    check('编排：条件满足后送出', delivered.length === 1 && F.test.size() === 0, delivered.length + '/' + F.test.size());
     F.accept({ fireId: 'f1', prompt: 'a' });
-    check('编排：同一 fireId 去重（SSE 与补跑可能同时捞到）', F.size() === 0 && delivered.length === 1);
+    check('编排：同一 fireId 去重（SSE 与补跑可能同时捞到）', F.test.size() === 0 && delivered.length === 1);
     F.accept({ fireId: 'f2', prompt: '   ' });
-    check('编排：空 prompt 不入队', F.size() === 0);
+    check('编排：空 prompt 不入队', F.test.size() === 0);
     F.clear();
   }
 }

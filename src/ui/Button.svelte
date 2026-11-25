@@ -10,7 +10,6 @@
     variant = 'default',
     size = 'md',
     icon = null,
-    iconSide = 'left',
     type = 'button',
     disabled = false,
     title = null,
@@ -29,9 +28,8 @@
   {onclick}
   {...rest}
 >
-  {#if icon && iconSide === 'left'}<Icon name={icon} />{/if}
+  {#if icon}<Icon name={icon} />{/if}
   {@render children?.()}
-  {#if icon && iconSide === 'right'}<Icon name={icon} />{/if}
 </button>
 
 <style>

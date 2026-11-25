@@ -37,7 +37,7 @@ async function flush(n) {
 function fresh() {
   Features.attach({ canDeliver: () => false, deliver: async () => {} });
   Features.clear();
-  Features.resetSeen();
+  Features.test.resetSeen();
 }
 
 async function main() {
@@ -47,23 +47,23 @@ async function main() {
   H.check('accept：prompt 空 / 全空白不收',
     Features.accept({ fireId: 'blank-1', prompt: '' }) === false
     && Features.accept({ fireId: 'blank-2', prompt: '   ' }) === false
-    && Features.size() === 0, 'size=' + Features.size());
+    && Features.test.size() === 0, 'size=' + Features.test.size());
   H.check('accept：正常触发同步返回 true 并入队',
-    Features.accept({ fireId: 'ok-1', prompt: '该喝水了' }) === true && Features.size() === 1,
-    'size=' + Features.size());
+    Features.accept({ fireId: 'ok-1', prompt: '该喝水了' }) === true && Features.test.size() === 1,
+    'size=' + Features.test.size());
 
   /* ---------------- 2. 去重（同一 fireId 只送一次） ---------------- */
   fresh();
   Features.accept({ fireId: 'dup', prompt: '第一条' });
   const second = Features.accept({ fireId: 'dup', prompt: '改写过的第二条' });
-  H.check('去重：同 fireId 第二次返回 false、队列不增长', second === false && Features.size() === 1,
-    'ret=' + second + ' size=' + Features.size());
+  H.check('去重：同 fireId 第二次返回 false、队列不增长', second === false && Features.test.size() === 1,
+    'ret=' + second + ' size=' + Features.test.size());
   Features.accept({ fireId: 'other', prompt: '另一条' });
-  H.check('去重：不同 fireId 各自入队', Features.size() === 2, 'size=' + Features.size());
+  H.check('去重：不同 fireId 各自入队', Features.test.size() === 2, 'size=' + Features.test.size());
   Features.accept({ prompt: '没有 id 的第一条' });
   Features.accept({ prompt: '没有 id 的第二条' });
-  H.check('去重：缺 fireId 时不去重（无 id 可记，两条都收）', Features.size() === 4,
-    'size=' + Features.size());
+  H.check('去重：缺 fireId 时不去重（无 id 可记，两条都收）', Features.test.size() === 4,
+    'size=' + Features.test.size());
 
   /* ---------------- 3. 排队与投递顺序 ---------------- */
   fresh();
@@ -77,16 +77,16 @@ async function main() {
   Features.accept({ fireId: 'q3', prompt: '三' });
   await Features.drain();
   H.check('排队：条件不满足时一条都不送（留在队里）',
-    delivered.length === 0 && Features.size() === 3,
-    'sent=' + delivered.length + ' size=' + Features.size());
+    delivered.length === 0 && Features.test.size() === 3,
+    'sent=' + delivered.length + ' size=' + Features.test.size());
   Features.attach({
     canDeliver: () => true,
     deliver: async p => { delivered.push(p.fireId); },
   });
   await Features.drain();
   H.check('投递：条件满足后按入队顺序一次送完，队列清空',
-    delivered.join(',') === 'q1,q2,q3' && Features.size() === 0,
-    'sent=' + delivered.join(',') + ' size=' + Features.size());
+    delivered.join(',') === 'q1,q2,q3' && Features.test.size() === 0,
+    'sent=' + delivered.join(',') + ' size=' + Features.test.size());
 
   /* ---------------- 4. deliver 抛错不卡队列 ---------------- */
   fresh();
@@ -102,23 +102,23 @@ async function main() {
   Features.accept({ fireId: 'after', prompt: '后面那条' });
   await flush();
   H.check('投递失败：异常被接住、队列继续推进到后面的条目',
-    sent.join(',') === 'boom,after' && Features.size() === 0,
-    'sent=' + sent.join(',') + ' size=' + Features.size());
+    sent.join(',') === 'boom,after' && Features.test.size() === 0,
+    'sent=' + sent.join(',') + ' size=' + Features.test.size());
 
   /* ---------------- 5. clear() 撤回待送：队列 + 去重记忆一起清 ---------------- */
   {
     fresh();
     Features.accept({ fireId: 'pending-1', prompt: '待送' });
     const dupBefore = Features.accept({ fireId: 'pending-1', prompt: '待送' });
-    const sizeBefore = Features.size();
+    const sizeBefore = Features.test.size();
     Features.clear();
-    const sizeAfter = Features.size();
+    const sizeAfter = Features.test.size();
     const again = Features.accept({ fireId: 'pending-1', prompt: '待送' });
     H.check('撤回：clear() 清空待送队列', sizeBefore === 1 && sizeAfter === 0,
       'before=' + sizeBefore + ' after=' + sizeAfter);
     H.check('撤回：同一 fireId 还能再入队（去重记忆一并忘掉）',
-      dupBefore === false && again === true && Features.size() === 1,
-      'dup=' + dupBefore + ' again=' + again + ' size=' + Features.size());
+      dupBefore === false && again === true && Features.test.size() === 1,
+      'dup=' + dupBefore + ' again=' + again + ' size=' + Features.test.size());
   }
   {
     // 已投递过的 id 同理：送成功的那条已在侧车 ack，忘掉 seen 不会真的重放
@@ -137,17 +137,18 @@ async function main() {
   /* ---------------- 6. resetSeen() 只忘去重、不动队列 ---------------- */
   fresh();
   Features.accept({ fireId: 'r1', prompt: '一' });
-  Features.resetSeen();
+  Features.test.resetSeen();
+  Features.test.size();
   const req = Features.accept({ fireId: 'r1', prompt: '一' });
   H.check('resetSeen：队列保持原样、同一 fireId 可再次入队',
-    req === true && Features.size() === 2, 'ret=' + req + ' size=' + Features.size());
+    req === true && Features.test.size() === 2, 'ret=' + req + ' size=' + Features.test.size());
 
   /* ---------------- 7. 去重记忆有界 ---------------- */
   fresh();
   let accepted = 0;
   for (let i = 1; i <= 501; i++) if (Features.accept({ fireId: 'f' + i, prompt: '第 ' + i + ' 条' })) accepted += 1;
   H.check('去重记忆：501 条全部入队（上限只作用于记忆，不丢消息）',
-    accepted === 501 && Features.size() === 501, 'accepted=' + accepted + ' size=' + Features.size());
+    accepted === 501 && Features.test.size() === 501, 'accepted=' + accepted + ' size=' + Features.test.size());
   H.check('去重记忆有界：最早的 id 被挤出后还能再收',
     Features.accept({ fireId: 'f1', prompt: '回来的第一条' }) === true);
   H.check('去重记忆有界：最近的一条仍在记忆里（重复照常拦下）',

@@ -20,7 +20,7 @@ import { A, saveAll, toast } from './core.js';
 
   /* ================= 小工具 ================= */
 
-  const MODE_ICONS = { choice: 'book', chat: 'chat' };   // sprite 里的图标名（mask 闲置不删）
+  const MODE_ICONS = { choice: 'book', chat: 'chat' };   // sprite 里的图标名
   const GROUP_LABELS = [
     { key: 'today', label: '今天' },
     { key: 'yesterday', label: '昨天' },
@@ -46,7 +46,7 @@ import { A, saveAll, toast } from './core.js';
     if (!Number.isFinite(diff) || diff < 0) diff = 0;
     if (diff < 60000) return '刚刚';
     if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
-    const d = new Date(ts), now = new Date();
+    const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     if (ts >= startOfToday) return Math.floor(diff / 3600000) + ' 小时前';
     if (ts >= startOfToday - DAY) return '昨天';

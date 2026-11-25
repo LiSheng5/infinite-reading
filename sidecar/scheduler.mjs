@@ -220,7 +220,7 @@ export function createScheduler(deps) {
    * 的证据，一律按 model 处理。要按用户身份写入，只有进程内调用能显式传 opts.asUser
    * （前端没有这条路径：用户能做的只有 confirm / cancel）。模型这条路径改不动已确认的行。
    *   - 新建：pending_confirm，用户确认后才生效；
-   *   - 已越过闸门（active / paused）的同名触发器：模型做**任何实质修改都直接拒绝**
+   *   - 已越过闸门（active）的同名触发器：模型做**任何实质修改都直接拒绝**
    *     （TRIGGER_LOCKED），库里那行一个字段都不动。不用「先覆盖内容、再退回 pending_confirm」：
    *     那样 prompt 在用户点确认之前就已经被换掉，用户点「取消」也拿不回批准过的内容，
    *     而确认界面只显示排期、看不到 diff。要改就换个名字新建（用户确认后再用），

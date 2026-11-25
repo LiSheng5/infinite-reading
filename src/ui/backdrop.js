@@ -109,8 +109,3 @@ export function setBranchBackdrop(open) {
   layers.branch = !!open;
   sync();
 }
-
-/** 当前背景是否被惰性化（验收 / 排障用，不读 DOM） */
-export function backdropActive() {
-  return layers.modal || layers.branch;
-}

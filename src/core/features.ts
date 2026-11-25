@@ -72,8 +72,9 @@
     attach: attach,
     accept: accept,
     drain: drain,
-    size: size,
     clear: clear,
-    resetSeen: resetSeen,
+    // 生产侧只用上面四个；下面两个是 eval/features-test.js 的观察口（应用零调用），
+    // 单独收进 test，免得被当成业务 API 引用。
+    test: { size: size, resetSeen: resetSeen },
   };
   export { Features };

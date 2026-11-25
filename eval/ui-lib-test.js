@@ -63,7 +63,7 @@ for (const m of iconSrc.matchAll(/^\{#if name === '([^']+)'\}(.*)$|^\{:else if n
   branches.set(name, content);
 }
 
-check('sprite 与 Icon.svelte 图标数一致（28 个）', sprite.size === 28 && branches.size === 28,
+check('sprite 与 Icon.svelte 图标数一致（27 个）', sprite.size === 27 && branches.size === 27,
   'sprite=' + sprite.size + ' Icon=' + branches.size);
 
 const nameMismatch = [];

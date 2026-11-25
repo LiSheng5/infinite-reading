@@ -68,7 +68,7 @@ for (const [name, spec] of Object.entries(SPECS)) {
 /* 循环清单必须与「只有这几条循环」一致 */
 const LOOPS = Object.keys(SPECS).filter((n) => SPECS[n] === 'loop').sort();
 eq('循环动画清单', LOOPS.join(','),
-  ['ambientDrift', 'breathe', 'busyFlow', 'flowLight', 'infWave', 'kenBurns', 'nodePulse'].join(','));
+  ['ambientDrift', 'breathe', 'busyFlow', 'flowLight', 'kenBurns', 'nodePulse'].join(','));
 
 /* ---------- 过渡声明（单档） ---------- */
 

@@ -20,38 +20,7 @@
 }
 .start-mark { margin: 0 0 38px; font-weight: 400; line-height: 1; }
 
-/* 语言切换：右上角（中文 / English）。无面板无滑块：两个文字选项直接坐在页面上
-   （与底部 .link-btn 同一材质语言），选中标出两处——文字加深 + 四周 1px 蓝边框；
-   边框常驻透明占位，选中只换颜色，文字不跳位。
-   定位挂 .screen 的 absolute 上：首页内容超高一屏时它会随滚动走（和卡片顶边一致）。 */
-.lang-switch {
-  position: absolute; top: 14px; right: 14px; z-index: 3;
-  display: flex;
-  gap: 4px;
-}
-.lang-switch .lang-opt {
-  min-width: 88px;
-  padding: 7px 16px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  letter-spacing: .05em;
-  text-align: center;
-  color: var(--ink-dim);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color var(--m-t-color-fast) var(--ease-out), border-color var(--m-t-color-fast) var(--ease-out);
-}
-.lang-switch .lang-opt:hover { color: var(--ink); }
-.lang-switch .lang-opt[aria-checked="true"] {
-  color: var(--ink);
-  border-color: var(--accent);
-}
-
-/* ASCII 无限符号：深色在底，浅色在 ::after 叠层；只改叠层 opacity（动画白名单），
-   每个字符按所在列错开相位 → 深浅色带从左往右流过整个符号。
-   --t 是静态时的浅色占比（JS 按列算的一道「深 → 浅 → 深」渐变）。 */
+/* ASCII 无限符号（无 JS 兜底的静态字符画，由 art.js 构建期注入） */
 .inf {
   display: inline-block;
   margin: 0 auto;
@@ -64,18 +33,6 @@
   white-space: pre;
   color: var(--inf-deep);
   user-select: none;
-}
-.inf .c { position: relative; color: var(--inf-deep); }
-.inf .c::after {
-  content: attr(data-c);
-  position: absolute; left: 0; top: 0;
-  color: var(--inf-light);
-  opacity: var(--t, .5);
-}
-/* 只有「丰富」档循环；其余档停在静态渐变（infWave 的三档声明见 ANIMATIONS.infWave） */
-html[data-motion="rich"] .inf .c::after {
-  animation: var(--an-infWave) var(--loop-inf) var(--ease-inout) var(--m-iter);
-  animation-delay: calc(var(--x, 0) * var(--loop-inf-step) * -1);
 }
 
 /* 继续上次：主操作（黑底白字），带最近那个故事的名字 */
@@ -145,22 +102,7 @@ html[data-motion="rich"] .inf .c::after {
   margin-top: 22px;
   text-align: center;
 }
-.field-label {
-  display: block;
-  font-family: var(--font-ui);
-  font-size: 12.5px;
-  color: var(--ink-dim);
-  margin-bottom: 8px;
-  letter-spacing: 0.08em;
-}
-.row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
-
 @media (max-width: 640px) {
   .start-card { padding: 30px 0 22px; }
   .start-mode-cards .mode-card { padding: 17px 4px 14px; }
-  .lang-switch { top: 10px; right: 10px; }
-}
-/* 触屏：可点目标与其他控件同一标准（≥44px 高） */
-@media (hover: none) {
-  .lang-switch .lang-opt { min-height: 44px; }
 }

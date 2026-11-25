@@ -156,7 +156,6 @@ import { plainReply, stripUserAction } from './tree.ts';
   }
 
   const Titles = {
-    TITLE_SYSTEM: TITLE_SYSTEM,
     needsTitle: needsTitle,
     buildPrompt: buildPrompt,
     sanitize: sanitize,

@@ -36,19 +36,7 @@ export function safeJSON(text, fallback) {
   }
 }
 
-// 本地日期键：YYYY-MM-DD（按天聚合的唯一口径）
-export function dayKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-// 本地月份键：YYYY-MM（按月聚合）
-export function monthKey(ms) {
-  const d = new Date(ms);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
-
-// 本地日/月区间 [start, end)（毫秒）。与 dayKey / monthKey 的本地口径一致，
+// 本地日/月区间 [start, end)（毫秒，按本地时区切天 / 切月），
 // 供 SQL 的 `at >= ? AND at < ?` 做范围聚合（不再全表 SELECT 后 JS 过滤）。
 export function dayRange(ms) {
   const d = new Date(ms);

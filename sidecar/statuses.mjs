@@ -20,11 +20,10 @@ export const TX = {
 // 已「占用额度」的状态（pending 不算，避免空占额度）：与 payment.mjs 的 sums/mandateSpent 同口径
 export const COMMITTED_TX = [TX.APPROVED, TX.AWAITING_PAYMENT, TX.CHARGED];
 
-/* 触发器状态：pending_confirm 待用户确认 → active 生效；paused 暂停 */
+/* 触发器状态：pending_confirm 待用户确认 → active 生效（取消即删除，没有暂停态） */
 export const TRIGGER = {
   PENDING_CONFIRM: 'pending_confirm',
   ACTIVE: 'active',
-  PAUSED: 'paused',
 };
 
 /* 触发记录（trigger_fires）状态：pending 占位待投递 → delivered 已投递到前端；skipped 放弃本次

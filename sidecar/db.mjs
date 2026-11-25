@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS triggers (
   prompt      TEXT NOT NULL DEFAULT '',      -- 合成入站消息的模板
   reason      TEXT NOT NULL DEFAULT '',      -- 模型声明的触发原因（给用户看）
   enabled     INTEGER NOT NULL DEFAULT 1,
-  status      TEXT NOT NULL DEFAULT '${TRIGGER.PENDING_CONFIRM}',  -- pending_confirm | active | paused
+  status      TEXT NOT NULL DEFAULT '${TRIGGER.PENDING_CONFIRM}',  -- pending_confirm | active
   next_at     INTEGER,
   last_at     INTEGER,
   created_at  INTEGER NOT NULL,

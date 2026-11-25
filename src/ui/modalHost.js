@@ -70,11 +70,6 @@ export function shellHostEl() {
   return typeof document === 'undefined' ? null : document.getElementById(SHELL_HOST_ID);
 }
 
-/** 外壳是否已接管 11 个弹窗 */
-export function shellInstalled() {
-  return shellReady;
-}
-
 /**
  * 安装外壳：把 index.html 里的 12 个弹窗整块搬进壳层。
  * 幂等；DOM 不在（极早期 / 单测环境）时什么都不做，弹窗照原样留在 #app 下。
@@ -168,11 +163,6 @@ function disarmTrap(id) {
 /** 是否开着 */
 export function isModalOpen(id) {
   return modalStack.indexOf(id) >= 0;
-}
-
-/** 最上层（没开时返回 ''） */
-export function topModal() {
-  return modalStack.length ? modalStack[modalStack.length - 1] : '';
 }
 
 function restack() {

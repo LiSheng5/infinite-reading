@@ -150,7 +150,7 @@ for (const m of MOTION.matchAll(/(--[\w-]+)\s*:/g)) motionVars.add(m[1]);
 const allVars = new Set([...tokenNames, ...motionVars]);
 
 // JS 动态写入的自定义属性（inline style，带 var() 回退；不是令牌，但合法引用）
-const JS_WRITTEN = new Set(['--t', '--x', '--split-ratio', '--content-w', '--density', '--font-scale']);
+const JS_WRITTEN = new Set(['--split-ratio', '--content-w', '--density', '--font-scale']);
 
 // 声明表（真源）
 const MotionApi = require(path.join(ROOT, 'src', 'core', 'motion.ts')).Motion;
@@ -168,7 +168,7 @@ const REQUIRED = [
   // 动效
   '--dur-fast', '--dur-base', '--dur-slow', '--dur-flash', '--dur-none',
   '--ease-out', '--ease-spring', '--ease-inout', '--ease-io', '--ease-linear',
-  '--loop-busy', '--loop-kb', '--loop-ambient', '--loop-flow', '--loop-inf', '--loop-inf-step',
+  '--loop-busy', '--loop-kb', '--loop-ambient', '--loop-flow',
   // 首页符号两端色
   '--inf-deep', '--inf-light',
 ];

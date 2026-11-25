@@ -22,41 +22,7 @@
     { mode: 'chat', icon: 'chat', label: '聊天' },
   ];
 
-  // 语言切换（右上角）：英文文案还没上线，先落按钮与偏好——
-  // 选择写 home.lang（状态桥）+ localStorage（ir:lang），并同步 <html lang>；
-  // 之后 i18n 文案接管时直接消费 home.lang，不必另起状态。
-  // 交互：点击切换；左右方向键在两个选项间移动并选中（焦点跟随，radio 惯例）；
-  // 选中态全在 CSS（aria-checked → 文字加深 + 蓝边框），JS 只改状态。
-  const LANGS = [
-    { id: 'zh', label: '中文' },
-    { id: 'en', label: 'English' },
-  ];
-  let langOptEls = {};
-
-  function setLang(id, moveFocus) {
-    home.lang = id;
-    try { localStorage.setItem('ir:lang', id); } catch { /* 隐私模式等存不进时只当次会话生效 */ }
-    if (moveFocus) langOptEls[id]?.focus();
-  }
-  function onLangKeydown(e) {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    e.preventDefault();
-    setLang(e.key === 'ArrowLeft' ? 'zh' : 'en', true);
-  }
-  // 挂载即按恢复出的偏好对齐 <html lang>（无 JS 兜底的 html 标签写死 zh-CN）
-  $effect(() => { document.documentElement.lang = home.lang === 'en' ? 'en' : 'zh-CN'; });
 </script>
-
-<!-- 语言切换：挂在 #screen-start（.screen 是定位父级）右上角；样式见 css/home.css 的 .lang-switch -->
-<div class="lang-switch" role="radiogroup" aria-label="界面语言">
-  {#each LANGS as l (l.id)}
-    <button class="lang-opt" type="button" role="radio" aria-checked={home.lang === l.id}
-            tabindex={home.lang === l.id ? 0 : -1}
-            bind:this={langOptEls[l.id]}
-            onclick={() => setLang(l.id, false)}
-            onkeydown={onLangKeydown}>{l.label}</button>
-  {/each}
-</div>
 
 <div class="start-card">
   <h1 class="start-mark" aria-label="无限阅读">

@@ -144,7 +144,10 @@
       return v !== undefined ? v : rule.fallback();
     }
     switch (key) {
-      case 'choices': return s.ui && s.ui.choices === 'always' ? 'always' : 'tray';
+      case 'choices': {
+        const v = oneOf(CHOICES_VALUES)(ui.choices);
+        return v !== undefined ? v : 'tray';
+      }
       case 'showReasoning': return s.showReasoning !== false;
       case 'tools': {
         // 全局默认：「测试中」四类（生图 / 定时 / 邮件 / 下单）默认关，记忆默认开。

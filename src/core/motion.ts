@@ -30,7 +30,7 @@
   };
 
   /* 同屏同时运行的循环动画上限：#busy-line + Ken Burns + 环境光 / 分支页流光 + head 呼吸 + 选中脉冲。
-   * 一组 = 同名 keyframes 的错相多实例（如首页符号逐字符波按 1 组计）。
+   * 一组 = 同名 keyframes 的错相多实例。
    * 没有运行时登记队列：预算由设计固定，由 acceptance/tools/motion-probe.mjs 实测校验。 */
   var LOOP_BUDGET = 3;
 
@@ -57,7 +57,6 @@
     breathe: 'loop',      // head 呼吸
     kenBurns: 'loop',     // 舞台极缓推拉
     ambientDrift: 'loop', // 舞台环境光漂移
-    infWave: 'loop',      // 首页符号色带（逐字符错相，按 1 组计）
     flowLight: 'loop',    // 分支页流光（只挂一条 path）
     nodePulse: 'loop',    // 选中节点脉冲
   };

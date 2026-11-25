@@ -210,7 +210,7 @@ a:hover::after, a:focus-visible::after { opacity: 0.75; transform: scaleX(1); }
    animation: var(--an-名字) var(--m-dur-*) var(--ease-*) both（循环加 var(--m-iter)）；
    transition 的时长走 var(--m-t-*)（位移 / 颜色）或 var(--m-dur-*)（透明度）。 */
 
-.start-card, .shelf-wrap, .story-card, .anchor-card,
+.start-card, .shelf-wrap, .anchor-card,
 .chat-note, .reason-block, .thumb {
   animation: var(--an-leafIn) var(--m-dur-slow) var(--ease-out) both;
 }

@@ -9,19 +9,9 @@
    也不作为档位暴露——JS 动画路径在 matchMedia 为真时跳过，末尾的
    @media (prefers-reduced-motion: reduce) 为 CSS 兜底，无条件生效。
 
-   循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例，
-   如首页符号逐字符波按 1 组计）。上限由设计固定，`acceptance/tools/motion-probe.mjs`
-   测量；已删运行时登记（registerLoop 随自查页退役）。 */
-
-/* ==================== @property 注册（可动画自定义属性的白名单入口） ====================
-   小面积装饰元素允许用 @property 注册的自定义属性做动画（放宽项），
-   其余动画仍只准动合成层属性。注册块必须：syntax 是可动画类型、inherits: false。
-   --t：首页无限符号逐字符的浅色占比（由首页状态桥按列写入，渐变流动改它）。 */
-@property --t {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.5;
-}
+   循环预算：同屏同时运行的循环动画 ≤ 3 组（一组 = 同名 keyframes 的错相多实例）。
+   上限由设计固定，`acceptance/tools/motion-probe.mjs` 测量；已删运行时登记
+   （registerLoop 随自查页退役）。 */
 
 /* ==================== 政策变量（动画/过渡时长的收口） ====================
    规则里只准引用这些变量，不写死毫秒数；改手感只改令牌（css/tokens.css）或这张收口表。 */
@@ -64,7 +54,6 @@
   --an-breathe: breathe;
   --an-kenBurns: kenBurns;
   --an-ambientDrift: ambientDrift;
-  --an-infWave: infWave;
   --an-flowLight: flowLight;
   --an-nodePulse: nodePulse;
 }
@@ -126,8 +115,6 @@
   50%  { transform: translate(3%, 2%) scale(1.06); }
   100% { transform: translate(-3%, -2%) scale(1); }
 }
-/* 首页无限符号逐字符深浅循环（rich 专档；错相延迟在用法处按 --x 计算） */
-@keyframes infWave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes titleSwap { from { opacity: .25; } to { opacity: 1; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
