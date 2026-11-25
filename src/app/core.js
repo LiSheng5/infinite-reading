@@ -262,7 +262,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
   * 现有 id 与 DOM 全部保持不变。 */
   function netErrHint(e) {
     if (e instanceof TypeError) {
-      return '网络请求失败：可能是 CORS 限制或地址不可达。建议用本地静态服务打开（如 `启动.bat` 或 `python tools/serve.py`），并检查 Base URL / API Key。';
+      return '网络请求失败：可能是 CORS 限制或地址不可达。建议用本地静态服务打开（如 `python tools/serve.py`，Windows 也可双击 `启动.bat`），并检查 Base URL / API Key。';
     }
     return '请求失败：' + errorText(e);
   }

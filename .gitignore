@@ -6,6 +6,9 @@ dist/
 # Python 运行缓存（tools/serve.py 之类会顺手生成）
 __pycache__/
 
+# CodeBuddy / 编辑器本地数据：不属于项目产物，禁止入库
+.codebuddy/
+
 
 
 # 本地旁路服务（sidecar）运行时数据：config.json / token / SQLite / 锁文件
