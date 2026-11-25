@@ -18,10 +18,6 @@
  * 纯逻辑、无 DOM / 网络 / 存储依赖：单测见 eval/writeback-test.js。
  */
 
-interface StoryLike {
-  id?: string | null;
-}
-
 /** 目标是否仍是「发起时的那本故事」（按 id 认；空 id 不算同一本） */
 function isSameStory(current: any, sid: any): boolean {
   return !!(current && sid != null && sid !== '' && current.id === sid);

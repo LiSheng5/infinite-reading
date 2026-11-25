@@ -17,7 +17,7 @@ declare const Buffer: any;
   const CARD_FIELDS = ['name', 'appearance', 'personality', 'scene', 'opening', 'exampleDialogue', 'systemNote'];
   const SOURCES = ['builtin', 'st-import', 'custom'];
   const TEXT_KEYWORDS = ['ccv3', 'chara'];   // V3 优先，其次 V2
-  const FIELD_MAX = 4000;                    // 单字段入库截断（防呆；控 localStorage 体积）
+  const FIELD_MAX = 4000;                    // 单字段入库截断（防呆；控单档体积）
 
   function str(v, max?) {
     const s = String(v == null ? '' : v).replace(/\r\n?/g, '\n').trim();
@@ -53,13 +53,6 @@ declare const Buffer: any;
     let s = '';
     for (let i = 0; i < n; i++) s += String.fromCharCode(b[o + i]);
     return s;
-  }
-
-  // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 zip.ts 的 Zip.crc32。
-  // 取值放调用时而不是加载时，缺依赖就直接抛，不静默降级。
-  function crc32(b) {
-    const fn = Zip.crc32;
-    return fn(b);
   }
 
   function toBytes(data) {
@@ -101,7 +94,8 @@ declare const Buffer: any;
       if (off + 12 + len > b.length) break;
       const chunk = b.subarray(off + 4, off + 8 + len);   // type + data
       const crc = readU32(b, off + 8 + len);
-      const ok = crc32(chunk) === crc;
+      // 标准 PNG CRC32（多项式 0xEDB88320，与 ZIP 同一多项式）：唯一口径在 zip.ts 的 Zip.crc32
+      const ok = Zip.crc32(chunk) === crc;
       if (ok && (type === 'tEXt' || type === 'iTXt')) {
         const body = b.subarray(off + 8, off + 8 + len);
         let i = 0;

@@ -1,11 +1,11 @@
 /*
  * 无限阅读 · 存储适配器（IndexedDB 主库 / 回退）
  *
- * 为什么要有这一层：localStorage 每站点约 5MB，是本项目最大的硬伤（ARCHITECTURE §11）。
+ * 为什么要有这一层：localStorage 每站点约 5MB，是本项目最大的硬伤（ARCHITECTURE §10）。
  * 这里把「大容量存储」抽成独立适配器，让 store.ts 只面对一套接口：
  *
  *   ir-db（IndexedDB，版本 1）
- *   ├── kv       小数据：settings / story-index / current / user-profile / 迁移标记
+ *   ├── kv       小数据：settings / story-index / current / user-profile
  *   ├── stories  故事档案（一个故事一条，键 = story id）
  *   └── images   原图 Blob（键 = imageId，值 = { blob, meta, at }）
  *
@@ -28,7 +28,7 @@ const global = globalThis as any;
   const STORE_NAMES = [KV, STORIES, IMAGES];
 
   const available = (function () {
-    try { return typeof global.indexedDB !== 'undefined' && !!global.indexedDB; }
+    try { return !!global.indexedDB; }
     catch (_) { return false; }
   })();
 

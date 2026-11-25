@@ -1,7 +1,7 @@
 /*
  * src/core/importText.ts —— 剧情文本导入的纯解析逻辑（自 src/app/importer.js 抽出）
  *
- * 只搬纯文本 → 结构化数据的变换（模型回包解析 / 本地兜底规则 / 人物行解析），
+ * 只搬纯文本 → 结构化数据的变换（模型回包解析 / 本地兜底规则），
  * 界面（粘贴框、向导表单、状态行）留在 src/app/importer.js，经 ImportText 调用本模块。
  * 解析逻辑集中在这里，界面层只负责取文本与展示结果。
  */
@@ -75,21 +75,12 @@ function localImport(text: any) {
   };
 }
 
-function parseImportCharacters(text: any) {
-  return String(text || '').split('\n').map((line: string) => {
-    const p = line.split('｜').map((s: string) => s.trim());
-    if (!p[0]) return null;
-    return { name: p[0], presence: p[1] || '在场', personality: p[2] || '', speech: p[3] || '', note: '', noteLocked: false };
-  }).filter(Boolean);
-}
-
 const ImportText = {
   parseImportJson,
   parseImportSummary,
   parseImportResult,
   localImport,
-  parseImportCharacters,
 };
 
-// 调用方只经 ImportText 一个入口（src/app/importer.js），五个解析函数不再单独二次导出
+// 调用方只经 ImportText 一个入口（src/app/importer.js），四个解析函数不再单独二次导出
 export { ImportText };

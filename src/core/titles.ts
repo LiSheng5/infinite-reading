@@ -1,7 +1,7 @@
 /*
  * 无限阅读 · 自动标题（Titles，纯逻辑，Node 可测）
  *
- * 职责：给智能体 / 扮演对话自动起标题的全部纯逻辑——
+ * 职责：给聊天对话自动起标题的全部纯逻辑——
  *   needsTitle    什么时候该起标题（titleAuto + 回合触发点）
  *   buildPrompt   发给小模型的 messages（只带最近几轮对话纯文本）
  *   sanitize      清洗模型输出成标题（失败给 fallback）
@@ -29,11 +29,7 @@ import { plainReply, stripUserAction } from './tree.ts';
     return stripUserAction(raw).trim();
   }
 
-  // 助手回复：剧情模式是 JSON（narration / 旁白），chat / rp 是纯文本。
-  // 「回复 → 纯文本」只有 tree.ts 的 plainReply 一份实现；这里传 trim，因为提示词逐条
-  // 拼进 messages，多余空白会白占 600 字的截断额度（见 buildPrompt）。
-
-  /* ---------------- 3.3 系统提示 ---------------- */
+  /* ---------------- 系统提示 ---------------- */
 
   var TITLE_SYSTEM = [
     '给这段对话起一个不超过 15 个字的标题。',
@@ -61,13 +57,15 @@ import { plainReply, stripUserAction } from './tree.ts';
    * 不带系统提示、世界卡、角色卡全文、工具调用内容；
    * 每条截断到 600 字（码点），超出不加省略号（保证 ≤600）。
    */
-  function buildPrompt(messages, mode) {
+  function buildPrompt(messages) {
     var valid = [];
     var arr = Array.isArray(messages) ? messages : [];
     for (var i = 0; i < arr.length; i++) {
       var m = arr[i];
       if (!m || typeof m !== 'object') continue;
       if (m.role !== 'user' && m.role !== 'assistant') continue;   // system / tool 一律不带
+      // 助手回复（剧情 JSON / 聊天纯文本）走 tree.ts 的 plainReply（唯一实现）；传 trim 是因为
+      // 提示词逐条拼进 messages，多余空白会白占 600 字的截断额度
       valid.push({
         role: m.role,
         content: m.role === 'user' ? userText(m.content) : plainReply(m.content, { trim: true }),
@@ -87,38 +85,35 @@ import { plainReply, stripUserAction } from './tree.ts';
    * 空或多行（明显不是标题）→ 用 fallback。
    */
   var QUOTE_CHARS = '"\'`「」『』《》〈〉“”‘’„‟';
-  var TRAIL_PUNCT = '。，、，,.!?！？；;：:…~～—-·';
+  var TRAIL_PUNCT = '。，、,.!?！？；;：:…~～—-·';
   var MD_PREFIX = /^(?:#{1,6}\s*|>\s*|\*\*|__|\*|_|~~|`+)/;
 
   function sanitize(raw, fallback) {
     var s = String(raw == null ? '' : raw);
-    // 首尾空白（含换行）先收掉；收完还有换行 = 多行解释 → fallback
-    s = s.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
+    // 首尾空白（含全角空格 / 换行）先收掉；收完还有换行 = 多行解释 → fallback
+    s = s.trim();
     if (s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) return fallback;
     // markdown 标记（可能多层）
     for (var i = 0; i < 8; i++) {
       var before = s;
-      s = s.replace(MD_PREFIX, '').replace(/(?:\*\*|__|~~|`+)$/, '');
-      s = s.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
+      s = s.replace(MD_PREFIX, '').replace(/(?:\*\*|__|~~|`+)$/, '').trim();
       if (s === before) break;
     }
     // 首尾引号 / 书名号（逐层剥）
     for (var j = 0; j < 8; j++) {
       if (!s) break;
-      var c0 = s.charAt(0), c1 = s.charAt(s.length - 1);
       var changed = false;
-      if (QUOTE_CHARS.indexOf(c0) >= 0) { s = s.slice(1); changed = true; }
+      if (QUOTE_CHARS.indexOf(s.charAt(0)) >= 0) { s = s.slice(1); changed = true; }
       if (s && QUOTE_CHARS.indexOf(s.charAt(s.length - 1)) >= 0) { s = s.slice(0, -1); changed = true; }
       if (!changed) break;
-      s = s.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
+      s = s.trim();
     }
     // 结尾标点
     while (s.length && TRAIL_PUNCT.indexOf(s.charAt(s.length - 1)) >= 0) s = s.slice(0, -1);
     // 折叠中间空白（换行已在此前判定过；这里是全角空格 / 连续空格）
-    s = s.replace(/[\s\u3000]+/g, ' ').replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
+    s = s.replace(/\s+/g, ' ').trim();
     if (!s) return fallback;
-    var a = cps(s);
-    if (a.length > 20) return a.slice(0, 20).join('') + '…';
+    if (cps(s).length > 20) return clipCp(s, 20) + '…';
     return s;
   }
 
@@ -134,8 +129,7 @@ import { plainReply, stripUserAction } from './tree.ts';
       var t = userText(m.content);
       if (!t) continue;
       if (/^（[^（）]*）$/.test(t)) continue;   // 占位话术（开局 / 系统注入），不当标题素材
-      var a = cps(t);
-      return a.length > 15 ? a.slice(0, 15).join('') + '…' : t;
+      return cps(t).length > 15 ? clipCp(t, 15) + '…' : t;
     }
     return '新对话';
   }

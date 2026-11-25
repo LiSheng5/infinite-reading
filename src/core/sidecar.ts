@@ -26,7 +26,8 @@ const global = globalThis as any;
 
   let cfg = { port: DEFAULT_PORT, token: '' };
   let state = 'offline';                 // 'offline' | 'online'
-  let features = { email: false, schedule: false, payment: false };
+  const FEATURES_OFF = { email: false, schedule: false, payment: false };   // 离线：三类能力全关（只整体替换、不就地改）
+  let features = FEATURES_OFF;
   let health = null;                     // 最近一次 /health 原文
   let lastError = '';                    // 最近一次失败原因（给 UI 显示）
   let version = '';
@@ -82,7 +83,7 @@ const global = globalThis as any;
     const changed = (state !== 'offline') || (lastError !== reason);
     state = 'offline';
     lastError = reason || '';
-    features = { email: false, schedule: false, payment: false };
+    features = FEATURES_OFF;
     health = null;
     stopSSE();
     if (changed) emit('state', status());
@@ -273,7 +274,6 @@ const global = globalThis as any;
 
   // 便捷方法
   function can(feature) { return state === 'online' && !!features[feature]; }
-  function config() { return { port: cfg.port, token: cfg.token }; }
   function getConfig() { return api('GET', '/api/config'); }
   // 业务失败的统一出入口：响应体带 { ok:false, code } 时抛出与 api() 400 同形的 Error
   //（err.code / err.status），调用方只用写一套 catch。成功则解包 body[key]。
@@ -294,7 +294,6 @@ const global = globalThis as any;
   function upsertTrigger(t) { return api('POST', '/api/triggers', t).then(r => unwrap(r, 'trigger')); }
   function confirmTrigger(id) { return api('POST', '/api/triggers/' + encodeURIComponent(id) + '/confirm').then(r => unwrap(r, 'trigger')); }
   function cancelTrigger(id) { return api('POST', '/api/triggers/' + encodeURIComponent(id) + '/cancel'); }
-  function pauseAll(paused) { return api('POST', '/api/schedule/pause', { paused: paused !== false }); }
 
   // 邮件（一律用户显式发起；白名单与上限由侧车硬校验）
   function emailSend(msg) { return api('POST', '/api/email/send', msg); }
@@ -309,7 +308,6 @@ const global = globalThis as any;
   function paymentPurchase(payload) { return api('POST', '/api/payment/intents', payload); }
   function paymentApprove(id) { return api('POST', '/api/payment/intents/' + encodeURIComponent(id) + '/approve'); }
   function paymentDeny(id) { return api('POST', '/api/payment/intents/' + encodeURIComponent(id) + '/deny'); }
-  function paymentCharge(id) { return api('POST', '/api/payment/intents/' + encodeURIComponent(id) + '/charge'); }
   function paymentMarkPaid(id) { return api('POST', '/api/payment/intents/' + encodeURIComponent(id) + '/paid'); }
   function paymentTransactions(limit) { return api('GET', '/api/payment/transactions' + (limit ? '?limit=' + encodeURIComponent(limit) : '')); }
   function paymentReceipt(id) { return api('GET', '/api/payment/receipt/' + encodeURIComponent(id)); }
@@ -319,7 +317,6 @@ const global = globalThis as any;
   const Sidecar = {
       DEFAULT_PORT: DEFAULT_PORT,
       configure: configure,
-      config: config,
       status: status,
       isOnline: () => state === 'online',
       can: can,
@@ -328,7 +325,6 @@ const global = globalThis as any;
       stop: stop,
       api: api,
       on: on,
-      off: off2,
       startSSE: startSSE,
       // 便捷封装
       getConfig: getConfig,
@@ -339,7 +335,6 @@ const global = globalThis as any;
       upsertTrigger: upsertTrigger,
       confirmTrigger: confirmTrigger,
       cancelTrigger: cancelTrigger,
-      pauseAll: pauseAll,
       // 邮件
       emailSend: emailSend,
       emailDraft: emailDraft,
@@ -352,7 +347,6 @@ const global = globalThis as any;
       paymentPurchase: paymentPurchase,
       paymentApprove: paymentApprove,
       paymentDeny: paymentDeny,
-      paymentCharge: paymentCharge,
       paymentMarkPaid: paymentMarkPaid,
       paymentTransactions: paymentTransactions,
       paymentReceipt: paymentReceipt,

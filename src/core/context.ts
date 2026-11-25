@@ -2,7 +2,7 @@
  * 无限阅读 · 上下文组装（AI1 剧情对话）v2
  *
  * 这里是「AI1 每轮发给模型的 messages 怎么拼、旧回合怎么压」的唯一实现：
- * 运行时（src/app/main.js）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
+ * 运行时（src/app/round.js 等）与离线评测（eval/run.js）共用同一份逻辑，避免评测测副本。
  *
  * 组装（常驻注入与动态窗口）：
  *   [system]  AI1 系统提示词（剧情 = JSON 契约；聊天 = 核心助手段 + 可选工具段 / 角色段，
@@ -16,10 +16,10 @@
  *             （注入层并入 user 前缀而非中段 system 块，规避兼容层吞中段 system）
  * 世界卡默认不常驻，靠 recall 工具按需召回、或「强制注入」。
  *
- * 压缩（-B）：以 scene_change 为边界做事件级摘要；占满时递归合并最旧两幕。
+ * 压缩：以 scene_change 为边界做事件级摘要；占满时递归合并最旧两幕。
  * 提供纯函数 + 可注入的 summarize（真实用书记员模型，失败兜底用 localSummarize）。
  *
- * 纯函数、零依赖；以 ES module 导出，被 src/app/turn.js 静态 import，Node 亦可加载。
+ * 纯函数、零依赖；以 ES module 导出，由 src/app/* 静态 import，Node 亦可加载（eval/* 直接用）。
  */
 
 
@@ -487,14 +487,13 @@
   function toolPolicyText(tools) {
     const hasImage = Array.isArray(tools) && tools.indexOf('request_image') >= 0;
     return [
-      '工具（只在必要时用，不要每轮都调，一轮最多 2 次）：',
+      '工具（只在必要时用，不要每轮都调，一轮最多 ' + MAX_TOOL_CALLS_PER_TURN + ' 次）：',
       '不确定地点 / 时间 / 在场人物 / 前情 / 伏笔时先调 recall_world_state；要写人物外貌、服饰或画面细节时先调 recall_style_card；',
       hasImage ? TOOL_POLICY_IMAGE : '',
       '玩家明确要求记住某事、或出现需要长期记住的设定时调 update_memory（玩家自己的个人信息写 profile，世界与关系写 world）。',
       '拿到结果后直接继续剧情，不要在回复里提「工具」「召回」「函数」这类字眼。',
     ].filter(Boolean).join('');
   }
-  const TOOL_POLICY_TEXT = toolPolicyText([]);   // 无作画工具的基础版（剧情模式口径）
 
   // 工具名 → 召回内容标识
   const RECALL_TOOL_SCOPE = { recall_world_state: 'world', recall_style_card: 'style' };
@@ -514,7 +513,7 @@
     if (cs.length) lines.push('人物设定：\n' + cs.join('\n'));
     if (card.negative) lines.push('负面：' + card.negative);
     if (card.note) lines.push('备注：' + card.note);
-    return lines.join('\n') || '';
+    return lines.join('\n');
   }
 
   /* 视觉设定卡的「文本侧视图」——**给 AI1（旁白模型）**，和上面那套不是一回事：
@@ -549,26 +548,21 @@
   // 起因：卡里的「备注」被写成了「始终深夜、始终下雨」，玩家要晴天时画师仍照雨画。
   const ANCHOR_SCOPE_HINT = '\n（画风锚只决定画风与气质：地点 / 时间 / 天气 / 在场者这类剧情事实以 [最近剧情] 为准，与备注冲突时听剧情。）';
 
-  // 画风锚：设定卡优先 → 滚动风格摘要 → 未锚定（降级）
-  function painterAnchorText(story) {
+  // 画风锚：设定卡优先（cardToText 选「给画师」或「文本侧」视图）→ 滚动风格摘要 → fallback
+  function anchorText(story, cardToText, fallback) {
     const card = story && story.styleCard;
     if (card && card.locked !== false) {
-      const t = styleCardText(card);
+      const t = cardToText(card);
       if (t) return t;
     }
-    const t2 = rollingStyleText((story && story.rollingStyle) || {});
-    return t2 || '（未锚定，自由发挥）';
+    return rollingStyleText(story && story.rollingStyle) || fallback;
   }
 
+  // 画师用：设定卡全文（外观与负面提示词都要）；没卡退回滚动风格摘要 → 未锚定（降级）
+  const painterAnchorText = story => anchorText(story, styleCardText, '（未锚定，自由发挥）');
+
   // 文本侧画风锚（AI1 用）：设定卡走「文本侧视图」（不含英文外观 / 负面提示词），没卡退回滚动风格摘要
-  function textAnchorText(story) {
-    const card = story && story.styleCard;
-    if (card && card.locked !== false) {
-      const t = styleCardTextForText(card);
-      if (t) return t;
-    }
-    return rollingStyleText((story && story.rollingStyle) || {});
-  }
+  const textAnchorText = story => anchorText(story, styleCardTextForText, '');
 
   // 召回块文本：world → 世界卡全文；style → 视觉设定卡（无卡退回滚动风格摘要 / 未锚定）
   function recallBlock(story, scope) {
@@ -833,7 +827,7 @@
     return painterSceneMessages(story, o);   // scene（默认）/ chat / 未知 mode 一律按 scene
   }
 
-  /* ---------------- 剧情文本整理（路径②） ----------------
+  /* ---------------- 剧情文本整理 ----------------
    * 粘贴任意剧情文本（设定文 / 小说片段 / 别人游戏的聊天记录）→ 整理向导 →
    * premise + world 草稿 + 画风关键词 → 用户确认修改（不可跳过）→ 建新档 → 试画锚定。
    * 默认一次调用；**仅当所选模型装不下该文本**时才 map-reduce（分段摘要 → 合并 → 一次性整理）。
@@ -889,7 +883,7 @@
   }
 
   const IMPORT_CALL_RESERVE = 800;    // 每次调用留给 system + 输出的余量（字 ≈ token）
-  const IMPORT_FIT_RATIO = 0.7;       // 与同口径：文本 + 余量 > 窗口 70% 才算「装不下」
+  const IMPORT_FIT_RATIO = 0.7;       // 与 COMPRESS_RATIO 同口径：文本 + 余量 > 窗口 70% 才算「装不下」
   const IMPORT_MIN_BUDGET = 600;      // 单段下限，窗口很小时也别切得太碎
 
   // 按段落切块，超长段落再按句子边界切；单块 ≤ budget
@@ -1070,14 +1064,17 @@
     return ('【旧幕·合并】' + clean(a) + ' ／ ' + clean(b)).slice(0, 240);
   }
 
+  // 第 i 个回合（assistant 在 i+1）是否开启新的一幕；非 JSON / 解析失败按「不切幕」
+  function sceneChangeAt(msgs, i) {
+    try { return !!JSON.parse(msgs[i + 1].content).scene_change; } catch (_) { return false; }
+  }
+
   // 按 scene_change 把 turn 分组（scene_change=true 的那一轮开启新的一幕）
   function groupScenes(msgs) {
     const groups = [];
     let cur = [];
     for (let i = 0; i + 1 < msgs.length; i += 2) {
-      let sc = false;
-      try { sc = !!JSON.parse(msgs[i + 1].content).scene_change; } catch (_) {}
-      if (sc && cur.length) { groups.push(cur); cur = []; }
+      if (sceneChangeAt(msgs, i) && cur.length) { groups.push(cur); cur = []; }
       cur.push(msgs[i], msgs[i + 1]);
     }
     if (cur.length) groups.push(cur);
@@ -1087,10 +1084,11 @@
   // 聊天纯文本没有 scene_change：按固定条数切幕（4 条 = 2 个回合），
   // 避免整个积压被压成一条摘要，保留「越老越模糊」的层次
   const PLAIN_SCENE_MESSAGES = 4;
-  function groupByTurns(msgs, size?) {
-    const n = Math.max(2, size || PLAIN_SCENE_MESSAGES);
+  function groupByTurns(msgs) {
     const groups = [];
-    for (let i = 0; i < msgs.length; i += n) groups.push(msgs.slice(i, i + n));
+    for (let i = 0; i < msgs.length; i += PLAIN_SCENE_MESSAGES) {
+      groups.push(msgs.slice(i, i + PLAIN_SCENE_MESSAGES));
+    }
     return groups;
   }
 
@@ -1098,19 +1096,17 @@
   function lastSceneStart(msgs) {
     let idx = 0;
     for (let i = 0; i + 1 < msgs.length; i += 2) {
-      let sc = false;
-      try { sc = !!JSON.parse(msgs[i + 1].content).scene_change; } catch (_) {}
-      if (sc) idx = i;
+      if (sceneChangeAt(msgs, i)) idx = i;
     }
     return idx;
   }
 
   // 动态组装窗口已知 contextWindow 时按 token 从最近往前装，
-  // 装到窗口一半为止，条数 ∈ [4, 40]；未知容量退回 fallback（评测与旧档口径不变）。
+  // 装到窗口一半为止，条数 ∈ [4, 40]；未知容量退回 DEFAULT_KEEP_MESSAGES。
   // 组装（assembleAI1）与压缩保留（planCompression）共用同一函数，保证「压多少 / 留多少」同口径。
-  function fitWindow(msgs, contextWindow, fallback?) {
+  function fitWindow(msgs, contextWindow) {
     const cw = +contextWindow;
-    if (!Number.isFinite(cw) || cw <= 0) return fallback || DEFAULT_KEEP_MESSAGES;
+    if (!Number.isFinite(cw) || cw <= 0) return DEFAULT_KEEP_MESSAGES;
     const budget = Math.floor(cw * WINDOW_TOKEN_RATIO);
     let acc = 0, n = 0;
     for (let i = msgs.length - 1; i >= 0; i--) {
@@ -1123,17 +1119,7 @@
     return Math.max(WINDOW_MIN_MESSAGES, n);
   }
 
-  /**
-   * 压缩 story：把超出保留窗口的旧回合压进摘要栈。
-   * 触发条件：
-   *   ① 积压条数 > maxMessages（兜底，容量未知时也保证有界）；
-   *   ② 组装后的 token 估算 > contextWindow × 0.7（容量来自能力登记表或用户手填）。
-   *   ③ opts.force（手动压缩）：忽略 ①②，固定保留最近 keep 条（成对、最少 2）。
-   * @param {object} story 当前故事状态（只读输入）
-   * @param {object} [opts] { keepMessages（短名 keep）, maxMessages, maxSummaries, summarize, contextWindow, force }
-   * @returns {null|{compressedTurns, messagesRemoved, summaries}}
-   */
-  // 压缩阈值（纯函数，-8）：contextWindow × 70%；0 = 容量未知（回退按条数压缩）。
+  // 压缩阈值（纯函数）：contextWindow × COMPRESS_RATIO；0 = 容量未知（回退按条数压缩）。
   // 有效 contextWindow 来自 resolveChatCfg 的 cfg（模型库 profile 可各不相同）。
   function compressThreshold(contextWindow) {
     const cw = +contextWindow;
@@ -1143,7 +1129,7 @@
 
   // 手动压缩（force）的保留条数：默认 8；消息成对，故保留数取偶数、最少 2 条。
   function forceKeep(opts) {
-    const raw = opts && (opts.keepMessages !== undefined ? opts.keepMessages : opts.keep);
+    const raw = opts && opts.keepMessages;
     if (raw === undefined || raw === null || raw === '') return DEFAULT_KEEP_MESSAGES;
     const k = Math.floor(Number(raw));
     if (!Number.isFinite(k)) return DEFAULT_KEEP_MESSAGES;
@@ -1215,6 +1201,15 @@
     return arr;
   }
 
+  /**
+   * 压缩 story：把超出保留窗口的旧回合压进摘要栈（就地改写 summaries / messages / world）。
+   * 触发条件（判定与切分见 planCompression）：
+   *   ① 积压条数 > maxMessages（兜底，容量未知时也保证有界）；
+   *   ② 组装后的 token 估算 > contextWindow × COMPRESS_RATIO（容量来自能力登记表或用户手填）；
+   *   ③ opts.force（手动压缩）：忽略 ①②，固定保留最近 keepMessages 条（成对、最少 2）。
+   * @param {object} [opts] { keepMessages, maxMessages, maxSummaries, summarize, contextWindow, estimatedTokens, force }
+   * @returns {null|{compressedTurns, messagesRemoved, summaries}}
+   */
   function compressStory(story, opts) {
     opts = opts || {};
     const plan = planCompression(story, opts);
@@ -1653,7 +1648,6 @@
   // 有卡的聊天完整记忆还包括角色卡；开启画像时再带一行画像摘要。
   function forceInjectBlock(story, playerAction, opts) {
     story = story || {};
-    if (playerAction && typeof playerAction === 'object' && !opts) { opts = playerAction; playerAction = ''; }
     opts = opts || {};
     const parts = ['[强制注入 · 完整记忆]'];
     const w = worldCardText(story.world);
@@ -1741,19 +1735,19 @@
   // 常驻层（每轮都在）：风格基调 / 故事设定 / 角色卡 / 关系记忆 / 用户画像 / 世界卡
   function appendPersistentBlocks(parts, ctx: AssembleCtx) {
     const story = ctx.story;
-    // 风格基调此前只影响画面，现在也进文本侧（三模式通用，≤120 字）
+    // 风格基调也进文本侧（剧情 / 聊天通用，≤TONE_MAX_CHARS 字）
     const tone = String(story.styleTone || '').trim();
     if (tone) parts.push({ role: 'system', content: '[风格基调] ' + clip(tone, TONE_MAX_CHARS) });
     // premise 此前只在开局一回合在场，地基设定随摘要合并流失——改为常驻摘要
     const premise = String(story.premise || '').trim();
     if (premise) parts.push({ role: 'system', content: '[故事设定（常驻）]\n' + clip(premise, PREMISE_MAX_CHARS) });
-    // 聊天有卡才常驻角色卡（hasCard 只看卡本身，不看模式名——有没有卡的差异不再用模式表达）；
-    // 聊天关系记忆常驻（choice 靠召回工具，不占常驻预算，剧情人物走 JSON 契约自报）
-    if (story.characterCard && isChatKind(ctx.mode)) {
-      const ct = characterCardText(story.characterCard);
-      if (ct) parts.push({ role: 'system', content: ct });
-    }
     if (isChatKind(ctx.mode)) {
+      // 聊天有卡才常驻角色卡（hasCard 只看卡本身，不看模式名——有没有卡的差异不再用模式表达）
+      if (story.characterCard) {
+        const ct = characterCardText(story.characterCard);
+        if (ct) parts.push({ role: 'system', content: ct });
+      }
+      // 聊天关系记忆常驻（choice 靠召回工具，不占常驻预算，剧情人物走 JSON 契约自报）
       const rb = relationshipBlock(story.world);
       if (rb) parts.push({ role: 'system', content: rb });
     }
@@ -1845,7 +1839,7 @@
    */
   function assembleAI1(story, playerAction, opts?: AssembleOpts) {
     const ctx = assembleCtx(story, playerAction, opts);
-    const trace = (ctx.opts && Array.isArray(ctx.opts.trace)) ? ctx.opts.trace : null;
+    const trace = Array.isArray(ctx.opts.trace) ? ctx.opts.trace : null;
     const out: Array<{ role: string; content: any }> = [];
     // 分层追踪：只记每层在 out 里的下标区间，不改任何拼装顺序。trace 为 null 时 begin / close
     // 是空操作，返回值、顺序与不传 trace 时逐字一致（分层 token 由调用方按前缀差分摊分）。
@@ -1984,7 +1978,7 @@
     SCHEDULE_TOOLS, TOOL_NAMES_SCHEDULE, SCHEDULE_POLICY_TEXT, toolsForMode, toolNamesForMode, isScheduleTool,
     EMAIL_TOOLS, PAYMENT_TOOLS, TOOL_NAMES_PROPOSAL, EMAIL_POLICY_TEXT, PAYMENT_POLICY_TEXT,
     isProposalTool, stripKindMarker,
-    TOOL_POLICY_TEXT, TOOL_POLICY_IMAGE, toolPolicyText, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
+    TOOL_POLICY_IMAGE, toolPolicyText, RECALL_TOOL_SCOPE, isRecallTool, recallBlock, forceInjectBlock,
     styleCardText, styleCardTextForText, rollingStyleText, painterAnchorText, textAnchorText,
     PAINTER_RECENT_TURNS, PAINTER_RECENT_LINE_CHARS,
     recentImageLines, recentNarrationLines, recentTurnLines, recentPlotText, assemblePainter,

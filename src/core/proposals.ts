@@ -119,7 +119,7 @@ import { genId as rootGenId } from './tree.ts';
   }
 
   function create(kind, args, now) {
-    const t = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const t = timeOf(now);
     if (kind === 'email') return createEmail(args, t);
     if (kind === 'payment') return createPayment(args, t);
     return fail('未知的提案类型：' + kind);

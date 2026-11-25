@@ -7,10 +7,12 @@
  *   notifySave(story)    saveStory 后防抖（约 800ms）增量重建该 id
  *   drop(id)             deleteStory 同步移除
  *
- * 硬约束：零依赖、无 DOM、无网络；输出里不含任何 HTML（高亮由 UI 用 createElement('mark') 做）；
- * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
+ * 硬约束：零依赖、无 DOM、无网络；输出里不含任何 HTML（高亮由 UI 按 ranges 用 <mark> 包裹，
+ * 见 src/screens/shelf/ShelfScreen.svelte）；规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
 
+// 助手回复 / 玩家行动 → 纯文本的唯一实现在 tree.ts（plainReply / stripUserAction）：
+// 书架摘要（store.ts）共用同一口径，schema 演进只改一处
 import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */
@@ -54,17 +56,6 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
 
   function normalize(s) { return normWithMap(s).text; }
 
-  /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
-
-  // 助手回复 → 纯文本：唯一实现在 tree.ts 的 plainReply。
-  // store.ts 的书架摘要共用同一口径，schema 演进只改一处；静态 import 缺了直接报错不静默降级
-
-  // 玩家行动文本：剥壳与内层（做/说/导演）标记的唯一实现在 tree.ts 的 stripUserAction
-  // （索引里不保留输入类型标记——它是元数据，不是可检索的正文）
-  function plainAction(raw) {
-    return stripUserAction(raw);
-  }
-
   /* ---------------- buildDoc：遍历全部节点（含非当前分支） ----------------
    * → { id, title, mode, updatedAt, nodes:[{ nid, text }] }；text 已规整。
    */
@@ -82,7 +73,8 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
         var node = table[nid];
         if (!node) return;
         var parts = [];
-        if (node.action && node.action.text) parts.push(plainAction(node.action.text));
+        // 索引里不保留输入类型标记——它是元数据，不是可检索的正文
+        if (node.action && node.action.text) parts.push(stripUserAction(node.action.text));
         var reply = '';
         if (node.assistantMsg && node.assistantMsg.content != null) {
           reply = plainReplyOfTree(node.assistantMsg.content);
@@ -106,7 +98,7 @@ import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
       (Array.isArray(story.log) ? story.log : []).forEach(function (e, i) {
         if (!e || typeof e !== 'object') return;
         if (e.type !== 'narration' && e.type !== 'player' && e.type !== 'choice') return;
-        var text = normalize(plainAction(e.text || ''));
+        var text = normalize(stripUserAction(e.text || ''));
         if (text) nodes.push({ nid: String(e.nid || ('log' + i)), text: text });
       });
     }

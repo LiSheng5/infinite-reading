@@ -24,8 +24,8 @@
  *   - 确定性：同一棵树同一参数 → 输出完全相同。
  */
 
-/* 分层拆成 buildKids / assignRows / tracePath / packLanes 四段
- *   （只挪职责与闭包，几何公式与合并口径未动）。 */
+/* 分层：buildKids（children 表）→ assignRows（行号 + 当前路径 tracePath）→ packLanes（泳道），
+ * 再 foldChains（折叠）→ geometryOf（几何）；各段职责见「主入口」处的说明。 */
 import { plainReply } from './tree.ts';
 
   const DEFAULTS = {
@@ -103,8 +103,9 @@ import { plainReply } from './tree.ts';
    *   packLanes   —— 泳道：主干固定 lane 0，支线整棵子树区间打包到更靠右的泳道
    *   foldChains  —— 折叠：≥ collapseRun 的纯单链折成超级节点
    *   geometryOf  —— 几何：节点 / 边 / pathEdgeD / 画布尺寸
-   * 每段都是纯函数（同一入参 → 同一出参、不改入参），各自在 eval/treelayout-test.js
-   * 第 10 节有独立单测；layerTree 只剩十来行装配。
+   * 每段都是纯函数（同一入参 → 同一出参、不改入参）：buildKids / assignRows / tracePath / packLanes
+   * 各自在 eval/treelayout-test.js 第 10 节有独立单测；foldChains / geometryOf 不单独导出，经 compute 整体对账。
+   * layerTree 只做装配。
    */
 
   // 归一化视图参数（一次算好；折叠 / 几何两段共用，缺省回落 DEFAULTS）
@@ -167,7 +168,6 @@ import { plainReply } from './tree.ts';
         q.push(c);
       }
     }
-    if (!row.size) return null;
     const parentOf = new Map();
     parentOf.set(rootId, null);
     for (const id of order) {
@@ -279,7 +279,6 @@ import { plainReply } from './tree.ts';
 
     const kids = buildKids(map);
     const H = assignRows(kids, rootId, tree.head);
-    if (!H) return null;
     const laneOf = packLanes(rootId, map, kids, H.row, H.order, H.path);
     return {
       map: map, head: tree.head, kids: kids, parentOf: H.parentOf,
@@ -364,8 +363,6 @@ import { plainReply } from './tree.ts';
         base.collapsedCount = sup.count;
         base.label = '··· ' + sup.count + ' 回合';
         base.onPath = sup.ids.some(rid => onPathSet.has(rid));
-        base.isHead = false;
-        base.isFork = false;
       } else {
         base.label = labelOf(n, labelLen);
       }

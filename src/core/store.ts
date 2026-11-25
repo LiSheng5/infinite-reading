@@ -2,7 +2,7 @@
  * 无限阅读 · 存档层（story schema v3 + 当前形状归一 + IndexedDB 主库）
  *
  * 职责：所有存档读写都走这里，避免散落各处。
- *  - 存储前缀统一 ir:（settings / story:<id> / story-index / current / user-profile）
+ *  - 键名前缀 ir:（kv 的 settings / story-index / current / user-profile；回退 localStorage 时故事另用 story:<id>）
  *  - story schema v3：log / world / styleCard / rollingStyle / characterCard /
  *    userProfile / painterThread / messages / mode / savepoints（设计）
  *    + tree（分支树，schema v3 新增；本层只透传，建树 / 投影在 src/core/tree.ts）
@@ -65,11 +65,9 @@ import { APP_VERSION } from './version.ts';
   // 超限只淘汰最旧的「引用」，**不 revoke** objectURL —— 页面上可能正显示着它，
   // 提前 revoke 会让画面变成裂图；这些 URL 随页面卸载一起释放。
   const IMG_CACHE_MAX = 48;
-  function trimCache(map) {
-    while (map.size > IMG_CACHE_MAX) {
-      const oldest = map.keys().next().value;
-      map.delete(oldest);
-    }
+  // 图片 / 视频缓存共用：超限只淘汰最久未命中的「引用」
+  function trimCache(map, max) {
+    while (map.size > max) map.delete(map.keys().next().value);
   }
   // 命中即「变新」：淘汰先淘汰最久没用过的
   function touch(map, key) {
@@ -102,7 +100,7 @@ import { APP_VERSION } from './version.ts';
     return lastPersistError;
   }
 
-  /* ---------------- 同步存储（回退路径 + 旧数据迁移的读源） ---------------- */
+  /* ---------------- 同步存储（IndexedDB 不可用时的回退路径） ---------------- */
 
   let memLS = null;
   // 没有可用 localStorage 的环境（Node 评测）：用进程内 Map 顶上，读写语义一致。
@@ -172,7 +170,7 @@ import { APP_VERSION } from './version.ts';
     return rootGenId(prefix || 's');
   }
 
-  /* ---------------- schema v2 默认值 ---------------- */
+  /* ---------------- 默认值 ---------------- */
 
   function defaultWorld() {
     return {
@@ -247,10 +245,9 @@ import { APP_VERSION } from './version.ts';
     return { style: '', scenes: '', wardrobe: '', updatedAt: 0 };
   }
 
-  // 界面状态（随存档记住）：输入类型（做 / 说 / 导演）。
-  // 布局状态已统一到 settings.ui（layout / splitRatio / imageCollapsed），这里只写 kind。
-  // 的 split / showImage / immersive 三个字段不再写进新档；读档时 Object.assign 会把
-  // 旧档里的它们原样带过（不读、不删），所以老档不需要迁移、也不会因为这里少写而丢数据。
+  // 界面状态（随存档记住）：只写输入类型 kind（做 / 说 / 导演）；布局状态已统一到 settings.ui。
+  // 旧档里遗留的 split / showImage / immersive 不再写进新档；读档时 Object.assign 会把它们
+  // 原样带过（不读、不删），所以老档不需要迁移、也不会因为这里少写而丢数据。
   function defaultUi() {
     return { kind: 'do' };
   }
@@ -280,7 +277,7 @@ import { APP_VERSION } from './version.ts';
       draft: defaultSubModel(),                                // 开局向导起草
       // 模型库：可选的多套主模型；settings.chat 仍是「默认主模型」（id 视作 'default'，不进数组）
       profiles: [],
-      // refMode：'off' = 纯文生图；“'prev' = 把上一张图当参考图（MiniMax subject_reference）
+      // refMode：'off' = 纯文生图；'prev' = 把上一张图当参考图（MiniMax subject_reference）
       // workflow / nodes：ComfyUI 专用——API 格式 workflow JSON 与可选的节点定位覆盖（其余渠道不读）
       image: { provider: 'openai-images', baseUrl: '', apiKey: '', model: '', aspect: '16:9', width: 1280, height: 720, extraParams: '', refMode: 'off', workflow: '', nodes: '' },
       // 生视频（MiniMax V2「minimax-video」）：异步任务。
@@ -558,7 +555,7 @@ import { APP_VERSION } from './version.ts';
     }).out;
   }
 
-  /* ---------------- story v2 ---------------- */
+  /* ---------------- story：新建与归一 ---------------- */
 
   /* 故事模式归一（唯一口径）：原「扮演」'rp' 已并入「聊天」'chat'。
    * 只在读取 / 导入时归一（懒迁移），不批量改写存档；characterCard 等其余字段原样保留。
@@ -612,7 +609,8 @@ import { APP_VERSION } from './version.ts';
   type StoryCtx = { raw: any; out: any };
 
   const STORY_STEPS: Array<MigrateStep<StoryCtx>> = [
-    // 基线：newStory 打底 + 各字段「默认值 ← 存档值」，log 条目就地归一
+    // 基线：newStory 打底 + 各字段「默认值 ← 存档值」，log 条目就地归一。
+    // 读档 / 导入的旧 'rp' 也靠这里的 newStory 归一成 'chat'（懒迁移：原档等下一次保存才落成新值）
     {
       since: 'v0.2',
       what: '字段铺默认值（newStory 打底）；log 走 migrateLogEntry',
@@ -679,14 +677,6 @@ import { APP_VERSION } from './version.ts';
       what: '本对话偏好 prefs 透传并清洗（丢未知键、剥凭证）；无 prefs 不长出 prefs',
       when: ({ raw }) => !!(raw.prefs && typeof raw.prefs === 'object'),
       apply: (c) => { c.out.prefs = sanitizePrefsSafe(c.raw.prefs); },
-    },
-    // 旧「扮演」并入「聊天」：读档 / 导入时 'rp' 统一看成 'chat'，角色卡与历史都不动。
-    // 懒迁移——原档要等下一次正常保存才落成新值，启动时不做批量改写。
-    {
-      since: 'v0.13',
-      what: "故事模式 'rp' 归一为 'chat'（原「扮演」并入「聊天」）",
-      when: () => true,
-      apply: (c) => { c.out.mode = normalizeMode(c.out.mode); },
     },
   ];
 
@@ -841,11 +831,10 @@ import { APP_VERSION } from './version.ts';
   // 文本进档案；原图不进这里 —— 原图是 Blob，走 images store（见 putImage）
   function serializeStory(story: Story): Story {
     // 裁剪窗口的唯一口径在 Tree（静态导入，必然在位）
-    const T = Tree;
     const out = Object.assign({}, story, {
-      log: (story.log || []).slice(-T.LOG_WINDOW).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
+      log: (story.log || []).slice(-Tree.LOG_WINDOW).map(e => (e.type === 'image' ? Object.assign({}, e, { src: undefined }) : e)),
       // scene 字段是白名单：新字段不加会在这里被丢掉
-      scenes: (story.scenes || []).slice(-T.SCENE_WINDOW).map(s => ({
+      scenes: (story.scenes || []).slice(-Tree.SCENE_WINDOW).map(s => ({
         id: s.id, alt: s.alt, prompt: s.prompt, promptRaw: s.promptRaw || '',
         kind: s.kind || undefined,                 // 'video' = 视频场景（其余按图片处理）
         aspect: s.aspect || '', width: s.width || 0, height: s.height || 0,
@@ -863,9 +852,9 @@ import { APP_VERSION } from './version.ts';
         ratio: s.ratio || undefined, model: s.model || undefined,
         ts: s.ts,
       })),
-      savepoints: (story.savepoints || []).slice(-T.SAVEPOINT_KEEP),   // 存档点最多保留 5 个
+      savepoints: (story.savepoints || []).slice(-Tree.SAVEPOINT_KEEP),   // 存档点最多保留 5 个
     });
-    // /：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
+    // prefs：落盘也走清洗——凭证永远不进故事存档（会被导出 / 分享 / 备份）
     if (story.prefs && typeof story.prefs === 'object') out.prefs = sanitizePrefsSafe(story.prefs);
     else delete out.prefs;
     // 落盘快照一律深拷贝（与 Tree 的「深拷贝存入」同口径）：out 若与在用 story 共享
@@ -1065,7 +1054,7 @@ import { APP_VERSION } from './version.ts';
   function putImage(id, blob, meta) {
     if (!id || !blob) return false;
     blobCache.set(id, blob);
-    trimCache(blobCache);
+    trimCache(blobCache, IMG_CACHE_MAX);
     if (!useIDB) return false;
     track(Storage.put('images', id, { blob: blob, meta: meta || {}, at: Date.now() }).catch(persistFail));
     return true;
@@ -1079,7 +1068,7 @@ import { APP_VERSION } from './version.ts';
     try {
       const rec = await Storage.get('images', id);
       const blob = (rec && rec.blob && typeof rec.blob.size === 'number') ? rec.blob : null;
-      if (blob) { blobCache.set(id, blob); trimCache(blobCache); }
+      if (blob) { blobCache.set(id, blob); trimCache(blobCache, IMG_CACHE_MAX); }
       return blob;
     } catch (e) { persistFail(e); return null; }
   }
@@ -1097,7 +1086,7 @@ import { APP_VERSION } from './version.ts';
       let url = null;
       try { url = URL.createObjectURL(blob); } catch (_) { return; }
       urlCache.set(id, url);
-      trimCache(urlCache);
+      trimCache(urlCache, IMG_CACHE_MAX);
       if (onImageReadyFn) { try { onImageReadyFn(id); } catch (_) {} }
     }).catch(() => { loading.delete(id); });
     return null;
@@ -1111,8 +1100,6 @@ import { APP_VERSION } from './version.ts';
     if (useIDB) track(Storage.del('images', id).catch(persistFail));
   }
 
-  function releaseImages(ids) { (ids || []).forEach(id => releaseImage(id)); }
-
   /* ---------------- 视频（Blob） ----------------
    * 与原图共用同一个 images store（键名 vid:<sceneId>，不升 DB 版本）。
    * 不进 blobCache —— 会挤掉图片缓存、占内存；用独立的 1~2 条小缓存。
@@ -1122,17 +1109,10 @@ import { APP_VERSION } from './version.ts';
   const videoBlobCache = new Map();               // videoId → Blob
   const videoUrlCache = new Map();                // videoId → objectURL
 
-  function trimVideoCache(map) {
-    while (map.size > VIDEO_CACHE_MAX) {
-      const oldest = map.keys().next().value;
-      map.delete(oldest);                          // 不 revoke：正在播的 <video> 还拿着这个 URL
-    }
-  }
-
   function putVideo(id, blob, meta) {
     if (!id || !blob) return false;
     videoBlobCache.set(id, blob);
-    trimVideoCache(videoBlobCache);
+    trimCache(videoBlobCache, VIDEO_CACHE_MAX);
     if (!useIDB) return false;
     track(Storage.put('images', id, { blob: blob, meta: meta || {}, at: Date.now() }).catch(persistFail));
     return true;
@@ -1146,7 +1126,7 @@ import { APP_VERSION } from './version.ts';
     try {
       const rec = await Storage.get('images', id);
       const blob = (rec && rec.blob && typeof rec.blob.size === 'number') ? rec.blob : null;
-      if (blob) { videoBlobCache.set(id, blob); trimVideoCache(videoBlobCache); }
+      if (blob) { videoBlobCache.set(id, blob); trimCache(videoBlobCache, VIDEO_CACHE_MAX); }
       return blob;
     } catch (e) { persistFail(e); return null; }
   }
@@ -1164,7 +1144,7 @@ import { APP_VERSION } from './version.ts';
       let url = null;
       try { url = URL.createObjectURL(blob); } catch (_) { return; }
       videoUrlCache.set(id, url);
-      trimVideoCache(videoUrlCache);
+      trimCache(videoUrlCache, VIDEO_CACHE_MAX);
       if (onImageReadyFn) { try { onImageReadyFn(id); } catch (_) {} }
     }).catch(() => { loading.delete(id); });
     return null;
@@ -1256,7 +1236,7 @@ import { APP_VERSION } from './version.ts';
       setImageReadyHandler(fn) { onImageReadyFn = (typeof fn === 'function') ? fn : null; },
 
       // 原图（Blob）
-      imageIdsOf, putImage, getImage, imageURL, releaseImage, releaseImages,
+      imageIdsOf, putImage, getImage, imageURL, releaseImage,
       listImageKeys, knownImageIds,
       // 视频（Blob，键名 vid:<sceneId>）
       putVideo, getVideo, videoURL, releaseVideo,

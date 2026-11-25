@@ -57,10 +57,7 @@
  }
 
  async function toBytes(data) {
-   if (typeof data === 'string') {
-     if (!encoder) throw new Error('当前环境没有 TextEncoder，无法打包文本');
-     return encoder.encode(data);
-   }
+   if (typeof data === 'string') return utf8(data);
    if (data instanceof Uint8Array) return data;
    if (typeof ArrayBuffer !== 'undefined' && data instanceof ArrayBuffer) return new Uint8Array(data);
    if (isBlobLike(data)) return new Uint8Array(await data.arrayBuffer());
@@ -102,7 +99,7 @@
      if (!name.length) throw new Error('有条目缺少文件名');
      const data = await toBytes(e && e.data);
      const size = data.length;
-     if (offset + size > MAX_BYTES || size > MAX_BYTES) {
+     if (offset + size > MAX_BYTES) {
        throw new Error('打包内容超过 4GB 上限（ZIP32）。请分开导出：单个故事的「导出 → 附带原图」也是一条路');
      }
 

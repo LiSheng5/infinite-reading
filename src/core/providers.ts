@@ -9,15 +9,19 @@
 
 import { sleep } from './tree.ts';
 
+  // 失败响应体截前 300 字给界面看；读不出来（连接已断 / 非文本）就当没有
+  async function errorDetail(res) {
+    try { return (await res.text()).slice(0, 300); } catch (_) { return ''; }
+  }
+
   async function readError(res) {
-    let detail = '';
-    try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+    const detail = await errorDetail(res);
     return `HTTP ${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`;
   }
 
   /* ---------------- 「测试连接」：只读探测 ----------------
-   * 原则：只发 GET /models（可选的兜底最小对话请求 max_tokens=1），
-   * **绝不调用 /images/generations**，所以测试永远不会产生出图费用。
+   * 原则：只发只读请求——对话 / OpenAI 兼容生图先 GET /models（可选兜底一条 max_tokens=1 的最小对话），
+   * MiniMax 生图 / 生视频与 ComfyUI 各用自己的只读 GET；**绝不提交生成任务**，测试永远不会产生出图 / 出视频费用。
    * 所有探测都不抛异常，统一返回 { level: 'ok'|'warn'|'fail', message }，
    * 让界面层直接把 message 显示出来即可。 */
 
@@ -85,7 +89,7 @@ import { sleep } from './tree.ts';
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      try { ctrl.abort(); } catch (_) { /* 环境不支持 abort(reason)：忽略 */ }
+      try { ctrl.abort(); } catch (_) { /* 极端环境 abort 可能抛：超时路径不能因此中断 */ }
     }, timeout);
     const outer = o.signal;
     const onOuterAbort = () => { try { ctrl.abort(); } catch (_) {} };
@@ -112,8 +116,7 @@ import { sleep } from './tree.ts';
     if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
     const res = await fetchWithTimeout(trimBase(cfg) + '/models', { method: 'GET', headers });
     if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      const detail = await errorDetail(res);
       return { ok: false, status: res.status, detail, noEndpoint: res.status === 404 || res.status === 405 };
     }
     let models = [];
@@ -135,8 +138,7 @@ import { sleep } from './tree.ts';
       body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
     });
     if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      const detail = await errorDetail(res);
       return { ok: false, status: res.status, detail };
     }
     return { ok: true };
@@ -238,7 +240,6 @@ import { sleep } from './tree.ts';
     label: string;
     chat(cfg: any, messages: any[], hooks?: any): Promise<any>;
     test?(cfg: any): Promise<any>;
-    probe?(cfg: any): Promise<any>;
   }
 
   export interface ImageProvider {
@@ -298,7 +299,7 @@ import { sleep } from './tree.ts';
       },
 
       async chat(cfg, messages, hooks) {
-        const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
+        const url = trimBase(cfg) + '/chat/completions';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
         const body: any = { model: cfg.model, messages };
@@ -377,7 +378,6 @@ import { sleep } from './tree.ts';
             if (calls.length && hooks && hooks.onToolCalls) hooks.onToolCalls(calls);
             const usage0 = normalizeUsage(data.usage);
             if (usage0 && hooks && hooks.onUsage) hooks.onUsage(usage0);
-            if (hooks && hooks.onDelta) hooks.onDelta(text);
             return text;
           }
 
@@ -582,9 +582,10 @@ import { sleep } from './tree.ts';
     return out;
   }
 
-  /* ComfyUI 本地 server 默认无鉴权；填了 Key 就一并带上 Authorization——
-   * 套了带鉴权的反向代理、或以后 ComfyUI 给本地加登录（v0.44.0 曾试过 local_web_sso 又回退）时能直接用。 */
-  function comfyHeaders(cfg, json) {
+  /* 请求头（ComfyUI / MiniMax 生图 / 生视频共用）：json=true 带 Content-Type，填了 Key 才带 Authorization。
+   * ComfyUI 本地 server 默认无鉴权，但套了带鉴权的反向代理、或以后给本地加登录
+   * （v0.44.0 曾试过 local_web_sso 又回退）时也要能直接用。 */
+  function authHeaders(cfg, json) {
     const headers: any = {};
     if (json) headers['Content-Type'] = 'application/json';
     const key = String((cfg && cfg.apiKey) || '').trim();
@@ -603,8 +604,8 @@ import { sleep } from './tree.ts';
    * 不回传 URL——重启 ComfyUI 后 /view 就失效，存档里的图会全挂）。
    * 浏览器走 FileReader；Node（eval 单测）走 btoa 兜底（分块拼二进制串，两边都有这个全局）。 */
   async function blobToDataUrl(blob) {
-    if (typeof FileReader !== 'undefined' && FileReader.prototype && typeof FileReader.prototype.readAsDataURL === 'function') {
-      return await new Promise((resolve, reject) => {
+    if (typeof FileReader !== 'undefined' && typeof FileReader.prototype.readAsDataURL === 'function') {
+      return new Promise((resolve, reject) => {
         const fr = new FileReader();
         fr.onload = () => resolve(String(fr.result || ''));
         fr.onerror = () => reject(new Error('读取图片失败'));
@@ -651,7 +652,7 @@ import { sleep } from './tree.ts';
       },
 
       async generate(cfg, prompt, opts) {
-        const url = cfg.baseUrl.replace(/\/+$/, '') + '/images/generations';
+        const url = trimBase(cfg) + '/images/generations';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
         const body: any = { model: cfg.model, prompt, n: 1 };
@@ -712,7 +713,7 @@ import { sleep } from './tree.ts';
 
         let res;
         try {
-          res = await fetchWithTimeout(minimaxImageEndpoint(cfg), { method: 'GET', headers: videoHeaders(cfg, false) });
+          res = await fetchWithTimeout(minimaxImageEndpoint(cfg), { method: 'GET', headers: authHeaders(cfg, false) });
         } catch (e) {
           // MiniMax 两个域名的响应都不带 Access-Control-Allow-*：提示走本地转发，别让人干猜
           return {
@@ -732,8 +733,7 @@ import { sleep } from './tree.ts';
           return { level: 'warn', message: '接口可达（HTTP ' + res.status + '，探测用的 GET 本来就不是合法方法，属正常）。' + tail };
         }
         if (!res.ok) {
-          let detail = '';
-          try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+          const detail = await errorDetail(res);
           return { level: 'warn', message: '地址可达，但探测没通过：' + friendlyStatus(res.status, detail) + tail };
         }
         return { level: 'ok', message: '连接成功：接口可达。' + tail };
@@ -779,7 +779,7 @@ import { sleep } from './tree.ts';
         try {
           res = await fetchWithTimeout(minimaxImageEndpoint(cfg), {
             method: 'POST',
-            headers: videoHeaders(cfg, true),
+            headers: authHeaders(cfg, true),
             body: JSON.stringify(body),
             signal: opts && opts.signal ? opts.signal : undefined,
           }, IMAGE_GEN_TIMEOUT_MS);
@@ -840,7 +840,7 @@ import { sleep } from './tree.ts';
         }
         let res;
         try {
-          res = await fetchWithTimeout(trimBase(cfg) + '/system_stats', { method: 'GET', headers: comfyHeaders(cfg, false) });
+          res = await fetchWithTimeout(trimBase(cfg) + '/system_stats', { method: 'GET', headers: authHeaders(cfg, false) });
         } catch (e) {
           if (e instanceof TypeError) {
             return {
@@ -911,7 +911,7 @@ import { sleep } from './tree.ts';
         try {
           res = await fetchWithTimeout(trimBase(cfg) + '/prompt', {
             method: 'POST',
-            headers: comfyHeaders(cfg, true),
+            headers: authHeaders(cfg, true),
             body: JSON.stringify({ prompt: wf, client_id: 'infinite-reading-' + Math.random().toString(36).slice(2, 10) }),
             signal,
           }, COMFY_SUBMIT_TIMEOUT_MS);
@@ -960,7 +960,7 @@ import { sleep } from './tree.ts';
           }
           let hist;
           try {
-            const r = await fetchWithTimeout(trimBase(cfg) + '/history/' + encodeURIComponent(String(promptId)), { method: 'GET', headers: comfyHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
+            const r = await fetchWithTimeout(trimBase(cfg) + '/history/' + encodeURIComponent(String(promptId)), { method: 'GET', headers: authHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
             // 403 是持续性拒绝（来源校验 / 鉴权），重试没意义：标记 fatal 直接冒出去，不计网络错
             if (r.status === 403) { const fe: any = new Error(comfy403Text()); fe.fatal = true; throw fe; }
             if (!r.ok) throw new Error(await readError(r));
@@ -1006,7 +1006,7 @@ import { sleep } from './tree.ts';
             trimBase(cfg) + '/view?filename=' + encodeURIComponent(String(img.filename))
             + '&subfolder=' + encodeURIComponent(String(img.subfolder || ''))
             + '&type=' + encodeURIComponent(String(img.type || 'output')),
-            { method: 'GET', headers: comfyHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
+            { method: 'GET', headers: authHeaders(cfg, false), signal }, COMFY_POLL_TIMEOUT_MS);
         } catch (e) {
           if (e instanceof TypeError) throw new Error('取图被浏览器拦下（CORS）：启动 ComfyUI 时加 --enable-cors-header "*" 再试。');
           throw e;
@@ -1026,7 +1026,7 @@ import { sleep } from './tree.ts';
    *     status ∈ queued | running | succeeded | failed | cancelled | expired
    *   generate(cfg, req, hooks)              → { url, taskId, params }
    *     = submit + 每 10 秒 poll；hooks.onTaskId(id)（提交成功立刻回调，用于落盘）、
-   *       hooks.onStatus(s)、hooks.signal（本地取消）。当前签名是 generate(cfg, req, hooks) → { url, taskId, params }。
+   *       hooks.onStatus(s)、hooks.signal（本地取消）。
    * V1 旧接口（Hailuo-02 / video-01，/v1/video_generation + files/retrieve）是本期非目标，不实现。 */
 
   const VIDEO_POLL_MS = 10000;                  // 官方示例轮询间隔 10 秒
@@ -1073,13 +1073,6 @@ import { sleep } from './tree.ts';
     } catch (_) { return src; }
   }
 
-  function videoHeaders(cfg, json) {
-    const headers = {};
-    if (json) headers['Content-Type'] = 'application/json';
-    if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-    return headers;
-  }
-
   /* 时长 / 分辨率 / 比例的唯一来源 = 面板控件（cfg.duration / resolution / ratio，双数据源）：
    * extraParams 只补充其它键（style / seed / watermark…），同名这三键一律以控件为准——
    * 此前 extraParams 后合并优先，旧迁移折进 extraParams 的同名键会一直盖住下拉框（「改了没生效」）。
@@ -1118,7 +1111,7 @@ import { sleep } from './tree.ts';
       try {
         res = await fetchWithTimeout(
           trimBase(cfg) + '/v2/query/video_generation?page_num=1&page_size=1',
-          { method: 'GET', headers: videoHeaders(cfg, false) }
+          { method: 'GET', headers: authHeaders(cfg, false) }
         );
       } catch (e) {
         // MiniMax 不对浏览器开放跨域（响应不带 CORS 头）：提示走本地转发，别让人干猜
@@ -1133,8 +1126,7 @@ import { sleep } from './tree.ts';
       if (res.ok) {
         return { level: 'ok', message: '连接成功：接口可达，Key 被接受。这里只读列任务，不会提交任务，所以不花钱。能否出视频要在第一次「生成视频」时才算真正验证。' };
       }
-      let detail = '';
-      try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+      const detail = await errorDetail(res);
       if (res.status === 401 || res.status === 403) {
         return { level: 'fail', message: 'Key 被拒绝（HTTP ' + res.status + '）：检查 Key 是否复制完整、是否过期、是否有生视频权限。（接口原文：' + detail.slice(0, 120) + '）' };
       }
@@ -1172,7 +1164,7 @@ import { sleep } from './tree.ts';
       try {
         // 提交本身要有上限（否则挂住就永远走不到 totalMs 的检查），并接受外部取消
         res = await fetchWithTimeout(trimBase(cfg) + '/v2/video_generation', {
-          method: 'POST', headers: videoHeaders(cfg, true), body: JSON.stringify(body),
+          method: 'POST', headers: authHeaders(cfg, true), body: JSON.stringify(body),
           signal: signal || undefined,
         }, VIDEO_SUBMIT_TIMEOUT_MS);
       } catch (e) {
@@ -1197,7 +1189,7 @@ import { sleep } from './tree.ts';
     },
 
     async poll(cfg, taskId, signal?) {
-      const headers = videoHeaders(cfg, false);
+      const headers = authHeaders(cfg, false);
       // 轮询也带上限 + 可中断（外部取消要能立刻切断在途请求）
       const res = await fetchWithTimeout(
         trimBase(cfg) + '/v2/query/video_generation/' + encodeURIComponent(String(taskId)),
@@ -1281,12 +1273,11 @@ import { sleep } from './tree.ts';
     },
   };
 
+  // 旧 provider 值（minimax / openai-videos）由 store 的 migrateSettings 钉死成 minimax-video，这里不留别名
   const VideoProviders: Record<string, VideoProvider> = {
     'minimax-video': MiniMaxVideo,
-    minimax: MiniMaxVideo,          // 旧值别名（migrateSettings 会迁成 minimax-video）
-    'openai-videos': MiniMaxVideo,  // 旧值别名（同上）
   };
 
-  /* fetchWithTimeout 一并导出：app 层（视频下载转存）也需要同一条「超时 + 可中断」口径，
-   * 不要在别处再写第二份 AbortController 模板。 */
+  /* fetchWithTimeout 一并导出：app 层（视频下载转存）复用这条「超时 + 可中断」口径。
+   * chat() 不走它——要按 chunk 续空闲计时，并把 controller 经 hooks.onAborter 交给「停止」按钮。 */
   export { ChatProviders, ImageProviders, VideoProviders, fetchWithTimeout, normalizeUsage, mergeUsage };

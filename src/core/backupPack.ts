@@ -2,8 +2,8 @@
  * src/core/backupPack.ts —— 全量备份的打包 / 解析纯逻辑（自 src/app/backup.js 抽出）
  *
  * 只搬数据变换，不碰界面（按钮态 / toast / 弹窗留在 src/app/backup.js，那里经 BackupPack 调用本模块）。
- * 把原先闭包里的 S.settings / Store 读取改成参数注入；版本戳由
- * tools/sync-version.mjs 注入（本文件与 store.ts 各持一处）。
+ * settings / 用户画像 / 故事列表由调用方传参；版本戳读 src/core/version.ts 的 APP_VERSION（构建期注入，
+ * tools/sync-version.mjs 只负责同步 package.json 与 README 的版本号）。
  *
  * 依赖：tree（clone）/ store / zip 都是静态 import——模块图是 DAG，不存在循环。
  */
@@ -22,6 +22,9 @@ const IMAGE_EXT: Record<string, string> = {
   'image/gif': 'gif', 'image/avif': 'avif', 'image/svg+xml': 'svg',
 };
 
+// 带 apiKey 的六组模型配置：导出剥 Key、导入补回本机 Key 都按这份清单走
+const KEY_ROLES = ['chat', 'painter', 'scribe', 'draft', 'image', 'video'];
+
 // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
 // 模型库 profiles[] 同样走这把刀（默认不带 Key 的语义不变，只是覆盖新增的 profiles）
 // sidecar.token 是本机服务的连接凭据，不随备份走——它与 API Key 不同，
@@ -30,7 +33,7 @@ function buildBackupPack(settings: any, userProfile: any[], stories: any[], stri
   const s = clone(settings);
   if (s.sidecar && typeof s.sidecar === 'object') s.sidecar.token = '';
   if (stripKeys) {
-    ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => { if (s[k]) s[k].apiKey = ''; });
+    KEY_ROLES.forEach(k => { if (s[k]) s[k].apiKey = ''; });
     if (Array.isArray(s.profiles)) s.profiles.forEach((p: any) => { if (p) p.apiKey = ''; });
   }
   return {
@@ -103,7 +106,7 @@ function restoreSecrets(prevSettings: any, incoming: any) {
   const prev = (prevSettings && typeof prevSettings === 'object') ? prevSettings : {};
   const next = incoming;
   if (!next || typeof next !== 'object') return next;
-  ['chat', 'painter', 'scribe', 'draft', 'image', 'video'].forEach(k => {
+  KEY_ROLES.forEach(k => {
     if (next[k] && !next[k].apiKey && prev[k] && prev[k].apiKey) next[k].apiKey = prev[k].apiKey;
   });
   if (next.sidecar && typeof next.sidecar === 'object') {

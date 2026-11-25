@@ -16,7 +16,7 @@
   // 全局默认（globalValue）、本对话覆盖（storyOverride）、合并（effectiveInfo）全部从表里取。
   // 加一个键 = 往表里加一行，四处判定自动跟上——不再维护「键名数组 + 四个 switch 清单」两套东西。
   // trigger（出图时机）已下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错。
-  // 工具开关键（仅聊天用）：false = 本对话关掉（默认），true = 跟随全局可用性（sidecar / feature 由运行时求交）。
+  // 工具开关键（仅聊天用）：false = 本对话关掉；true = 打开（仍与全局可用性求交）；不写 = 跟随全局默认。
   // 「测试中」四类（image / schedule / email / payment）默认关；memory 默认开（基础记忆召回）。
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
 

@@ -1,15 +1,15 @@
 /*
- * 无限阅读 · 分支树数据层（第一期：数据模型 + 投影）
+ * 无限阅读 · 分支树数据层（数据模型 + 投影 + 任意节点继续 / 分叉）
  *
  * 职责：story.tree 是回合树的**唯一真源**；story.log / messages / scenes / world / …
  * 全是「根 → head」这条路径的派生物。
  *  - 纯逻辑：不碰 DOM、不碰 Storage、不联网；Node 里 require 就能测
  *  - 零依赖：以 ES module 导出，调用方静态 import
  *
- * 另承载全模块共用的纯工具（genId / clone / sleep / plainReply）：
+ * 另承载全模块共用的纯工具（genId / clone / sleep / plainReply / stripUserAction）：
  * 零依赖、全模块可引用的小函数收敛在这里一处实现，其它模块只调用、不再各写一份。
  *
- * API（本期）：
+ * API：
  *   ensure(story)            建树 / 校验（幂等）；无树的旧档降级建线性链（不丢当前 log / messages）
  *   begin(story)             回合开始：记下 logMark（在 pushLog 之前调）
  *   commit(story, opts)      回合成功落一个 turn 节点，head 前移
@@ -56,7 +56,7 @@ import type { Story, StoryTree } from './schema.ts';
 
   // 深拷贝的唯一口径：浏览器 / Node 用 structuredClone（不丢 undefined / Date、
   // 循环引用不炸）；环境没有或内容不可克隆（函数等）时回落 JSON 往返。
-  // State / msgSnap 等一律用 clone，不要再各写 JSON.parse(JSON.stringify(x))。
+  // 树内（State / msgSnap 等）一律用 clone，不要再各写 JSON 往返。
   function clone(x) {
     if (x == null || typeof x !== 'object') return x;
     if (typeof structuredClone === 'function') {
@@ -162,7 +162,7 @@ import type { Story, StoryTree } from './schema.ts';
       sealed: !!opts.sealed,
       turn: +opts.turn || 0,
       ts: opts.ts || Date.now(),
-      meta: opts.meta || {},           // 预留给第二期（模型 / 备注等）
+      meta: opts.meta || {},           // 回合元数据：meta.model 模型名、meta.logFrom 本回合 log 起点（见 commit / seal）
     };
   }
 
@@ -182,7 +182,6 @@ import type { Story, StoryTree } from './schema.ts';
 
   /* ---------------- action 还原 ---------------- */
 
-  const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
   const KIND_MARK_RE = /^（(做|说|导演)）/;
 
   // 玩家文本剥壳的唯一实现（两档，别再各写一份正则）：
@@ -331,7 +330,8 @@ import type { Story, StoryTree } from './schema.ts';
       turnNodes[j].sid = (j === turnNodes.length - 1) ? root.sid : null;
     }
 
-    // 窗口：head 按的成对规则算；更早的节点记 0（旧档的链就等于现存窗口，历史窗口已不可考）
+    // 窗口：head 按成对规则算、msgFloor 取 0；更早的节点沿用 makeNode 的默认值 0
+    // （旧档的链就等于现存窗口，历史窗口已不可考）
     const head = tree.nodes[tree.head];
     if (head.kind === 'turn') {
       const w = computeWindow(tree, head, messages);
@@ -340,10 +340,6 @@ import type { Story, StoryTree } from './schema.ts';
     } else {
       root.msgFloor = 0;
       root.msgSnap = messages.length ? clone(messages) : null;
-    }
-    for (const id of Object.keys(tree.nodes)) {
-      const nd = tree.nodes[id];
-      if (nd !== head && nd.kind === 'turn') nd.msgFloor = 0;
     }
     return tree;
   }
@@ -687,4 +683,4 @@ import type { Story, StoryTree } from './schema.ts';
     siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
     pushLate, imageIdsOf,
   };
-  export { genId, clone, sleep, plainReply, stripUserContent, stripUserAction, Tree };
+  export { genId, clone, sleep, plainReply, stripUserAction, Tree };
