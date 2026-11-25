@@ -554,6 +554,13 @@ import { APP_VERSION } from './version.ts';
 
   /* ---------------- story v2 ---------------- */
 
+  /* 故事模式归一（唯一口径）：原「扮演」'rp' 已并入「聊天」'chat'。
+   * 只在读取 / 导入时归一（懒迁移），不批量改写存档；characterCard 等其余字段原样保留。
+   * 缺省值仍由 newStory / 索引兜底为 'choice'，这里只处理退役的模式名。 */
+  function normalizeMode(mode) {
+    return mode === 'rp' ? 'chat' : mode;
+  }
+
   function newStory(opts): Story {
     opts = opts || {};
     const now = Date.now();
@@ -666,6 +673,14 @@ import { APP_VERSION } from './version.ts';
       what: '本对话偏好 prefs 透传并清洗（丢未知键、剥凭证）；无 prefs 不长出 prefs',
       when: ({ raw }) => !!(raw.prefs && typeof raw.prefs === 'object'),
       apply: (c) => { c.out.prefs = sanitizePrefsSafe(c.raw.prefs); },
+    },
+    // 旧「扮演」并入「聊天」：读档 / 导入时 'rp' 统一看成 'chat'，角色卡与历史都不动。
+    // 懒迁移——原档要等下一次正常保存才落成新值，启动时不做批量改写。
+    {
+      since: 'v0.13',
+      what: "故事模式 'rp' 归一为 'chat'（原「扮演」并入「聊天」）",
+      when: () => true,
+      apply: (c) => { c.out.mode = normalizeMode(c.out.mode); },
     },
   ];
 
@@ -794,7 +809,10 @@ import { APP_VERSION } from './version.ts';
 
   function listIndex() {
     const a = readKV(KEYS.index);
-    return Array.isArray(a) ? a : [];
+    const arr = Array.isArray(a) ? a : [];
+    // 书架只读索引：旧条目里的 'rp' 在这里就地归一（返回新对象，不改写已存索引；
+    // 下一次 saveStory / ensureIndexComplete 落盘时自然写回 'chat'）。
+    return arr.map(it => (it && it.mode === 'rp') ? Object.assign({}, it, { mode: 'chat' }) : it);
   }
   function listStories() {
     return listIndex().slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -857,7 +875,7 @@ import { APP_VERSION } from './version.ts';
   function buildStoryPack(st: Story, kind: string, images: any[], settings: any): StoryPack {
     const pack: StoryPack = {
       format: 'ir-story', schema: PACK_SCHEMA, kind: kind, app: '无限阅读 v' + APP_VERSION,   // 构建注入
-      title: st.title, premise: st.premise, mode: st.mode, styleTone: st.styleTone || '',
+      title: st.title, premise: st.premise, mode: normalizeMode(st.mode), styleTone: st.styleTone || '',
       world: st.world, styleCard: st.styleCard || null, rollingStyle: st.rollingStyle || null,
       characterCard: st.characterCard || null,
       createdAt: st.createdAt, updatedAt: st.updatedAt,
@@ -899,7 +917,8 @@ import { APP_VERSION } from './version.ts';
       updatedAt: story.updatedAt,
       thumb: storyThumb(story),
       // 索引条目扩充——书架只读索引，不再对每个故事 loadStory
-      mode: story.mode || 'choice',
+      // 模式写归一后的值：旧「扮演」故事一旦保存，索引里也不再出现 'rp'
+      mode: normalizeMode(story.mode || 'choice'),
       turn: +story.turn || 0,
       titleAuto: story.titleAuto === true,
       snippet: storySnippet(story),   // 每次重算（切兄弟 / 重试后会变，不缓存）
@@ -1004,7 +1023,7 @@ import { APP_VERSION } from './version.ts';
       out.push(Object.assign({}, it, {
         // 显示兜底文案不回写存档：这里只补索引里的展示字段
         title: it.title || st.title || '',
-        mode: st.mode || 'choice',
+        mode: normalizeMode(st.mode || 'choice'),
         turn: +st.turn || 0,
         titleAuto: st.titleAuto === true,
         snippet: storySnippet(st),
@@ -1216,6 +1235,7 @@ import { APP_VERSION } from './version.ts';
       genId,
       defaultWorld, defaultRollingStyle, defaultSettings, defaultUi, seedWorldFromPremise,
       migrateSettings, migrateProfiles, migrateStory, storyTooOld, storyPackTooOld, serializeStory,
+      normalizeMode,
       buildStoryPack, sanitizePrefsSafe,
       newStory,
       loadSettings, saveSettings,

@@ -140,7 +140,8 @@ function storyFromPack(obj: any) {
   const st = Store.newStory({
     title: (obj.title || '导入的故事') + '（导入）',
     premise: obj.premise || '',
-    mode: obj.mode || 'choice',
+    // 旧包里的 'rp'（原「扮演」）读成 'chat'；其余字段（含 characterCard）原样回填
+    mode: Store.normalizeMode(obj.mode || 'choice'),
     styleTone: obj.styleTone || '',
     world: obj.world || {},
     styleCard: obj.styleCard || null,

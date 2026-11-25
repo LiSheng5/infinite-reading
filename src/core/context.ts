@@ -83,12 +83,17 @@
   // chat（智能体）不再下发做 / 说 / 导演，因此 chat 的系统提示不附这条说明（防模型复述标记）。
   const KIND_MARK_HINT_SHORT = '输入前的（做）/（说）/（导演）是输入类型标记（分别是行动 / 说的话 / 世界里的既成事实），不要复述标记本身。';
 
-  // 切换兼容：rp 存档切成 chat 后，历史用户消息里可能带着内层标记，而 chat 的系统提示
-  // 不再解释它们（模型会照着复述）——组装 chat 历史时剥掉 [玩家行动] 之后紧跟的那一个标记。
+  // 切换兼容：旧「扮演」存档读成「聊天」后，历史用户消息里可能带着内层标记，而聊天的系统提示
+  // 不再解释它们（模型会照着复述）——组装聊天历史时剥掉 [玩家行动] 之后紧跟的那一个标记。
   // 外层 [玩家行动] 前缀保持不变；正文中间出现的（导演）等不动。
   function stripKindMarker(content) {
     const s = String(content == null ? '' : content);
     return s.replace(/(\[玩家行动\] )（(?:做|说|导演)）/, '$1');
+  }
+
+  // 聊天类：'chat' 与尚未归一的旧 'rp'（做 / 说 / 导演只属于剧情，聊天一律不带内层标记）
+  function isChatKind(mode) {
+    return mode === 'chat' || mode === 'rp';
   }
 
   function systemForMode(mode, opts?) {
@@ -1741,9 +1746,9 @@
       let content = m.content;
       if (m.role === 'assistant') {
         if (ctx.mode === 'choice') content = toChineseHistory(content);
-        else if (ctx.mode === 'chat' || ctx.mode === 'rp') content = toPlainHistory(content);
-      } else if (m.role === 'user' && ctx.mode === 'chat') {
-        // 切换兼容：rp 存档切成 chat 后，历史用户消息里的内层标记要剥掉
+        else if (isChatKind(ctx.mode)) content = toPlainHistory(content);
+      } else if (m.role === 'user' && isChatKind(ctx.mode)) {
+        // 聊天类：旧「扮演」存档的历史用户消息里可能带内层标记，一律剥掉
         content = stripKindMarker(content);
       }
       out.push({ role: m.role, content });
@@ -1811,7 +1816,7 @@
     out.push({
       role: 'user',
       content: (preUser.length ? preUser.join('\n\n') + '\n\n' : '')
-        + (ctx.mode === 'chat' ? stripKindMarker(action) : action),   // chat 不带内层标记
+        + (isChatKind(ctx.mode) ? stripKindMarker(action) : action),   // 聊天类不带内层标记
     });
     close('user', from);
     return out;

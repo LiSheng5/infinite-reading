@@ -243,6 +243,10 @@ export interface StoryPrefs {
 
 /* ================================ 故事 ==================================== */
 
+/** 故事模式：'choice' = 剧情，'chat' = 聊天（助手 + 可选角色卡）。
+ *  旧档案 / 旧导出包里的 'rp'（原「扮演」）在读取时归一为 'chat'，见 Store.normalizeMode。 */
+export type StoryMode = 'choice' | 'chat';
+
 export interface Story {
   schema: number;           // 当前 = 3
   id: string;
@@ -250,7 +254,7 @@ export interface Story {
   titleAuto: boolean;
   titleGen: number;
   premise: string;
-  mode: string;             // 'choice' | 'chat' | 'rp'
+  mode: StoryMode;
   createdAt: number;
   updatedAt: number;
   log: LogEntry[];
@@ -303,7 +307,7 @@ export interface StoryPack {
   app: string;
   title: string;
   premise: string;
-  mode: string;
+  mode: StoryMode | 'rp';   // 旧包可能仍是 'rp'（导入时归一为 'chat'；新导出一律写 'chat'）
   styleTone?: string;
   world: World;
   styleCard: StyleCard | null;

@@ -11,6 +11,7 @@
  *      （只忽略 fixture.mjs RULES_STORY 里同一份「注定会变」清单）；
  *   ③ 全量备份往返：backup-plain 的每个 story 归一 / 序列化稳定、重打包逐字段一致；
  *   ④ 当前形状：narration versions 补齐、prefs 清洗、设置归一与幂等；
+ *      旧「扮演」（mode='rp'）读档 / 导入 / 索引一律归一为 'chat'，角色卡与历史完整；
  *      过旧存档（schema < 3）与过旧导出包（schema < 2）明确拒绝，不半加载。
  *
  * 用法：node eval/schema-test.js（任一不过 → 退出码 1）
@@ -76,6 +77,15 @@ function normalizeStoryPack(p) {
   return o;
 }
 
+/* 旧「扮演」并入「聊天」：夹具里 mode='rp' 的档案读入后应为 'chat'。
+ * 往返 / 重打包比对时把原侧的 mode 按同一规则归一，其余字段仍严格逐字段一致。 */
+function withModeMigrated(obj) {
+  const o = JSON.parse(JSON.stringify(obj));
+  if (o.mode === 'rp') o.mode = 'chat';
+  if (Array.isArray(o.stories)) o.stories.forEach(s => { if (s && s.mode === 'rp') s.mode = 'chat'; });
+  return o;
+}
+
 /* ===================== ① 三份真实夹具过 schema 校验 ===================== */
 console.log('[1] 真实夹具过 IR.Schema 校验（类型以档案为准）');
 {
@@ -127,8 +137,13 @@ function part2() {
     const out = Store.buildStoryPack(reloaded, reloaded && reloaded.id ? 'full' : 'full', images, {});
     const problems = Schema.checkStoryPack(out);
     check(f + '：导出包过 schema 校验', problems.length === 0, problems.slice(0, 5).join(' | '));
-    const diffs = diffFields(normalizeStoryPack(pack), normalizeStoryPack(out), 'pack');
-    check(f + '：导入→还原→导出逐字段一致', saveOk && reloaded != null && diffs.length === 0,
+    if (pack.mode === 'rp') {
+      check(f + '：旧 rp 包读入后模式归一为 chat（导入 / 读回 / 再导出）',
+        st.mode === 'chat' && reloaded.mode === 'chat' && out.mode === 'chat',
+        'import=' + st.mode + ' load=' + reloaded.mode + ' export=' + out.mode);
+    }
+    const diffs = diffFields(withModeMigrated(normalizeStoryPack(pack)), normalizeStoryPack(out), 'pack');
+    check(f + '：导入→还原→导出逐字段一致（模式按归一口径）', saveOk && reloaded != null && diffs.length === 0,
       diffs.slice(0, 8).join(' | ') || ('save=' + saveOk));
     Store.deleteStory(st.id);
   }
@@ -149,9 +164,9 @@ function part3() {
     const m2 = Store.migrateStory(m);
     const idem = diffFields(JSON.parse(JSON.stringify(m)), JSON.parse(JSON.stringify(m2)), raw.title);
     if (idem.length) { allStable = false; details.push('幂等失败 ' + idem[0]); }
-    // 与原档逐字段一致（fixture 由真实存盘路径产出，已归一）
+    // 与原档逐字段一致（fixture 由真实存盘路径产出，已归一；旧 rp 只按「模式归一」这一处不同）
     const same = diffFields(
-      JSON.parse(JSON.stringify(raw)),
+      withModeMigrated(raw),
       JSON.parse(JSON.stringify(m)),
       raw.title
     );
@@ -161,7 +176,7 @@ function part3() {
   check('backup 每个 story 迁移后与原档逐字段一致', allSame, details.join(' || ').slice(0, 300));
   // 重打包：与原备份逐字段一致（忽略 fixture.mjs RULES_BACKUP 的 volatile 清单）
   const repack = BackupPack.buildBackupPack(backup.settings, backup.userProfile, backup.stories.map(s => Store.migrateStory(s)), true);
-  const a = JSON.parse(JSON.stringify(backup));
+  const a = withModeMigrated(backup);   // 旧 rp 故事重打包后写 'chat'，原侧按同一口径比
   const b = JSON.parse(JSON.stringify(repack));
   delete a.exportedAt; delete b.exportedAt;
   delete a.app; delete b.app;
@@ -218,6 +233,35 @@ function part4() {
   const mAgain = Store.migrateStory(m);
   const mIdem = diffFields(m, mAgain, 'story');
   check('当前形状归一幂等（再归一次逐字段不变）', mIdem.length === 0, mIdem.slice(0, 3).join(' || '));
+
+  // —— 4.1b 旧「扮演」并入「聊天」：导出包 / 存档 / 索引都归一，卡与历史完整 ——
+  const rpPack = load('story-rp-full.irstory.json');
+  const rpImported = BackupPack.storyFromPack(rpPack);
+  check('旧 rp 导出包：导入后 mode === chat', rpImported.mode === 'chat', rpImported.mode);
+  check('旧 rp 导出包：角色卡逐字段完整',
+    diffFields(rpPack.characterCard, rpImported.characterCard, 'characterCard').length === 0);
+  check('旧 rp 导出包：历史 / 消息 / 分支树条数完整',
+    rpImported.log.length === rpPack.log.length
+      && rpImported.messages.length === rpPack.messages.length
+      && !!rpImported.tree === !!rpPack.tree,
+    'log=' + rpImported.log.length + '/' + rpPack.log.length
+      + ' messages=' + rpImported.messages.length + '/' + rpPack.messages.length);
+
+  // 存档路径：落盘时仍可能是旧值，读回才归一（懒迁移），索引随保存写成 chat
+  const legacyRp = Store.newStory({ id: 'legacy-rp-io', title: '旧扮演', mode: 'rp' });
+  legacyRp.characterCard = rpPack.characterCard;
+  legacyRp.log = rpPack.log;
+  legacyRp.messages = rpPack.messages;
+  const savedRp = Store.saveStory(legacyRp);
+  const loadedRp = Store.loadStory('legacy-rp-io');
+  const idxRp = Store.listIndex().find(x => x && x.id === 'legacy-rp-io');
+  check('旧 rp 存档：读回后 mode === chat（懒迁移）', savedRp && !!loadedRp && loadedRp.mode === 'chat',
+    loadedRp && loadedRp.mode);
+  check('旧 rp 存档：角色卡 / 历史不丢',
+    !!loadedRp && diffFields(rpPack.characterCard, loadedRp.characterCard, 'characterCard').length === 0
+      && loadedRp.log.length === rpPack.log.length && loadedRp.messages.length === rpPack.messages.length);
+  check('旧 rp 存档：书架索引条目写成 chat', !!idxRp && idxRp.mode === 'chat', idxRp && idxRp.mode);
+  Store.deleteStory('legacy-rp-io');
 
   // —— 4.2 设置归一：provider 归一、video 控件折回、profiles 补 id ——
   const oldSettings = {
