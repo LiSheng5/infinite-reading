@@ -217,7 +217,7 @@ async function ensureGame(page) {
     return !!el && !el.classList.contains('hidden');
   });
   if (inGame) return;
-  await page.evaluate(() => window.__IR_TEST__.App.enterGame(true, { deferOpening: true }));
+  await page.evaluate(() => window.__IR_TEST__.App.enterGame(true));
   await page.waitForSelector('#screen-game:not(.hidden)', { timeout: 8000 });
   await sleep(400);
 }
@@ -348,7 +348,7 @@ async function seedStory(page) {
       await Store.flush();
 
       // 当前舞台停在最后画的第二张图（paint 里写了 lastBg）；换画动作再从第一张开始点
-      App.enterGame(true, { deferOpening: true });
+      App.enterGame(true);
       return {
         ok: true,
         head: st.tree.head,

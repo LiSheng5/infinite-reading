@@ -6,7 +6,7 @@
  * → ④ 测试连接（复用 ChatProviders 的 test，只读探测）→ 写入现有 S.settings.chat 完成接入。
  *
  * 既定口径：
- *   · 预设只预填 Base URL + 显示名，**永不预填 / 硬编码模型名**——模型名只来自 /models 或手填；
+ *   · 预设只预填 Base URL（聚合商另记运营方），**永不预填 / 硬编码模型名**——模型名只来自 /models 或手填；
  *   · 向导写入现有 S.settings.chat / connectionMode，不造平行存储；也可以直接在设置里填写
  *     （页脚「跳过，直接在设置里填写」）；
  *   · 聚合模式 = 走现成第三方聚合商（OpenRouter / 硅基流动）中转，不是自建网关：
@@ -20,13 +20,13 @@ import { matchAggregator, matchBaseUrlOption, vendorKeyUrl, vendorKeyName } from
 import { A, saveAll, toast } from './core.js';
 
   const S = A.state;
-  const { $, openModal, closeModal, irConfirm } = A;
+  const { $, openModal, closeModal, irConfirm, errorText } = A;
 
   const STEP_IDS = ['cw-step-1', 'cw-step-2', 'cw-step-3', 'cw-step-4'];
   // 本地模型（Ollama / LM Studio / vLLM）：不用 Key，第二步直接跳过
   const LOCAL_BASE_RE = /^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i;
 
-  // from = 这次向导从哪开的（settings = 设置页里点进来 / first-run = 首次启动）；
+  // from = 这次向导从哪开的（settings = 设置页里点进来 / first-run = 首次启动，在 openConnectWizard 里定）；
   // dirty = 本次打开后用户动过内容（预填不算）——关闭确认只拦「真的会丢东西」的场景
   const W = { step: 1, mode: '', via: '', base: '', from: 'first-run', dirty: false };
 
@@ -176,7 +176,7 @@ import { A, saveAll, toast } from './core.js';
       setTest(r.level, r.message);
     } catch (e) {
       // test() 本身不抛（失败也返回人话结果），这里只兜底意外异常
-      setTest('fail', '测试失败：' + ((e && e.message) ? e.message : String(e)));
+      setTest('fail', '测试失败：' + errorText(e));
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = oldText; }
     }
@@ -231,14 +231,14 @@ import { A, saveAll, toast } from './core.js';
 
   /* ---------------- 打开 / 绑定 ---------------- */
 
-  function openConnectWizard(from) {
+  function openConnectWizard() {
     W.mode = '';
     W.via = '';
     W.step = 1;
     W.base = '';
     W.dirty = false;
     // 来源：设置页点进来的（关掉向导就回到设置）/ 首次启动自动弹的（跳过才要顺路开设置）
-    W.from = from || (A.modalStack.indexOf('modal-settings') >= 0 ? 'settings' : 'first-run');
+    W.from = A.modalStack.indexOf('modal-settings') >= 0 ? 'settings' : 'first-run';
     // 重新打开时预填现有配置（方便改；模型名照旧只回显已填的值，不预置清单）
     const chat = S.settings.chat || {};
     const keyEl = $('#cw-key'); if (keyEl) keyEl.value = chat.apiKey || '';
@@ -259,8 +259,7 @@ import { A, saveAll, toast } from './core.js';
     }
     showPickPanels();
     openModal('modal-connect');
-    goStep(1);
-    renderEcho();
+    goStep(1);        // 内部已调 renderEcho
     renderStep1Hint();
   }
 

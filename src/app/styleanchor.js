@@ -21,7 +21,7 @@ import { A, saveAll, toast } from './core.js';
     opts = opts || {};
     S.anchor = {
       onDone: typeof opts.onDone === 'function' ? opts.onDone : null,
-      batch: 0, tried: [], candidates: [], pickedIdx: -1, card: null,
+      batch: 0, tried: [], candidates: [], pickedIdx: -1,
       busy: false, doneFired: false,
     };
     const card = S.story.styleCard;
@@ -37,7 +37,7 @@ import { A, saveAll, toast } from './core.js';
     runAnchorBatch();
   }
 
-  // 关闭 = 结束锚定（锁定 / 跳过 / ✕ / Esc 都走这里）；开局场景下继续开场
+  // 关闭 = 结束锚定（锁定 / 跳过 / ✕ / Esc 都走这里）；有 onDone 就回调一次
   function closeAnchor() {
     const a = S.anchor;
     S.anchor = null;
@@ -122,17 +122,17 @@ import { A, saveAll, toast } from './core.js';
       S.anchor.batch += 1;
       S.anchor.candidates = styles.map(s => ({
         keywords: s.keywords || [], promptEn: s.promptEn || '', alt: s.alt || '',
-        src: '', loading: true, failed: false,
+        src: '', failed: false,
       }));
       for (const c of S.anchor.candidates) S.anchor.tried = S.anchor.tried.concat(c.keywords);
       renderAnchorGrid();
       // 4 张并发试画；回调里按住候选对象本身，批次被替换后不再更新界面
       S.anchor.candidates.forEach(cand => {
         paintCandidate(cand.promptEn).then(src => {
-          cand.src = src; cand.loading = false;
+          cand.src = src;
           if (S.anchor && S.anchor.candidates.indexOf(cand) >= 0) renderAnchorGrid();
         }).catch(() => {
-          cand.loading = false; cand.failed = true;
+          cand.failed = true;
           if (S.anchor && S.anchor.candidates.indexOf(cand) >= 0) renderAnchorGrid();
         });
       });
@@ -158,7 +158,6 @@ import { A, saveAll, toast } from './core.js';
     try {
       const res = await painterAnchorCompose({ mode: 'card', picked });
       if (!res.card) throw new Error('画师没有给出设定卡');
-      S.anchor.card = res.card;
       fillAnchorCardForm(res.card);
       $('#anchor-card-preview').src = picked.src;
       $('#ac-picked-kw').textContent = '选定画风：' + ((picked.keywords || []).slice(0, 4).join(', ') || picked.alt || '');
@@ -211,7 +210,7 @@ import { A, saveAll, toast } from './core.js';
       const res = await painterAnchorCompose({
         mode: 'cardchat', currentCard: readAnchorCardForm(), userText: text,
       });
-      if (res.card) { S.anchor.card = res.card; fillAnchorCardForm(res.card); }
+      if (res.card) fillAnchorCardForm(res.card);
       $('#ac-status').textContent = res.reply || '已更新设定卡。';
     } catch (e) {
       $('#ac-status').textContent = '';

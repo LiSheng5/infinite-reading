@@ -12,28 +12,26 @@ import { A, renderChat, saveAll, toast } from './core.js';
   const S = A.state;
   const { $, Store, irConfirm, persistSettings, miniBtn, clone } = A;
 
-  const P = () => Prefs;
-
   // 「本对话覆盖 / 跟随全局」状态标签：纯文本 + 勾选图标（图标用元素构造，不拼 innerHTML）
   function setPrefBadge(badge, over) {
     if (over) { badge.textContent = '本对话覆盖'; return; }
     badge.replaceChildren(document.createTextNode('跟随全局'), A.iconEl('check', 'ic-r'));
   }
 
+  function badgeEl(over) {
+    const b = document.createElement('span');
+    b.className = 'prefs-badge' + (over ? ' over' : '');
+    setPrefBadge(b, over);
+    return b;
+  }
+
   /* ================= 全局设置：分组导航 ================= */
 
-  // fieldset → 分组：按 legend 归类（控件 id 不动，只是搬进分组面板）
- // 「推进模式 / 存档点 / 世界状态卡」三组已迁入本对话设置面板（#prefs-story），
- // 不再进全局设置分组。
-  // 分组标题（导航标签由设置屏组件自己渲染；这里只给旧入口的兜底文案用）
-  const GROUP_TITLES = {
-    'g-models': '模型',
-    'g-subs': '辅助模型',
-    'g-image': '生图与画风',
-    'g-tools': '工具与服务',
-    'g-data': '数据',
-    'g-look': '外观',
-  };
+  /* fieldset → 分组：按 data-group 归类（控件 id 不动，只是搬进分组面板）。
+   * 合法分组名只此一份；导航标签由设置屏组件自己渲染（SettingsScreen.svelte 的 g.title），
+   * 这里只用它判断「这个分组名认不认识」。
+   * 「推进模式 / 存档点 / 世界状态卡」三组在本对话设置面板（#prefs-story），不在这里。 */
+  const SETTINGS_GROUPS = new Set(['g-models', 'g-subs', 'g-image', 'g-tools', 'g-data', 'g-look']);
 
   function narrowSettings() {
     return typeof window !== 'undefined' && window.matchMedia
@@ -71,7 +69,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function openSettingsGroup(group) {
     const shell = $('#set-shell');
     if (!shell) return;
-    const g = GROUP_TITLES[group] ? group : 'g-models';
+    const g = SETTINGS_GROUPS.has(group) ? group : 'g-models';
     document.querySelectorAll('#set-panels .set-panel').forEach(sec => {
       sec.classList.toggle('hidden', sec.dataset.group !== g);
     });
@@ -198,9 +196,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return (S.settings.profiles || []).find(p => p && p.id === id) || null;
   }
 
-  // 模型库用量：索引条目现在带 profileId，遍历一次索引就够。
-  // 以前是「每个模型都把全部故事 loadStory 一遍」（O(模型数 × 故事数)），档一多打开设置面板就明显卡。
-  // 老索引没有 profileId 这一列时，由书架渲染时调用的 Store.ensureIndexComplete() 补齐一次。
+  // 模型库用量：索引条目带 profileId，遍历一次索引就够（不按模型逐个 loadStory）。
+  // 老索引没有 profileId 这一列，下面顺手用 Store.ensureIndexComplete() 补齐一次。
   function profileUsage() {
     const m = new Map();
     try {
@@ -429,11 +426,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     label.className = 'prefs-label';
     label.textContent = labelText;
     head.appendChild(label);
-    const badge = document.createElement('span');
     const over = prefHas(path);
-    badge.className = 'prefs-badge' + (over ? ' over' : '');
-    setPrefBadge(badge, over);
-    head.appendChild(badge);
+    head.appendChild(badgeEl(over));
     if (over) {
       head.appendChild(miniBtn('重置', () => {
         delPref(path);
@@ -483,8 +477,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   // 写完 prefs 后的即时生效：布局 / 渲染 / 提示
   function applyPrefsSideEffects(path) {
-    if (!path || path.indexOf('ui') === 0) A.applyLayout();
-    if (!path || path === 'choices' || path === 'showReasoning') renderChat();
+    if (path.indexOf('ui.') === 0) A.applyLayout();
+    if (path === 'choices' || path === 'showReasoning') renderChat();
   }
 
   function modelRow() {
@@ -496,16 +490,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
         opts.push([p.id, (p.name || '（未命名）') + ' · ' + (p.model || p.id)]);
       });
       const rawPid = (S.story.prefs && S.story.prefs.profileId) || '';
-      const info = P().effectiveInfo(S.settings, S.story, 'profileId');
-      let cur = rawPid && !info.missing ? rawPid : '';
-      if (rawPid && info.missing) {
-        opts.push([rawPid, '（原对话使用的模型已不存在）']);
-        cur = rawPid;
-      }
+      const info = Prefs.effectiveInfo(S.settings, S.story, 'profileId');
+      const cur = rawPid;
+      if (rawPid && info.missing) opts.push([rawPid, '（原对话使用的模型已不存在）']);
       wrap.appendChild(sel(opts, cur, (v) => {
         if (v) {
           setPref('profileId', v);
-          setPref('profileLabel', P().profileLabel(S.settings, v));
+          setPref('profileLabel', Prefs.profileLabel(S.settings, v));
         } else {
           delPref('profileId');
           delPref('profileLabel');
@@ -523,7 +514,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       }
       const note = document.createElement('p');
       note.className = 'hint';
-      const resolved = P().resolveChatCfg(S.settings, S.story);
+      const resolved = Prefs.resolveChatCfg(S.settings, S.story);
       note.textContent = '当前生效：' + (resolved.cfg.model || '（还没填模型）') + '（从下一条消息起生效）';
       wrap.appendChild(note);
       return wrap;
@@ -534,7 +525,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return prefRow('choices', '选项显示', () => sel([
       ['tray', '收在「灵感」里'],
       ['always', '始终内联在旁白下'],
-    ], P().effective(S.settings, S.story, 'choices'), (v) => {
+    ], Prefs.effective(S.settings, S.story, 'choices'), (v) => {
       setPref('choices', v); saveAll(); renderStoryPrefs(); renderChat();
     }, 'p-choices'), '');
   }
@@ -542,7 +533,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function showReasoningRow() {
     return prefRow('showReasoning', '显示思考过程', () => chk(
       '展示深度思考链（模型返回 reasoning_content 时）',
-      P().effective(S.settings, S.story, 'showReasoning'),
+      Prefs.effective(S.settings, S.story, 'showReasoning'),
       (v) => { setPref('showReasoning', v); saveAll(); renderStoryPrefs(); renderChat(); },
       'p-show-reasoning',
     ), '');
@@ -582,10 +573,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     label.textContent = '工具开关';
     head.appendChild(label);
     const over = prefHas('tools');
-    const badge = document.createElement('span');
-    badge.className = 'prefs-badge' + (over ? ' over' : '');
-    setPrefBadge(badge, over);
-    head.appendChild(badge);
+    head.appendChild(badgeEl(over));
     if (over) {
       head.appendChild(miniBtn('重置', () => {
         delPref('tools');
@@ -594,18 +582,19 @@ import { A, renderChat, saveAll, toast } from './core.js';
       }));
     }
     box.appendChild(head);
-    const tools = P().effective(S.settings, S.story, 'tools');
+    const tools = Prefs.effective(S.settings, S.story, 'tools');
+    const pt = A.proposalToolsAvailable();
     const avail = {
       image: true,
       memory: true,
       schedule: !!A.scheduleToolsAvailable(),
-      email: !!(A.proposalToolsAvailable && A.proposalToolsAvailable().email),
-      payment: !!(A.proposalToolsAvailable && A.proposalToolsAvailable().payment),
+      email: !!pt.email,
+      payment: !!pt.payment,
     };
     const LABELS = { image: '生图', memory: '记忆', schedule: '定时', email: '邮件', payment: '下单' };
     // 「测试中」四类（生图 / 定时 / 邮件 / 下单）标注测试中；关着的再缀「本对话已关」
     const TESTING = { image: true, schedule: true, email: true, payment: true };
-    P().TOOL_KEYS.forEach(k => {
+    Prefs.TOOL_KEYS.forEach(k => {
       if (!avail[k]) return;   // 只显示全局可用的
       const tags = [];
       if (TESTING[k]) tags.push('测试中');
@@ -626,7 +615,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function scheduleRow() {
     return prefRow('tools.schedule', '定时主动', () => chk(
       '允许模型主动安排定时联系（仍需在「全局设置 · 定时」里确认每条安排）',
-      P().effective(S.settings, S.story, 'tools').schedule,
+      Prefs.effective(S.settings, S.story, 'tools').schedule,
       (v) => { setPref('tools.schedule', v); saveAll(); renderStoryPrefs(); },
       'p-schedule',
     ), '');
@@ -649,18 +638,18 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const box = document.createElement('div');
     box.className = 'prefs-row';
     box.appendChild(prefRow('ui.layout', '页面布局', () => sel(
-      tierOptions(P().LAYOUT_VALUES, LAYOUT_LABELS),
-      P().effective(S.settings, S.story, 'ui').layout, (v) => {
+      tierOptions(Prefs.LAYOUT_VALUES, LAYOUT_LABELS),
+      Prefs.effective(S.settings, S.story, 'ui').layout, (v) => {
         setPref('ui.layout', v); saveAll(); renderStoryPrefs(); A.applyLayout();
       }, 'p-layout'), ''));
     box.appendChild(prefRow('ui.splitRatio', '双栏比例', () => {
       const s = document.createElement('input');
       s.id = 'p-split';
       s.type = 'range';
-      s.min = String(P().SPLIT_MIN); s.max = String(P().SPLIT_MAX); s.step = '0.02';
-      s.value = String(P().effective(S.settings, S.story, 'ui').splitRatio || P().SPLIT_DEFAULT);
+      s.min = String(Prefs.SPLIT_MIN); s.max = String(Prefs.SPLIT_MAX); s.step = '0.02';
+      s.value = String(Prefs.effective(S.settings, S.story, 'ui').splitRatio || Prefs.SPLIT_DEFAULT);
       s.oninput = () => {
-        setPref('ui.splitRatio', P().clampSplitRatio(+s.value));
+        setPref('ui.splitRatio', Prefs.clampSplitRatio(+s.value));
         A.applyLayout();
       };
       s.onchange = () => { saveAll(); renderStoryPrefs(); };
@@ -668,7 +657,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }, '双击分隔条恢复 1:1。'));
     box.appendChild(prefRow('ui.imageCollapsed', '舞台', () => chk(
       '收起画面（聊天占满）',
-      P().effective(S.settings, S.story, 'ui').imageCollapsed,
+      Prefs.effective(S.settings, S.story, 'ui').imageCollapsed,
       (v) => { setPref('ui.imageCollapsed', v); saveAll(); renderStoryPrefs(); A.applyLayout(); },
       'p-image-collapsed',
     ), ''));
@@ -678,15 +667,15 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function layoutChatRow() {
     const box = document.createElement('div');
     box.className = 'prefs-row';
-    const ui = P().effective(S.settings, S.story, 'ui');
+    const ui = Prefs.effective(S.settings, S.story, 'ui');
     box.appendChild(prefRow('ui.fontScale', '字号', () => sel(
-      tierOptions(Object.keys(P().FONT_SCALE), FONT_LABELS),
+      tierOptions(Object.keys(Prefs.FONT_SCALE), FONT_LABELS),
       ui.fontScale, (v) => { setPref('ui.fontScale', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-font'), ''));
     box.appendChild(prefRow('ui.width', '内容宽度', () => sel(
-      tierOptions(Object.keys(P().CONTENT_WIDTH), WIDTH_LABELS),
+      tierOptions(Object.keys(Prefs.CONTENT_WIDTH), WIDTH_LABELS),
       ui.width, (v) => { setPref('ui.width', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-width'), ''));
     box.appendChild(prefRow('ui.density', '密度', () => sel(
-      tierOptions(Object.keys(P().DENSITY), DENSITY_LABELS),
+      tierOptions(Object.keys(Prefs.DENSITY), DENSITY_LABELS),
       ui.density, (v) => { setPref('ui.density', v); saveAll(); renderStoryPrefs(); A.applyLayout(); }, 'p-density'), ''));
     return box;
   }
@@ -704,7 +693,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       return;
     }
     const mode = S.story.mode || 'choice';
-    const visible = P().visibleFor(mode);
+    const visible = Prefs.visibleFor(mode);
     const modeLabel = { choice: '剧情', chat: '聊天' }[mode] || '剧情';
     const head = document.createElement('p');
     head.className = 'hint';
@@ -713,8 +702,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
     if (visible.has('model')) body.appendChild(modelRow());
     if (visible.has('style')) body.appendChild(styleRow());
-    // 推进模式（s-story-mode）与角色卡（btn-edit-card）已并入下面的「故事数据」区（#prefs-story），
- // 覆盖行里不再另出 p-mode / p-card-open。
+    // 推进模式（s-story-mode）与角色卡（btn-edit-card）在下面的「故事数据」区（#prefs-story）
     if (visible.has('choices')) body.appendChild(choicesRow());
     if (visible.has('showReasoning')) body.appendChild(showReasoningRow());
     if (visible.has('tools')) body.appendChild(toolsRows());
@@ -728,8 +716,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!S.story) { toast('先打开一个对话'); return; }
     storyPanelOpen();   // 回到一级视图 + 对账判变
     renderStoryPrefs();
-    // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新——
- // 迁入面板后它不再等全局设置打开才画
+    // 「故事数据」区（推进模式 / 存档点 / 世界状态卡）随面板打开刷新
     A.renderStoryPanels();
     A.renderSavepoints();
     A.renderInjectHint();
@@ -766,9 +753,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   A.reg({
-    initSettingsNav, openSettingsGroup, syncSettingsNav, syncAdvPanels,
-    revealSettingsBlock, gotoSettingsBlock,
-    renderModelProfiles, openProfileEditor, cancelProfileEditor, saveProfileFromEditor, deleteProfile,
+    initSettingsNav, openSettingsGroup, syncAdvPanels, gotoSettingsBlock,
+    renderModelProfiles,
     renderStoryPrefs, openStoryPrefs, closeStoryPrefs,
     bindPrefsUI,
   });

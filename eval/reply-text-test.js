@@ -100,7 +100,7 @@ const json = o => JSON.stringify(o);
 
 // 标题提示词：assistant 条目 → 去空白的纯文本
 function promptTextOf(content) {
-  const p = Titles.buildPrompt([{ role: 'assistant', content: content }], 'choice');
+  const p = Titles.buildPrompt([{ role: 'assistant', content: content }]);
   return p[1] && p[1].content;
 }
 

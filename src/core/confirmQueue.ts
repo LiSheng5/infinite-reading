@@ -42,4 +42,3 @@ function createConfirmQueue() {
 }
 
 export { createConfirmQueue };
-export type { ConfirmJob };

@@ -12,10 +12,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, irConfirm, fmtTime, miniBtn } = A;
+  const { $, Store, MODE_LABELS, IMAGE_ASPECTS, SCRIBE_UNCONFIGURED, irConfirm, fmtTime, miniBtn } = A;
 
   function syncSettingsToForm() {
-    A.renderLayoutHint();   // 布局项在 chat / rp 下要有「此模式没有画面区」的灰字说明
+    A.renderLayoutHint();   // 布局项在聊天模式下要有「此模式没有画面区」的灰字说明
     // 可选本地服务：这里只同步「怎么连它」（端口 + token）；额度 / 白名单等安全项由侧车 config.json 提供
     const sc = S.settings.sidecar || {};
     if ($('#s-sidecar-port')) $('#s-sidecar-port').value = sc.port || Sidecar.DEFAULT_PORT;
@@ -100,7 +100,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 生图适配器切换：三套提示 / 占位文字各一份（OpenAI 兼容 ↔ MiniMax 原生 ↔ ComfyUI 本地）
   function applyImageProviderHint() {
     const sel = $('#s-image-provider');
-    const v = !!sel && sel.value;
+    const v = sel ? sel.value : '';
     const mm = v === 'minimax-image', cy = v === 'comfyui';
     const hintO = $('#hint-image-openai'), hintM = $('#hint-image-minimax'), hintC = $('#hint-image-comfyui');
     if (hintO) hintO.classList.toggle('hidden', mm || cy);
@@ -130,7 +130,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       port: Number(($('#s-sidecar-port') || {}).value) || Sidecar.DEFAULT_PORT,
       token: (($('#s-sidecar-token') || {}).value || '').trim(),
     };
-    if (Sidecar) Sidecar.configure(S.settings.sidecar);
+    Sidecar.configure(S.settings.sidecar);
     S.settings.chat.provider = 'openai-compatible';
     S.settings.chat.baseUrl = $('#s-chat-base').value.trim();
     S.settings.chat.model = $('#s-chat-model').value.trim();
@@ -223,9 +223,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.settings.toolsEnabled = $('#s-tools-enabled').checked ? 'on' : 'off';
     S.settings.stylePreset = $('#s-style-preset').value;
     S.settings.styleCustom = $('#s-style-custom').value.trim();
- // 主「保存」只管全局设置。原「顺带落盘世界卡 / 推进模式」的收口随
- // 「当前故事」组迁入本对话设置面板而移除：
-    // 那两块现在就在面板里就地编辑——模式即时生效，世界卡走「保存世界卡」按钮。
+    // 主「保存」只管全局设置：剧情模式 / 世界卡在本对话设置面板里就地编辑
+    //（模式即时生效，世界卡走「保存世界卡」按钮），这里不顺手写它们
     saveAll();
     renderConnBadge();   // 状态行 / 聚合徽章 / 行内聚合提示跟着这次保存对账
     A.renderModelOverview();
@@ -357,11 +356,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 世界卡表单的「判变」账本：上次整画时对应的故事 id（换故事必须整画，同故事脏了不冲）
   let worldFormStoryId = null;
 
-  // 本对话设置面板的「判变」对账：重绘后让「保存世界卡」的禁用态跟表单一致
-  function syncStoryPanel() {
-    syncDirty();
-  }
-
   function renderStoryPanels() {
     const has = !!S.story;
     renderStylePanel();
@@ -375,11 +369,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     $('#memory-empty').classList.toggle('hidden', has);
     $('#memory-panels').classList.toggle('hidden', !has);
- syncStoryPanel(); // Svelte 面板对账「判变」（保存钮禁用态）
+    syncDirty();   // Svelte 面板对账「判变」（保存钮禁用态）
     if (!has) return;
     const w = S.story.world || {};
-    // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉
- // 换故事（表单记账的 story id 变了）照常整画。
+    // 表单改过没保存就不回填，防止回合重绘 / 打开全局设置把在编的世界卡冲掉；
+    // 换故事（表单记账的 story id 变了）照常整画
     const worldDirty = worldFormStoryId === S.story.id && worldFormChanged(w);
     if (!worldDirty) {
       worldFormStoryId = S.story.id;
@@ -392,7 +386,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       $('#w-rel-bonds').value = ((w.relationship || {}).bonds || []).join('\n');
       $('#w-rel-notes').value = (w.relationship || {}).notes || '';
     }
- // 世界状态卡摘要行（一级视图：地点 · 时间 · 人物 n 位 · 摘要 n 幕）
+    // 世界状态卡摘要行（一级视图：地点 · 时间 · 人物 n 位 · 摘要 n 幕）
     const sum = $('#world-summary');
     if (sum) {
       const chars = (w.characters || []).filter(c => c && c.name).length;
@@ -400,7 +394,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         + ' · 人物 ' + chars + ' 位 · 摘要 ' + ((S.story.summaries || []).length) + ' 幕';
     }
     // 书记员状态区分「未启用 / 未配置 / 失败 / 成功」——失败可归因（error 来自
-    // turn.js 写的 {tool:'scribe', error} 留痕；'未配置书记员模型' 两处同串，见 runScribe）。
+    // turn.js 写的 {tool:'scribe', error} 留痕；「未配置」用 A.SCRIBE_UNCONFIGURED 同一常量）。
     const sc = S.settings.scribe || {};
     let lastScribe = null;
     for (let i = (S.story.log || []).length - 1; i >= 0; i--) {
@@ -408,7 +402,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (e.type === 'tool' && e.tool === 'scribe') { lastScribe = e; break; }
     }
     $('#world-scribe-at').textContent = !sc.enabled ? '书记员未启用：世界卡由本地规则维护'
-      : (lastScribe && lastScribe.error === '未配置书记员模型') ? '书记员未配置模型：世界卡由本地规则维护（设置里补上模型与 Key）'
+      : (lastScribe && lastScribe.error === SCRIBE_UNCONFIGURED) ? '书记员未配置模型：世界卡由本地规则维护（设置里补上模型与 Key）'
       : (lastScribe && lastScribe.error) ? ('上次书记员任务失败（已退回本地规则）：' + String(lastScribe.error).slice(0, 60))
       : w.scribeAt ? ('上次书记员校对：' + new Date(w.scribeAt).toLocaleTimeString())
       : '尚未校对';
@@ -421,7 +415,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       d.textContent = '· ' + (e.tool || '') + '：' + (e.summary || '');
       tl.appendChild(d);
     });
-    syncStoryPanel();   // 回填后再对账一次（回填只在未判变时发生，这里兜住保存后的时序）
+    syncDirty();   // 回填后再对账一次（回填只在未判变时发生，这里兜住保存后的时序）
   }
 
   // 角色卡区块（聊天设置）：添加 / 编辑 / 移除。卡常驻系统提示词，开场白在加卡时进日志。
@@ -446,9 +440,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (rmBtn) rmBtn.classList.toggle('hidden', !card);
   }
 
-  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
- // 新面板里改「行卡」形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
-  // 向导 / 文本导入两处仍是表格形态；本对话面板用行卡形态。
+  // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注。
+  // 行卡形态（首行名字 + 在场/离场，下方三个全宽输入，右上角删除钮）；
+  // 向导 / 文本导入由 screens/modal/CharRows.svelte 承担，本对话面板用这里的行卡。
   let wCharEdInst = null;
   function wCharEd() {
     return wCharEdInst || (wCharEdInst = A.charEditor($('#w-characters'), [
@@ -457,10 +451,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
       { key: 'personality', label: '性格', placeholder: '性格' },
       { key: 'speech', label: '说话方式', placeholder: '说话方式' },
       { key: 'note', label: '备注', placeholder: '手改后书记员不覆盖' },
-    ], $('#btn-w-char-add'), { variant: 'card' }));
+    ], $('#btn-w-char-add')));
   }
 
-  // 表单与当前世界卡是否不一致：modal「保存」用它决定要不要顺带落盘世界卡（没改就不写，避免误锁备注）
+  // 表单与当前世界卡是否不一致：「保存世界卡」钮的禁用态与判变都读它
   function worldFormChanged(w) {
     w = w || {};
     const rel = w.relationship || {};
@@ -487,10 +481,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return false;
   }
 
-  // opts：{ silent } 不弹提示（modal「保存」顺带落盘时用）；{ ifChanged } 仅当表单真的改过才写
-  function saveWorldFromForm(opts) {
+  // 本对话面板「保存世界卡」钮的入口（唯一调用方是 main.js 的 onclick）
+  function saveWorldFromForm() {
     if (!S.story) return;
-    if (opts && opts.ifChanged && !worldFormChanged(S.story.world || {})) return;
     const w = S.story.world || (S.story.world = Store.defaultWorld());
     w.place = $('#w-place').value.trim();
     w.time = $('#w-time').value.trim();
@@ -516,12 +509,12 @@ import { A, renderChat, saveAll, toast } from './core.js';
     try { Tree.resyncState(S.story); } catch (_) { /* 树还没建好时忽略 */ }
     saveAll();
     renderStoryPanels();
-    if (!(opts && opts.silent)) toast('世界卡已保存，下一回合生效');
+    toast('世界卡已保存，下一回合生效');
   }
 
   /* ---------- 🧠 注入记忆（手动层；定案：不用 tool_choice） ---------- */
 
-  // 按钮在「模型设置 · 故事记忆」里：点一下排定下一回合强制注入完整世界卡 + 设定 + 视觉设定卡
+  // 按钮在「本对话设置 → 故事数据」里：点一下排定下一回合强制注入完整世界卡 + 设定 + 视觉设定卡
   function toggleInjectMemory() {
     if (!S.story) { toast('先打开一个故事'); return; }
     S.pendingInject = !S.pendingInject;
@@ -544,15 +537,19 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ---------- 用户画像面板（面板在模型设置里，每条可删、可清空） ---------- */
 
+  // 画像范围：只有「仅当前故事」是另一档，其余一律全局
+  function profileScope() {
+    return (S.settings.userProfile || {}).scope === 'per-story' ? 'per-story' : 'global';
+  }
+
   function profileStore() {
-    const scope = (S.settings.userProfile || {}).scope === 'per-story' ? 'per-story' : 'global';
+    const scope = profileScope();
     if (scope === 'global') return { scope: scope, entries: Store.loadUserProfile() };
     return { scope: scope, entries: S.story ? (S.story.userProfile || []) : [] };
   }
 
   function writeProfile(entries) {
-    const scope = (S.settings.userProfile || {}).scope === 'per-story' ? 'per-story' : 'global';
-    if (scope === 'global') Store.saveUserProfile(entries);
+    if (profileScope() === 'global') Store.saveUserProfile(entries);
     else if (S.story) { S.story.userProfile = entries; saveAll(); }
   }
 
@@ -566,17 +563,17 @@ import { A, renderChat, saveAll, toast } from './core.js';
       : ('范围：' + (st.scope === 'global' ? '全局（跨故事共享）' : '仅当前故事') + ' · 共 ' + st.entries.length + ' 条'
         + (on ? ' · 当前模式已开启（收集 + 按需注入）' : ' · 当前模式开关未开（停止收集，已存条目保留）'));
     el.replaceChildren();
-    st.entries.slice().reverse().forEach((e) => {
-      const idx = st.entries.indexOf(e);
+    for (let i = st.entries.length - 1; i >= 0; i--) {   // 新的在上面
+      const e = st.entries[i];
       const row = document.createElement('div');
       row.className = 'mono-row';
       const text = document.createElement('span');
       text.className = 'mono-line';
       text.textContent = (Context.PROFILE_KIND_LABEL[e.kind] || '事实') + '｜' + e.text;
       row.appendChild(text);
-      row.appendChild(miniBtn('删除', () => deleteProfileEntry(idx)));
+      row.appendChild(miniBtn('删除', () => deleteProfileEntry(i)));
       el.appendChild(row);
-    });
+    }
     $('#btn-profile-clear').disabled = !st.entries.length;
   }
 
@@ -627,7 +624,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   A.reg({
     syncSettingsToForm, applyImageProviderHint, applyAspectToFields, applyFormToSettings, saveCardNote,
-    takeSettingsSnapshot, settingsFormDirty, closeSettings,
+    closeSettings,
     renderConnBadge, switchConnDirect, renderStoryPanels, worldFormChanged, saveWorldFromForm,
     toggleInjectMemory, renderInjectHint, renderProfilePanel, clearProfile, onModeChange,
   });

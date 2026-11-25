@@ -2,10 +2,10 @@
  * src/app/main.js —— 组合根：事件绑定 + 启动（唯一的界面入口）
  *
  * 结构：
- *  书架（应用入口）→ 新故事（选模式 → 剧情走向导 / 聊天直接开聊）
+ *  开始页（应用入口）→ 新故事（选模式 → 剧情走向导 / 聊天直接开聊）
  *  → 阅读页（聊天记录 : 画面双栏）→ AI1 回合（上下文走 Context，与评测同源）
  *  → 画师子代理 + 生图→ 书记员 / 压缩→ 存档点 / 导出导入
- * 存档：统一走 Store（schema v3）；图片只存缩略图以控制体积。
+ * 存档：统一走 Store（schema v3）；缩略图随存档，原图以 Blob 存 IndexedDB。
  */
 import { Sidecar } from '../core/sidecar.ts';
 import { Nav } from '../ui/navigation.js';
@@ -14,7 +14,7 @@ import { esc as storyPanelEsc } from '../screens/storyPrefs/panel.svelte.js';
 import { A, renderChat, saveAll, toast } from './core.js';
 
   const S = A.state;
-  const { $, Store, Cap, STYLE_PRESETS, MODE_LABELS, KIND_LABELS, DEFAULT_TOPIC, CHAT_PREMISE, rpPremise, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, DRAFT_SYSTEM, IMAGE_ASPECTS, requestChatStop, isStopError, setSendButtonsBusy, motionLevel, applyPaused, motionMs, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, netErrHint, offlineBlocked, sleep, clone, fmtTime, fmtMB, persistSettings, resolveSub, imageCfg, miniBtn } = A;
+  const { $, Store, Cap, requestChatStop, applyPaused, hideToast, irConfirm, closeConfirm, confirmValue, MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopModal, offlineBlocked, persistSettings, errorText, warnSaveFailed } = A;
 
   /* ================= 事件绑定 ================= */
 
@@ -23,17 +23,12 @@ import { A, renderChat, saveAll, toast } from './core.js';
     // 搜索框与清空钮由 src/app/shelf.js 的 initShelf 按 id 绑定。
     $('#btn-close-new').onclick = () => closeModal('modal-new');
     document.querySelectorAll('#modal-new .mode-card').forEach(b => {
-      b.onclick = () => {
-        const mode = b.dataset.mode;
-        closeModal('modal-new');
-        if (mode === 'choice') A.openWizard(null);
-        else A.createStoryImmediate(mode);
-      };
+      b.onclick = () => { closeModal('modal-new'); A.startFromStart(b.dataset.mode); };
     });
     A.initShelf();   // 搜索框与清空钮（src/app/shelf.js）
     $('#file-import').onchange = e => { A.handleImportFile(e.target.files && e.target.files[0]); e.target.value = ''; };
 
-    // —— 剧情文本导入（路径②） ——
+    // —— 剧情文本导入 ——
     $('#btn-close-import-text').onclick = A.closeImportText;
     $('#btn-it-cancel').onclick = A.closeImportText;
     $('#btn-it-run').onclick = A.runImportText;
@@ -289,7 +284,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#btn-close-card').onclick = () => A.closeCardEditor(true);
     $('#btn-rc-cancel').onclick = () => A.closeCardEditor(true);
     $('#btn-rc-save').onclick = A.saveCardFromEditor;
-    $('#btn-rc-import').onclick = () => $('#file-card').click();
+    $('#btn-rc-import').onclick = A.pickCardFile;
     $('#file-card').onchange = e => {
       A.importCardFile(e.target.files && e.target.files[0]);
       e.target.value = '';
@@ -370,7 +365,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const pmSubmit = $('#btn-pm-submit');
     if (pmSubmit) pmSubmit.onclick = A.doPaymentSubmit;
     $('#btn-backup-all').onclick = () => {
-      A.doBackupAll().catch(e => toast('导出备份失败：' + ((e && e.message) || e), true, true));
+      A.doBackupAll().catch(e => toast('导出备份失败：' + errorText(e), true, true));
     };
     // 清理孤儿原图：只删「没有任何故事引用」的 Blob，剧情 / 缩略图 / 提示词都不动
     $('#btn-clean-images').onclick = async () => {
@@ -397,8 +392,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#s-chat-base').addEventListener('input', () => A.renderConnBadge());
     // 模型名变化 → 按参考表刷新上下文窗口提示（表里只有窗口这一个数字）
     $('#s-chat-model').addEventListener('change', () => {
-      const cap = Cap.find($('#s-chat-model').value.trim());
-      S.settings.chat.model = $('#s-chat-model').value.trim();
+      const v = $('#s-chat-model').value.trim();
+      const cap = Cap.find(v);
+      S.settings.chat.model = v;
       if (cap && +cap.contextWindow > 0) S.settings.chat.contextWindow = 0; // 交回参考表自动值
       A.renderCapabilityFields();
     });
@@ -462,11 +458,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function init() {
     // 后台落盘失败（最常见：本地空间满）不再静默：10 秒节流提示一次导出备份
-    Store.setPersistErrorHandler(() => {
-      if (Date.now() - S.lastSaveWarnAt < 10000) return;
-      S.lastSaveWarnAt = Date.now();
-      toast('存档写入失败（本地空间可能已满）：请「一键导出全部备份」，或删掉不用的故事 / 原图腾出空间', true, true);
-    });
+    Store.setPersistErrorHandler(warnSaveFailed);
     // 原图是 Blob、异步取的：取到后把画面与缩略图重画一遍
     Store.setImageReadyHandler(() => { A.renderStage(); A.renderThumbs(); });
 
@@ -477,7 +469,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.syncSettingsToForm();
     A.initFeatures();                   // 主动消息编排：去重 + 排队（投递走 sendPlayerAction）
     A.initSidecar();                    // 探测本地服务；离线则三功能保持禁用
-    A.showStart();                      // 入口 = 开始页（沿用旧实现）
+    A.showStart();                      // 入口 = 开始页
     A.renderShelf();
     A.initStorageGuard().then(A.renderStoragePanel);   // 申请持久化 + 刷新存储面板
     A.remindBackupIfNeeded();                        // 7 天没备份就提醒一次

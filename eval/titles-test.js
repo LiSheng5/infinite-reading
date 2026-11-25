@@ -142,7 +142,7 @@ const msgs = [
   { role: 'user', content: '[玩家行动]（做）捡起照片' },
   { role: 'assistant', content: JSON.stringify({ narration: '照片背面写着一行小字：' + '字'.repeat(700) }) },
 ];
-const prompt = T.buildPrompt(msgs, 'choice');
+const prompt = T.buildPrompt(msgs);
 check('buildPrompt：首条是标题系统提示',
   prompt[0].role === 'system' && prompt[0].content.indexOf('只输出标题本身') >= 0, prompt[0].content.slice(0, 20));
 check('buildPrompt：只含最近 3 轮（最多 6 条对话）',
@@ -161,7 +161,7 @@ check('buildPrompt：单条 ≤ 600 字（码点）',
   prompt.every(m => cps(m.content).length <= 600),
   prompt.map(m => cps(m.content).length).join(','));
 check('buildPrompt：坏 JSON 当纯文本不抛错',
-  T.buildPrompt([{ role: 'assistant', content: '{"narration": 坏掉的' }], 'choice')[1].content.indexOf('坏掉的') >= 0);
+  T.buildPrompt([{ role: 'assistant', content: '{"narration": 坏掉的' }])[1].content.indexOf('坏掉的') >= 0);
 
 /* ---------------- 5. applyTitle 写回护栏 ---------------- */
 

@@ -8,7 +8,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, rpPremise, openModal, closeModal, fmtTime, MODE_ENTRY } = A;
+  const { $, Store, rpPremise, openModal, closeModal, MODE_ENTRY } = A;
 
 
   /* ================= 角色卡 =================
@@ -187,7 +187,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const hadCard = !!S.story.characterCard;
     S.story.characterCard = card;
     if (syncWorld) syncWorldCharacter(card);
-    // 给还没有历史的聊天加卡：开场白直接进日志（有卡时的开场方式，与原扮演一致）
+    // 给还没有历史的聊天加卡：开场白直接进日志（带卡聊天一贯的开场方式）
     if (!hadCard && !(S.story.log || []).length) pushCardOpening(card);
     saveAll();
     A.renderStoryPanels();
@@ -258,7 +258,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (entry) Context.mergeWorld(s.world, { characters: [entry] });
     }
     S.story = s;
-    A.enterGame(true, { deferOpening: true });   // 带卡聊天不做开局锚定；开场白直接进日志
+    A.enterGame(true);   // 带卡聊天不做开局锚定；开场白直接进日志
     pushCardOpening(card);
     saveAll();
     renderChat();

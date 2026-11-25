@@ -7,7 +7,7 @@ import { A, renderChat } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, DEFAULT_TOPIC, CHAT_PREMISE, DRAFT_SYSTEM, openModal, closeModal, netErrHint, sleep, fmtTime, resolveSub, reportUserFailure } = A;
+  const { $, Store, DEFAULT_TOPIC, CHAT_PREMISE, DRAFT_SYSTEM, openModal, closeModal, netErrHint, sleep, resolveSub, reportUserFailure } = A;
 
 
   /* ================= 开局向导 ================= */
@@ -151,7 +151,7 @@ import { A, renderChat } from './core.js';
     syncWzMore(true);
   }
 
-  // 被起草填充的字段短暂高亮（约 1.2s）：颜色过渡走 --m-t-*，低动效档直接跳变
+  // 被起草填充的字段短暂高亮（约 1.2s）：颜色过渡走 --m-t-* 令牌
   function flashWzFields(ids) {
     clearTimeout(wzFlashTimer);
     for (const id of ids) {
@@ -185,9 +185,9 @@ import { A, renderChat } from './core.js';
   async function draftWizard() {
     const topic = $('#wz-draft-input').value.trim() || DEFAULT_TOPIC;
     const btn = $('#btn-wz-draft');
- // 按钮由 Button 组件产出（图标是一个子节点），文案单独放在 #wz-draft-label，
-    // 只能改这个 span 的文字；旧 DOM 没有该 span，退回原来的 textContent / innerHTML 写法。
-    const label = $('#wz-draft-label') || btn;
+    // 按钮由 Button 组件产出（图标是一个子节点），文案单独放在 #wz-draft-label，
+    // 只能改这个 span 的文字，不能改按钮的 textContent
+    const label = $('#wz-draft-label');
     btn.disabled = true; label.textContent = '起草中…';   // 结束后在 finally 里按「图标 + 起草」还原
     wzDraftUndo = {   // 快照先存：失败兜底填的本地模板草稿同样可撤销
       world: $('#wz-world').value,
@@ -261,11 +261,11 @@ import { A, renderChat } from './core.js';
     Store.seedWorldFromPremise(s, premise);   // 画面参考 / 时间 / 伏笔等留空项按设定补上
     S.story = s;
     closeModal('modal-wizard');
-    A.enterGame(true, { deferOpening: true });
+    A.enterGame(true);
     A.openAnchor({ onDone: renderChat });   // 剧情模式「向导 → 试画」；开场由用户点「开始第一幕」
   }
 
-  function createStoryImmediate(mode) {
+  function createStoryImmediate() {
     // 新建聊天默认不带卡（角色卡在聊天里随时可加：空聊天引导页 / 聊天设置）
     const s = Store.newStory({
       title: '新对话',           // 初始标题「新对话」，回合 1 / 6 由小模型自动起标题

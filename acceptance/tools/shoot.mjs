@@ -616,7 +616,7 @@ async function seedStory(page) {
 
       // 进阅读页并重绘（enterGame 内部会 ensure / project / render）
       S.story = st;
-      App.enterGame(true, { deferOpening: true });
+      App.enterGame(true);
 
       return {
         ok: true,
@@ -859,7 +859,7 @@ async function runSeeded(page, snap, vp, manifest) {
   await page.evaluate(() => {
     const A = window.__IR_TEST__.App;
     A.closeStoryPrefs();
-    A.createStoryImmediate('chat');
+    A.createStoryImmediate();
   });
   await sleep(800);
   // 开新故事前如果弹了「先把这一幕存好」的确认框，先确认掉，否则挡住底下的点击

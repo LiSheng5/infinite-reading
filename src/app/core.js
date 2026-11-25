@@ -38,6 +38,9 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
 
   const DEFAULT_TOPIC = '雨夜便利店：凌晨三点的第八个货架，与一场没有说出口的告别。';
 
+  // 书记员「没配置模型」的统一文案：turn.js 写留痕，settings.js 据此区分「未配置 / 失败」
+  const SCRIBE_UNCONFIGURED = '未配置书记员模型';
+
   const CHAT_PREMISE = '对话模式：没有剧本，随性聊天。对话的走向由你们共同决定。你自带画图、记事、定时提醒、写邮件、下单这些能力，需要时主动用起来（邮件与下单会先让用户确认）。';
   // 带卡聊天：premise 与角色卡绑定（卡常驻系统提示词；开场白由卡写、直接进日志）
   function rpPremise(card) {
@@ -91,16 +94,18 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     choicesTrayOpen: false,   // 选项托盘是否展开（每轮重置）
     live: null,               // 流式 / 打字机中的临时旁白 { text, reasoning }
     liveEl: null,
-    liveReasonEl: null,       // 流式思考窗（方案 B：固定小窗滚动跟随）
+    liveReasonEl: null,       // 流式思考窗（固定小窗，自动跟随滚动）
     liveReasonCollapsed: false,   // 正文已开始 → 思考窗卷成一行
     liveReasonOpen: false,        // 用户点开看全量（照样自动跟随，不暂停）
     pendingInject: false,     // 注入记忆：已排定下一回合强制注入完整记忆（手动层）
-    anchor: null,             // 画风锚定状态（{ onDone, batch, tried, candidates, pickedIdx, card, busy }）
+    anchor: null,             // 画风锚定状态（{ onDone, batch, tried, candidates, pickedIdx, busy }）
     chatAbortCtrl: null,
     stopRequested: false,
     lastSaveWarnAt: 0,
-    importJob: null,          // { raw, plan, result, busy, err }
+    importJob: null,          // { result, busy, err, cancelled, abortCtrl }
     importModelMode: 'follow',    // follow | draft
+    // 回合锚点：request_image 在 commit 之前提交、节点还没创建——任务提交时带上它；
+    // 回合 commit 成功后补 nodeId，失败 / 主动停止置 dead；任务开跑前与写回前各核一次
     turnAnchor: { nodeId: null, dead: false },
     pw: null,                 // 画师工作台 { sceneId, prompt, promptRaw, alt, busy }
     immersiveTextHidden: false,
@@ -202,9 +207,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
        有输入：确定 resolve(字符串)，取消 / 关闭 resolve(null)
        有 checkbox（勾选文案）：确定 resolve({ ok:true, checked })，取消 / 关闭 resolve(null)
 
-     并发：弹窗只有一个，但 irConfirm 可以被两条异步流程同时调用。
-     以前是单槽 cfResolve —— 后一次调用直接覆盖前一次的 resolve，前一个 Promise 永不落地
-     （调用方的 await 永久挂起，连 toast 都不会出）。现在按调用顺序排队（队列本体在
+     并发：弹窗只有一个，但可以被两条异步流程同时调用，所以按调用顺序排队（队列本体在
      src/core/confirmQueue.ts，可单测）：
        · 队头那条显示在弹窗里，后来的只入队，不覆盖正在显示的内容；
        · closeConfirm 只收队头：后面还有排队就**就地换成下一条**（弹窗不关、焦点留在里面），
@@ -257,9 +260,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     return true;
   }
 
- /* ---------- 弹窗栈（语义在 src/ui/modalHost.js） ----------
-  * 这里只转发：A.modalStack 仍是同一个数组实例（src/app/main.js 的遮罩点击按引用读它），
-  * 现有 id 与 DOM 全部保持不变。 */
   function netErrHint(e) {
     if (e instanceof TypeError) {
       return '网络请求失败：可能是 CORS 限制或地址不可达。建议用本地静态服务打开（如 `python tools/serve.py`，Windows 也可双击 `启动.bat`），并检查 Base URL / API Key。';
@@ -301,8 +301,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     return false;
   }
 
-  // sleep / clone 的唯一口径在 tree：
-  // 这里只转接进 A.reg，app 模块照旧解构 { sleep, clone }，实现全仓只有一份
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -325,16 +323,19 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     Store.saveSettings(S.settings);
   }
 
+  // 写入失败（多为本地存储超限）不再静默：提示用户导出备份（10 秒节流防刷屏）
+  function warnSaveFailed() {
+    if (Date.now() - S.lastSaveWarnAt < 10000) return;
+    S.lastSaveWarnAt = Date.now();
+    toast('存档写入失败（本地空间可能已满）：请「一键导出全部备份」，或删掉不用的故事 / 原图腾出空间', true, true);
+  }
+
   function saveAll() {
     persistSettings();
     if (S.story) {
       const ok = Store.saveStory(S.story);
       Store.setCurrentId(S.story.id);
-      // 写入失败（多为本地存储超限）不再静默：提示用户导出备份（10 秒节流防刷屏）
-      if (!ok && Date.now() - S.lastSaveWarnAt > 10000) {
-        S.lastSaveWarnAt = Date.now();
-        toast('存档写入失败（本地存储可能已满）：请导出故事备份，或删除不用的故事腾出空间', true, true);
-      }
+      if (!ok) warnSaveFailed();
     }
   }
 
@@ -371,7 +372,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
   /* 图标：sprite 在 index.html 顶部（#ir-icons）。iconEl() 返回元素（不用 innerHTML 拼字符串，
    * name 只来自固定清单）。cls 例：'ic-l' = 图标在文字左边留一点空隙。 */
   function iconEl(name, cls) {
-    // 不用 innerHTML：sprite 的 <use href="#i-名字"> 直接建元素（name 只来自固定清单）
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', cls ? 'ic ' + cls : 'ic');
     svg.setAttribute('aria-hidden', 'true');
@@ -390,32 +390,14 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
   }
 
   /* 人物设定独立控件（可增删行）：替代「名字｜性格｜说话方式」一行一个的竖线文本框。
-   * container 渲染行（.char-row）；addBtn 可选（不传就自建「+ 添加人物」放容器后面）。
-   * fields: [{ key, label?, placeholder? }]，每行每字段一个输入框。
-   * opts.variant：'row'（默认，表格形态：一行五字段 + 表头，向导 / 文本导入用）
-   *              'card'（行卡形态：首行「名字 + 在场/离场」各占一半、下方三个全宽输入、
-   *                      右上角 40px 删除钮、不出表头——本对话设置的世界卡编辑器用）
+   * 本对话设置的世界卡编辑器用行卡形态：前两个字段各占一半、第三个起整行，右上角删除钮。
+   * addBtn 是调用方传入的「+ 添加人物」钮；fields: [{ key, label?, placeholder? }]。
    * 返回 { set(list), get(), add(vals) }：get() 滤掉全空行、不造字段外的值。 */
-  function charEditor(container, fields, addBtn, opts) {
+  function charEditor(container, fields, addBtn) {
     fields = fields || [];
-    const variant = (opts && opts.variant === 'card') ? 'card' : 'row';
-    // 表头：每个字段的可见名字（名字 / 性格 / 说话方式……），与输入框同列对齐（行卡形态不出表头）
-    function makeHead() {
-      const head = document.createElement('div');
-      head.className = 'char-head';
-      fields.forEach(f => {
-        const s = document.createElement('span');
-        s.textContent = f.label || '';
-        head.appendChild(s);
-      });
-      const spacer = document.createElement('span');
-      spacer.className = 'char-del';
-      head.appendChild(spacer);
-      return head;
-    }
     function makeRow(vals) {
       const row = document.createElement('div');
-      row.className = 'char-row' + (variant === 'card' ? ' card' : '');
+      row.className = 'char-row card';
       fields.forEach((f, i) => {
         const inp = document.createElement('input');
         inp.type = 'text';
@@ -423,7 +405,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
         inp.placeholder = f.placeholder || f.label || f.key;
         inp.spellcheck = false;
         inp.value = vals && vals[f.key] != null ? String(vals[f.key]) : '';
-        if (variant === 'card' && i >= 2) inp.className = 'char-wide';   // 性格 / 说话方式 / 备注整行
+        if (i >= 2) inp.className = 'char-wide';   // 性格 / 说话方式 / 备注整行
         row.appendChild(inp);
       });
       const del = miniBtn('', () => row.remove(), 'char-del');
@@ -436,7 +418,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     const api = {
       set(list) {
         container.textContent = '';
-        if (variant === 'row' && fields.some(f => f.label)) container.appendChild(makeHead());
         (Array.isArray(list) ? list : []).forEach(v => container.appendChild(makeRow(v)));
         if (!rows().length) container.appendChild(makeRow(null));   // 空表也给一行，看得见字段形状
       },
@@ -458,17 +439,12 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
         return r;
       },
     };
-    let btn = addBtn;
-    if (!btn) {
-      btn = miniBtn('+ 添加人物', null, 'char-add');
-      if (container.parentNode) container.parentNode.insertBefore(btn, container.nextSibling);
-    }
-    btn.onclick = () => {
+    addBtn.onclick = () => {
       const r = api.add(null);
       const inp = r.querySelector('input');
       if (inp) inp.focus();
     };
-    if (!rows().length) api.set([]);   // 挂载即见表头 + 一行空行
+    if (!rows().length) api.set([]);   // 挂载即见一行空行
     return api;
   }
 
@@ -482,6 +458,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     KIND_LABELS,
     DEFAULT_TOPIC,
     CHAT_PREMISE,
+    SCRIBE_UNCONFIGURED,
     rpPremise,
     SCRIBE_SYSTEM,
     SCRIBE_COMPRESS_SYSTEM,
@@ -491,7 +468,6 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     requestChatStop,
     isStopError,
     setSendButtonsBusy,
-    motionMQ,
     motionLevel,
     applyPaused,
     motionMs,
@@ -502,6 +478,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     closeConfirm,
     confirmValue,
     charEditor,
+    // 弹窗栈的语义在 src/ui/modalHost.js；这里只转接（modalStack 与遮罩点击共享同一数组）
     MODAL_IDS,
     modalStack,
     openModal,
@@ -515,11 +492,13 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     shortError,
     failureEntry,
     offlineBlocked,
+    // sleep / clone 的实现唯一在 src/core/tree.ts（这里只转接）
     sleep,
     clone,
     fmtTime,
     fmtMB,
     persistSettings,
+    warnSaveFailed,
     saveAll,
     resolveSub,
     imageCfg,
@@ -527,22 +506,16 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
   });
 
   /* ---------- 高频入口的显式导出（IDE 跳转面；运行时真源仍是 A） ----------
-   * 为什么需要这一节：跨模块调用一律写 A.xxx()（晚绑定，避免 ESM 环），但 A 是运行时
-   * 拼起来的对象 —— 编辑器对 A.xxx() 既不跳转，也不能改名重构。高频入口因此改走命名
-   * import（调用方写 `import { A, renderChat, saveAll, toast } from './core.js'`），
-   * 读代码时 Ctrl+Click 至少能落到这里：
-   *   · toast / saveAll 就在本文件定义，导出的是真实函数；
-   *   · renderChat 的实现仍在 src/app/render.js（A.reg 登记），这里只做一层转接。
-   * 为什么不能写成 `export { renderChat } from './render.js'`：本文件是所有 app 模块的
-   * 静态依赖，反向 import 会成环 —— render.js 顶部的 `const { … } = A` 会在 A 初始化
-   * 之前求值（TDZ）。所以转接只在函数体内读 A，模块加载期不碰它。
-   * 新增条目的门槛：全仓 ≥10 个 app 模块从 core 命名 import 它、且是读代码时的第一跳；
-   * 其余跨模块调用继续 A.xxx()。eval/app-structure-test.js 第 7 节守这条约定
-   *（调用方不许再写 A.toast / A.saveAll / A.renderChat，也不许把这些名字放回 `= A` 解构）。
-   * 高频入口 showScreen 不需要在这一节再开一个别名：它在 src/ui/navigation.js 本来就是
-   * 真实命名导出（Nav.showScreen），Ctrl+Click 已经能到实现。 */
+   * 跨模块调用一律写 A.xxx()（晚绑定，避免 ESM 环），但编辑器对 A.xxx() 既不跳转也不能
+   * 改名重构；高频入口（全仓 ≥10 个 app 模块从 core 命名 import）因此改走命名 import，
+   * toast / saveAll 是真实函数，renderChat 的实现仍在 src/app/render.js（A.reg 登记）。
+   * 为什么不能写成 `export { renderChat } from './render.js'`：本文件是所有 app 模块的静态
+   * 依赖，反向 import 会成环 —— render.js 顶部的 `const { … } = A` 会在 A 初始化之前求值
+   *（TDZ）。所以转接只在函数体内读 A，模块加载期不碰它。
+   * 其余跨模块调用继续 A.xxx()；eval/app-structure-test.js 第 7 节守这条约定。
+   * showScreen 不需要别名：它在 src/ui/navigation.js 本来就是真实命名导出。 */
   function renderChat() {
-    return A.renderChat();   // 实现：src/app/render.js 的 renderChat（A.reg 登记）
+    return A.renderChat();
   }
 
   export { A, renderChat, saveAll, toast };

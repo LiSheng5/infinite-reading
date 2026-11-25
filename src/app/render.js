@@ -1,7 +1,6 @@
 /*
  * src/app/render.js —— 聊天记录窗口 / 画面面板 / 布局状态 / 进入离开故事（含灯箱与内联图气泡）
  */
-import { Prefs } from '../core/prefs.ts';
 import { Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
 import { setChat, setThumbs } from '../screens/read/read.svelte.js';
@@ -9,7 +8,7 @@ import { A, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, KIND_LABELS, motionLevel, fmtTime, persistSettings } = A;
+  const { $, Store, MODE_LABELS, motionLevel } = A;
 
   function scrollChatBottom() {
     const box = $('#chat-scroll');
@@ -41,7 +40,7 @@ import { A, saveAll, toast } from './core.js';
     return btn;
   }
 
- // 思考窗 interior（按钮 + 面板）：旧整节点拼装与 Svelte 空壳（fillLiveDom）共用
+  // 思考窗 interior（按钮 + 面板）：旧整节点拼装与 Svelte 空壳（fillLiveDom）共用
   function reasonLiveInto(wrap, text) {
     const btn = reasonToggleBtn('思考中…');
     const panel = document.createElement('div');
@@ -58,12 +57,11 @@ import { A, saveAll, toast } from './core.js';
     wrap.replaceChildren(btn, panel);   // 幂等：空壳跨 renderChat 常驻，重复回填不叠加
   }
 
- // 流式 / 打字机临时旁白挂进组件渲染的两个空壳（与旧 DOM 同位置同结构）。
+  // 流式 / 打字机临时旁白挂进组件渲染的两个空壳。
   // 空壳的显隐由视图模型的 live / liveReason 决定；interior 与 class 状态照旧命令式回填，
-  // S.liveEl / S.liveReasonEl 的同步语义与流式 span 追踪零改动（round.js / turn.js 不用改）。
-  // 幂等：{#key} 整体重建已删，同一 live 窗口内空壳跨 renderChat 常驻——只回填空壳，
-  // 在途的 span.delta / 思考窗 interior 由 appendLiveDelta / updateLiveReasoning 原地维护，
-  // 不在这里覆盖（回合内的工具留痕 renderChat、设置改动 renderChat 不再打断流式）。
+  // S.liveEl / S.liveReasonEl 的同步语义与流式 span 追踪零改动。
+  // 幂等：同一 live 窗口内空壳跨 renderChat 常驻——只回填空壳，在途的 span.delta /
+  // 思考窗 interior 由 appendLiveDelta / updateLiveReasoning 原地维护，不在这里覆盖。
   function fillLiveDom() {
     if (!S.live) return;
     const shell = $('#chat-scroll').querySelector('.reason-live');
@@ -105,7 +103,7 @@ import { A, saveAll, toast } from './core.js';
     scrollChatBottom();
   }
 
-  // 图片 src 只放行 data: / blob: / https:（chat / rp 内联图与灯箱用；javascript: 等一律拒绝）
+  // 图片 src 只放行 data: / blob: / https:（聊天内联图与灯箱用；javascript: 等一律拒绝）
   function safeImgSrc(src) {
     const s = String(src || '');
     return (/^(data|blob|https):/i.test(s)) ? s : '';
@@ -121,7 +119,7 @@ import { A, saveAll, toast } from './core.js';
       || '';
   }
 
-  /* ---- 灯箱（chat / rp 的最小看图方案：固定遮罩 + 大图，点遮罩 / Esc 关闭） ---- */
+  /* ---- 灯箱（聊天模式的最小看图方案：固定遮罩 + 大图，点遮罩 / Esc 关闭） ---- */
   function openLightbox(entry) {
     const box = $('#lightbox');
     if (!box || !entry) return;
@@ -261,7 +259,7 @@ import { A, saveAll, toast } from './core.js';
     setStageImage(sc, A.sceneSrc(sc));
   }
 
-  // Ken Burns 离屏暂停（data-paused 由 CSS 统一管）：图片不可见时停掉循环
+  // Ken Burns 离屏暂停：图片不可见时打上 is-offscreen（css/base.css 据此停掉循环）
   let stageIO = null;
   function watchStageVisibility() {
     const img = $('#stage-img');
@@ -280,14 +278,13 @@ import { A, saveAll, toast } from './core.js';
     setThumbs(A.readThumbsModel());
   }
 
-  /* 布局状态段已拆出到 src/app/layout.js（app-structure-test 的 800 行红线；只搬家，不改行为） */
+  /* 布局状态在 src/app/layout.js（data-layout / 沉浸态 / 分隔条） */
 
   /* ================= 进入 / 离开故事 ================= */
 
-  function enterGame(fresh, opts) {
-    opts = opts || {};
+  function enterGame(fresh) {
     if (!S.story) return;
- // 过渡的 update 回调要下一帧才跑：先把故事抓在闭包里，
+    // 过渡的 update 回调要下一帧才跑：先把故事抓在闭包里，
     // 免得等待期间被别的入口（返回首页 / 换故事）把 S.story 置空。
     const story = S.story;
     // 分支树：树是唯一真源——载入一律先 ensure（旧档建线性链 / 坏树降级）再 project 重建 log / messages 等
@@ -297,7 +294,7 @@ import { A, saveAll, toast } from './core.js';
     } catch (e) { console.warn('Tree 初始化失败（按存档原样继续）：', e); }
     story.ui = Object.assign(Store.defaultUi(), story.ui || {});
     A.renderStoryPrefs();   // 切换对话整体重绘本对话设置面板（不残留上一个对话的值）
- // 切屏收口到 Nav：原「三处 classList 写 .hidden」由 showScreen 统一改，
+    // 切屏收口到 Nav：屏幕显隐由 showScreen 统一改，
     // 换画 / 聊天 / 布局这些 DOM 变更全部放进 mutate —— 过渡的新快照拿到的就是渲染完的阅读页。
     Nav.showScreen('read', () => {
       $('#screen-game').classList.remove('stage-strip', 'text-hidden');
@@ -318,19 +315,14 @@ import { A, saveAll, toast } from './core.js';
         // 「开始第一幕」按钮触发。试画锚定关闭后同样只回到这个按钮。
       } else {
         S.currentChoices = A.choicesFromHead();   // 选项跟着 head 的 assistantMsg 恢复（刷新后不丢）
-        renderNarrationToolsAfterLoad();
+        $('#btn-send').disabled = false;          // 重试控件由 renderChat 渲染，这里只放开输入框
         saveAll();
         // 空档（例：锚定向导还没走完就刷新了页面）同样交给「开始第一幕」按钮
       }
     });
   }
 
-  function renderNarrationToolsAfterLoad() {
-    // 重试控件由 renderChat 渲染；这里只处理输入框可用状态
-    $('#btn-send').disabled = false;
-  }
-
   // 布局类导出（effectiveLayout / renderLayoutHint / isImmersive / applyLayout / toggleStagePanel /
-  // enterImmersive / exitImmersive / bindSplitter）在 src/app/layout.js 注册（本文件只搬家拆分）
+  // enterImmersive / exitImmersive / bindSplitter）在 src/app/layout.js 注册
   A.reg({ scrollChatBottom, imageSceneById, currentScene, renderChat, openLightbox, closeLightbox, safeImgSrc, renderStage, watchStageVisibility, renderThumbs, enterGame });
 

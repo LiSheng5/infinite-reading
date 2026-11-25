@@ -137,30 +137,29 @@
       Promise.resolve().then(() => runOne(item));
     }
 
+    /* 取消收尾：abort 信号 + 立刻收尾（run 迟到的回包由 done 丢弃，队列不必再等它） */
+    function cancelItem(item) {
+      abortItem(item);
+      const r = resultOf(item, false, null, cancelledError(), false);
+      r.cancelled = true;
+      settle(item, r);
+    }
+
     function cancel(key) {
       if (key == null) {
         if (!current || current.done) return false;
-        abortItem(current);
-        const r = resultOf(current, false, null, cancelledError(), false);
-        r.cancelled = true;
-        settle(current, r);
+        cancelItem(current);
         return true;
       }
       // 排队中：直接摘掉，run 不会被调用（不花额度）
       for (let i = 0; i < pending.length; i++) {
         if (pending[i].key !== key) continue;
-        const item = pending.splice(i, 1)[0];
-        const r = resultOf(item, false, null, cancelledError(), false);
-        r.cancelled = true;
-        settle(item, r);
+        cancelItem(pending.splice(i, 1)[0]);
         return true;
       }
-      // 进行中：abort 信号 + 立刻收尾（run 迟到的回包由 done 丢弃，队列不必再等它）
+      // 进行中
       if (current && !current.done && current.key === key) {
-        abortItem(current);
-        const r = resultOf(current, false, null, cancelledError(), false);
-        r.cancelled = true;
-        settle(current, r);
+        cancelItem(current);
         return true;
       }
       return false;

@@ -4,13 +4,12 @@
 import { genId, Tree } from '../core/tree.ts';
 import { Nav } from '../ui/navigation.js';
 import { home } from '../screens/home/home.svelte.js';
-import { A, renderChat, saveAll, toast } from './core.js';
+import { A, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, MODE_LABELS, irConfirm, openModal, closeModal, clone, fmtTime, miniBtn } = A;
+  const { $, Store, irConfirm, openModal, closeModal, clone, fmtTime, errorText } = A;
 
-  let startMode = 'choice';      // 开始页选中的模式（choice | chat | rp）
   let typeTimer = null;
   let exportTargetId = null;
 
@@ -46,7 +45,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   async function storeOriginal(sceneId, src, meta) {
     try {
       const info = Store.storageInfo();
-      if (!info || !info.available || !info.backend || info.backend !== 'indexeddb') return undefined;
+      if (!info || !info.available || info.backend !== 'indexeddb') return undefined;
       const blob = await fetchBlob(src);
       if (!blob || !blob.size) return undefined;
       const imageId = 'img:' + sceneId;
@@ -129,7 +128,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         }
       } catch (_) { /* 退回缩略图 */ }
     }
-    return String(last.thumb || last.src || '');
+    return last.thumb || last.src || '';
   }
 
   // 打字机（流式失败 / 非流式时的兜底观感）；返回 Promise
@@ -215,7 +214,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const sp = (S.story.savepoints || []).find(x => x.id === id);
     if (!sp) return;
     // 分流：存档点带着 nodeId 且节点还在（当前树或存档点自带的树里）→ 回到树上那个节点；
-    // 老存档点（迁移前）没有节点可回 → 旧的整档快照，树随之重置成一条直线
+    // 老存档点没有节点可回 → 用整档快照还原，树随之重置成一条直线
     const hasNode = !!(sp.nodeId && ((S.story.tree && S.story.tree.nodes[sp.nodeId]) || (sp.tree && sp.tree.nodes && sp.tree.nodes[sp.nodeId])));
     const msg = '回到「' + sp.name + '」？当前进度会先自动存为一个新存档点。'
       + (hasNode ? '' : '\n\n这个存档点早于分支功能，回档会重置当前分支树为一条直线（回档前的分支树已整体备份进新存档点）。');
@@ -230,9 +229,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       Tree.ensure(S.story);
       Tree.project(S.story);
     }
-    S.currentChoices = A.choicesFromHead();
-    saveAll();
-    renderChat(); A.renderStage(); A.renderThumbs(); A.renderStoryPanels(); renderSavepoints();
+    A.afterSwitch();   // 与分支页切换后同一套重绘 + 落盘（src/app/branch.js）
     toast('已回到：' + sp.name);
   }
 
@@ -270,14 +267,20 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ================= 书架 ================= */
 
-  function showShelf() {
-    if (S.busy) { toast('正在生成中，等这一步结束再离开'); return; }   // 回合进行中切走会让异步续体写空/串档
+  // 离开当前故事的统一前置：回合进行中切走会让异步续体写空 / 串档，先拦下并落盘
+  function saveBeforeLeave() {
+    if (S.busy) { toast('正在生成中，等这一步结束再离开'); return false; }
     if (S.story) saveAll();       // 退出即自动存档
+    return true;
+  }
+
+  function showShelf() {
+    if (!saveBeforeLeave()) return;
     S.story = null;
     S.busy = false;
     S.live = null;
- // 切屏收口到 Nav：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
-    // 这样视图过渡的新快照里书架已经是渲染好的（本步之前等价于旧的三行 classList 写入）。
+    // 切屏收口到 Nav：显隐由 showScreen 统一改，其余 DOM 变更放进 mutate，
+    // 这样视图过渡的新快照里书架已经是渲染好的。
     Nav.showScreen('shelf', () => {
       A.closeMenus();
       A.closeStoryPrefs();   // 离开对话就收起本对话设置面板（不残留上一个对话的值）
@@ -285,14 +288,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
   }
 
-  // 开始页（应用入口）：三个模式先看介绍、点一张选中，再按「开始」
+  // 开始页（应用入口）：两个模式各一张卡，点哪张就按哪种模式开局
   function showStart() {
-    if (S.busy) { toast('正在生成中，等这一步结束再离开'); return; }   // 同 showShelf：防异步续体写空/串档
-    if (S.story) saveAll();
+    if (!saveBeforeLeave()) return;
     S.story = null;
     S.busy = false;
     S.live = null;
- // 切屏收口到 Nav：同 showShelf，「继续上次」的状态推进进 mutate，
+    // 切屏收口到 Nav：同 showShelf，「继续上次」的状态推进进 mutate，
     // 保证过渡的新快照里首页已经是最终形态。
     Nav.showScreen('home', () => {
       A.closeMenus();
@@ -305,24 +307,24 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
   }
 
-  // 阅读页「＋ 新故事」：先把当前这一幕落盘，再开「新故事」选模式弹窗（三个模式共用同一入口）
+  // 阅读页「＋ 新故事」：先把当前这一幕落盘，再开「新故事」选模式弹窗（两模式共用同一入口）
   function newStoryFromGame() {
-    if (S.busy) { toast('正在生成中，等这一步结束再离开'); return; }
-    if (S.story) saveAll();             // 切走不丢：当前档先存下（仍留在书架里，可随时回去）
+    if (!saveBeforeLeave()) return;   // 切走不丢：当前档先存下（仍留在书架里，可随时回去）
     openModal('modal-new');
   }
 
   // 开始页两模式：两张卡即两个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
   //   剧情 = 开局设定向导（与书架「新建」同一入口，不再有预设剧情）；聊天 = 直接开聊（角色卡可选，之后再加）
   function startFromStart(mode) {
-    startMode = (mode === 'chat') ? mode : 'choice';
-    if (startMode === 'choice') A.openWizard(null);
-    else A.createStoryImmediate(startMode);
+    const m = (mode === 'chat') ? 'chat' : 'choice';
+    if (m === 'choice') A.openWizard(null);
+    else A.createStoryImmediate();
   }
 
   // 「↶ 继续上次」
   function continueLast() {
-    const s = Store.loadCurrent() || (Store.listStories()[0] && Store.loadStory(Store.listStories()[0].id));
+    const first = Store.listStories()[0];
+    const s = Store.loadCurrent() || (first && Store.loadStory(first.id));
     if (!s) { toast('没有找到存档'); showShelf(); return; }
     if (S.story && S.story.id !== s.id) A.stopVideoWaiting();   // 切故事停本地轮询
     S.story = s;
@@ -333,7 +335,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     A.resumePendingVideos();   // 刷新 / 重开后续上生视频轮询
   }
 
-  /* 书架渲染 / 打开对话（openStory）/ 行菜单已迁至 src/app/shelf.js：
+  /* 书架渲染 / 打开对话（openStory）/ 行菜单在 src/app/shelf.js：
      renderShelf 只读索引；openStory(id, opts) 支持滚动到命中消息。 */
 
   /* ================= 导入 / 导出 ================= */
@@ -405,7 +407,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     try {
       pack = await buildExportPack(st, kind, withSrc);
     } catch (e) {
-      toast('打包失败：' + ((e && e.message) ? e.message : e), true, true);
+      toast('打包失败：' + errorText(e), true, true);
       return;
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = oldText; }

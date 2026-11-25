@@ -1,11 +1,11 @@
 /*
  * src/app/shelf.js —— 书架页：会话列表 + 搜索 + 自动标题 + 新建弹层
  *
- * - renderShelf：只读索引（不再对每个故事 loadStory），按 updatedAt 分组吸顶列表
+ * - renderShelf：只读索引（不对每个故事 loadStory），把分组 / 行错峰 / 截断推给 ShelfScreen
  * - 「⋯」菜单：重命名 / 重新生成标题 / 导出 / 删除
  * - 自动标题：回合 seal 后异步触发（Titles + resolveSub('scribe')），打字机式替换
- * - 搜索：首次聚焦惰性构建索引（分批让出主线程）；命中片段 createElement('mark') 高亮
- * - 键盘：/ 或 Ctrl/Cmd+K 聚焦搜索；↑↓ 选结果、Enter 打开、Esc 清空；行 Tab/Enter/Shift+F10
+ * - 搜索：首次聚焦惰性构建索引（分批让出主线程）；命中片段由 ShelfScreen 用 <mark> 高亮
+ * - 键盘：/ 或 Ctrl/Cmd+K 聚焦搜索；↑↓ 选结果、Enter 打开、Esc 清空（在 ShelfScreen 里）
  */
 import { Titles } from '../core/titles.ts';
 import { Nav } from '../ui/navigation.js';
@@ -29,8 +29,8 @@ import { A, saveAll, toast } from './core.js';
   ];
   const DAY = 86400000;
   const EARLIER_CAP = 100;      // 「更早」分组默认最多渲染 100 条（约 300 条以上时）
-  const ROW_STAGGER_MAX = 600;  // 行错峰淡入总时长封顶（ms）
-  const ROW_STAGGER_STEP = 45;
+  const ROW_STAGGER_COUNT = 14; // 只有前 14 行做错峰淡入（再往后一起出现）
+  const ROW_STAGGER_STEP = 45;  // 每行延迟（ms）
 
   let expandEarlier = false;    // 「展开更多」是否已点开
   let currentQuery = '';
@@ -68,7 +68,7 @@ import { A, saveAll, toast } from './core.js';
     return timeBucket(ts).key;
   }
 
- // 屏幕显隐的判定收口到 Nav（本文件不再直接读 .hidden）
+  // 屏幕显隐的判定收口到 Nav（本文件不直接读 .hidden）
   function shelfVisible() {
     return Nav.screenVisible('shelf');
   }
@@ -93,8 +93,8 @@ import { A, saveAll, toast } from './core.js';
   }
 
  /* ============ 视图模型（ShelfScreen 状态桥） ============
-   * Svelte 组件按这些数据渲染出与 rowOf / resultRowOf 同结构的 DOM；
-   * 切分 / 分组 / 截断口径与旧拼装路径共用上面的常量与工具函数，不另起一套。 */
+  * Svelte 组件按这些数据渲染行与命中片段；分组 / 截断 / 错峰的口径都在这里，
+  * 组件只管画，不另算一套。 */
 
   function shelfModel(index) {
     const currentId = Store.getCurrentId();
@@ -123,8 +123,8 @@ import { A, saveAll, toast } from './core.js';
     return {
       id: it.id,
       current: it.id === currentId,
-      rowIn: rowIndex < 14,
-      delay: rowIndex < 14 ? Math.min(rowIndex * ROW_STAGGER_STEP, ROW_STAGGER_MAX) + 'ms' : '',
+      rowIn: rowIndex < ROW_STAGGER_COUNT,
+      delay: rowIndex < ROW_STAGGER_COUNT ? (rowIndex * ROW_STAGGER_STEP) + 'ms' : '',
       // 导入档案的 thumb 不可信：白名单只放行 data:/blob:（safeThumb），
       // 组件拼 url() 时再经 JSON.stringify 转义——与旧 rowOf / models.js setStageArt 同口径
       thumb: Store.safeThumb(it.thumb),
@@ -146,7 +146,7 @@ import { A, saveAll, toast } from './core.js';
     };
   }
 
-  // 「展开更多」：点开「更早」分组的截断（新旧两屏的行列表展开按钮共用）
+  // 「展开更多」：点开「更早」分组的截断（ShelfScreen 的展开按钮调它）
   function showAllEarlier() {
     expandEarlier = true;
     renderShelf();
@@ -160,7 +160,7 @@ import { A, saveAll, toast } from './core.js';
 
   function openRowMenu(row, it) {
     closeRowMenus();
-    if (A.closeMenus) A.closeMenus();
+    A.closeMenus();
     const menu = document.createElement('div');
     menu.className = 'menu row-menu';
     const add = (label, fn) => {
@@ -184,7 +184,7 @@ import { A, saveAll, toast } from './core.js';
         A.openBranch({});
       });
     }
-    add('导出', () => { if (A.openExport) A.openExport(it.id); });
+    add('导出', () => A.openExport(it.id));
     add('删除', () => removeStory(it.id));
     row.appendChild(menu);
   }
@@ -224,7 +224,7 @@ import { A, saveAll, toast } from './core.js';
     if (!sc.enabled) return false;
     const cfg = resolveSub('scribe');
     if (!cfg.provider || !cfg.model) return false;
-    const adapter = (ChatProviders || {})[cfg.provider];
+    const adapter = ChatProviders[cfg.provider];
     if (!adapter || typeof adapter.chat !== 'function') return false;
     if (!cfg.apiKey) return false;
     return true;
@@ -288,7 +288,7 @@ import { A, saveAll, toast } from './core.js';
       let raw = '';
       try {
         const cfg = resolveSub('scribe');
-        const msgs = Titles.buildPrompt(story.messages || [], story.mode);
+        const msgs = Titles.buildPrompt(story.messages || []);
         raw = await ChatProviders[cfg.provider].chat(cfg, msgs);
       } catch (e) {
         // 纯后台降级：不弹 toast、不计次（保留现有标题），但不再静默——console 留原因
@@ -311,7 +311,7 @@ import { A, saveAll, toast } from './core.js';
       let modelErr = null;
       if (titleModelUsable()) {
         const cfg = resolveSub('scribe');
-        const msgs = Titles.buildPrompt(st.messages || [], st.mode);
+        const msgs = Titles.buildPrompt(st.messages || []);
         let raw = '';
         try { raw = await ChatProviders[cfg.provider].chat(cfg, msgs); }
         catch (e) { modelErr = e; raw = ''; }
@@ -340,17 +340,16 @@ import { A, saveAll, toast } from './core.js';
 
   /* ================= 搜索 ================= */
 
-  const searchStats = { buildMs: 0, lastQueryMs: 0, docs: 0, built: false };
+  let searchBuilt = false;   // 索引是否已建好（建好才允许查询）
   let searchBuilding = false;
   let searchTimer = null;
   let activeIdx = -1;
 
   // 首次聚焦搜索框才惰性构建：分批让出主线程，建完才允许查询
   function ensureSearchIndex() {
-    if (searchStats.built || searchBuilding) return;
+    if (searchBuilt || searchBuilding) return;
     searchBuilding = true;
     const items = Store.listStories();
-    const t0 = Date.now();
     let i = 0;
     const BATCH = 5;   // 每批 ~5 个故事，setTimeout 0 让出主线程
     const step = () => {
@@ -361,9 +360,7 @@ import { A, saveAll, toast } from './core.js';
       }
       if (i < items.length) { setTimeout(step, 0); return; }
       searchBuilding = false;
-      searchStats.built = true;
-      searchStats.buildMs = Date.now() - t0;
-      searchStats.docs = Search.index.size();
+      searchBuilt = true;
       if (currentQuery) runSearch();
     };
     setTimeout(step, 0);
@@ -395,7 +392,7 @@ import { A, saveAll, toast } from './core.js';
     if (clearBtn) clearBtn.classList.toggle('hidden', !q);
     if (!q) {
       results.classList.add('hidden');
-      // 结果行 DOM 由组件管：推空数组（等价于旧 innerHTML=''）
+      // 结果行 DOM 由组件管：推空数组即可清空
       shelf.resSeq += 1;
       shelf.hits = [];
       input.setAttribute('aria-expanded', 'false');
@@ -406,11 +403,9 @@ import { A, saveAll, toast } from './core.js';
       renderShelf();
       return;
     }
-    if (!searchStats.built) { ensureSearchIndex(); return; }   // 等索引建好再查
+    if (!searchBuilt) { ensureSearchIndex(); return; }   // 等索引建好再查
 
-    const t0 = Date.now();
     const hits = Search.query(Search.index.docs(), q);
-    searchStats.lastQueryMs = Date.now() - t0;
 
     // 交叉淡入：结果替换分组列表
     list.classList.add('hidden');
@@ -573,10 +568,8 @@ import { A, saveAll, toast } from './core.js';
     renderShelf,
     openStory,
     maybeAutoTitle,
-    regenTitle,
     initShelf,
- // Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断——
-    // 两个入口登记给 A（函数体零改动 / 与旧按钮同语义），组件经 A() 调用
+    // Svelte 行上的「⋯」按钮 / Shift+F10 要叫到行菜单，「展开更多」要翻截断
     openRowMenu,
     showAllEarlier,
   });

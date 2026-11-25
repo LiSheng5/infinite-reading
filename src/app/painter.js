@@ -16,7 +16,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   /* ================= 画师子代理 + 生图 =================
    * 出图全走同一条串行队列 PaintQueue，画师构思也在队列里跑
    *（不与队列外的构思并发）；request_image 已异步化、不卡回合。
-   * 时机出图已删除——剧情模式只剩手动 🎨 / 工作台重画，外加 chat / rp 的工具直出。 */
+   * 剧情模式只剩手动 🎨 / 工作台重画，外加 chat 的工具直出。 */
 
   /* 队列兜底超时：正常情况下每一段都有自己的上限（画师构思 CHAT_TOTAL_TIMEOUT_MS
    * 10 分钟、生图 IMAGE_GEN_TIMEOUT_MS 3 分钟，含带工具重发的那一次），这里的 20 分钟只用来
@@ -95,8 +95,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // request_image 入队：立刻返回、不等图；任务带回合锚点，完成后落回「它所属的回合」。
-  // 只剩 chat / rp 的直出分支（模型自己写提示词，不经画师）——剧情模式的工具已停用，
-  // 原 direct === false 的画师分支已删除；剧情的手动作画走 enqueueImage（画师构思仍在 runPaintTask 一处）。
+  // 只有 chat 的直出分支（模型自己写提示词，不经画师）；剧情的手动作画走 enqueueImage
+  //（画师构思仍在 runPaintTask 一处）。
   function submitToolPaint(args) {
     const storyId = S.story && S.story.id;
     const a = args || {};
@@ -124,7 +124,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   // 作画任务体：合并原 runToolPaint / generateScene 的重复流程——
   //   构思（directPrompt 缺省时走画师；画师不可用 / 失败用场景描述兜底）→ 组 prompt → runPaint 出图写回
-  // 「构思 → 出图」集中在这里一处（非目标的预留点：以后要分叉工具 / 视频只改这里）。
+  // 「构思 → 出图」集中在这里一处（要改工具 / 视频出图也只改这里）。
   // opts: { storyId, nodeId, anchor, signal, directPrompt, promptRaw, sceneRef, altHint, supersedesEntry, supersedesScene, params }
   // signal 来自作画队列（超时 / 取消会 abort）：构思与生图两段都把它传下去，才能真的掐断在途请求
   async function runPaintTask(opts) {
@@ -137,13 +137,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const styleText = styleSuffixText();
     let promptRaw, prompt, alt;
     if (opts.directPrompt) {
-      // 直出：提示词是模型写的，不请画师（chat / rp 的工具出图 / 工作台按提示词重画）
+      // 直出：提示词是模型写的，不请画师（chat 的工具出图 / 工作台按提示词重画）
       promptRaw = opts.promptRaw || opts.directPrompt;
       prompt = composePrompt(opts.directPrompt, styleText);
       alt = opts.altHint || opts.sceneRef || '';
       setGenPill('AI 作画中…');
     } else {
-      // —— 画师子代理：把剧情写成绘画提示词 ——（手动 🎨 / 时机出图已删）
+      // —— 画师子代理：把剧情写成绘画提示词 ——（手动 🎨 / 工作台重画）
       const sceneRef = opts.sceneRef
         || S.story.lastSceneSummary || String(S.story.premise || '').split('\n')[0] || 'story scene';
       setGenPill('AI 画师构思中…');
@@ -168,7 +168,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
   }
 
-  // 手动出图（剧情 / 聊天唯一的自动画入口只剩用户点 🎨）：
+  // 手动出图（剧情模式下唯一的作画入口就是用户点 🎨）：
   // 节点在任务创建时记下，同一条队列串行；画师构思 → 出图仍集中在 runPaintTask
   function enqueueImage(sceneSummary, nodeId, key) {
     const storyId = S.story && S.story.id;   // 记住「为谁画的」：等图期间换档也不写错故事
@@ -295,9 +295,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
           if (name === 'recall_recent_plot') wantPlot = true;
         }
       },
-      // 画师构思 / 生图不再写全局 chatAbortCtrl——「停止」只管聊天回合，
-      // 后台作画不受它中断（超时沿用适配器自己的；本期不为作画再造取消按钮）
-      // 但作画队列自己有取消信号（q.cancel / 队列超时），它必须能中断构思，
+      // 画师构思 / 生图不写全局 chatAbortCtrl——「停止」只管聊天回合，后台作画不受它中断
+      //（超时沿用适配器自己的）。但作画队列自己有取消信号（q.cancel / 队列超时），它能中断构思，
       // 否则一个挂死的对话请求照样堵住整条作画队列。这里把队列信号接到这条请求的 controller 上。
       onAborter(ctrl) {
         const outer = opts.signal;
@@ -446,8 +445,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return scene;
   }
 
-  // （generateScene 已并入 runPaintTask：构思 → 组 prompt → 出图三处共用一个任务体）
-
   /* ================= 画师工作台 ================= */
 
   function findImageEntry(id) {
@@ -537,10 +534,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const busy = !!S.pw.busy;
     const card = S.story && S.story.styleCard;
     const hasCard = !!(card && card.locked !== false);
-    const sendBtn = $('#btn-pw-send');
-    if (sendBtn) sendBtn.disabled = busy;
-    const redrawBtn = $('#btn-pw-redraw');
-    if (redrawBtn) redrawBtn.disabled = busy;
+    setPwButtons(busy);
     const fb = $('#btn-pw-force');
     if (fb) {
       fb.disabled = !hasCard || busy;
@@ -548,6 +542,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     A.renderWorkbenchVideo();   // 「视频」区：本图已生成视频的预览
     renderPainterThread();
+  }
+
+  // 工作台三钮统一置位 / 还原（busy 期间全禁用；结束后由 renderWorkbench 按「有没有设定卡」重算）
+  function setPwButtons(dis) {
+    for (const sel of ['#btn-pw-send', '#btn-pw-redraw', '#btn-pw-force']) {
+      const el = $(sel);
+      if (el) el.disabled = dis;
+    }
   }
 
   function renderPainterThread() {
@@ -598,9 +600,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!text) return;
     $('#pw-input').value = '';
     S.pw.busy = true;
-    $('#btn-pw-send').disabled = true;
-    $('#btn-pw-redraw').disabled = true;
-    $('#btn-pw-force').disabled = true;
+    setPwButtons(true);
     // 用户可能手改过 prompt：先按当下的版本跟画师谈
     const curPrompt = $('#pw-prompt').value.trim();
     const curAlt = $('#pw-alt').value.trim();
@@ -646,9 +646,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     } finally {
       WriteBack.writeBackIfSameJob(S.pw, jobPw, (pw) => {
         pw.busy = false;
-        $('#btn-pw-send').disabled = false;
-        $('#btn-pw-redraw').disabled = false;
-        $('#btn-pw-force').disabled = false;
+        setPwButtons(false);
       });
       saveAll();
     }
@@ -658,8 +656,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
    *   byCard=false —— 「按此重画」：用面板里当下的 prompt（手改过就按手改的）同 prompt 重画；
    *   byCard=true  —— 「按设定卡强制重画」：把视觉设定卡的画风 / 人物设定压进 prompt 再画，
    *                   并回填面板，让用户看到真正发出去的原话。
-   * 两个按钮只有「取词方式」不同，取到词之后的下单 / 写回 / 收尾完全一致——
-   * 分开写两份曾让「回填面板」「toast 文案」这类细节各漂各的。旧图一律保留并标 supersededBy。 */
+   * 两个按钮只有「取词方式」不同，取到词之后的下单 / 写回 / 收尾完全一致（所以只此一份实现）。
+   * 旧图一律保留并标 supersededBy。 */
   async function redraw(opts) {
     const byCard = !!(opts && opts.byCard);
     if (!S.story || !S.pw || S.pw.busy) return;
@@ -682,12 +680,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (!prompt) { toast('prompt 不能为空', true); return; }
       promptRaw = stripStyleSuffix(prompt);
     }
-    const key = 'redraw:' + jobPw.sceneId;   // 带 key 防连点（不需要 busy 保护，它改的是已有的图）
+    const key = 'redraw:' + jobPw.sceneId;   // 带 key 防连点；下面同时把 busy 置位、锁住三个按钮
     if (paintQ.has(key)) { toast('这张图已在作画队列里'); return; }
     jobPw.busy = true;
-    $('#btn-pw-redraw').disabled = true;
-    $('#btn-pw-send').disabled = true;
-    $('#btn-pw-force').disabled = true;
+    setPwButtons(true);
     pwParamsToSettings();
     if (byCard) {
       $('#pw-prompt').value = prompt;   // 透明：用户看到真正发出去的原话
@@ -715,9 +711,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     } finally {
       WriteBack.writeBackIfSameJob(S.pw, jobPw, (pw) => {
         pw.busy = false;
-        $('#btn-pw-redraw').disabled = false;
-        $('#btn-pw-send').disabled = false;
-        $('#btn-pw-force').disabled = false;
+        setPwButtons(false);
       });
       saveAll();
     }

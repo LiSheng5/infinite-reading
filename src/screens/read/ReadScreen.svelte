@@ -126,7 +126,7 @@
 
   <footer class="composer">
     <!-- 选项托盘：默认收起，点「灵感」才展开 -->
-    <div id="choice-tray" class="choice-tray" class:hidden={!read.chat.trayVisible}>
+    <div id="choice-tray" class="choice-tray" class:hidden={!read.chat.trayOpen}>
       {#each read.chat.tray as c}
         <button type="button" class="tray-btn" title={c} onclick={() => pickChoice(c)}>{c}</button>
       {/each}

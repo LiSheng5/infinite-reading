@@ -14,16 +14,14 @@ import { A } from './core.js';
 
   function capChat() {
     // 参考表是纯数据查询（只登记上下文窗口）；查不到 / 抛错都按「未登记」处理，界面退回手填提示
-    try { return Cap && Cap.find ? Cap.find(S.settings.chat.model) : null; } catch (_) { /* 未登记 = 无参考值 */ return null; }
+    try { return Cap.find(S.settings.chat.model); } catch (_) { /* 未登记 = 无参考值 */ return null; }
   }
 
   // 有效主模型配置：story.prefs.profileId → 模型库；缺省 / 找不到 → 默认主模型。
   // 所有发给主模型的请求与派生量（contextWindow / extraParams / noTools 键）都走它，
   // 不再直接读 S.settings.chat。
   function chatCfg() {
-    const P = Prefs;
-    if (P && typeof P.resolveChatCfg === 'function') return P.resolveChatCfg(S.settings, S.story).cfg;
-    return S.settings.chat;
+    return Prefs.resolveChatCfg(S.settings, S.story).cfg;
   }
 
   // 有效上下文窗口：用户手填优先，其次参考表；0 = 未知（压缩退回条数兜底）
@@ -32,7 +30,7 @@ import { A } from './core.js';
     const manual = +cfg.contextWindow || 0;
     if (manual > 0) return manual;
     try {
-      const cap = Cap && Cap.find ? Cap.find(cfg.model, cfg.provider) : null;
+      const cap = Cap.find(cfg.model, cfg.provider);
       return (cap && +cap.contextWindow > 0) ? +cap.contextWindow : 0;
     } catch (_) { return 0; }   // 参考表查询失败 = 未知窗口（压缩按条数兜底，功能不受影响）
   }
@@ -47,13 +45,9 @@ import { A } from './core.js';
     ctxInput.placeholder = (cap && +cap.contextWindow > 0)
       ? (+cap.contextWindow + '（自动，按参考表）')
       : '不知道就留空（回退按条数压缩）';
-    const parts = [];
-    if (cap) {
-      parts.push('参考值：' + cap.model + (Cap.summarize ? '（' + Cap.summarize(cap) + '）' : ''));
-    } else {
-      parts.push('参数全部手填即可，不影响使用：上下文容量可在服务商「模型广场 / 文档」查到，不知道就留空（回退按条数压缩）；思考档位等厂商参数写进上面的「自定义请求参数」');
-    }
-    $('#s-chat-cap').textContent = parts.join(' · ');
+    $('#s-chat-cap').textContent = cap
+      ? ('参考值：' + cap.model + '（' + Cap.summarize(cap) + '）')
+      : '参数全部手填即可，不影响使用：上下文容量可在服务商「模型广场 / 文档」查到，不知道就留空（回退按条数压缩）；思考档位等厂商参数写进上面的「自定义请求参数」';
   }
 
   // 背景图只作用于右栏舞台：底层是当前图的模糊放大副本（CSS 负责模糊 / 压暗）。

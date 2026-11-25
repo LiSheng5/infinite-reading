@@ -7,14 +7,13 @@ import { A, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, reportBackgroundFailure } = A;
+  const { $, errorText, reportBackgroundFailure } = A;
 
 
   /* ---- 侧车连接状态与主动消息投递 ---- */
 
   function sidecarReady() {
-    const SC = Sidecar;
-    return !!(SC && typeof SC.isOnline === 'function' && SC.isOnline() && SC.status().hasToken);
+    return Sidecar.isOnline() && Sidecar.status().hasToken;
   }
 
   function sidecarOffHint() {
@@ -22,8 +21,7 @@ import { A, toast } from './core.js';
   }
 
   function renderSidecarStatus() {
-    const SC = Sidecar;
-    const st = SC ? SC.status() : { online: false, hasToken: false, features: {}, lastError: '' };
+    const st = Sidecar.status();
     const el = $('#sidecar-state');
     if (el) {
       el.textContent = st.online
@@ -59,15 +57,8 @@ import { A, toast } from './core.js';
       plus.setAttribute('aria-expanded', 'false');
       return;
     }
-    const SC = Sidecar;
-    const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
+    const st = Sidecar.status();
     const ready = !!(st.online && st.hasToken);
-    // 「✉ 写邮件」「🛒 代下单」只在聊天（chat）下显示（用户主动操作，不是模型调用）
-    const isChat = !!(S.story && S.story.mode === 'chat');
-    const emBtn = $('#btn-feat-email');
-    if (emBtn) emBtn.classList.toggle('hidden', !isChat);
-    const pmBtn = $('#btn-feat-payment');
-    if (pmBtn) pmBtn.classList.toggle('hidden', !isChat);
     for (const sel of ['#btn-feat-email', '#btn-feat-schedule', '#btn-feat-payment']) {
       const b = $(sel);
       if (!b || b.classList.contains('hidden')) continue;
@@ -117,34 +108,29 @@ import { A, toast } from './core.js';
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
+    } catch (e) { toast('导出失败：' + errorText(e), true); }
   }
 
   // 页面打开 / 重新上线时补跑：把侧车里排队的触达捞回来（页面关着时侧车只入队，不打扰）
   async function pullProactive() {
-    const SC = Sidecar;
-    const F = Features;
-    if (!SC || !F || !SC.isOnline() || !SC.status().hasToken) return;
+    if (!sidecarReady()) return;
     try {
-      const list = await SC.listPending();
+      const list = await Sidecar.listPending();
       for (const p of list) {
         if (p.channel && S.story && p.channel !== S.story.id) continue;   // 指定了别的会话就跳过
-        F.accept({ fireId: p.id, prompt: p.prompt, name: p.name, reason: p.reason });
+        Features.accept({ fireId: p.id, prompt: p.prompt, name: p.name, reason: p.reason });
       }
     } catch (e) { reportBackgroundFailure('主动消息', e, { note: '拉取失败，等下一次上线再补' }); }
   }
 
   async function ackProactive(fireId) {
-    const SC = Sidecar;
-    if (!SC || !fireId) return;
-    try { await SC.ackPending(fireId); }
+    if (!fireId) return;
+    try { await Sidecar.ackPending(fireId); }
     catch (e) { reportBackgroundFailure('主动消息确认', e, { note: '确认失败，下次下发会重复提醒' }); }
   }
 
   function initFeatures() {
-    const F = Features;
-    if (!F) return;
-    F.attach({
+    Features.attach({
       // 什么时候能把主动消息送进回合流程：不忙、有故事、是聊天模式、且在线
       canDeliver: () => !S.busy && !!S.story && S.story.mode === 'chat'
         && (typeof navigator === 'undefined' || navigator.onLine !== false),
@@ -161,16 +147,14 @@ import { A, toast } from './core.js';
   }
 
   function initSidecar() {
-    const SC = Sidecar;
-    if (!SC) return;
-    SC.configure(S.settings.sidecar || {});
-    SC.on('state', () => {
+    Sidecar.configure(S.settings.sidecar || {});
+    Sidecar.on('state', () => {
       renderSidecarStatus();
-      if (SC.isOnline() && SC.status().hasToken) { pullProactive(); A.loadFeatureConfig(); }
+      if (sidecarReady()) { pullProactive(); A.loadFeatureConfig(); }
     });
-    SC.on('fire', payload => { if (Features) Features.accept(payload); });
-    SC.on('changed', () => { if (typeof A.renderTriggerList === 'function') { try { A.renderTriggerList(); } catch (_) { /* 列表刷新失败不影响推送本身，下次变更再刷 */ } } });
-    SC.start();
+    Sidecar.on('fire', payload => Features.accept(payload));
+    Sidecar.on('changed', () => A.renderTriggerList());
+    Sidecar.start();
     renderSidecarStatus();
     pullProactive();
     if (sidecarReady()) A.loadFeatureConfig();

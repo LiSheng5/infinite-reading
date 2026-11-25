@@ -15,7 +15,7 @@
 import { Context } from './context.ts';
 
 /** 服务商实报的用量形状（normalizeUsage 的输出）；只用于说明文字，不参与 level */
-export interface UsageReport {
+interface UsageReport {
   prompt: number;
   completion: number;
   total: number;
@@ -24,13 +24,13 @@ export interface UsageReport {
 }
 
 /** 一层上下文占用的估算（分层明细用）；layers 之和恒等于整体 tokens */
-export interface CtxLayer {
+interface CtxLayer {
   key: string;
   label: string;
   tokens: number;
 }
 
-export interface CtxUsage {
+interface CtxUsage {
   /** 下一轮请求的估算 token（≈：不含用户还没输入的那一句与召回 / 实体命中注入） */
   tokens: number;
   /** 模型上下文窗口（token）；0 = 容量未知 */

@@ -8,11 +8,11 @@ import { A, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, irConfirm, openModal, closeModal, clone, fmtTime, fmtMB, persistSettings } = A;
+  const { $, Store, irConfirm, openModal, closeModal, fmtTime, fmtMB, persistSettings, errorText } = A;
 
 
   /* ================= 本地存储与备份（数据安全） =================
-   * 全部数据只在浏览器 localStorage（每站点约 5MB），没有任何服务端。这里做三件事：
+   * 全部数据只在这个浏览器里（主库 IndexedDB，退路 localStorage 约 5MB），没有任何服务端。这里做三件事：
    *  1) 申请持久化存储 navigator.storage.persist()：磁盘压力下的 LRU 淘汰会跳过本站
    *     （Safari 的 7 天无交互清除仍会生效，只能靠交互 / 加到主屏缓解）
    *  2) 算清本应用占用量，到 70% 提前预警（原来的提示只在写入失败之后才出现，已经晚了）
@@ -70,7 +70,7 @@ import { A, toast } from './core.js';
     if (!el) return;
     el.textContent = '正在统计占用…';
     let est = null;
-    try { est = Storage ? await Storage.estimate() : null; }
+    try { est = await Storage.estimate(); }
     catch (_) { /* 探测失败：下面按「查不到占用统计」显示，不影响导出 */ }
     let imgs = 0;
     try { imgs = (await Store.listImageKeys()).length; }
@@ -119,8 +119,8 @@ import { A, toast } from './core.js';
   }
 
   // 导出包：默认剥掉 API Key（备份文件常被放进网盘，带 Key 等于把钱包一起备份）
- // 打包逻辑抽到 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
-  function buildBackupPack(stripKeys) {
+ // 打包逻辑在 src/core/backupPack.ts（纯数据），这里只负责取数与界面反馈
+ function buildBackupPack(stripKeys) {
     return BackupPack.buildBackupPack(
       S.settings,
       Store.loadUserProfile(),
@@ -147,14 +147,18 @@ import { A, toast } from './core.js';
     const stamp = day.getFullYear() + String(day.getMonth() + 1).padStart(2, '0') + String(day.getDate()).padStart(2, '0');
     const note = withKeys ? '（含 API Key，请妥善保管）' : '（不含 API Key）';
 
-    if (!withSrc) {
+    // 写成 .irbackup.json 并收尾（不含原图 / 没取到原图两条路共用）
+    const exportJson = () => {
       A.download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
       markBackedUp();
       renderStoragePanel();
+    };
+
+    if (!withSrc) {
+      exportJson();
       toast('已导出全部备份：' + pack.stories.length + ' 个故事' + note, false, true);
       return;
     }
-    if (!(Zip && Zip.build)) { toast('打包模块没加载出来：请刷新页面重试', true, true); return; }
 
     if (btn) { btn.disabled = true; btn.textContent = '正在收集原图…'; }
     try {
@@ -163,10 +167,8 @@ import { A, toast } from './core.js';
         if (btn) btn.textContent = '正在打包原图 ' + done + '/' + total + '（' + fmtMB(bytes) + '）…';
       });
       if (!zip.count) {
-        // 一张原图都没取到：多半是 早期的老故事只存了缩略图（那时原图还没有单独存放）
-        A.download('ir-backup-' + stamp + '.irbackup.json', JSON.stringify(pack, null, 1));
-        markBackedUp();
-        renderStoragePanel();
+        // 一张原图都没取到：多半是早期的老故事只存了缩略图（那时原图还没有单独存放）
+        exportJson();
         toast('本地没有原图可打包（旧故事可能只存了缩略图），已改为导出不含原图的 .irbackup.json', false, true);
         return;
       }
@@ -175,14 +177,14 @@ import { A, toast } from './core.js';
       renderStoragePanel();
       toast('已导出全部备份：' + pack.stories.length + ' 个故事 + ' + zip.count + ' 张原图（' + fmtMB(zip.bytes) + '）' + note, false, true);
     } catch (e) {
-      toast('打包失败：' + ((e && e.message) ? e.message : e), true, true);
+      toast('打包失败：' + errorText(e), true, true);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = oldText; }
     }
   }
 
   async function applyBackupImport(obj, zipEntries) {
- // 数据校验/清单过滤抽到 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
+    // 数据校验 / 清单过滤在 src/core/backupPack.ts（parseBackup），这里只留确认与界面反馈
     const { stories, pending, missing } = BackupPack.parseBackup(obj, zipEntries);
     if (!stories.length && !obj.settings) { toast('备份文件里没有可还原的内容', true); return; }
     const ok = await irConfirm(
@@ -228,7 +230,7 @@ import { A, toast } from './core.js';
       + (imgs ? ' + ' + imgs + ' 张原图' : '')
       + (lost
         ? '；有 ' + lost + ' 张原图没还原'
-          + (Storage && !Storage.available ? '（这台浏览器用不了 IndexedDB，原图存不进本地）' : '（数据不完整）')
+          + (!Storage.available ? '（这台浏览器用不了 IndexedDB，原图存不进本地）' : '（数据不完整）')
         : '')
       + (missing ? '；清单里有 ' + missing + ' 张图不在包里（备份文件可能被改动过）' : ''),
       !!lost, true);
@@ -260,7 +262,7 @@ import { A, toast } from './core.js';
     A.syncAdvPanels();     // 已有内容的折叠块（单独配置 / 高级参数 / 低频可选块）自动展开
     A.autoTestSweep();     // 测试连接自动化：补一轮探测（有短时缓存，重开不重复狂测）
     if (A.sidecarReady()) {   // 打开设置时刷新一次安全项（真源在侧车）；填完再同步一次折叠块
-      Promise.resolve(A.loadFeatureConfig()).then(() => A.syncAdvPanels(), () => {});
+      A.loadFeatureConfig().then(() => A.syncAdvPanels(), () => {});
     }
   }
 
@@ -277,13 +279,12 @@ import { A, toast } from './core.js';
 
   // 带原图的全量备份（.zip）：解出 ir-backup.json 走同一套还原流程，原图另走 images/*
   async function importZipFile(file) {
-    if (!(Zip && Zip.read)) { toast('这个版本没有 zip 支持：请刷新页面重试', true, true); return; }
     toast('正在读取备份包…', false, true);
     let entries = null;
     try {
       entries = await Zip.read(file);
     } catch (e) {
-      toast('这个 .zip 打不开：' + ((e && e.message) ? e.message : e), true, true);
+      toast('这个 .zip 打不开：' + errorText(e), true, true);
       return;
     }
     const main = pickBackupJson(entries);
@@ -319,15 +320,14 @@ import { A, toast } from './core.js';
     // 过旧导出包不再兼容：直接明确拒绝，不半加载
     if (Store.storyPackTooOld(obj)) { toast('存档版本过旧，不再支持（请用新版本重新导出）', true, true); return; }
     if (obj.kind === 'premise') {
-      // 精简设定包 → 预填开局向导（路径①）
+      // 精简设定包 → 预填开局向导
       closeModal('modal-new');
       A.openWizard(wizardPrefillFromPack(obj));
       toast('精简设定包：已预填向导，确认后开始', false, true);
       return;
     }
     // 完整档案：原样续玩
- // story 组装的数据段抽到 src/core/backupPack.ts（storyFromPack），
-    // 这里只留落盘与界面跳转
+    // story 组装的数据段在 src/core/backupPack.ts（storyFromPack），这里只留落盘与界面跳转
     const st = BackupPack.storyFromPack(obj);
     Store.saveStory(st);
     A.showShelf();                       // 导入即进书架，能直接看到新卡片
@@ -339,7 +339,7 @@ import { A, toast } from './core.js';
           const imageId = await A.storeOriginal(sc.id, sc.src, { width: sc.width, height: sc.height });
           if (imageId) {
             sc.imageId = imageId;
-            // 这里 story 已被 showShelf 置空：直接在导入的 st 上找（原写法 findImageEntry 永远找不到）
+            // S.story 已被 showShelf 置空：直接在导入的 st 上找图片条目
             const entry = (st.log || []).find(e => e && e.type === 'image' && e.id === sc.id);
             if (entry) entry.imageId = imageId;
             // 分支树里同一张 scene / 图片条目也换键：否则非当前分支的图全是死键

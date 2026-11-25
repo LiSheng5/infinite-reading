@@ -1,16 +1,15 @@
 /*
  * src/app/readmodel.js —— 阅读页视图模型（ReadScreen 状态桥的弹药）
  *
- * render.js 的 renderChat / renderThumbs 在 Svelte 屏（src/screens/read）在位时取这里的
- * 纯数据模型推给组件；切分 / 分派口径与旧拼装路径（bubbleFor / renderOpeningHint /
- * renderChoices / renderThumbs）共用同一套 helper（imageSceneById / sceneSrc / safeImgSrc /
- * KIND_LABELS / Tree.siblings …），不另起一套。
- * 用户 / 模型产出的文字只以字符串进模型（组件文本插值渲染 ≡ textContent，红线）；
+ * render.js 的 renderChat / renderThumbs 取这里的纯数据模型推给组件
+ *（src/screens/read：ReadScreen.svelte / ChatBubble.svelte 按 kind 分派各分支）；
+ * 拆分口径复用同一套 helper（imageSceneById / sceneSrc / safeImgSrc / KIND_LABELS /
+ * Tree.siblings …），不另起一套。
+ * 用户 / 模型产出的文字只以字符串进模型（组件文本插值渲染，等价 textContent）；
  * 条目附原条目引用（entry），点击动作（选场景 / 灯箱 / 工作台 / 提案确认拒绝）原样走 App。
  * 每个条目模型带稳定 key：按 log 条目对象身份发号（project 按引用共享 → 同一条目
  * 跨 renderChat / 切分支共享前缀拿到同一个号），ReadScreen 的 each 据此做 keyed 更新——
  * 旧气泡与内联图不销毁、不重新解码、入场动画不重放。
- * 输出纯数据视图模型，DOM 由 Svelte 组件按字段渲染；字段名与旧拼装保持一致，供回归对照。
  */
 import { Tree } from '../core/tree.ts';
 import { Prefs } from '../core/prefs.ts';
@@ -21,7 +20,7 @@ import { A } from './core.js';
 
   const S = A.state;
 
-  /* ================= 单条条目：e.type → 模型（分派表同 BUBBLE_RENDERERS） ================= */
+  /* ================= 单条条目：e.type → 模型（ChatBubble.svelte 按 kind 分派） ================= */
 
   // 通用文本气泡（player / choice / narration 及未知类型）：标签 + 正文 + 思考链 + 分支导航
   function textModel(e, index) {
@@ -77,7 +76,7 @@ import { A } from './core.js';
     };
   }
 
-  // 场景标记行（剧情模式）/ 内联图（chat，无舞台）：imageBubble 的两条分支
+  // 场景标记行（剧情模式）/ 内联图（chat，无舞台）两条分支
   function imageModel(e) {
     const inline = !!(S.story && S.story.mode === 'chat');
     const sc = A.imageSceneById(e.id);
@@ -85,7 +84,7 @@ import { A } from './core.js';
       kind: 'image',
       variant: inline ? 'inline' : 'row',
       entry: e,
-      // 内联图走安全白名单（data: / blob: / https:）；场景行原样（同旧 imageRowBubble 口径）
+      // 内联图走安全白名单（data: / blob: / https:）；场景行原样
       src: inline ? A.safeImgSrc(A.sceneSrc(sc, e)) : (A.sceneSrc(sc, e) || ''),
       alt: e.alt || (inline ? '插图' : '场景缩略图'),
       cap: (e.alt || (inline ? '（一幅插图）' : '（一幅场景插图）'))
@@ -118,7 +117,7 @@ import { A } from './core.js';
     };
   }
 
-  // 提案卡（✉ 邮件 / 🛒 下单）：参数原值进模型（红线 4，组件文本插值渲染），
+  // 提案卡（✉ 邮件 / 🛒 下单）：参数原值进模型（组件文本插值渲染），
   // 状态 / 剩余分钟由 features 的 proposalStatusLabel 统一给出；状态收敛同点位
   //（Proposals.reconcile：旧档迁移 / 中断的 executing / TTL 过期，只改内存，saveAll 落盘）
   function proposalModel(e) {
@@ -312,7 +311,7 @@ import { A } from './core.js';
     };
   }
 
-  /* ================= renderChat 整模型（旧 renderChat 的同步语义） ================= */
+  /* ================= renderChat 整模型 ================= */
 
   function readChatModel() {
     const m = {
@@ -326,7 +325,6 @@ import { A } from './core.js';
       liveReason: false,
       choices: [],
       tray: [],
-      trayVisible: false,
       trayOpen: false,
       inspiration: false,
       inspirationCount: '',
@@ -340,11 +338,11 @@ import { A } from './core.js';
     const log = story.log || [];
     log.forEach((e, i) => { m.entries.push(entryModel(e, i)); });
 
-    // 剧情模式空档：不自动跑开场，显示「开始第一幕」按钮（renderOpeningHint 同口径）
+    // 剧情模式空档：不自动跑开场，显示「开始第一幕」按钮
     m.openingHint = !S.busy && !S.live && story.mode === 'choice' && !log.length;
 
     // 聊天空对话（无卡且无历史）：还没发过消息时给「能做什么」引导（发出第一条消息后 log 非空，自然消失）
-    // 有卡时沿用原 rp 的开场方式：开场白已在进场时写进日志，这里不再出引导
+    // 有卡时开场白已在进场时写进日志，这里不再出引导
     m.agentIntro = !S.busy && !S.live && story.mode === 'chat' && !story.characterCard && !log.length;
     if (m.agentIntro) {
       // 首行是模式说明（与剧情的开局页同一份文案表）：
@@ -371,7 +369,7 @@ import { A } from './core.js';
     m.live = !!S.live;
     m.liveReason = !!(S.live && showReasoning() && String(S.live.reasoning || '').trim());
 
-    // 选项（renderChoices 同口径）：always 内联在旁白下；默认收在「灵感」托盘
+    // 选项：always 内联在旁白下；默认收在「灵感」托盘
     const canShow = !S.busy && !S.live && story.mode === 'choice'
       && Array.isArray(S.currentChoices) && S.currentChoices.length > 0;
     const inline = Prefs.effective(S.settings, story, 'choices') === 'always';
@@ -380,7 +378,6 @@ import { A } from './core.js';
       m.inspiration = true;
       m.inspirationCount = String(S.currentChoices.length);
       m.trayOpen = !!S.choicesTrayOpen;
-      m.trayVisible = m.trayOpen;
       if (m.trayOpen) m.tray = S.currentChoices.slice();
     }
     return m;

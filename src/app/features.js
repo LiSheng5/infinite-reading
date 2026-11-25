@@ -8,9 +8,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
   const S = A.state;
   const { $, irConfirm, openModal, fmtTime, errorText, reportBackgroundFailure } = A;
 
-  // 回合锚点：request_image 在 commit 之前提交、节点还没创建——任务提交时带上它；
-  // 回合 commit 成功后补 nodeId，失败 / 主动停止置 dead；任务开跑前与写回前各核一次。
-
   /* ================= 可选本地服务（sidecar）：调度工具与主动消息 ================= */
 
   // 本地服务类能力（定时 / 邮件 / 下单）「为什么还没启用」的唯一口径：
@@ -32,7 +29,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
-  // 另外 toolsForMode 只在 chat（聊天）模式放行（红线 7）。
+  // 另外 toolsForMode 只在 chat（聊天）模式放行。
   function proposalToolsAvailable() {
     return {
       email: !sidecarFeatureWhy('email'),
@@ -112,14 +109,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
         const hit = list.filter(t => t.name === want)[0];
         if (!hit) return '[取消失败] 没有叫「' + want + '」的安排（可以先 list_triggers 看看）。';
         await SC.cancelTrigger(hit.id);
-        if (typeof renderTriggerList === 'function') { try { renderTriggerList(); } catch (_) {} }
+        renderTriggerList();
         return '[已取消] 安排「' + hit.name + '」已删除。';
       }
       return '[调度失败] 未知的调度动作：' + name;
     } catch (e) {
       // 已确认的安排不能被模型改写：给出可执行的下一步，别让它反复重试同名
       if (e && e.code === 'TRIGGER_LOCKED') return '[调度失败] 同名安排「' + String(a.name || '') + '」已被用户确认生效，模型不能改写它。要改：换个名字重新提交（用户确认后再用），或请用户在「设置 → 本地服务」里取消旧的。';
-      return '[调度失败] ' + ((e && e.message) || e);
+      return '[调度失败] ' + errorText(e);
     }
   }
 
@@ -162,7 +159,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       renderEmailAudit();
       renderPayLedger();
     } catch (e) {
-      toast('读取本地服务配置失败：' + ((e && e.message) || e), true, true);
+      toast('读取本地服务配置失败：' + errorText(e), true, true);
     }
   }
 
@@ -215,7 +212,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       A.renderSidecarStatus();
       renderTriggerList();
     } catch (e) {
-      toast('写入本地服务失败：' + ((e && e.message) || e), true, true);
+      toast('写入本地服务失败：' + errorText(e), true, true);
     }
   }
 
@@ -271,7 +268,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
           ok.textContent = '确认';
           ok.onclick = async () => {
             try { await Sidecar.confirmTrigger(t.id); toast('已生效'); renderTriggerList(); }
-            catch (e) { toast('确认失败：' + ((e && e.message) || e), true); }
+            catch (e) { toast('确认失败：' + errorText(e), true); }
           };
           acts.appendChild(ok);
         }
@@ -280,7 +277,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         del.textContent = '取消';
         del.onclick = async () => {
           try { await Sidecar.cancelTrigger(t.id); toast('已取消'); renderTriggerList(); }
-          catch (e) { toast('取消失败：' + ((e && e.message) || e), true); }
+          catch (e) { toast('取消失败：' + errorText(e), true); }
         };
         acts.appendChild(del);
         row.appendChild(acts);
@@ -356,7 +353,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
             toast(r && r.ok ? '已发送' : ('没发出：' + ((r && (r.message || r.code)) || '未知原因')), !(r && r.ok));
             renderEmailDrafts();
             renderEmailAudit();
-          } catch (e) { toast('发送失败：' + ((e && e.message) || e), true); }
+          } catch (e) { toast('发送失败：' + errorText(e), true); }
         };
         const del = document.createElement('button');
         del.className = 'ui-btn mini';
@@ -378,7 +375,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function openEmailModal() {
     // 「写邮件」只在聊天（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在聊天模式可用：切到聊天模式再用', true); return; }
+    if (!A.featuresAllowed()) { toast('写邮件只在聊天模式可用：切到聊天模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();
     const el = $('#email-status');
@@ -416,7 +413,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       renderEmailDrafts();
       renderEmailAudit();
     } catch (e) {
-      toast('发送失败：' + ((e && e.message) || e), true, true);
+      toast('发送失败：' + errorText(e), true, true);
     }
   }
 
@@ -430,7 +427,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     try {
       const r = await Sidecar.paymentTransactions(20);
       const list = (r && r.transactions) || [];
-      const s = await Sidecar.paymentSummary('');
+      const s = await Sidecar.paymentSummary();
       if (sum && s && s.summary) {
         sum.textContent = '今日已用 ' + A.yuan(s.summary.spent.dailyCents) + ' · 本月 ' + A.yuan(s.summary.spent.monthlyCents)
           + ' · 每日剩余 ' + A.yuan(s.summary.remaining.dailyCents);
@@ -471,7 +468,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
           try {
             const rr = await Sidecar.paymentReceipt(t.intentId);
             if (rr && rr.receipt) A.irDownloadText('收据-' + t.intentId + '.txt', rr.receipt.text);
-          } catch (e) { toast('导出失败：' + ((e && e.message) || e), true); }
+          } catch (e) { toast('导出失败：' + errorText(e), true); }
         };
         acts.appendChild(rec);
         if (t.status === 'awaiting_payment') {
@@ -482,7 +479,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
             const ok = await irConfirm('确认你已经在微信 / 支付宝里手动付好款了？', { title: '标记已支付', okText: '已支付' });
             if (!ok) return;
             try { await Sidecar.paymentMarkPaid(t.intentId); toast('已标记为已支付'); renderPayLedger(); }
-            catch (e) { toast('操作失败：' + ((e && e.message) || e), true); }
+            catch (e) { toast('操作失败：' + errorText(e), true); }
           };
           acts.appendChild(paid);
         }
@@ -497,7 +494,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function openPaymentModal() {
     // 「代下单」只在聊天（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在聊天模式可用：切到聊天模式再用', true); return; }
+    if (!A.featuresAllowed()) { toast('代下单只在聊天模式可用：切到聊天模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();
     const el = $('#pay-status');
@@ -542,9 +539,24 @@ import { A, renderChat, saveAll, toast } from './core.js';
       });
       return (md && md.id) || '';
     } catch (e) {
-      toast('读取授权范围失败：' + ((e && e.message) || e), true);
+      toast('读取授权范围失败：' + errorText(e), true);
       return '';
     }
+  }
+
+  /* 「需要你确认这一笔」的正文：手动下单与提案二次确认共用一套字段与文案口径。
+   * args = { amountCents, merchant, category, items }（items 为已拼好的商品文本） */
+  function confirmOrderLines(args, rem) {
+    const lines = [
+      '需要你确认这一笔：',
+      '',
+      '金额：' + A.yuan(args.amountCents),
+      '商户：' + (args.merchant || '（未填）'),
+      '品类：' + (args.category || '（未填）'),
+    ];
+    if (args.items) lines.push('商品：' + args.items);
+    lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
+    return lines.join('\n');
   }
 
   async function doPaymentSubmit() {
@@ -573,16 +585,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
       }
       if (r.needsApproval) {
         const rem = (r.summary && r.summary.remaining) || {};
-        const lines = [
-          '需要你确认这一笔：',
-          '',
-          '金额：' + A.yuan(amountCents),
-          '商户：' + (merchant || '（未填）'),
-          '品类：' + (category || '（未填）'),
-        ];
-        if (itemsText) lines.push('商品：' + itemsText);
-        lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
-        const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
+        const ok = await irConfirm(
+          confirmOrderLines({ amountCents: amountCents, merchant: merchant, category: category, items: itemsText }, rem),
+          { title: '确认下单', okText: '确认并支付' });
         const rr = ok ? await Sidecar.paymentApprove(r.intentId) : await Sidecar.paymentDeny(r.intentId);
         out.textContent = ok
           ? ((rr && rr.ok) ? ('已放行（' + (rr.status || 'charged') + '）') : ('未完成：' + ((rr && (rr.message || rr.code)) || '')))
@@ -597,11 +602,11 @@ import { A, renderChat, saveAll, toast } from './core.js';
       }
       renderPayLedger();
     } catch (e) {
-      toast('提交失败：' + ((e && e.message) || e), true, true);
+      toast('提交失败：' + errorText(e), true, true);
     }
   }
 
-  // email_propose / payment_propose → 建提案（红线 1/2/3）：
+  // email_propose / payment_propose → 建提案：
   // 提案路径只走 Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
   function runProposalTool(name, args) {
@@ -618,7 +623,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return '[已提交，待用户确认] 下单 ' + A.yuan(p.args.amountCents) + '（' + (p.args.merchant || '未填商户') + '）；用户确认前不会扣款。不要说已经付款。';
   }
 
-  /* ---- 提案卡（✉ 邮件提案 / 🛒 下单提案）：参数原值用 textContent 渲染（红线 4），未确认不可执行 ----
+  /* ---- 提案卡（✉ 邮件提案 / 🛒 下单提案）：参数原值用 textContent 渲染，未确认不可执行 ----
    * 状态文案只读 p.status（src/core/proposals.ts 的状态机是唯一真源）；
    * 旧档 / 中断的 executing 由渲染前的 Proposals.reconcile 提前收敛，这里只负责显示。 */
   function proposalStatusLabel(p, now) {
@@ -641,23 +646,16 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return p.status;
   }
 
-  /* 二次确认（红线 3）：不得自动批准；弹窗关掉 = 拒绝 → deny 清理 intent。
+  /* 二次确认：不得自动批准；弹窗关掉 = 拒绝 → deny 清理 intent。
    * summary 从 p.result 取（它随存档落盘），所以关窗 / 刷新后从卡片「继续确认」也能原样恢复。 */
   async function askSecondConfirm(p) {
     const a = p.args;
     const summary = (p.result && p.result.summary) || null;
     const rem = (summary && summary.remaining) || {};
-    const lines = [
-      '需要你确认这一笔：',
-      '',
-      '金额：' + A.yuan(a.amountCents),
-      '商户：' + (a.merchant || '（未填）'),
-      '品类：' + (a.category || '（未填）'),
-    ];
     const items = (a.items || []).map(i => i && i.name).filter(Boolean).join('、');
-    if (items) lines.push('商品：' + items);
-    lines.push('', '每日剩余：' + A.yuan(rem.dailyCents || 0) + ' · 每月剩余：' + A.yuan(rem.monthlyCents || 0), '', '确认后才会真正扣款。');
-    const ok = await irConfirm(lines.join('\n'), { title: '确认下单', okText: '确认并支付' });
+    const ok = await irConfirm(
+      confirmOrderLines({ amountCents: a.amountCents, merchant: a.merchant, category: a.category, items: items }, rem),
+      { title: '确认下单', okText: '确认并支付' });
     if (ok) {
       try { await Proposals.approveSecond(p, Sidecar, Date.now()); }
       catch (err) { Proposals.markFailed(p, errorText(err)); }   // 用户可见的失败落在提案卡上

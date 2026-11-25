@@ -13,7 +13,7 @@
 import { ImageProviders, VideoProviders, ChatProviders } from '../core/providers.ts';
 import { A } from './core.js';
 
-  const { $ } = A;
+  const { $, errorText } = A;
 
   /* ---- 「测试连接」：只读当前输入框的值 ----
    * 三个原则：① 不保存设置、② 不生成内容、③ 生图绝不出图（不花钱）。
@@ -32,24 +32,21 @@ import { A } from './core.js';
   const testResults = new Map();   // key → { level: 'ok'|'warn'|'fail', message, at }
 
   function readTestCfg(t) {
-    const pick = sels => {
-      for (const s of sels) { const el = $(s); const v = el ? String(el.value || '').trim() : ''; if (v) return v; }
-      return '';
-    };
+    const pick = sel => { const el = $(sel); return el ? String(el.value || '').trim() : ''; };
     let inherited = false;
     const grab = i => {
-      const own = pick([t.self[i]]);
+      const own = pick(t.self[i]);
       if (own) return own;
       if (!t.inherit) return '';
       inherited = true;
-      return pick([t.inherit[i]]);
+      return pick(t.inherit[i]);
     };
+    const pv = String((($('#s-image-provider') || {}).value) || '');
     return {
       cfg: {
         // 生图按面板上选的适配器测（comfyui 要带上 workflow / nodes，test 只用地址，出图才用它们）
         provider: t.kind === 'image'
-          ? ((($('#s-image-provider') || {}).value === 'minimax-image' || ($('#s-image-provider') || {}).value === 'comfyui')
-            ? ($('#s-image-provider') || {}).value : 'openai-images')
+          ? ((pv === 'minimax-image' || pv === 'comfyui') ? pv : 'openai-images')
           : (t.kind === 'video' ? 'minimax-video' : 'openai-compatible'),
         baseUrl: grab(0), apiKey: grab(1), model: grab(2),
         workflow: t.kind === 'image' ? String((($('#s-image-workflow') || {}).value || '')).trim() : '',
@@ -88,7 +85,7 @@ import { A } from './core.js';
       const r = await adapter.test(cfg);
       set(r.level, r.message + (inherited ? '（留空项已按剧情模型代入）' : ''));
     } catch (e) {
-      set('fail', '测试失败：' + ((e && e.message) ? e.message : String(e)));
+      set('fail', '测试失败：' + errorText(e));
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = oldText; }
     }

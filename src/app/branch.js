@@ -31,6 +31,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   const ROW_H = 44;
   const ZOOM_MIN = 0.5, ZOOM_MAX = 2;
   const REPLY_PREVIEW = 400;
+  const CULL_AT = 400;    // 超过这个节点数才做视口裁剪
 
   // 视图态（不进存档）
   const V = {
@@ -74,7 +75,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
   // 忙碌期间所有切换类操作被拒绝（busy 或有未 sealed 的 head）
   function isBusy() {
-    const head = nodeOf(tree() ? tree().head : null);
+    const t = tree();
+    const head = nodeOf(t ? t.head : null);
     return !!S.busy || !!(head && !head.sealed);
   }
   function gateSwitch() {
@@ -90,7 +92,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return out;
   }
 
-  // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.js）
+  // codeSlice 的唯一口径在 TreeLayout.codeSlice（treeLayout.ts）
   const codeSlice = TreeLayout.codeSlice;
 
   // 面板预览文本（textContent 用）：AI 回复取旁白（坏 JSON 当纯文本）。
@@ -128,8 +130,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       const page = $('#branch-page');
       if (!page) return;
       page.classList.remove('hidden');
-      // .enter（旧的整页淡入）退役：入场由视图过渡负责；css/branch.css 里那条规则只剩兜底用途
-      page.classList.remove('enter');
       $('#branch-title').textContent = (st.title || '未命名') + ' · 分支';
       relayout();
       render();
@@ -185,16 +185,16 @@ import { A, renderChat, saveAll, toast } from './core.js';
     clearTimeout(V.renderTimer);
     V.renderTimer = setTimeout(() => {
       if (!V.open) return;
-      // ≤400 个节点没有视口裁剪：平移 / 缩放只改 transform 就够，不整树重建（省主线程）
+      // ≤CULL_AT 个节点没有视口裁剪：平移 / 缩放只改 transform 就够，不整树重建（省主线程）
       const n = (V.layout && V.layout.nodes) || [];
-      if (n.length > 400) render();
+      if (n.length > CULL_AT) render();
     }, 200);
   }
 
-  // 视口裁剪：> 400 个节点时只创建可见行附近的元素，选中 / head 恒创建
+  // 视口裁剪：> CULL_AT 个节点时只创建可见行附近的元素，选中 / head 恒创建
   function visibleNodes() {
     const nodes = (V.layout && V.layout.nodes) || [];
-    if (nodes.length <= 400) return nodes;
+    if (nodes.length <= CULL_AT) return nodes;
     const canvas = $('#branch-canvas');
     const h = (canvas && canvas.clientHeight) || 600;
     const rowPx = ROW_H * V.zoom;
@@ -350,7 +350,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     for (const g of nodeEls) {
       // 弹簧弹出挂在内层 <g> 上（外层 g 的 transform 是 translate，不能被 CSS 动画覆盖）
-      const inner = g.querySelector ? g.querySelector('.node-inner') : null;
+      const inner = g.querySelector('.node-inner');
       const target = inner || g;
       try {
         target.animate(
@@ -504,7 +504,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function updateActiveDescendant() {
     const svg = $('#branch-svg');
     if (!svg) return;
-    if (V.selectId && tree() && tree().nodes[V.selectId]) {
+    const t = tree();
+    if (V.selectId && t && t.nodes[V.selectId]) {
       svg.setAttribute('aria-activedescendant', 'branch-node-' + V.selectId);
     } else {
       svg.removeAttribute('aria-activedescendant');
@@ -528,13 +529,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const k = e.key;
     if (k === 'Escape') {
       e.preventDefault();
-      if (V.panelOpen) {
-        setPanelOpen(false);
-        const svg = $('#branch-svg');
-        if (svg && svg.focus) svg.focus({ preventScroll: true });
-      } else {
-        closeBranch();
-      }
+      if (V.panelOpen) closePanel();
+      else closeBranch();
       return;
     }
     const t = tree();
@@ -566,10 +562,17 @@ import { A, renderChat, saveAll, toast } from './core.js';
   /* ================= 节点面板 ================= */
 
   /* 面板由 Svelte 组件渲染：文本与 disabled 走 branch.svelte.js 的视图模型。
-   * 视图模型口径与迁移前逐字一致（哪句警告、哪个钮禁用，全部照搬，不改判据）。 */
+   * 判据都在这里：哪句警告、哪个钮禁用，组件只照字段渲染。 */
   function setPanelOpen(open) {
     V.panelOpen = !!open;
     setBranchPanelOpen(V.panelOpen);
+  }
+
+  // 关面板 + 把焦点交还画布（Esc / 面板关闭钮共用）
+  function closePanel() {
+    setPanelOpen(false);
+    const svg = $('#branch-svg');
+    if (svg && svg.focus) svg.focus({ preventScroll: true });
   }
 
   function panelModel(node, t) {
@@ -629,7 +632,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       return;
     }
     if (!Tree.switchTo(S.story, node.id)) return;
- // 先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
+    // 先刷内容再关页。反过来的话，关闭过渡的新快照拍到的还是旧 head 的聊天流，
     // 快照会盖着旧内容跑 220ms，结算后才换成新内容（「最终内容不闪回旧分支」的同款坑）。
     afterSwitch();
     closeBranch();
@@ -708,11 +711,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       relayout();
       render();
     };
-    $('#btn-bp-close').onclick = () => {
-      setPanelOpen(false);
-      const svg = $('#branch-svg');
-      if (svg && svg.focus) svg.focus({ preventScroll: true });
-    };
+    $('#btn-bp-close').onclick = closePanel;
     $('#btn-bp-resume').onclick = opResume;
     $('#btn-bp-fork').onclick = opFork;
     $('#btn-bp-latest').onclick = opLatest;
@@ -737,7 +736,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   A.reg({
     initBranch,
     openBranch,
-    closeBranch,
+    afterSwitch,
     updateHistoryBar,
     branchUiOn,
   });

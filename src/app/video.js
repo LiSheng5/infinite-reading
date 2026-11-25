@@ -330,7 +330,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ---------------- 主流程 ---------------- */
 
-  // 整段任务：构思 →（确认在 enqueueVideo 做）→ 提交 + 轮询 → 下载 / 降级 → 写回
+  // 整段任务：构思 → 提交 + 轮询 → 下载 / 降级 → 写回（付费确认在 enqueueVideo 那层先做）
   // opts: { storyId, nodeId, mode:'i2v'|'t2v', sourceSceneId?, directPrompt?, altHint?, resume? }
   async function runVideoTask(opts) {
     if (!S.story) return null;
@@ -689,8 +689,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   A.reg({
-    videoQ, videoSrc, isVideoScene, generateVideo,
-    enqueueVideo, videoFromCurrentImage, videoFromPlot,
+    videoSrc, isVideoScene, generateVideo,
+    videoFromCurrentImage, videoFromPlot,
     resumePendingVideos, stopVideoWaiting, cancelActiveVideo,
     renderWorkbenchVideo, pwVideoGenerate,
   });

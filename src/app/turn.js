@@ -2,10 +2,10 @@
  * src/app/turn.js —— AI1 剧情回合 / 书记员模型任务 / 工具护栏 / 重试与分支（兄弟切换）
  */
 // 切兄弟的过渡收编进过渡内核（runTransition）。本文件是 ES module，
-// 经 src/main.js 装载，顶层 import 合法；三档 kind / 时长的唯一声明处是 src/core/motion.ts 的 TRANSITIONS.sibling。
+// 经 src/main.js 装载，顶层 import 合法；过渡的 kind / 时长声明处是 src/core/motion.ts 的 TRANSITIONS.sibling。
 // 命名空间导入 + VT.runTransition 点名调用：tools/check-free-calls.mjs 的裸调用启发式
 // （抓「搬家后忘改 A.xxx」）认得 import 绑定，跨模块调用与 A.xxx 同口径。
-import * as VT from '../../src/ui/viewTransition.js';
+import * as VT from '../ui/viewTransition.js';
 
 import { Context } from '../core/context.ts';
 import { ChatProviders, mergeUsage } from '../core/providers.ts';
@@ -15,7 +15,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
 
   const S = A.state;
-  const { $, Store, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, isStopError, setSendButtonsBusy, motionLevel, motionMs, netErrHint, resolveSub, reportUserFailure, reportBackgroundFailure, errorText, shortError, failureEntry } = A;
+  const { $, Store, SCRIBE_SYSTEM, SCRIBE_COMPRESS_SYSTEM, SCRIBE_ROLLING_SYSTEM, SCRIBE_UNCONFIGURED, isStopError, setSendButtonsBusy, motionLevel, netErrHint, resolveSub, reportUserFailure, reportBackgroundFailure, errorText, shortError, failureEntry } = A;
 
   function parseAIReply(raw) {
     const text = String(raw || '').trim();
@@ -76,7 +76,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   async function runScribe() {
     const sid = S.story && S.story.id;
     let result = null;
-    let err = '';   // 失败原因（'未配置书记员模型' / 网络错误文本 / '回包解析失败'）
+    let err = '';   // 失败原因（SCRIBE_UNCONFIGURED / 网络错误文本 / '回包解析失败'）
     try {
       const cfg = resolveSub('scribe');
       if (cfg.provider && cfg.model) {
@@ -95,7 +95,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         result = parseScribe(raw);
         if (!result) err = '回包解析失败';
       } else {
-        err = '未配置书记员模型';
+        err = SCRIBE_UNCONFIGURED;
       }
     } catch (e) {
       err = errorText(e);
@@ -111,7 +111,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       story.log.push(!err
         ? { type: 'tool', tool: 'scribe', summary: (result.diff || []).join('；') || '书记员校对完成', ts: Date.now() }
         : failureEntry('scribe', err, {
-          summary: err === '未配置书记员模型'
+          summary: err === SCRIBE_UNCONFIGURED
             ? '书记员未配置模型，世界卡由本地规则维护'
             : '书记员校对失败（退回本地规则）：' + shortError(err),
         }));
@@ -273,7 +273,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       });
       if (!applied) return;    // 中途换档 / 回档：丢弃结果
       saveAll();
-      if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
+      refreshPanelsIfOpen();
     } catch (e) {
       reportBackgroundFailure('scribe', e, { note: '滚动风格摘要刷新失败（保留本地规则结果）' });
     }
@@ -317,10 +317,15 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (A.profileOn() && !scribeUsable()) A.collectProfileLocal();
     saveAll();
     renderChat();
+    refreshPanelsIfOpen();
+  }
+
+  // 设置 / 本对话设置面板开着才刷新（收起时刷是白刷）
+  function refreshPanelsIfOpen() {
     if (!$('#modal-settings').classList.contains('hidden') || !$('#story-prefs').classList.contains('hidden')) A.renderStoryPanels();
   }
 
-  // 思考链入库前截断（长链只留前 4000 字，控住 localStorage 体积；渲染照常可折叠）
+  // 思考链入库前截断（长链只留前 4000 字，控住存档体积；渲染照常可折叠）
   // 旁白条目 / assistant 条目：唯一口径在 Context.narrationEntry / assistantEntry
   function pushNarrationEntry(text, reasoning) {
     const entry = Context.narrationEntry(text, reasoning);
@@ -361,8 +366,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 超额的 span 合并进前缀文本节点：DOM 里始终最多约 DELTA_MAX_SPANS 个 span
-  function trimLiveDeltaSpans(el, keep) {
-    const n = liveDeltaSpans.length - keep;
+  function trimLiveDeltaSpans(el) {
+    const n = liveDeltaSpans.length - DELTA_MAX_SPANS;
     if (n <= 0) return;
     for (let i = 0; i < n; i++) {
       const span = liveDeltaSpans[i];
@@ -415,10 +420,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
     span.textContent = delta;
     el.appendChild(span);
     liveDeltaSpans.push(span);
-    if (liveDeltaSpans.length > DELTA_MAX_SPANS) trimLiveDeltaSpans(el, DELTA_MAX_SPANS);
+    if (liveDeltaSpans.length > DELTA_MAX_SPANS) trimLiveDeltaSpans(el);
   }
 
-  // 流式思考链（方案 B）：写进固定小窗，并始终滚到最新——点开看全量也不暂停
+  // 流式思考链：写进固定小窗，并始终滚到最新——点开看全量也不暂停
   function updateLiveReasoning() {
     if (!S.live) return;
     const el = $('#chat-scroll').querySelector('.reason-live-text');
@@ -441,7 +446,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!cfg || !cfg.model) return;
     S.settings.noTools = (S.settings.noTools || []).filter(x => noToolsKey(x) !== noToolsKey(cfg));
     S.settings.noTools.push({ baseUrl: String(cfg.baseUrl || ''), model: String(cfg.model || ''), at: Date.now() });
-    // 上限与加载归一同一常量（Store.NO_TOOLS_KEEP），两边都写一次 20 的旧形态已删
+    // 上限与加载归一共用同一常量（Store.NO_TOOLS_KEEP）
     if (S.settings.noTools.length > Store.NO_TOOLS_KEEP) S.settings.noTools = S.settings.noTools.slice(-Store.NO_TOOLS_KEEP);
     saveAll();
     renderNoToolsHint();
@@ -489,7 +494,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
           S.live.text = cleanStream(preview);
           if (!S.liveEl) S.liveEl = $('#chat-scroll').querySelector('.bubble-live');
           if (S.liveEl) appendLiveDelta(S.liveEl, S.live.text);   // 只给可见增量做逐段淡入
-          // 正文已开始流式 → 思考窗卷成一行（方案 B：不推走正文，也不骤折）
+          // 正文已开始流式 → 思考窗卷成一行（不推走正文，也不骤折）
           if (S.liveReasonEl && !S.liveReasonCollapsed) {
             S.liveReasonCollapsed = true;
             S.liveReasonEl.classList.add('collapsed');
@@ -585,8 +590,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const sent = act.sent || A.withKindMarker(act.text, act.kind);
     const userMsg = old.userMsg || { role: 'user', content: Context.playerContent(S.story.premise, sent) };
 
-    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」——对旧行为的修正：
-    // 以前重试是在已被上一版改写过的世界卡上重来
+    // 世界卡 / 摘要 / 消息窗口先回到「这一回合发生之前」，在干净的状态上重来
     Tree.switchTo(S.story, old.parent);
     S.story.turn += 1;            // 与正常回合同口径：turn 在提交前 +1
     S.currentChoices = [];
@@ -619,7 +623,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       renderChat();
       // 成功：parent = 原 head 的父节点（投影已停在那），落一个新兄弟
       const node = Tree.commit(S.story, {
-        action: { type: act.type, text: act.text, kind: act.kind || null, sent: act.sent || sent },
+        action: { type: act.type, text: act.text, kind: act.kind || null, sent: sent },
         userMsg: userMsg, assistantMsg: asst, logMark: mark.logMark,
         meta: { model: S.turnModel || '' },   // 重试同样记模型名
       });
@@ -650,9 +654,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function switchSiblingFromBubble(nid, dir) {
     if (!S.story || !nid) return;
     if (S.busy) { toast('正在生成中，等这一步结束再切分支'); return; }   // 沿用 showShelf 的做法
- // 数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
+    // 数据切换先行、重渲染留在过渡里——快照只认 DOM，先切数据不影响新旧两帧；
     // 顺带保住「每点必达」（视图过渡的 update 回调晚一帧，数据不能等它）。
-    // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画（旧 animateSwap 同口径）。
+    // 越界 / 无兄弟：switchSibling 返回 null 且完全不动，也不播动画。
     const head = Tree.switchSibling(S.story, nid, dir);
     if (!head) return;
     S.currentChoices = choicesFromHead();   // 选项跟着新 head 的 assistantMsg 走

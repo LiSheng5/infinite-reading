@@ -1,6 +1,5 @@
 /*
  * src/app/layout.js —— 布局状态（全局设置与本对话设置共用同一入口）
- * 从 src/app/render.js 拆出（只搬家，不改行为）：render.js 在 800 行红线（app-structure-test）。
  *
  * 所有排版只由 #screen-game 的 data-layout 决定：
  *   auto → 宽度 ≥ 900px 用 split，否则 stack；immersive 只能由用户进入。
@@ -77,8 +76,11 @@ import { A, saveAll } from './core.js';
     return effectiveLayout() === 'immersive';
   }
 
+  // 名单外的值一律回落 auto
+  const normLayout = v => (LAYOUTS.indexOf(v) >= 0 ? v : 'auto');
+
   function setLayout(next) {
-    const layout = LAYOUTS.indexOf(next) >= 0 ? next : 'auto';
+    const layout = normLayout(next);
     if (layout !== 'immersive') S.immersiveTextHidden = false;
     writeUi({ layout: layout });
     applyLayout();
@@ -92,10 +94,10 @@ import { A, saveAll } from './core.js';
     const layout = effectiveLayout();
     // 记「上一次的非沉浸配置」：退出沉浸回到它；原来是 auto 的仍回 auto，
     // 不把 auto 钉死成某个具体布局（那样宽屏切换 / 旋转就再也不自适应了）。
-    if (ui.layout !== 'immersive') lastUiLayout = LAYOUTS.indexOf(ui.layout) >= 0 ? ui.layout : 'auto';
+    if (ui.layout !== 'immersive') lastUiLayout = normLayout(ui.layout);
     el.dataset.layout = layout;
     el.style.setProperty('--split-ratio', String(ui.splitRatio || 0.5));
-    // 字号 / 宽度 / 密度 → CSS 变量（令牌驱动；chat / rp 的内容区吃这三个变量）
+    // 字号 / 宽度 / 密度 → CSS 变量（令牌驱动；内容区吃这三个变量）
     el.style.setProperty('--font-scale', String(FONT_SCALE[ui.fontScale] != null ? FONT_SCALE[ui.fontScale] : 1));
     el.style.setProperty('--content-w', CONTENT_W[ui.width] || CONTENT_W.standard);
     el.style.setProperty('--density', String(DENSITY[ui.density] != null ? DENSITY[ui.density] : 1));

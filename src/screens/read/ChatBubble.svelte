@@ -51,7 +51,7 @@
 <!-- 场景标记行：56px 缩略图 + alt（点击 = 舞台选中）；「工作台」悬停才出现 -->
 <div class="bubble bubble-image">{#if e.src}<img src={e.src} alt={e.alt} title="在右侧舞台看这张" role="button" tabindex="0" onclick={selectScene} onkeydown={onActivate(selectScene)} />{/if}<div class="img-alt-row"><span class="img-alt" title="点击在右侧舞台查看" onclick={selectScene}>{e.cap}</span><button class="ui-btn mini" type="button" title="看 / 改完整 prompt、跟画师说着改、按此重画" onclick={openWorkbench}>工作台</button></div></div>
 {:else if e.kind === 'image'}
-<!-- chat / rp 内联图：图直接排在聊天流里，点开是灯箱 -->
+<!-- chat 内联图：图直接排在聊天流里，点开是灯箱 -->
 <div class="bubble bubble-image bubble-image-inline">{#if e.src}<img src={e.src} alt={e.alt} loading="lazy" role="button" tabindex="0" onclick={openLightbox} onkeydown={onActivate(openLightbox)} />{/if}<div class="img-alt" onclick={openLightbox}>{e.cap}</div></div>
 {:else if e.kind === 'video'}
 <!-- 视频：封面 + alt + ▶，点一下在舞台选中；无 videoId 只有外链时给降级入口 -->
@@ -60,5 +60,5 @@
 <!-- 模型主动联系：样式同玩家气泡 + 「谁 / 何时 / 为何找你」标注 -->
 <div class="bubble bubble-player bubble-agent"><div class="agent-note"><Icon name="spark" class="ic-l" />{e.note}</div><div>{e.text}</div></div>
 {:else if e.kind === 'proposal'}
-{#if e.empty}<div class="bubble proposal-card">（提案数据缺失）</div>{:else}<!-- 提案卡：参数原值文本插值（红线 4），未确认不可执行 --><div class="bubble proposal-card"><div class="proposal-title"><Icon name={e.icon} class="ic-l" />{e.title}</div><div class="proposal-args">{#each e.rows as r}<div class="proposal-row"><span class="proposal-key">{r.k}</span><span class="proposal-val">{r.v}</span></div>{/each}</div><div class="proposal-foot"><span class="proposal-status">{e.statusText}</span>{#if e.actionable || e.second}<button class="ui-btn mini proposal-ok" type="button" title={e.second ? '上一次二次确认没走完：再确认一次才会真正扣款' : '确认后才会真正执行（一封邮件 / 一笔扣款）'} onclick={confirmProposal}>{e.second ? '继续确认' : '确认'}</button><button class="ui-btn mini" type="button" onclick={denyProposal}>拒绝</button>{:else if e.cleanup}<button class="ui-btn mini" type="button" title="这封草稿没发出去，还留在本地服务里；点一下丢弃它" onclick={denyProposal}>清理草稿</button>{/if}</div></div>{/if}
+{#if e.empty}<div class="bubble proposal-card">（提案数据缺失）</div>{:else}<!-- 提案卡：参数原值文本插值，未确认不可执行 --><div class="bubble proposal-card"><div class="proposal-title"><Icon name={e.icon} class="ic-l" />{e.title}</div><div class="proposal-args">{#each e.rows as r}<div class="proposal-row"><span class="proposal-key">{r.k}</span><span class="proposal-val">{r.v}</span></div>{/each}</div><div class="proposal-foot"><span class="proposal-status">{e.statusText}</span>{#if e.actionable || e.second}<button class="ui-btn mini proposal-ok" type="button" title={e.second ? '上一次二次确认没走完：再确认一次才会真正扣款' : '确认后才会真正执行（一封邮件 / 一笔扣款）'} onclick={confirmProposal}>{e.second ? '继续确认' : '确认'}</button><button class="ui-btn mini" type="button" onclick={denyProposal}>拒绝</button>{:else if e.cleanup}<button class="ui-btn mini" type="button" title="这封草稿没发出去，还留在本地服务里；点一下丢弃它" onclick={denyProposal}>清理草稿</button>{/if}</div></div>{/if}
 {/if}

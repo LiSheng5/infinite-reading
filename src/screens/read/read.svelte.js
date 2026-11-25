@@ -26,7 +26,6 @@ export const read = $state({
     liveReason: false,
     choices: [],      // 内联选项（choices=always）
     tray: [],         // 托盘选项（展开时）
-    trayVisible: false,
     trayOpen: false,
     inspiration: false,
     inspirationCount: '',

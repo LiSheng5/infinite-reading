@@ -1,5 +1,5 @@
 /*
- * src/app/importer.js —— 剧情文本导入（路径②）
+ * src/app/importer.js —— 剧情文本导入
  */
 import { Context } from '../core/context.ts';
 import { ChatProviders } from '../core/providers.ts';
@@ -13,7 +13,7 @@ import { A, renderChat, toast } from './core.js';
   const { $, Store, Cap, openModal, closeModal, resolveSub } = A;
 
 
-  /* ================= 剧情文本导入（路径②） =================
+  /* ================= 剧情文本导入 =================
    * 粘贴任意剧情文本 → 整理向导（用「起草模型」；只有装不下才 map-reduce）→
    * premise + world 草稿 + 画风关键词 → 用户确认修改（不可跳过）→ 建新档 → 试画锚定 → 开场。
    * 调用失败退回本地规则。 */
@@ -41,20 +41,14 @@ import { A, renderChat, toast } from './core.js';
 
   // 整理模型的有效窗口：跟随剧情模型 → 用剧情模型的；起草模型 → 单独配了才查登记表
   function importContextWindow() {
-    if (S.importModelMode === 'draft') {
-      const sub = S.settings.draft || {};
-      if (!sub.provider && !sub.model) return A.chatContextWindow();
-      try {
-        const w = Cap && Cap.contextWindowOf ? Cap.contextWindowOf(sub.model || S.settings.chat.model, sub.provider) : null;
-        return w || 0;
-      } catch (_) { return 0; }   // 登记表查询失败 = 未知窗口（只影响提示与分段策略，按一次调用处理）
-    }
-    return A.chatContextWindow();
+    const sub = (S.importModelMode === 'draft' && S.settings.draft) || {};
+    if (!sub.provider && !sub.model) return A.chatContextWindow();
+    return Cap.contextWindowOf(sub.model || S.settings.chat.model, sub.provider) || 0;
   }
 
-  // 粘贴框下方的一行提示：整理模型 + 窗口 + 这次会一次调用还是 map-reduce（返回 plan 供调用方复用）
+  // 粘贴框下方的一行提示：整理模型 + 窗口 + 这次会一次调用还是 map-reduce
   function importPlanHint() {
-    const raw = ($('#it-text').value || '').trim();
+    const raw = $('#it-text').value.trim();
     const win = importContextWindow();
     const plan = Context.planImport(raw, win);
     const parts = [
@@ -65,7 +59,6 @@ import { A, renderChat, toast } from './core.js';
         : '一次调用'),
     ];
     $('#it-plan-hint').textContent = parts.join(' · ');
-    return plan;
   }
 
   function openImportText() {
@@ -150,14 +143,14 @@ import { A, renderChat, toast } from './core.js';
 
   async function runImportText() {
     if (S.importJob && S.importJob.busy) return;
-    const raw = ($('#it-text').value || '').trim();
+    const raw = $('#it-text').value.trim();
     if (raw.length < 20) { toast('先贴一段剧情文本（至少 20 字），再点「开始整理」', true); return; }
     const cfg = importCfg();
     const plan = Context.planImport(raw, importContextWindow());
     // 异步写回契约：任务对象持有在局部，关窗 / 重开 / 新一轮整理都会把 S.importJob 置空或换掉
     //（cancelImportJob 还会标 cancelled + abort 在途请求）；续体只认自己这一次的 job，
     // 绝不写 S.importJob.err / .busy，最后一段写回也过 writeBackIfSameJob 闸。
-    const job = { raw: raw, plan: plan, busy: true, result: null, err: '', cancelled: false, abortCtrl: null };
+    const job = { busy: true, result: null, err: '', cancelled: false, abortCtrl: null };
     S.importJob = job;
     const stale = () => job.cancelled || !WriteBack.isSameJob(S.importJob, job);
     const hooks = { onAborter(ctrl) { job.abortCtrl = ctrl; } };
@@ -232,7 +225,7 @@ import { A, renderChat, toast } from './core.js';
     S.story = s;
     closeModal('modal-import-text');
     S.importJob = null;
-    A.enterGame(true, { deferOpening: true });
+    A.enterGame(true);
     A.openAnchor({ onDone: renderChat });   // 建新档 → 试画锚定；开场由用户点「开始第一幕」
   }
 

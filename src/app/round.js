@@ -2,7 +2,6 @@
  * src/app/round.js —— 回合编排：callAI1 / 玩家行动 / 开场 / 工具执行 / 旁白收尾
  */
 import { Context } from '../core/context.ts';
-import { Proposals } from '../core/proposals.ts';
 import { Prefs } from '../core/prefs.ts';
 import { ChatProviders } from '../core/providers.ts';
 import { Tree } from '../core/tree.ts';
@@ -42,7 +41,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       } else if (Context.isScheduleTool(c.name)) {
         feedback.push(await A.runScheduleTool(c.name, c.args));
       } else if (Context.isProposalTool(c.name)) {
-        // 提案制（红线 1）：只产生提案卡，绝不执行发送 / 扣款；执行要等用户在界面上点「确认」
+        // 提案制：只产生提案卡，绝不执行发送 / 扣款；执行要等用户在界面上点「确认」
         feedback.push(A.runProposalTool(c.name, c.args));
       }
     }
@@ -53,10 +52,6 @@ import { A, renderChat, saveAll, toast } from './core.js';
       toolUnavailable: toolUnavailable,
     };
   }
-
-  // email_propose / payment_propose → 建提案（红线 1/2/3）：
-  // 提案路径只走 Proposals.create（不碰任何 send / purchase / approve），失败给模型可读原因让它圆场，
-  // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
 
   /* 工具注入判定的唯一口径：「本回合正常发一轮」会注入哪些工具、各类目为什么没注入。
    * buildAI1Request 的工具组装与聊天空对话引导（readmodel 的 agentChips）共用这一个函数：
@@ -99,7 +94,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
         if (w) why[k] = w;
       }
     });
-    // 模式门控（chat / rp 的 request_image 直出变体、邮件 / 下单只放 chat 等）在 toolsForMode 里；
+    // 模式门控（chat 的 request_image 直出变体、邮件 / 下单只放 chat 等）在 toolsForMode 里；
     // 类目可用性（why）在结果上再收一道——chip 的「启用」与注入清单始终一致
     const tools = Context.toolsForMode(S.story ? S.story.mode : 'choice', {
       schedule: !why.schedule,
@@ -168,11 +163,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const cfg = built.cfg;
     const adapter = ChatProviders[cfg.provider] || ChatProviders['openai-compatible'];
     const asmOpts = built.asmOpts;
-    // 组装时先按本次结果估 token，超预算才压一次并重组（估算直接用本次组装结果，不再另组一份）
-    //（postTurn 收尾才压），越过 70% 阈值的那一回合会超发一轮（严格的服务端直接拒）。
-    // 本地摘要确定性、不花 API；后续 postTurn 的书记员照常处理新批次。
-    // 估算直接用本次组装结果（estimateTokensOf），不再「估一次、组一次、压缩时再估一次」；
-    // 超预算才压一次并重组——常态一回合只组装一次。
+    // 组装一次、按本次结果估算 token（estimateTokensOf），超 70% 阈值才用本地摘要压一次并重组；
+    // 常态一回合只组装一次。（postTurn 收尾的书记员压缩照常处理新批次。）
     let messages = Context.assembleAI1(S.story, playerAction, asmOpts);
     try {
       const cw = asmOpts.contextWindow;
@@ -233,7 +225,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
      * 模型边写旁白边调 recall_world_state 时，召回执行了但模型没看到（正文是盲写的）。
      * 按工具语义分流：
      *  - recall_*：模型需要的信息 → 调了就注入重发；
-     *  - request_image（chat / rp 直出）：已异步化，模型写了正文就不重发（省一次调用）——「已排队」的
+     *  - request_image（chat 直出）：已异步化，模型写了正文就不重发（省一次调用）——「已排队」的
      *    feedback 只在 noProse 重发时随包注入；
      *  - request_image（剧情模式）：工具已停用，「该工具不可用」是模型要收到的回传 → 调了就重发；
      *  - update_memory / schedule_*：fire-and-forget 的事后动作 → 仅 noProse 时重发（原行为）。
@@ -396,7 +388,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       S.live = null; S.liveEl = null;
       setSendButtonsBusy(false);
       renderChat();
-      if (Features) Features.drain();   // 忙完了，看看排队的主动消息能不能送
+      Features.drain();   // 忙完了，看看排队的主动消息能不能送
     }
   }
 
@@ -419,8 +411,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     S.live = null;
   }
 
-  // 开局第一幕：让 AI1 主动给出开场旁白与选项（不记录为玩家行动）
-  // 实际请求与存档此前是两句不同的话，retryLast 会以存档版重发、与首发不一致——统一成常量
+  // 开局第一幕：让 AI1 主动给出开场旁白与选项（不记录为玩家行动）。
+  // 请求与存档共用同一个常量，retryLast 重发才与首发一致
   const OPENING_ACTION = '（故事开场。请描写第一幕，把玩家带进场景。）';
 
   async function runOpening() {
