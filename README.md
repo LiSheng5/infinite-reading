@@ -66,6 +66,8 @@ cd infinite-reading
 
 ## 可选：本地服务（邮件 / 定时主动 / 代下单）
 
+> 🧪 **状态：测试中（实验性）**。这三项能力仍在验证阶段，接口、配置项与行为可能随时调整，不保证向后兼容。**不感兴趣可以整段跳过**：`sidecar/` 是独立目录，不启动它、不开启开关，它就不参与任何主流程；聊天里标注「测试中」的四类工具（生图 / 定时 / 邮件 / 下单）同理——默认全关，只影响本对话。
+
 > ⚠️ **风险提示：AI 可能出错，请设置合理额度。** 这三项能力默认**全部关闭**、额度默认 **0**、白名单默认**为空**——不手动开启就什么都不放行。
 
 三项能力需要一个**可选**的本地小服务（不启动它，应用照常用，只是这三个入口会显示「需要启动本地服务」并禁用）：
@@ -149,13 +151,13 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认留空；厂商形参走「自定义请求参数」） |
 | `src/app/main.js` | 组合根：安装弹窗外壳 + 事件绑定 + 启动（业务在 `src/app/` 的 25 个模块里，见 [ARCHITECTURE.md](ARCHITECTURE.md) §2.1） |
 | `src/screens/` + `src/ui/` | Svelte 5 屏幕与基础组件库（图标 / 按钮 / 弹窗卡片 / 视图过渡） |
-| `src/core/sidecar.ts` + `src/core/features.ts` | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
+| `src/core/sidecar.ts` + `src/core/features.ts`（测试中） | 可选本地服务客户端：`/health` 探测与离线降级、主动触达去重与排队 |
 | `src/pwa.js` + `sw.js` | PWA：注册 Service Worker；只缓存本站静态资源，跨域请求一律放行 |
 | `eval/run.js` | 离线评测（mock 长局 + 探针，不花 API；剧本在 `eval/mock-story.js`） |
 | `eval/tree-test.js` | 分支树数据层测试（Node 离线：投影 / 兄弟切换 / 旧档迁移 / store 集成） |
 | `eval/proposals-test.js` | 提案模块单测（假 sidecar：模型发起的邮件 / 下单只能产生提案、确认才执行、幂等 / 过期，Node 离线） |
 | `eval/zip-smoke.js` 等 | ZIP 冒烟与侧车 / 前端特性测试（`npm test` 一并跑） |
-| `sidecar/` | 可选本地服务（Node 进程）：邮件 / 定时主动 / 受限购物支付；只绑 `127.0.0.1` |
+| `sidecar/`（测试中） | 可选本地服务（Node 进程）：邮件 / 定时主动 / 受限购物支付；只绑 `127.0.0.1` |
 | `tools/` | 可选脚本：版本号同步、单文件打包、图标生成、本地服务器、生视频本地转发 `video-proxy.mjs`（不属于运行时代码） |
 
 模块职责、一回合的完整调用链、存储键位与备份格式、关键不变量，见 [ARCHITECTURE.md](ARCHITECTURE.md)。

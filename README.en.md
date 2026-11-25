@@ -66,6 +66,8 @@ In Chat, images still come from the model calling the image tool itself (it writ
 
 ## Optional: local sidecar service (email / proactive scheduling / delegated purchase)
 
+> 🧪 **Status: experimental (testing).** These three capabilities are still being validated; interfaces, config keys and behavior may change without notice, and backward compatibility is not guaranteed. **Feel free to skip this whole section**: `sidecar/` is a self-contained directory — if you don't start it and don't flip the switches, it never enters the main flow. The same goes for the four chat tools marked "testing" (image / schedule / email / purchase): they are all off by default and only affect that conversation.
+
 > ⚠️ **Risk notice: AI makes mistakes. Set sensible limits.** All three capabilities ship **off by default**, with **0** limits and an **empty** allowlist — nothing goes through until you turn it on.
 
 These three capabilities need an **optional** local service. Without it the app works as usual; the three entries just show "local service not started" and stay disabled:
@@ -138,12 +140,12 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `src/core/modelCapabilities.ts` | Context-window reference table (empty by default; vendor-specific params go through "extra request params") |
 | `src/app/main.js` | Composition root: installs the modal shell, binds events, boots (business logic lives in the 25 modules under `src/app/` — see ARCHITECTURE.md §2.1) |
 | `src/screens/` + `src/ui/` | Svelte 5 screens and the base component library (icons / buttons / modal card / view transitions) |
-| `src/core/sidecar.ts` + `src/core/features.ts` | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
+| `src/core/sidecar.ts` + `src/core/features.ts` (testing) | Optional local-service client: `/health` probe & offline fallback, proactive-message dedupe/queue |
 | `src/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
 | `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
-| `sidecar/` | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
+| `sidecar/` (testing) | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
 | `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server, `video-proxy.mjs` local relay for image/video generation (not runtime code) |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip call chain, storage keys and backup formats, and the invariants you must not break.

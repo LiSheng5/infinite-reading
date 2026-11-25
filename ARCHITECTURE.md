@@ -39,10 +39,10 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/modelCapabilities.ts` | 上下文窗口参考表（默认**全空**，不预置厂商数据；厂商形参不进表） | `find`、`contextWindowOf`、`summarize`、`formatWindow` |
 | `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`normalize`、`worldCharacter`、`sourceLabel` |
 | `src/core/zip.ts` | 极简 ZIP 读写（**零依赖、手写**）：带原图备份打包 / 解包 | `build`、`read`、`crc32` |
-| `src/core/sidecar.ts` | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连（重连与复探共用一条退避链，计时器只有 `probeTimer` 一个、`stop()` 必清，见 `eval/sidecar-client-test.js`） | `probe`、`api`、`on`、`status`、`configure` |
-| `src/core/features.ts` | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`size`、`clear`、`resetSeen` |
+| `src/core/sidecar.ts`（测试中） | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连（重连与复探共用一条退避链，计时器只有 `probeTimer` 一个、`stop()` 必清，见 `eval/sidecar-client-test.js`） | `probe`、`api`、`on`、`status`、`configure` |
+| `src/core/features.ts`（测试中） | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`size`、`clear`、`resetSeen` |
 | `src/core/paintQueue.ts` | 作画串行队列（**纯逻辑**）：时机 / 工具 / 手动 / 重画共用一条 FIFO，画师构思也在队列里；带兜底超时与取消（`run(signal)` / `timeoutMs`），任务体挂死也不会堵死队列 | 模块只导出 `PaintQueue = { create }`；`enqueue / has / size / cancel` 是 `create()` 返回的实例方法 |
-| `src/core/proposals.ts` | 提案（**纯逻辑**）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；状态机（pending / awaiting_confirm / executing / 四个终态）以 `p.status` 为唯一真源 | `create`、`reconcile`、`isActionable`、`confirm`、`approveSecond`、`deny` |
+| `src/core/proposals.ts`（测试中） | 提案（**纯逻辑**）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；状态机（pending / awaiting_confirm / executing / 四个终态）以 `p.status` 为唯一真源 | `create`、`reconcile`、`isActionable`、`confirm`、`approveSecond`、`deny` |
 | `src/core/errors.ts` | 失败处理策略的纯逻辑端（**纯逻辑**）：原因归一 / 截短 / tool 留痕拼装；DOM 与 toast 出口在 `src/app/core.js` | `errorText`、`shortError`、`failureEntry` |
 | `src/core/motion.ts` | 动效声明的纯逻辑端：rich 单档政策 `TIERS`、`ANIMATIONS` 逐动画与 `TRANSITIONS` 逐过渡的单值声明表（系统「减少动态效果」是 JS 侧的静默例外，不属档位） | `TIERS` `ANIMATIONS` `TRANSITIONS` |
 | `src/core/titles.ts` | 自动标题（**纯逻辑**）：触发判定、给小模型的 prompt、输出清洗、本地兜底 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
@@ -54,7 +54,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/*.js`（25 个 + 组合根 `src/app/main.js`） | 界面行为层：事件绑定、回合编排、渲染推进、弹窗流程（见 §2.1） | `A.reg({...})` 注册，调用方 `A.xxx()` |
 | `src/main.js` / `sw.js` / `src/pwa.js` | 唯一入口 / Service Worker（构建期注入预缓存清单与缓存版本）/ PWA 注册 | `installShell()`、`install` / `fetch` |
 | `eval/*.js` / `tools/*.mjs` | 离线评测与构建 / 验收脚本（不改产品代码） | `eval/run.js`、`tools/sync-version.mjs` |
-| `sidecar/`（Node 进程） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 与 SSE ticket 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
+| `sidecar/`（Node 进程，测试中） | 可选本地服务：调度器 / 邮件 / 支付网关；只绑 `127.0.0.1`，除 `/health` 与 SSE ticket 外都要 Bearer token | `server.mjs`、`scheduler.mjs`、`cron.mjs`、`email.mjs`、`payment.mjs`、`payment-policy.mjs` |
 
 **两张产物**（`vite.config.mjs`）：
 
@@ -122,7 +122,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **禁令**：真实失败（网络 / 模型 / 存储 / 侧车）绝不允许空 catch 静默掉。`eval/error-policy-test.js` 静态扫描 `src/`：try 里出现 `ChatProviders` / `ImageProviders` / `Sidecar` / `Store` / `Storage` / `fetch` / `adapter.chat|generate|poll` 等真实失败源的 catch，必须命中上报出口（`report*` / `toast` / `console.warn` / 抛回 / `failureEntry` / `persistFail` / `markFailed`）或带说明注释；扫描面与反向自检（构造一个静默吞掉 Sidecar 失败的片段必须报警）都在同一门禁里。
 
-实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；界面时序类验收（toast 样式、重试入口、console 前缀）不进自动化测试，只做手动检查，清单与记录见 `docs/manual_checks.md`（本地验收清单，只随本机工作副本维护、不入库）。
+实现落点：纯逻辑（`errorText` / `shortError` / `failureEntry`）在 `src/core/errors.ts`（无 DOM 依赖，Node 可直接 require）；两个出口在 `src/app/core.js` 并进 `A.reg`，其余 app 模块从 `A` 解构。`ARCHITECTURE.md` 本节 + `CONTRIBUTING.md` §四「失败处理」是约定真源；界面时序类验收（toast 样式、重试入口、console 前缀）不进自动化测试，只做手动检查；清单与记录随本机工作副本维护、不入库。
 
 ## 3. 一回合的完整调用链
 
@@ -398,6 +398,10 @@ PWA 是「装个帽子」，不是「换条路」：`src/pwa.js` 在 https / `lo
 - API Key 明文存 IndexedDB（详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的「安全说明」）。
 
 ## 11. 可选本地服务（sidecar）
+
+> 🧪 **状态：测试中（实验性）**。本节描述的能力与接口仍在验证阶段，改动不承诺向后兼容。**只想了解主线（浏览器内的剧情 / 聊天 / 生图 / 存储与备份）可以整节跳过**——它的结论不影响 §1–§10。
+>
+> 前端侧对应的「测试中」开关共四类：生图（`image`）、定时（`schedule`）、邮件（`email`）、下单（`payment`），默认值全为关（`src/core/prefs.ts` 的 `effective(..., 'tools')`），只有在本对话设置里显式打开才注入模型。其中生图不依赖侧车，其余三类依赖侧车在线。相关代码：`src/core/sidecar.ts`、`src/core/features.ts`、`src/core/proposals.ts`、`src/app/sidecar.js` + 整个 `sidecar/` 目录。
 
 **定位**：不是「应用必须有后端」。前端核心照旧纯前端；`sidecar/` 是一个**可选**的本地伴侣进程，只有三项能力靠它：
 
