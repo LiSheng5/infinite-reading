@@ -253,8 +253,10 @@ import { APP_VERSION } from './version.ts';
   }
 
   function defaultSubModel() {
-    // provider 留空 = 沿用剧情模型（settings.chat）
-    return { provider: '', baseUrl: '', apiKey: '', model: '', temperature: 0.7 };
+    // provider / baseUrl / apiKey / model 留空 = 沿用剧情模型（settings.chat）；
+    // temperature 不落默认值：留空同样沿用剧情模型的温度（由 src/app/core.js 的 resolveSub 解析），
+    // 不再写死第二个默认值，否则「留空 = 沿用」只对 provider 成立。
+    return { provider: '', baseUrl: '', apiKey: '', model: '' };
   }
 
   function defaultSettings() {

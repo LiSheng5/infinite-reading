@@ -27,7 +27,8 @@ import { A, renderChat, toast } from './core.js';
       // provider 按配置取（剧情模型没写就沿用子模型的归一口径）；写死会在加第二个渠道时静默走错
       provider: c.provider || resolveSub('draft').provider,
       baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
-      temperature: 0.7,
+      // 跟随剧情模型：温度也跟随；剧情模型没填时由 resolveSub 统一回落
+      temperature: Number.isFinite(+c.temperature) ? +c.temperature : resolveSub('draft').temperature,
     };
   }
 

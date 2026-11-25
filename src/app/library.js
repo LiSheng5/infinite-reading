@@ -168,8 +168,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
       characterCard: clone(s.characterCard || null),
       userProfile: clone(s.userProfile || []),
       painterThread: clone((s.painterThread || []).slice(-20)),
-      // 剥掉全尺寸 src、只留缩略图（与 serializeStory 同口径），否则 5 个存档点 ×8 张原图极易撑爆 localStorage
-      scenes: clone((s.scenes || []).slice(-8).map(sc => Object.assign({}, sc, { src: undefined }))),
+      // 剥掉全尺寸 src、只留缩略图；裁剪窗口直接引用 Tree.SCENE_WINDOW（与 serializeStory 同口径），
+      // 否则 5 个存档点各存一份原图会撑爆存储，且窗口字面量改一处漏一处会导致回档丢画面
+      scenes: clone((s.scenes || []).slice(-Tree.SCENE_WINDOW).map(sc => Object.assign({}, sc, { src: undefined }))),
       lastBg: s.lastBg || null,
       lastSceneSummary: s.lastSceneSummary || '',
       // 分支树：nodeId 用于「回到这个存档点 = 回到树上这个节点」；

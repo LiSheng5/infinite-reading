@@ -483,7 +483,7 @@ export const GROUPS = [
           { k: 'check', id: 's-sched-enabled', text: '启用定时主动联系' },
           { k: 'check', id: 's-sched-paused', text: '一键暂停所有主动行为' },
           { k: 'grid2', items: [
-            { k: 'field', id: 's-sched-dailycap', label: '每日主动消息上限（0 = 不限制）', type: 'number', attrs: { min: '0', step: '1' } },
+            { k: 'field', id: 's-sched-dailycap', label: '每日主动消息上限（0 = 不发送）', type: 'number', attrs: { min: '0', step: '1' } },
             { k: 'select', id: 's-sched-missed', label: '错过触发时', options: [
               ['SKIP', '跳过'], ['RUN_ONCE', '补一次'], ['RUN_ALL', '全部补齐'],
             ] },

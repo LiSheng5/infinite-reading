@@ -41,8 +41,11 @@ echo   Infinite Reading  ->  %URL%
 echo   (close this window to stop the server)
 echo.
 
-start "" "%URL%"
-timeout /t 1 >nul
+rem Open the browser only after the port accepts connections.
+rem Cold start of Python / PowerShell often takes more than one second;
+rem opening first would show the browser error page. This helper polls the
+rem port in the background (0.5s x 60) and opens the URL once it is up.
+start "" /b powershell -NoProfile -NonInteractive -Command "for($n=0;$n -lt 60;$n++){try{$c=New-Object Net.Sockets.TcpClient;$c.Connect('127.0.0.1',%PORT%);$c.Close();Start-Process '%URL%';break}catch{Start-Sleep -Milliseconds 500}}"
 
 where python >nul 2>nul
 if %errorlevel%==0 (

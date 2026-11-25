@@ -21,6 +21,10 @@ const MAX_CATCHUP = 50;                     // RUN_ALL 补跑上限，防雪崩
 const TICK_CLAMP_MS = 60 * 1000;            // 滚动定时器最长 60s 醒一次（防系统休眠错过大跨度）
 const MISFIRE_THRESHOLD_MS = 60 * 1000;     // 迟到不超过这个量级算「准点」，不算「错过」
 
+// 滚动定时器里的失败不能打死调度循环，但也不能静默：统一从这里留一行可追溯的日志。
+function errText(e) { return String((e && e.message) || e); }
+function warn(msg) { try { console.warn('[sidecar] ' + msg); } catch (_) { /* 无 console 的环境忽略 */ } }
+
 function minutesOfDay(ms) {
   const d = new Date(ms);
   return d.getHours() * 60 + d.getMinutes();
@@ -156,7 +160,8 @@ export function createScheduler(deps) {
     const policy = sched.missedPolicy || 'SKIP';
     const dueAt = trigger.nextAt;
     const quiet = sched.quietHours || [];
-    const cap = Number(sched.dailyCap) || 0;
+    // 每日上限口径与邮件 / 支付一致：0（或未填）= 一封都不发（保守默认），不是「无上限」。
+    const cap = Math.max(0, Math.floor(Number(sched.dailyCap) || 0));
 
     let times = [];
     let skippedReason = '';
@@ -176,7 +181,7 @@ export function createScheduler(deps) {
 
     for (const t of times) {
       if (inQuietHours(quiet, t)) { insertFire(trigger.id, t, FIRE.SKIPPED, 'quiet_hours', t0); continue; }
-      if (cap > 0 && today >= cap) { insertFire(trigger.id, t, FIRE.SKIPPED, 'daily_cap', t0); continue; }
+      if (today >= cap) { insertFire(trigger.id, t, FIRE.SKIPPED, 'daily_cap', t0); continue; }
       const fire = insertFire(trigger.id, t, FIRE.PENDING, 'due', t0);
       today += 1;
       fired += 1;
@@ -361,20 +366,30 @@ export function createScheduler(deps) {
     const delay = Math.max(50, Math.min(at - now(), TICK_CLAMP_MS));
     timer = setTimeout(() => {
       timer = null;
-      try { tick(); } catch (_) { /* 单次失败不拖垮调度循环 */ }
+      // 单次失败不拖垮调度循环，但必须留日志（否则只表现为「触发不再发生」）
+      try { tick(); } catch (e) { warn('调度 tick 失败：' + errText(e)); }
       // arm() 也要在 try 里：这里抛出没人接，一次 DB 抖动就能让调度循环静默停摆
       try {
         arm();
-      } catch (_) {
-        try { timer = setTimeout(() => { timer = null; try { arm(); } catch (_) {} }, 30000); } catch (_) {}
+      } catch (e) {
+        warn('重新排程失败，30 秒后重试：' + errText(e));
+        try {
+          timer = setTimeout(() => {
+            timer = null;
+            try { arm(); } catch (e2) { warn('重试排程仍失败：' + errText(e2)); }
+          }, 30000);
+        } catch (e2) {
+          warn('无法安排排程重试定时器：' + errText(e2));
+        }
       }
     }, delay);
   }
 
   function start() {
     stopped = false;
-    try { tick(); } catch (_) {}     // 启动即按 missed 策略处理停摆期间错过的触发
-    try { arm(); } catch (_) {}
+    // 启动即按 missed 策略处理停摆期间错过的触发；失败要留原因，否则用户只看到「一直没动静」
+    try { tick(); } catch (e) { warn('启动补跑失败：' + errText(e)); }
+    try { arm(); } catch (e) { warn('启动排程失败：' + errText(e)); }
   }
 
   function stop() {

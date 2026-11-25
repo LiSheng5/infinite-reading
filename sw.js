@@ -34,8 +34,10 @@ const CORE = ['./', './index.html', './manifest.webmanifest'];
 const PRECACHE = [];
 
 async function precache(cache) {
-  for (const url of CORE.concat(PRECACHE)) {
-    await cache.add(url).catch(() => {});            // 单个失败不影响整体
+  // CORE 与注入清单会有重叠（index.html / manifest.webmanifest 同时出现在两边）：
+  // 先 Set 去重，同一个 URL 只 add 一次；单个失败不影响整体。
+  for (const url of new Set(CORE.concat(PRECACHE))) {
+    await cache.add(url).catch(() => {});
   }
 }
 

@@ -28,7 +28,9 @@ COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/site /usr/share/nginx/html
 COPY LICENSE README.md /usr/share/nginx/html/
 
+# 健康检查打真实静态文件，不打 /：SPA 的 try_files 会把不存在的路径回落到 index.html，
+# 于是即使产物没拷全、只剩入口页，`/` 也永远 200——那种健康检查等于没做。
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1/manifest.webmanifest || exit 1
 
 EXPOSE 80

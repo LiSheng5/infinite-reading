@@ -300,11 +300,11 @@ import { sleep } from './tree.ts';
         const headers = { 'Content-Type': 'application/json' };
         if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
         const body: any = { model: cfg.model, messages };
-        // 采样温度：一律发用户填的值（没填就是 0.8 这个通用默认）。
+        // 采样温度：一律发用户填的值；cfg 里没有时用与默认主模型一致的 0.9（不要再引入第三个默认值）。
         // 厂商独有的形参没有通用协议（思考档位的 reasoning_effort / thinking.type / enable_thinking、
         // 各家自己的采样参数…），一律由「自定义请求参数」原样并入（下面的 mergeExtraParams，
         // 优先级最高，同名键会覆盖这里的值）——适配器不再按模型查表换算。
-        body.temperature = Number.isFinite(+cfg.temperature) ? +cfg.temperature : 0.8;
+        body.temperature = Number.isFinite(+cfg.temperature) ? +cfg.temperature : 0.9;
         // 工具：结构化下发（OpenAI 格式）；调用时机写在系统提示词里
         if (Array.isArray(cfg.tools) && cfg.tools.length) {
           body.tools = cfg.tools;

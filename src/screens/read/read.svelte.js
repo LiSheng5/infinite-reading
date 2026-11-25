@@ -31,6 +31,7 @@ export const read = $state({
     inspiration: false,
     inspirationCount: '',
     usage: null,       // 上下文用量指示器（readmodel 的 usageView：只读估算，流式期间保持旧值）
+    compact: null,     // 用量气泡底部的手动压缩按钮（readmodel 的 compactView；随 usage 一起出现）
   },
   thumbs: [],         // [thumbModel]
   thumbsEmpty: true,

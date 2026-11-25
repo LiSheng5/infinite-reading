@@ -287,7 +287,8 @@ async function main() {
     const h2 = await req('GET', '/health');
     check('/health 反映能力开关变化', h2.json.features.email === true);
 
-    await req('PUT', '/api/config', { schedule: { enabled: true, paused: false } }, token);
+    // 每日上限与邮件 / 支付同口径：0 = 不发送，所以要先给足额度，触发才会真的发生
+    await req('PUT', '/api/config', { schedule: { enabled: true, paused: false, dailyCap: 10 } }, token);
 
     const mdl = await req('POST', '/api/triggers',
       { name: 'model-one', type: 'interval', spec: { everyMs: 60000 }, prompt: 'p', reason: 'r' }, token);

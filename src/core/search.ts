@@ -11,7 +11,7 @@
  * 规整统一 NFKC + 小写 + 折叠空白（中文可用，子串匹配、不分词）。
  */
 
-import { plainReply as plainReplyOfTree } from './tree.ts';
+import { plainReply as plainReplyOfTree, stripUserAction } from './tree.ts';
 
   /* ---------------- 规整（NFKC / 小写 / 折叠空白） ---------------- */
 
@@ -60,11 +60,10 @@ import { plainReply as plainReplyOfTree } from './tree.ts';
   // store.ts 的书架摘要共用同一口径，schema 演进只改一处；静态 import 缺了直接报错不静默降级
   const plainReply = plainReplyOfTree;
 
-  // 玩家行动文本：去掉 [玩家行动] / [设定] 标记
+  // 玩家行动文本：剥壳与内层（做/说/导演）标记的唯一实现在 tree.ts 的 stripUserAction
+  // （索引里不保留输入类型标记——它是元数据，不是可检索的正文）
   function plainAction(raw) {
-    return String(raw == null ? '' : raw)
-      .replace(/^\[设定\][\s\S]*?\n\n/, '')
-      .replace(/^\[玩家行动\]\s*/, '');
+    return stripUserAction(raw);
   }
 
   /* ---------------- buildDoc：遍历全部节点（含非当前分支） ----------------

@@ -344,7 +344,7 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     }
   }
 
-  // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型
+  // 子模型（画师/书记员/起草）配置：留空即沿用剧情模型（含温度——子模型面板不提供温度控件）
   function resolveSub(name) {
     const sub = S.settings[name] || {};
     const c = S.settings.chat;
@@ -353,7 +353,8 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
       baseUrl: sub.baseUrl || c.baseUrl,
       apiKey: sub.apiKey || c.apiKey,
       model: sub.model || c.model,
-      temperature: Number.isFinite(+sub.temperature) ? +sub.temperature : 0.7,
+      temperature: Number.isFinite(+sub.temperature) ? +sub.temperature
+        : (Number.isFinite(+c.temperature) ? +c.temperature : 0.9),
     };
   }
 

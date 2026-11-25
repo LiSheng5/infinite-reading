@@ -64,7 +64,7 @@ console.log('[1] providers.ts：请求体不再读参考表');
   const bad = providerProblems(src);
   ok(bad.length === 0, '参考表已不参与请求体塑形' + (bad.length ? '：' + bad.join('；') : ''));
   ok(/body\.temperature\s*=\s*Number\.isFinite/.test(stripComments(src)),
-    '温度一律按用户填的值下发（默认 0.8），不再看表');
+    '温度一律按用户填的值下发（缺省回落 0.9，与默认主模型一致），不再看表');
   ok(/mergeExtraParams\(body, cfg\.extraParams\)/.test(stripComments(src)),
     '厂商形参统一走 mergeExtraParams（最后合并、优先级最高）');
 }

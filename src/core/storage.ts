@@ -155,14 +155,20 @@ const global = globalThis as any;
       }));
     },
 
-    // 估算可用空间（Chromium / Firefox 支持；Safari 较旧版本可能没有）
+    // 估算可用空间（Chromium / Firefox 支持；Safari 较旧版本可能没有）。
+    // 返回 null = 「拿不到数字」：可能是浏览器不支持，也可能是查询失败。
+    // 两个调用方（占用显示 / 视频余量判断）本来就按「查不到」降级，不需要区分；
+    // 但查询失败要留一行日志——静默吞掉会让「容量为什么算不准」无从排查。
     async estimate() {
+      if (!(global.navigator && navigator.storage && navigator.storage.estimate)) return null;
       try {
-        if (global.navigator && navigator.storage && navigator.storage.estimate) {
-          return await navigator.storage.estimate();
-        }
-      } catch (_) {}
-      return null;
+        return await navigator.storage.estimate();
+      } catch (e) {
+        try {
+          console.warn('[storage] 读取占用估算失败（按「查不到」处理）：', (e && e.message) || e);
+        } catch (_) { /* 无 console 的环境忽略 */ }
+        return null;
+      }
     },
   };
 

@@ -88,7 +88,8 @@ async function main() {
         enabled: o.enabled === undefined ? true : o.enabled,
         paused: !!o.paused,
         quietHours: o.quiet || [],
-        dailyCap: o.cap || 0,
+        // 上限 0 = 一封都不发（与邮件 / 支付同口径）：多数用例测的是别的东西，默认给足额度
+        dailyCap: o.cap === undefined ? 1000 : o.cap,
         missedPolicy: o.missedPolicy || 'SKIP',
       },
     };
@@ -192,6 +193,17 @@ async function main() {
     check('每日上限：第 1 条放行', r1.fired === 1, JSON.stringify(r1));
     check('每日上限：第 2 条被拦', r2.fired === 0, JSON.stringify(r2));
     check('每日上限：pending 只有 1 条', s.listPending().length === 1, s.listPending().length);
+  }
+
+  // 3.6b 上限为 0 = 一封都不发（与邮件 / 支付同口径，不再是「无上限」）
+  {
+    VNOW = localMs(2026, 1, 1, 12, 0);
+    const { s } = fresh({ cap: 0 });
+    mk(s, 'd0', 'interval', { everyMs: M });
+    VNOW += M;
+    const r = s.tick();
+    check('每日上限为 0：不触发', r.fired === 0, JSON.stringify(r));
+    check('每日上限为 0：无 pending', s.listPending().length === 0, s.listPending().length);
   }
 
   // 3.7 一键暂停 / 功能总开关

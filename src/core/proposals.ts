@@ -211,10 +211,11 @@ import { genId as rootGenId } from './tree.ts';
   }
 
   // 「用户还能对它做点什么」：pending（首次确认）或 awaiting_confirm（补完二次确认）。
+  // 过期的判定只在 reconcile 里（PENDING / AWAITING 过 TTL → EXPIRED），这里不再重复比较时间。
   function isActionable(p, now) {
     if (!p) return false;
     const st = reconcile(p, now);
-    return (st === STATUS.PENDING || st === STATUS.AWAITING) && timeOf(now) < p.expiresAt;
+    return st === STATUS.PENDING || st === STATUS.AWAITING;
   }
 
   // 同步抢占状态：必须在任何 await 之前把 pending 变掉，保证并发再点不会二次执行

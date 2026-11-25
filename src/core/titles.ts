@@ -11,7 +11,7 @@
  * 硬约束：零依赖、无 DOM、无网络；以 ES module 导出，Node 里可直接 import。
  */
 
-import { plainReply } from './tree.ts';
+import { plainReply, stripUserAction } from './tree.ts';
 
   /* ---------------- 码点安全的小工具 ---------------- */
 
@@ -23,13 +23,10 @@ import { plainReply } from './tree.ts';
 
   /* ---------------- 纯文本提取（剥 JSON 与标记） ---------------- */
 
-  // 用户话：去掉 [设定] 前缀、[玩家行动] 标记与（做/说/导演）内层标记（与 src/core/tree.ts 同口径）
+  // 用户话：去掉 [设定] 前缀、[玩家行动] 外壳与（做/说/导演）内层标记。
+  // 剥标记走 tree.ts 的 stripUserAction（唯一实现），这里只补标题提示词需要的 trim。
   function userText(raw) {
-    return String(raw == null ? '' : raw)
-      .replace(/^\[设定\][\s\S]*?\n\n/, '')
-      .replace(/^\[玩家行动\]\s*/, '')
-      .replace(/^（(?:做|说|导演)）/, '')
-      .trim();
+    return stripUserAction(raw).trim();
   }
 
   // 助手回复：剧情模式是 JSON（narration / 旁白），chat / rp 是纯文本。

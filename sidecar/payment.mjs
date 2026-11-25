@@ -45,6 +45,12 @@ export function createPayment(deps) {
   // 已「占用额度」的状态组唯一口径在 statuses.mjs（COMMITTED_TX）：待确认的不算，避免空占额度
   const COMMITTED = sqlIn(COMMITTED_TX);
 
+  // 审批人：调用方只允许传服务端认定的身份（server.mjs 恒传 'user'），
+  // 落进 acted_by 留痕；不采信任何来自模型 / 请求体的自称。
+  function actorOf(opts) {
+    return String((opts && opts.actor) || 'user').slice(0, 40);
+  }
+
   function toTx(r) {
     if (!r) return null;
     return {
@@ -57,6 +63,7 @@ export function createPayment(deps) {
       items: safeJSON(r.items, []),
       status: r.status,
       code: r.code || '',
+      actedBy: r.acted_by || '',
       providerRef: r.provider_ref || '',
       mandateId: r.mandate_id || '',
       createdAt: Number(r.created_at),
@@ -75,11 +82,11 @@ export function createPayment(deps) {
     const raw = Math.floor(Number(row.amountCents));
     const amountCents = Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
     db.prepare(
-      'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, provider_ref, mandate_id, created_at, approved_at, charged_at) '
-      + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      'INSERT INTO payment_transactions (id, intent_id, agent, amount_cents, currency, merchant, category, items, status, code, acted_by, provider_ref, mandate_id, created_at, approved_at, charged_at) '
+      + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(
       genId('tx'), row.intentId, row.agent, amountCents, row.currency, row.merchant, row.category,
-      JSON.stringify(row.items || []), row.status, row.code || '', row.providerRef || '', row.mandateId || '',
+      JSON.stringify(row.items || []), row.status, row.code || '', row.actedBy || '', row.providerRef || '', row.mandateId || '',
       row.createdAt, row.approvedAt == null ? null : row.approvedAt, row.chargedAt == null ? null : row.chargedAt
     );
   }
@@ -268,7 +275,7 @@ export function createPayment(deps) {
     };
 
     if (verdict.decision === 'deny') {
-      insertTx(Object.assign({}, base, { status: TX.DENIED, code: verdict.code }));
+      insertTx(Object.assign({}, base, { status: TX.DENIED, code: verdict.code, actedBy: 'system' }));
       return {
         ok: false, code: verdict.code, message: verdict.message, intentId: intentId,
         transaction: getTx(intentId),
@@ -279,7 +286,7 @@ export function createPayment(deps) {
     // 授权范围缺失：策略过了也不放行——「三层授权」的第一层不可省略
     if (!mandate) {
       const code = mandateId ? 'MANDATE_NOT_FOUND' : 'MANDATE_REQUIRED';
-      insertTx(Object.assign({}, base, { status: TX.DENIED, code: code }));
+      insertTx(Object.assign({}, base, { status: TX.DENIED, code: code, actedBy: 'system' }));
       return {
         ok: false, code: code, intentId: intentId,
         message: code === 'MANDATE_REQUIRED'
@@ -301,8 +308,8 @@ export function createPayment(deps) {
       };
     }
 
-    // allow：直接放行并扣款
-    insertTx(Object.assign({}, base, { status: TX.APPROVED, approvedAt: t0 }));
+    // allow（在免确认额度内）：策略自动放行，不留「人」的身份
+    insertTx(Object.assign({}, base, { status: TX.APPROVED, approvedAt: t0, actedBy: 'system' }));
     const charged = await charge(intentId);
     return Object.assign({ needsApproval: false, summary: summary(agent) }, charged);
   }
@@ -310,8 +317,8 @@ export function createPayment(deps) {
   function approve(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare('UPDATE payment_transactions SET status=?, approved_at=? WHERE intent_id=? AND status=?')
-      .run(TX.APPROVED, now(), id, TX.PENDING);
+    const info = db.prepare('UPDATE payment_transactions SET status=?, approved_at=?, acted_by=? WHERE intent_id=? AND status=?')
+      .run(TX.APPROVED, now(), actorOf(opts), id, TX.PENDING);
     if (info.changes > 0) return { ok: true, status: TX.APPROVED, transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔已经不是待确认状态了。', transaction: tx };
@@ -320,8 +327,8 @@ export function createPayment(deps) {
   function deny(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare('UPDATE payment_transactions SET status=?, code=? WHERE intent_id=? AND status=?')
-      .run(TX.DENIED, 'USER_REJECTED', id, TX.PENDING);
+    const info = db.prepare('UPDATE payment_transactions SET status=?, code=?, acted_by=? WHERE intent_id=? AND status=?')
+      .run(TX.DENIED, 'USER_REJECTED', actorOf(opts), id, TX.PENDING);
     if (info.changes > 0) return { ok: true, status: TX.DENIED, code: 'USER_REJECTED', transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔已经不是待确认状态了。', transaction: tx };
@@ -366,7 +373,7 @@ export function createPayment(deps) {
       }
     );
     if (verdict.decision === 'deny') {
-      db.prepare('UPDATE payment_transactions SET status=?, code=? WHERE intent_id=?').run(TX.DENIED, verdict.code, id);
+      db.prepare('UPDATE payment_transactions SET status=?, code=?, acted_by=? WHERE intent_id=?').run(TX.DENIED, verdict.code, 'system', id);
       return {
         ok: false, code: verdict.code, message: verdict.message,
         intentId: id, transaction: getTx(id), summary: summary(tx.agent),
@@ -402,8 +409,8 @@ export function createPayment(deps) {
   function markPaid(intentId, opts) {
     const id = String(intentId || '');
     if (!getTx(id)) return { ok: false, code: 'INTENT_NOT_FOUND', message: '找不到这笔购买意图。' };
-    const info = db.prepare('UPDATE payment_transactions SET status=?, charged_at=? WHERE intent_id=? AND status=?')
-      .run(TX.CHARGED, now(), id, TX.AWAITING_PAYMENT);
+    const info = db.prepare('UPDATE payment_transactions SET status=?, charged_at=?, acted_by=? WHERE intent_id=? AND status=?')
+      .run(TX.CHARGED, now(), actorOf(opts), id, TX.AWAITING_PAYMENT);
     if (info.changes > 0) return { ok: true, status: TX.CHARGED, transaction: getTx(id) };
     const tx = getTx(id);
     return { ok: false, code: 'INTENT_ALREADY_RESOLVED', status: tx.status, message: '这笔不是「等待付款」状态。', transaction: tx };

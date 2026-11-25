@@ -142,7 +142,10 @@ function irShell({ single }) {
           else files.push('./' + relative(out, abs).split(/[\\/]/).join(posix.sep));
         }
       })(out);
-      const precache = files.filter(f => f !== './sw.js').sort();
+      // sw.js 是本次构建末尾才写出的产物，不是预缓存目标；这里显式排除，
+      // 兼作「目录没清干净、上次的 sw.js 还在」时的兜底（emptyOutDir 正常已清）。
+      const NOT_PRECACHED = new Set(['./sw.js']);
+      const precache = [...new Set(files.filter(f => !NOT_PRECACHED.has(f)))].sort();
 
       const swPath = join(ROOT, 'sw.js');
       const sw = readFileSync(swPath, 'utf8');

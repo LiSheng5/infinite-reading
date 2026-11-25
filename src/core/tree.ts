@@ -185,9 +185,15 @@ import type { Story, StoryTree } from './schema.ts';
   const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
   const KIND_MARK_RE = /^（(做|说|导演)）/;
 
-  // user 消息 → 实际发给 AI 的串（含 do/say/direct 标记）；与 src/app/turn.js 的 buildCompressInput 同口径
+  // 玩家文本剥壳的唯一实现（两档，别再各写一份正则）：
+  //   stripUserContent —— 只剥 [设定] / [玩家行动] 外壳，保留 do/say/direct 标记：
+  //                       这就是实际发给 AI 的串（与 src/app/turn.js 的 buildCompressInput 同口径）；
+  //   stripUserAction  —— 展示 / 检索 / 起标题用：在外壳之上再去掉开头的（做）/（说）/（导演）。
   function stripUserContent(s) {
     return String(s == null ? '' : s).replace(/^\[设定\][\s\S]*?\n\n/, '').replace(/^\[玩家行动\]\s*/, '');
+  }
+  function stripUserAction(s) {
+    return stripUserContent(s).replace(KIND_MARK_RE, '');
   }
   function parseSent(sent) {
     const s = String(sent == null ? '' : sent);
@@ -681,4 +687,4 @@ import type { Story, StoryTree } from './schema.ts';
     siblings, switchSibling, switchTo, latestLeaf, forkBefore, canResume,
     pushLate, imageIdsOf,
   };
-  export { genId, clone, sleep, plainReply, Tree };
+  export { genId, clone, sleep, plainReply, stripUserContent, stripUserAction, Tree };

@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
   items        TEXT NOT NULL DEFAULT '[]',
   status       TEXT NOT NULL DEFAULT '${TX.PENDING}',  -- pending | approved | charging | awaiting_payment | charged | denied
   code         TEXT NOT NULL DEFAULT '',
+  acted_by     TEXT NOT NULL DEFAULT '',          -- 批准 / 拒绝 / 标记已付的执行者（user | system）
   provider_ref TEXT NOT NULL DEFAULT '',          -- 渠道回执号 / 订单号（不含任何支付凭证）
   created_at   INTEGER NOT NULL,
   approved_at  INTEGER,
@@ -99,8 +100,18 @@ CREATE INDEX IF NOT EXISTS idx_email_audit_at  ON email_audit(at);
 CREATE INDEX IF NOT EXISTS idx_tx_created      ON payment_transactions(created_at);
 `;
 
-// 老库补列（幂等）：SQLite 没有 IF NOT EXISTS 的 ADD COLUMN，只能尝试后忽略错误
-function tryAlter(db, sql) { try { db.exec(sql); } catch (_) {} }
+// 老库补列（幂等）：SQLite 没有 IF NOT EXISTS 的 ADD COLUMN，只能尝试后忽略错误。
+// 只把「列已存在」当成预期错误；磁盘满 / 库被锁 / schema 冲突一律留日志——否则补列失败会
+// 伪装成「这列本来就有」，直到某条语句 500 才暴露。
+function tryAlter(db, sql) {
+  try { db.exec(sql); }
+  catch (e) {
+    const msg = String((e && e.message) || e);
+    if (!/duplicate column name/i.test(msg)) {
+      try { console.warn('[sidecar] 补列失败（' + sql + '）：' + msg); } catch (_) { /* 无 console 的环境忽略 */ }
+    }
+  }
+}
 
 /* 在指定文件（或 ':memory:'）上开库并建表 —— 单测用 :memory:，运行用 DB_PATH */
 export function openDbAt(file) {
@@ -111,6 +122,8 @@ export function openDbAt(file) {
   tryAlter(db, "ALTER TABLE payment_transactions ADD COLUMN provider_ref TEXT NOT NULL DEFAULT ''");
   // 支出按授权范围（mandate）关联统计：老库补列，幂等
   tryAlter(db, "ALTER TABLE payment_transactions ADD COLUMN mandate_id TEXT NOT NULL DEFAULT ''");
+  // 审批人留痕（谁批准 / 拒绝 / 标记已付）：老库补列，幂等
+  tryAlter(db, "ALTER TABLE payment_transactions ADD COLUMN acted_by TEXT NOT NULL DEFAULT ''");
   return db;
 }
 
