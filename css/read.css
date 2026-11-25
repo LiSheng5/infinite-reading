@@ -343,8 +343,9 @@
 .opening-hint-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
 .opening-hint .hint { margin: 0; }
 
-/* 智能体空对话引导（「能做什么」）：纸墨风，同 opening-hint 的虚线框 + 纸面底色，不做营销卡片；
-   能力 chip 两列网格，未启用的仍可点（跳设置分组）、第二行「未启用 ›」点明去处。
+/* 聊天空对话引导（「能做什么」）：纸墨风，同 opening-hint 的虚线框 + 纸面底色，不做营销卡片；
+   能力 chip 两列网格，未启用的仍可点（跳设置分组）、第二行「未启用 ›」点明去处；
+   末尾是次要的「添加角色卡」入口（可选，不抢 chip 的戏）。
    高度不设限：随聊天区滚动，键盘弹出时照常可滚。 */
 .agent-intro {
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
@@ -354,7 +355,7 @@
   background: var(--surface-2);
 }
 .agent-intro-line { margin: 0; font-family: var(--font-body); font-size: 15px; line-height: 1.8; color: var(--ink-dim); }
-/* 首行是模式说明（与两个开局弹窗同一条 .entry-desc）：块内已经用 gap 排版，不再吃外边距 */
+/* 首行是模式说明（与开局弹窗同一条 .entry-desc）：块内已经用 gap 排版，不再吃外边距 */
 .agent-intro .hint.entry-desc { margin: 0; }
 .agent-chips {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -375,6 +376,11 @@
 .agent-chip.off { border-style: dashed; color: var(--ink-dim); }
 .agent-chip.off:hover { color: var(--ink); }
 .agent-chip-fix { font-family: var(--font-ui); font-size: 12px; color: var(--ink-faint); letter-spacing: 0.05em; }
+
+/* 「添加角色卡」次要入口：小一号、ghost，放在 chip 网格下面单独一行 */
+.agent-card-entry { display: flex; gap: 8px; align-items: center; width: 100%; }
+.agent-card-entry .ui-btn { font-size: 13px; padding: 6px 12px; color: var(--ink-dim); }
+.agent-card-entry .ui-btn:hover { color: var(--ink); }
 
 /* 选项：默认走「💡 灵感」托盘；always 模式才内联在旁白下 */
 .choices-inline { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }

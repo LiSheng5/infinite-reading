@@ -53,8 +53,20 @@ console.log('[1] effective：覆盖 / 跟随 / 各键独立');
   eq(P.effective(s, story, 'ui.splitRatio'), 0.5, 'ui.splitRatio 未覆盖 → 跟随全局');
   const tools = P.effective(s, story, 'tools');
   eq(tools.email, false, 'prefs.tools.email 覆盖');
-  eq(tools.payment, true, 'prefs.tools.payment 未覆盖 → 跟随全局可用性');
-  eq(tools.schedule, true, 'prefs.tools.schedule 未覆盖 → 跟随全局可用性');
+  eq(tools.payment, false, 'prefs.tools.payment 未覆盖 → 全局默认关（测试中）');
+  eq(tools.schedule, false, 'prefs.tools.schedule 未覆盖 → 全局默认关（测试中）');
+  eq(tools.image, false, 'prefs.tools.image 未覆盖 → 全局默认关（测试中）');
+  eq(tools.memory, true, 'prefs.tools.memory 未覆盖 → 默认开（基础记忆召回）');
+  eq(P.effective(s, { prefs: { tools: { email: true } } }, 'tools').email, true,
+    '无卡显式打开：邮件跟随开关（true = 跟随全局可用性）');
+  // 有卡（characterCard）且本对话未显式设置：邮件 / 下单有效值为关；显式打开才开
+  const cardStory = { characterCard: { name: 'A' }, prefs: {} };
+  eq(P.effective(s, cardStory, 'tools').email, false, '有卡未显式设置：邮件有效值为关');
+  eq(P.effective(s, cardStory, 'tools').payment, false, '有卡未显式设置：下单有效值为关');
+  eq(P.effective(s, cardStory, 'tools').memory, true, '有卡：记忆不受影响');
+  const cardStoryOn = { characterCard: { name: 'A' }, prefs: { tools: { email: true, payment: true } } };
+  eq(P.effective(s, cardStoryOn, 'tools').email, true, '有卡但显式打开：邮件放行');
+  eq(P.effective(s, cardStoryOn, 'tools').payment, true, '有卡但显式打开：下单放行');
   // profileId
   eq(P.effective(s, { prefs: { profileId: 'p1' } }, 'profileId'), 'p1', 'profileId 命中模型库');
   eq(P.effective(s, { prefs: {} }, 'profileId'), 'default', '未设置 profileId → default');
@@ -92,22 +104,19 @@ console.log('[2] resolveChatCfg：命中 / 缺失 / 未设置');
   eq(partial.source, 'story', '仍是本对话来源');
 }
 
-console.log('[3] visibleFor：三种模式的可见控件集合');
+console.log('[3] visibleFor：两种模式的可见控件集合');
 {
   const choice = P.visibleFor('choice');
-  const rp = P.visibleFor('rp');
   const chat = P.visibleFor('chat');
   ok(choice.has('model') && choice.has('choices') && choice.has('layout') && choice.has('showReasoning'),
     '剧情：模型 / 选项显示 / 布局 / 思考过程');
   ok(choice.has('style') && choice.has('mode'), '剧情：画风入口 + 推进模式');
   ok(!choice.has('trigger'), '剧情：不含出图时机（下线）');
   ok(!choice.has('tools') && !choice.has('schedule'), '剧情：不含工具开关 / 定时主动开关');
-  ok(chat.has('model') && chat.has('tools') && chat.has('layout') && chat.has('showReasoning'), '智能体：模型 / 工具开关 / 布局 / 思考过程');
-  ok(!chat.has('trigger') && !chat.has('choices'), '智能体：不含出图时机 / 选项显示');
-  ok(rp.has('model') && rp.has('characterCard') && rp.has('layout') && rp.has('showReasoning') && rp.has('schedule'),
-    '扮演：模型 / 角色卡入口 / 布局 / 思考过程 / 定时主动开关');
-  ok(!rp.has('tools'), '扮演：不含工具开关组');
-  ok(!rp.has('trigger') && !rp.has('choices'), '扮演：不含出图时机 / 选项显示');
+  ok(chat.has('model') && chat.has('tools') && chat.has('layout') && chat.has('showReasoning'), '聊天：模型 / 工具开关 / 布局 / 思考过程');
+  ok(!chat.has('trigger') && !chat.has('choices'), '聊天：不含出图时机 / 选项显示');
+  ok(P.visibleFor('rp').has('tools') && !P.visibleFor('rp').has('characterCard'),
+    '旧 rp 值归一为 chat 集合（角色卡入口在故事数据区，不在可见控件集）');
   ok(P.visibleFor('unknown') instanceof Set, '未知模式回落剧情集合且不抛错');
 }
 

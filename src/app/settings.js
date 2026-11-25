@@ -81,7 +81,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const sui = S.settings.ui || Store.defaultSettings().ui;
     if ($('#s-ui-layout')) $('#s-ui-layout').value = sui.layout === 'immersive' ? 'auto' : sui.layout;
     if ($('#s-ui-choices')) $('#s-ui-choices').value = sui.choices === 'always' ? 'always' : 'tray';
-    // 外观：字号 / 宽度 / 密度默认（扮演 / 智能体；本对话可覆盖）
+    // 外观：字号 / 宽度 / 密度默认（聊天；本对话可覆盖）
     if ($('#s-ui-font')) $('#s-ui-font').value = ['sm', 'md', 'lg'].indexOf(sui.fontScale) >= 0 ? sui.fontScale : 'md';
     if ($('#s-ui-width')) $('#s-ui-width').value = ['narrow', 'standard', 'wide'].indexOf(sui.width) >= 0 ? sui.width : 'standard';
     if ($('#s-ui-density')) $('#s-ui-density').value = ['compact', 'standard'].indexOf(sui.density) >= 0 ? sui.density : 'standard';
@@ -426,18 +426,26 @@ import { A, renderChat, saveAll, toast } from './core.js';
     syncStoryPanel();   // 回填后再对账一次（回填只在未判变时发生，这里兜住保存后的时序）
   }
 
-  // 角色卡状态：rp 常驻；切出 rp 时卡保留在存档里只是停用
+  // 角色卡区块（聊天设置）：添加 / 编辑 / 移除。卡常驻系统提示词，开场白在加卡时进日志。
+  // 移除要二次确认；移除只摘卡，历史消息保留。剧情模式不显示这个区块（卡留在存档里只是停用）。
   function renderCardPanel() {
-    const el = $('#rc-status');
-    if (!el) return;
-    $('#btn-edit-card').disabled = !S.story;
+    const block = $('#rc-block');
+    if (!block) return;
+    const isChat = !!(S.story && S.story.mode === 'chat');
+    block.classList.toggle('hidden', !isChat);
     const card = S.story && S.story.characterCard;
-    if (!card) {
-      el.textContent = '还没有角色卡：切到「扮演」会先让你建一张 / 导入一张（SillyTavern V2/V3 PNG 也可）。';
-      return;
+    const el = $('#rc-status');
+    if (el) {
+      el.textContent = !card
+        ? '还没有角色卡：可以添加一张（SillyTavern V2/V3 PNG 也可），也可以一直不带卡。'
+        : '角色卡：' + (card.name || '（无名）') + '（' + RoleCard.sourceLabel(card) + '）· 每轮常驻';
     }
-    el.textContent = '角色卡：' + (card.name || '（无名）') + '（' + RoleCard.sourceLabel(card) + '）'
-      + (S.story.mode === 'rp' ? ' · 扮演中：每轮常驻，开场白已进场' : ' · 已保留：切到扮演模式即启用');
+    const addBtn = $('#btn-add-card');
+    const editBtn = $('#btn-edit-card');
+    const rmBtn = $('#btn-remove-card');
+    if (addBtn) addBtn.classList.toggle('hidden', !!card);
+    if (editBtn) editBtn.classList.toggle('hidden', !card);
+    if (rmBtn) rmBtn.classList.toggle('hidden', !card);
   }
 
   // 人物设定独立控件（可增删行）：姓名 / 在场或离场 / 性格 / 说话方式 / 备注
@@ -596,33 +604,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function onModeChange(e) {
     if (!S.story) return;
     const m = e.target.value;
-    const prev = S.story.mode || 'choice';
-    if (m === 'rp' && !S.story.characterCard) {
-      // 切到 rp 时若没有角色卡 → 弹角色卡选择 / 新建；取消则留在原模式
-      S.story.mode = m;
-      $('#hud-mode').textContent = MODE_LABELS[m] || '剧情';
-      saveAll();
-      A.applyLayout();
-      A.syncKindSwitch();
-      renderChat();
-      A.openCardEditor({
-        mode: 'edit',
-        onCancel: () => {
-          S.story.mode = prev;
-          $('#s-story-mode').value = prev;
-          $('#hud-mode').textContent = MODE_LABELS[prev] || '剧情';
-          saveAll();
-          A.applyLayout();
-          A.syncKindSwitch();
-          renderChat();
-        },
-      });
-      return;
-    }
     S.story.mode = m;
     $('#hud-mode').textContent = MODE_LABELS[m] || '剧情';
     saveAll();
-    A.applyLayout();      // 剧情 ↔ chat/rp 来回切：舞台与图都还在（只是不显示），布局要跟着模式走
+    A.applyLayout();      // 剧情 ↔ chat 来回切：舞台与图都还在（只是不显示），布局要跟着模式走
     A.syncKindSwitch();   // chat 隐藏做 / 说 / 导演；story.ui.kind 保留不清
     renderChat();
     renderStoryPanels();

@@ -24,23 +24,22 @@ import { MODAL_IDS, modalStack, openModal, closeModal, dismissModal, closeTopMod
     custom: '',
   };
 
-  const MODE_LABELS = { choice: '剧情', chat: '智能体', rp: '扮演' };
+  const MODE_LABELS = { choice: '剧情', chat: '聊天' };   // 原「扮演」'rp' 已并入「聊天」
   // 做 / 说 / 导演：玩家回合的三种输入语义（旧存档缺 kind 时按「做」处理）
   const KIND_LABELS = { do: '做', say: '说', direct: '导演' };
 
-  /* 三种模式「点进去」的开局页共用一套文案骨架：标题 = 「新故事 · 模式名」，下面一行说明。
+  /* 两种模式「点进去」的开局页共用一套文案骨架：标题 = 「新故事 · 模式名」，下面一行说明。
    * 说明统一控制在 18 字内、只用白话（不写模型 / 格式 / 接口这类技术词），一句话讲清这里能干什么。
-   * 剧情与扮演印在弹窗标题下，智能体印在空对话引导的第一行——三处读同一份，改文案只改这里。 */
+   * 剧情印在弹窗标题下，聊天印在空对话引导的第一行——两处读同一份，改文案只改这里。 */
   const MODE_ENTRY = {
     choice: { title: '新故事 · ' + MODE_LABELS.choice, desc: '先搭个舞台，故事从这里生长' },
     chat: { title: '新故事 · ' + MODE_LABELS.chat, desc: '有事直说，它替你去办' },
-    rp: { title: '新故事 · ' + MODE_LABELS.rp, desc: '以一张角色卡登场，玩的是关系' },
   };
 
   const DEFAULT_TOPIC = '雨夜便利店：凌晨三点的第八个货架，与一场没有说出口的告别。';
 
   const CHAT_PREMISE = '对话模式：没有剧本，随性聊天。对话的走向由你们共同决定。你自带画图、记事、定时提醒、写邮件、下单这些能力，需要时主动用起来（邮件与下单会先让用户确认）。';
-  // rp：premise 与角色卡绑定（卡常驻系统提示词；开场白由卡写、直接进日志）
+  // 带卡聊天：premise 与角色卡绑定（卡常驻系统提示词；开场白由卡写、直接进日志）
   function rpPremise(card) {
     const name = (card && card.name) || '角色';
     return '角色扮演：「' + name + '」。以第一人称与玩家对话，保持性格与说话方式一致。';

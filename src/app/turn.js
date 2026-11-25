@@ -32,9 +32,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
         tool_calls: Array.isArray(j.tool_calls) ? j.tool_calls : [],
       };
     }
-    // chat / rp：纯文本契约——正文本身就是回复，不做「像 JSON 却坏了」的判错，
-    // 否则正文里出现一个「{」就会被误判成坏包（这两个模式已不再要求模型输出 JSON）
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) {
+    // chat：纯文本契约——正文本身就是回复，不做「像 JSON 却坏了」的判错，
+    // 否则正文里出现一个「{」就会被误判成坏包（聊天已不再要求模型输出 JSON）
+    if (S.story && S.story.mode === 'chat') {
       return { narration: text, choices: [], scene_change: false, scene_summary: '', world: null, tool_calls: [], plainText: true };
     }
     // 兜底：完全不是 JSON 的（模型没按格式来）→ 原文当旁白，fail-open；
@@ -54,8 +54,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   function absorbReply(reply) {
     if (reply.world) Context.mergeWorld(S.story.world, reply.world);
     if (Array.isArray(reply.tool_calls)) for (const c of reply.tool_calls) applyToolCall(c);
-    // chat / rp 纯文本没有 scene_summary：拿旁白原文当画面参考，免得「🎨 作画」越画越旧
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp') && !reply.scene_summary && reply.narration) {
+    // chat 纯文本没有 scene_summary：拿旁白原文当画面参考，免得「🎨 作画」越画越旧
+    if (S.story && S.story.mode === 'chat' && !reply.scene_summary && reply.narration) {
       S.story.lastSceneSummary = String(reply.narration).replace(/\s+/g, ' ').slice(0, 120);
     }
   }

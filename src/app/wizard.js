@@ -266,8 +266,7 @@ import { A, renderChat } from './core.js';
   }
 
   function createStoryImmediate(mode) {
-    // rp 开局 = 选角色卡（自建空白表单 / 导入 PNG），开场白由卡写、直接进日志
-    if (mode === 'rp') { A.openCardEditor({ mode: 'new' }); return; }
+    // 新建聊天默认不带卡（角色卡在聊天里随时可加：空聊天引导页 / 聊天设置）
     const s = Store.newStory({
       title: '新对话',           // 初始标题「新对话」，回合 1 / 6 由小模型自动起标题
       premise: CHAT_PREMISE,

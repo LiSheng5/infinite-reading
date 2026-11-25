@@ -20,7 +20,7 @@ import { A, saveAll, toast } from './core.js';
 
   /* ================= 小工具 ================= */
 
-  const MODE_ICONS = { choice: 'book', chat: 'chat', rp: 'mask' };   // sprite 里的图标名
+  const MODE_ICONS = { choice: 'book', chat: 'chat' };   // sprite 里的图标名（mask 闲置不删）
   const GROUP_LABELS = [
     { key: 'today', label: '今天' },
     { key: 'yesterday', label: '昨天' },
@@ -479,7 +479,7 @@ import { A, saveAll, toast } from './core.js';
 
   // 命中节点在当前路径且在可见窗口内 → 滚动 + 短暂高亮（已做）；
   // 否则（仅在剧情模式）打开分支页、选中该节点（不自动 switchTo，由用户决定怎么继续）；
-  // 对话 / 扮演没有分支入口 → 只提示结果在别的版本里，不跳转
+  // 聊天没有分支入口 → 只提示结果在别的版本里，不跳转
   function scrollToHit(nid) {
     setTimeout(() => {
       const sel = '#chat-scroll [data-nid="' + escAttr(nid) + '"]';

@@ -564,11 +564,11 @@ import { APP_VERSION } from './version.ts';
   function newStory(opts): Story {
     opts = opts || {};
     const now = Date.now();
-    const mode = opts.mode || 'choice';         // choice | chat | rp
-    // 新建的智能体 / 扮演对话自动起标题（titleAuto），剧情新故事标题来自设定
+    const mode = normalizeMode(opts.mode || 'choice');   // choice | chat（旧 'rp' 归一为 'chat'）
+    // 新建的聊天对话自动起标题（titleAuto），剧情新故事标题来自设定
     const titleAuto = ('titleAuto' in opts)
       ? !!opts.titleAuto
-      : (mode === 'chat' || mode === 'rp');
+      : (mode === 'chat');
     return {
       schema: SCHEMA,
       id: opts.id || genId(),

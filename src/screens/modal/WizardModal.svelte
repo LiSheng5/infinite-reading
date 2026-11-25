@@ -4,8 +4,8 @@
    * 全部按 id 读写；这里只把标记换成组件库（Field / TextInput / 本目录的 Textarea / Button）。
    * 人物行是唯一走状态桥的部分（见 CharRows.svelte / state.svelte.js）：
    * wizard.js 的 wzChars() 在 Svelte 形态下取 state.svelte.js 的 charApi('wizard')。
-   * 骨架（三模式同一套）：标题 + 一句话说明 → 主操作 → 折叠的「更多设定（可选）」→ 底部固定主按钮。
-   * 标题与说明读 A.MODE_ENTRY.choice（与扮演 / 智能体同一份文案表），折叠块用共用的 OptFold，
+   * 骨架（与角色卡选卡视图同一套）：标题 + 一句话说明 → 主操作 → 折叠的「更多设定（可选）」→ 底部固定主按钮。
+   * 标题与说明读 A.MODE_ENTRY.choice（与聊天的开局页同一份文案表），折叠块用共用的 OptFold，
    * 于是三个开局页的措辞与样式不会各走各的。
    * 可选块里的字段 id（wz-characters / wz-style / wz-development）始终在 DOM 里，
    * details 收起不影响 startFromWizard 读取；起草提示、必填红字、折叠摘要由 wizard.js 就地改写。

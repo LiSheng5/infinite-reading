@@ -50,8 +50,7 @@
         <label>当前故事模式
           <select id="s-story-mode">
             <option value="choice">剧情（结尾给选项）</option>
-            <option value="chat">智能体（带工具的助手）</option>
-            <option value="rp">角色扮演（角色卡）</option>
+            <option value="chat">聊天（助手，可选角色卡）</option>
           </select>
         </label>
         <p class="set-sub">切换只改提示词与渲染，不影响记忆 / 重试 / 作画；记忆数据不随切换清空。</p>
@@ -82,10 +81,12 @@
           <div class="row-inline">
             <button id="btn-world-edit" class="ui-btn" type="button" onclick={openWorld}>编辑世界状态卡</button>
           </div>
-          <div class="panel-block">
+          <div class="panel-block" id="rc-block">
             <p class="hint" id="rc-status"></p>
             <div class="row-inline">
+              <button id="btn-add-card" class="ui-btn" type="button">添加角色卡</button>
               <button id="btn-edit-card" class="ui-btn" type="button">编辑角色卡 / 导入 PNG</button>
+              <button id="btn-remove-card" class="ui-btn" type="button">移除角色卡</button>
             </div>
           </div>
         </div>

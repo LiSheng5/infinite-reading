@@ -77,9 +77,9 @@ import { A } from './core.js';
     };
   }
 
-  // 场景标记行（剧情模式）/ 内联图（chat / rp，无舞台）：imageBubble 的两条分支
+  // 场景标记行（剧情模式）/ 内联图（chat，无舞台）：imageBubble 的两条分支
   function imageModel(e) {
-    const inline = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
+    const inline = !!(S.story && S.story.mode === 'chat');
     const sc = A.imageSceneById(e.id);
     return {
       kind: 'image',
@@ -192,7 +192,7 @@ import { A } from './core.js';
     return m;
   }
 
-  /* ================= 智能体空对话引导（新对话「能做什么」） =================
+  /* ================= 聊天空对话引导（新对话「能做什么」） =================
    * 还没有任何消息时显示一块引导；发出第一条消息后永久消失（只依赖 log.length === 0，不存状态）。
    * chips 的「启用」复用工具注入判定（round.js 的 toolInjection）：启用 ⇔ 对应工具这回合会被注入，
    * 判定不写第二套；未启用项仍显示（「未启用 ›」），why 是给用户看的未启用原因。
@@ -343,10 +343,11 @@ import { A } from './core.js';
     // 剧情模式空档：不自动跑开场，显示「开始第一幕」按钮（renderOpeningHint 同口径）
     m.openingHint = !S.busy && !S.live && story.mode === 'choice' && !log.length;
 
-    // 智能体空对话：还没发过消息时给「能做什么」引导（发出第一条消息后 log 非空，自然消失）
-    m.agentIntro = !S.busy && !S.live && story.mode === 'chat' && !log.length;
+    // 聊天空对话（无卡且无历史）：还没发过消息时给「能做什么」引导（发出第一条消息后 log 非空，自然消失）
+    // 有卡时沿用原 rp 的开场方式：开场白已在进场时写进日志，这里不再出引导
+    m.agentIntro = !S.busy && !S.live && story.mode === 'chat' && !story.characterCard && !log.length;
     if (m.agentIntro) {
-      // 首行是模式说明（与剧情 / 扮演的开局页同一份文案表）：
+      // 首行是模式说明（与剧情的开局页同一份文案表）：
       // 这一屏没有弹窗标题，「新建的这次对话是什么模式」由顶栏的模式名担着，说明印在引导块第一行。
       m.agentIntroDesc = A.MODE_ENTRY.chat.desc;
       const inj = A.toolInjection();

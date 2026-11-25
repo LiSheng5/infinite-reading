@@ -40,13 +40,13 @@ import { A, toast } from './core.js';
     renderFeatureBar();
   }
 
-  // 邮件 / 定时主动 / 代下单只在「对话 / 扮演」模式可用：剧情模式里既不能出现，
+  // 邮件 / 定时主动 / 代下单只在「聊天」模式可用：剧情模式里既不能出现，
   // 也不能被触发（入口函数自己也再挡一次，不依赖界面是否渲染）。
   function featuresAllowed() {
-    return !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
+    return !!(S.story && S.story.mode === 'chat');
   }
 
-  // 局内功能入口：只有「对话 / 扮演」模式才有「＋」菜单；本地服务没启动时菜单项灰显
+  // 局内功能入口：只有「聊天」模式才有「＋」菜单；本地服务没启动时菜单项灰显
   function renderFeatureBar() {
     const plus = $('#btn-more-actions');
     const menu = $('#feature-menu');
@@ -62,7 +62,7 @@ import { A, toast } from './core.js';
     const SC = Sidecar;
     const st = SC ? SC.status() : { online: false, hasToken: false, features: {} };
     const ready = !!(st.online && st.hasToken);
-    // 「✉ 写邮件」「🛒 代下单」只在智能体（chat）下显示；扮演（rp）只留「⏰ 定时主动」（行为变更）
+    // 「✉ 写邮件」「🛒 代下单」只在聊天（chat）下显示（用户主动操作，不是模型调用）
     const isChat = !!(S.story && S.story.mode === 'chat');
     const emBtn = $('#btn-feat-email');
     if (emBtn) emBtn.classList.toggle('hidden', !isChat);
@@ -145,8 +145,8 @@ import { A, toast } from './core.js';
     const F = Features;
     if (!F) return;
     F.attach({
-      // 什么时候能把主动消息送进回合流程：不忙、有故事、是对话 / 扮演模式、且在线
-      canDeliver: () => !S.busy && !!S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')
+      // 什么时候能把主动消息送进回合流程：不忙、有故事、是聊天模式、且在线
+      canDeliver: () => !S.busy && !!S.story && S.story.mode === 'chat'
         && (typeof navigator === 'undefined' || navigator.onLine !== false),
       deliver: async payload => {
         if (!payload || !payload.prompt) return;

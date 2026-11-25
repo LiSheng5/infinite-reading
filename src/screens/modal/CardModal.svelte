@@ -2,7 +2,7 @@
  /* CardModal.svelte —— #modal-card「角色卡」（选卡 / 编辑两个视图）
   * 视图 A「选卡」：导入 PNG 卡（拖入或点选）/ 自己写一张——开局选卡、以及故事里还没有卡时先到这里；
   * 视图 B「编辑」：名字 + 开场白直给，其余折进「更多设定（可选）」。
-  * 开局页的标题与一句话说明读 A.MODE_ENTRY.rp（与剧情 / 智能体同一份文案表），
+  * 选卡视图的标题与保存钮文案由 cards.js 按场景改写（给当前聊天加卡 / 新建聊天并带卡），
   * 折叠块用共用的 OptFold，可选字段的措辞与样式三个开局页只有一套。
   * 视图切换是组件内的 cardView 状态（state.svelte.js）：两块都常驻 DOM 只切 hidden，
   * 于是 main.js 启动时按 id 绑的 #btn-rc-import / #btn-rc-cancel / #btn-rc-save 不会因
@@ -40,10 +40,10 @@
   </div>
 {/snippet}
 
-<Card title={appApi.MODE_ENTRY.rp.title} titleId="card-modal-title" closeId="btn-close-card" footer={foot}>
+<Card title="角色卡" titleId="card-modal-title" closeId="btn-close-card" footer={foot}>
   <!-- 视图 A：选卡 -->
   <div id="rc-view-pick" class:hidden={!isPick}>
-    <p class="hint entry-desc">{appApi.MODE_ENTRY.rp.desc}</p>
+    <p class="hint entry-desc">TA 是谁、怎么说话，由这张卡定。</p>
     <div class="rc-pick-cards">
       <button type="button" class="mode-card" id="btn-rc-import"
         ondragover={e => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}

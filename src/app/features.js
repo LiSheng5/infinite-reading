@@ -16,7 +16,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 本地服务类能力（定时 / 邮件 / 下单）「为什么还没启用」的唯一口径：
   // 返回 '' = 这个能力可用；否则是给用户看的一句话原因。
   // scheduleToolsAvailable / proposalToolsAvailable 从这里派生，工具注入判定（round.js 的
-  // toolInjection）与智能体空对话引导的「未启用原因」也读这里——门控条件只写这一套，不会漂移。
+  // toolInjection）与聊天空对话引导的「未启用原因」也读这里——门控条件只写这一套，不会漂移。
   function sidecarFeatureWhy(feature) {
     const SC = Sidecar;
     if (!SC || typeof SC.isOnline !== 'function' || !SC.isOnline()) return '本地服务未启动';
@@ -26,13 +26,13 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return '';
   }
 
-  // 调度工具只在「对话 / 扮演」+ 本地服务在线 + 后端已开启调度时才下发
+  // 调度工具只在「聊天」+ 本地服务在线 + 后端已开启调度时才下发
   function scheduleToolsAvailable() {
     return !sidecarFeatureWhy('schedule');
   }
 
   // 邮件 / 下单工具同样只在「本地服务在线 + 对应 feature 开启 + 有 token」时下发；
-  // 另外 toolsForMode 只在 chat（智能体）模式放行（红线 7）。
+  // 另外 toolsForMode 只在 chat（聊天）模式放行（红线 7）。
   function proposalToolsAvailable() {
     return {
       email: !sidecarFeatureWhy('email'),
@@ -377,8 +377,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   function openEmailModal() {
-    // 「写邮件」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在智能体模式可用：切到智能体模式再用', true); return; }
+    // 「写邮件」只在聊天（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('写邮件只在聊天模式可用：切到聊天模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();
     const el = $('#email-status');
@@ -496,8 +496,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   function openPaymentModal() {
-    // 「代下单」只在智能体（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
-    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在智能体模式可用：切到智能体模式再用', true); return; }
+    // 「代下单」只在聊天（chat）下可达；入口自己再挡一次，不依赖菜单是否渲染
+    if (!A.featuresAllowed() || !S.story || S.story.mode !== 'chat') { toast('代下单只在聊天模式可用：切到聊天模式再用', true); return; }
     if (!A.sidecarReady()) { toast(A.sidecarOffHint(), true, true); return; }
     const st = Sidecar.status();
     const el = $('#pay-status');

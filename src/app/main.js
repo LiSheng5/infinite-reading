@@ -2,7 +2,7 @@
  * src/app/main.js —— 组合根：事件绑定 + 启动（唯一的界面入口）
  *
  * 结构：
- *  书架（应用入口）→ 新故事（选模式 → 剧情走向导 / 对话直接开聊 / 扮演暂自由扮演）
+ *  书架（应用入口）→ 新故事（选模式 → 剧情走向导 / 聊天直接开聊）
  *  → 阅读页（聊天记录 : 画面双栏）→ AI1 回合（上下文走 Context，与评测同源）
  *  → 画师子代理 + 生图→ 书记员 / 压缩→ 存档点 / 导出导入
  * 存档：统一走 Store（schema v3）；图片只存缩略图以控制体积。
@@ -282,8 +282,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
     $('#btn-save-world').onclick = A.saveWorldFromForm;
     $('#btn-inject-memory').onclick = A.toggleInjectMemory;
 
-    // —— 角色卡 ——
+    // —— 角色卡（聊天设置的添加 / 编辑 / 移除；移除在 cards.js 里二次确认）——
+    $('#btn-add-card').onclick = () => { if (!S.story) { toast('先打开一个故事'); return; } A.openCardEditor({ mode: 'new' }); };
     $('#btn-edit-card').onclick = () => { if (!S.story) { toast('先打开一个故事'); return; } A.openCardEditor({ mode: 'edit' }); };
+    $('#btn-remove-card').onclick = () => A.removeCardFromStory();
     $('#btn-close-card').onclick = () => A.closeCardEditor(true);
     $('#btn-rc-cancel').onclick = () => A.closeCardEditor(true);
     $('#btn-rc-save').onclick = A.saveCardFromEditor;
@@ -351,7 +353,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (featPay) featPay.onclick = A.openPaymentModal;
     const featSched = $('#btn-feat-schedule');
     if (featSched) featSched.onclick = () => {
-      if (!A.featuresAllowed()) { toast('剧情模式里没有定时主动：切到智能体 / 扮演模式再用', true); return; }
+      if (!A.featuresAllowed()) { toast('剧情模式里没有定时主动：切到聊天模式再用', true); return; }
       openModal('modal-settings');
       A.initSettingsNav();
       if (A.sidecarReady()) A.loadFeatureConfig();

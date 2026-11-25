@@ -310,10 +310,10 @@ import { A, renderChat, saveAll, toast } from './core.js';
     openModal('modal-new');
   }
 
-  // 开始页三模式：三张卡即三个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
-  //   剧情 = 开局设定向导（与书架「新建」同一入口，不再有预设剧情）；对话 = 直接开聊；扮演 = 先建角色卡
+  // 开始页两模式：两张卡即两个开局入口，点哪张就按哪种模式开局（没有单独的开始按钮）
+  //   剧情 = 开局设定向导（与书架「新建」同一入口，不再有预设剧情）；聊天 = 直接开聊（角色卡可选，之后再加）
   function startFromStart(mode) {
-    startMode = (mode === 'chat' || mode === 'rp') ? mode : 'choice';
+    startMode = (mode === 'chat') ? mode : 'choice';
     if (startMode === 'choice') A.openWizard(null);
     else A.createStoryImmediate(startMode);
   }

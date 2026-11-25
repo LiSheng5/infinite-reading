@@ -1,9 +1,9 @@
 /* ==================== 开始页 ====================
- * 无限符号主视觉 + 继续上次 + 三张模式卡 + 底部文字入口。
+ * 无限符号主视觉 + 继续上次 + 两张模式卡 + 底部文字入口。
  * 屏幕样式的一个分片：开始页；@import 顺序即层叠顺序，勿随意调整。 */
 
 /* ==================== 开始页 ====================
-   版式：无限符号（主视觉）→ 「继续上次」（有存档才出现）→ 三张模式卡 → 底部一排安静的文字入口。
+   版式：无限符号（主视觉）→ 「继续上次」（有存档才出现）→ 两张模式卡 → 底部一排安静的文字入口。
    不再套一层带框的卡片：符号直接浮在白底上。 */
 #screen-start {
   display: flex; align-items: center; justify-content: center;
@@ -105,7 +105,7 @@ html[data-motion="rich"] .inf .c::after {
 }
 .start-continue .ic { width: 18px; height: 18px; flex: none; }
 
-/* 三个模式：一行三张，图标 + 名字；每张卡本身就是一个开局入口 */
+/* 两个模式：一行两张（flex 等分自动撑满），图标 + 名字；每张卡本身就是一个开局入口 */
 .mode-cards.start-mode-cards { flex-direction: row; gap: 12px; margin: 0; }
 .start-mode-cards .mode-card {
   flex: 1 1 0; min-width: 0;
@@ -118,7 +118,7 @@ html[data-motion="rich"] .inf .c::after {
 .start-mode-cards .mode-card .ic { width: 28px; height: 28px; color: var(--accent); }
 .start-mode-cards .mode-card b { margin: 0; padding-left: .2em; font-size: 15px; letter-spacing: .2em; }
 
-/* 底部入口：一排文字链接，不抢三张卡的戏 */
+/* 底部入口：一排文字链接，不抢两张卡的戏 */
 .start-links {
   display: flex; justify-content: center; flex-wrap: wrap;
   gap: 2px 4px;

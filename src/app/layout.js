@@ -56,19 +56,19 @@ import { A, saveAll } from './core.js';
   }
 
   function effectiveLayout() {
-    // chat（智能体）/ rp（扮演）是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
-    if (S.story && (S.story.mode === 'chat' || S.story.mode === 'rp')) return 'chat';
+    // chat 是纯聊天布局（无画面区）；剧情模式的 split / stack / immersive 一行不动
+    if (S.story && S.story.mode === 'chat') return 'chat';
     const ui = effectiveUi();
     if (ui.layout === 'immersive') return 'immersive';
     if (ui.layout === 'split' || ui.layout === 'stack') return ui.layout;
     return autoLayout();
   }
 
-  // 设置里的布局项：chat / rp 下给一行灰字说明（布局选项本身不动，切回剧情模式照常生效）
+  // 设置里的布局项：chat 下给一行灰字说明（布局选项本身不动，切回剧情模式照常生效）
   function renderLayoutHint() {
     const el = $('#ui-layout-hint');
     if (!el) return;
-    const noStage = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
+    const noStage = !!(S.story && S.story.mode === 'chat');
     el.textContent = noStage ? '此模式没有画面区（纯聊天布局），下面的布局选项只对剧情模式生效。' : '';
   }
 

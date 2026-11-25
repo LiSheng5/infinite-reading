@@ -168,7 +168,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
   }
 
-  // 手动出图（剧情 / 扮演 / 智能体唯一的自动画入口只剩用户点 🎨）：
+  // 手动出图（剧情 / 聊天唯一的自动画入口只剩用户点 🎨）：
   // 节点在任务创建时记下，同一条队列串行；画师构思 → 出图仍集中在 runPaintTask
   function enqueueImage(sceneSummary, nodeId, key) {
     const storyId = S.story && S.story.id;   // 记住「为谁画的」：等图期间换档也不写错故事

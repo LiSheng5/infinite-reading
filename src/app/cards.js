@@ -14,7 +14,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   /* ================= 角色卡 =================
    * 双视图编辑器：视图 A「选卡」= 导入 SillyTavern V2/V3 PNG（只兼容格式，不复制内容）/ 自己写一张；
    * 视图 B「编辑」= 名字 + 开场白直给，其余折进「更多设定（可选）」。改完即生效。
-   * rp 开局 = 选（建 / 导入）一张角色卡；开场白作为首条旁白；示例对话喂给模型学口吻。 */
+   * 聊天带卡开局 = 选（建 / 导入）一张角色卡；开场白作为首条旁白；示例对话喂给模型学口吻。 */
 
   let cardEditor = null;   // { mode: 'new'|'edit', source, hasExisting, imported, onCancel }
 
@@ -33,7 +33,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     };
     fillCardForm(card);
     bindCardExtras();
-    // 开局选卡（mode 为 new）或故事里还没有角色卡（切到扮演模式时补的第一张）→ 先到选卡视图；
+    // 开局选卡（mode 为 new）或故事里还没有角色卡（聊天设置里补的第一张）→ 先到选卡视图；
     // 编辑已有卡直接进编辑视图。backable 只在这里定：从选卡走过去的编辑视图才有「← 选卡」。
     const wantPick = mode === 'new' || !hasExisting;
     showCardView(wantPick ? 'pick' : 'edit', wantPick);
@@ -63,17 +63,28 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   /* ---------- 双视图与折叠区的就地状态（标题 / 提示 / 摘要 / 必填红字），DOM 契约仍按 id 读写 ---------- */
 
+  // 当前是不是「给当前聊天加卡」的场景：聊天还没有卡（空聊天引导页 / 聊天设置的「添加」都走这里）。
+  // 否则（没有可挂的聊天）保存时才新建一条带卡聊天。
+  function cardAttachToCurrent() {
+    return !!(S.story && S.story.mode === 'chat' && !S.story.characterCard);
+  }
+
   // 视图切换（'pick' 选卡 / 'edit' 编辑）：组件按 cardView 状态切 hidden，这里同步文案。
-  // 保存钮文案仍按 id 改写（组件里只放纯文本子节点）。
+  // 保存钮 / 标题文案按场景改写（组件里只放纯文本子节点）：
+  //   选卡视图 = 「给当前聊天加卡」（添加角色卡）或「新建聊天并带卡」（新故事 · 聊天）；
+  //   编辑视图 = 改已有卡（保存角色卡）。
   function showCardView(v, backable) {
     const pick = v === 'pick';
     setCardView(pick ? 'pick' : 'edit', backable);
     if (pick && cardEditor) cardEditor.imported = null;   // 回到选卡 = 重新选，导入提示作废
-    // 选卡视图是「开局页」：标题与剧情 / 智能体同一套（新故事 · 模式名 + 一句话说明在组件里）；
-    // 编辑视图不是在开局，标题保持「角色卡」，说明位让给来源提示。
-    $('#card-modal-title').textContent = pick ? MODE_ENTRY.rp.title : '角色卡';
+    const attachToCurrent = cardAttachToCurrent();
+    $('#card-modal-title').textContent = pick
+      ? (attachToCurrent ? '添加角色卡' : MODE_ENTRY.chat.title)
+      : '角色卡';
     $('#card-source-hint').textContent = pick ? '' : cardSourceHint();
-    $('#btn-rc-save').textContent = (cardEditor && cardEditor.mode === 'new') ? '开始扮演' : '保存角色卡';
+    $('#btn-rc-save').textContent = (cardEditor && cardEditor.mode === 'new')
+      ? (attachToCurrent ? '添加角色卡' : '开始聊天')
+      : ((cardEditor && cardEditor.hasExisting) ? '保存角色卡' : '添加角色卡');
     const req = $('#rc-required-hint');
     if (req) req.classList.add('hidden');
     if (!pick) {
@@ -91,7 +102,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (cardEditor.hasExisting) {
       return '来源：' + RoleCard.sourceLabel({ source: cardEditor.source }) + '（改完即生效，下一回合开始用新卡）';
     }
-    return '这张卡只属于这次扮演：会随故事保存，之后随时能改';
+    return '这张卡只属于这次对话：会随故事保存，之后随时能改';
   }
 
   // 「更多设定（可选）」：摘要行给已填提示；autoOpen 时「有内容就展开」（不自动收起），
@@ -164,20 +175,39 @@ import { A, renderChat, saveAll, toast } from './core.js';
       return;
     }
     const syncWorld = $('#rc-sync-world').checked;
-    if (cardEditor.mode === 'new') {
+    if (cardEditor.mode === 'new' && !cardAttachToCurrent()) {
+      // 新建聊天并带卡（没有可挂的当前聊天时）
       closeModal('modal-card');
       cardEditor = null;
       startStoryFromCard(card, syncWorld);
       return;
     }
     if (!S.story) { closeCardEditor(false); return; }
+    // 给当前聊天加卡 / 改已有卡
+    const hadCard = !!S.story.characterCard;
     S.story.characterCard = card;
     if (syncWorld) syncWorldCharacter(card);
+    // 给还没有历史的聊天加卡：开场白直接进日志（有卡时的开场方式，与原扮演一致）
+    if (!hadCard && !(S.story.log || []).length) pushCardOpening(card);
     saveAll();
     A.renderStoryPanels();
     A.renderProfilePanel();
     closeCardEditor(false);
-    toast('角色卡已保存，改完即生效');
+    renderChat();
+    toast(hadCard
+      ? '角色卡已保存，改完即生效'
+      : ('角色卡已添加：' + (card.name || '角色') + (card.opening ? '。开场白是角色卡写的，接下来就由你们演。' : '。')), false, true);
+  }
+
+  // 移除角色卡（聊天设置）：二次确认；只摘卡，历史消息与世界卡都保留
+  async function removeCardFromStory() {
+    if (!S.story || !S.story.characterCard) return;
+    if (!await A.irConfirm('移除角色卡？历史消息会保留，之后还可以再添加。', { title: '移除角色卡', okText: '移除' })) return;
+    delete S.story.characterCard;
+    saveAll();
+    A.renderStoryPanels();
+    renderChat();
+    toast('角色卡已移除，历史消息保留');
   }
 
   function importCardFile(file) {
@@ -206,7 +236,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     Context.mergeWorld(S.story.world, { characters: [entry] });
   }
 
-  // 开场白 = rp 首条旁白（不花一次 AI 调用）
+  // 开场白 = 有卡聊天的首条旁白（不花一次 AI 调用）
   function pushCardOpening(card) {
     const text = String((card && card.opening) || '').trim();
     if (!S.story || !text) return;
@@ -215,9 +245,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
 
   function startStoryFromCard(card, syncWorld) {
     const s = Store.newStory({
-      title: '新对话',           // 扮演新对话初始标题「新对话」，之后自动起标题（titleAuto 默认 true）
+      title: '新对话',           // 带卡聊天初始标题「新对话」，之后自动起标题（titleAuto 默认 true）
       premise: rpPremise(card),
-      mode: 'rp',
+      mode: 'chat',
       characterCard: card,
     });
     if (syncWorld) {
@@ -225,7 +255,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
       if (entry) Context.mergeWorld(s.world, { characters: [entry] });
     }
     S.story = s;
-    A.enterGame(true, { deferOpening: true });   // rp 不做开局锚定；开场白直接进日志
+    A.enterGame(true, { deferOpening: true });   // 带卡聊天不做开局锚定；开场白直接进日志
     pushCardOpening(card);
     saveAll();
     renderChat();
@@ -278,5 +308,5 @@ import { A, renderChat, saveAll, toast } from './core.js';
       : '[用户画像] 未开启：不要输出 profile 字段。';
   }
 
-  A.reg({ openCardEditor, closeCardEditor, showCardView, writeCardFromScratch, pickCardFile, saveCardFromEditor, importCardFile, profileOn, activeProfileEntries, applyProfileEntries, collectProfileLocal, scribeProfileHint });
+  A.reg({ openCardEditor, closeCardEditor, showCardView, writeCardFromScratch, pickCardFile, saveCardFromEditor, importCardFile, removeCardFromStory, profileOn, activeProfileEntries, applyProfileEntries, collectProfileLocal, scribeProfileHint });
 

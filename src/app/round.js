@@ -18,8 +18,8 @@ import { A, renderChat, saveAll, toast } from './core.js';
     const feedback = [];
     const recallScopes = [];
     let toolUnavailable = false;
-    // chat / rp 的 request_image 是直出变体；剧情模式没有作画工具
-    const directPaint = !!(S.story && (S.story.mode === 'chat' || S.story.mode === 'rp'));
+    // chat 的 request_image 是直出变体；剧情模式没有作画工具
+    const directPaint = !!(S.story && S.story.mode === 'chat');
     for (const c of calls) {
       const rawCall = { function: { name: c.name, arguments: c.raw && c.raw.function ? c.raw.function.arguments : undefined } };
       if (c.name === 'request_image' && !directPaint) {
@@ -59,7 +59,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   // 成功 pushLog({type:'proposal'})（回合内、commit 之前，由 logMark 切片收进节点），并回一条「待确认」提示。
 
   /* 工具注入判定的唯一口径：「本回合正常发一轮」会注入哪些工具、各类目为什么没注入。
-   * buildAI1Request 的工具组装与智能体空对话引导（readmodel 的 agentChips）共用这一个函数：
+   * buildAI1Request 的工具组装与聊天空对话引导（readmodel 的 agentChips）共用这一个函数：
    * 「chip 已启用」≡「对应工具这回合会被注入」，判定不写第二套、不会漂移。
    * 返回 { on, tools, why }：
    *   on    —— 全局工具门（toolsEnabled 关 / 模型不支持 tools 时 false）；
@@ -148,7 +148,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
 
     // 工具集 = 全局可用性（toolsEnabled / noTools / 侧车 feature）∩ prefs.tools（本对话可单独关）。
-    // 判定只有一份：toolInjection()（智能体空对话引导的 chips 也读它），这里只再叠本次调用的
+    // 判定只有一份：toolInjection()（聊天空对话引导的 chips 也读它），这里只再叠本次调用的
     // 关断（opts.tools===false / recall 二跳不带工具）。
     const inj = toolInjection();
     const toolsOn = opts.tools !== false && !opts.recall && inj.on;
@@ -292,7 +292,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     return (k === 'say' || k === 'direct') ? k : 'do';
   }
   // 外层前缀 [玩家行动] 保持不变，类型标记作为内层前缀。
-  // chat（智能体）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
+  // chat（聊天）不做 / 说 / 导演——内层标记直接不加（组装历史时另有 stripKindMarker 兼容旧档）。
   function withKindMarker(text, kind) {
     const raw = String(text == null ? '' : text);
     if (S.story && S.story.mode === 'chat') return raw;
@@ -301,7 +301,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
   function syncKindSwitch() {
     const k = currentKind();
-    // chat（智能体）没有做 / 说 / 导演：整组开关隐藏（story.ui.kind 保留不清）
+    // chat（聊天）没有做 / 说 / 导演：整组开关隐藏（story.ui.kind 保留不清，旧 rp 存档里的 kind 不会再影响输入）
     const sw = $('#kind-switch');
     if (sw) sw.classList.toggle('hidden', !!(S.story && S.story.mode === 'chat'));
     document.querySelectorAll('#kind-switch .seg-btn').forEach(b => {
@@ -311,7 +311,9 @@ import { A, renderChat, saveAll, toast } from './core.js';
     });
     const inp = $('#player-input');
     if (inp) {
-      inp.placeholder = (S.story && S.story.mode === 'chat') ? '说点什么，或交给我办件事……'
+      // 聊天：无卡还有「交给我办件事」的余地；有卡是纯角色对话，占位符收敛成「说点什么」
+      inp.placeholder = (S.story && S.story.mode === 'chat')
+        ? (S.story.characterCard ? '说点什么……' : '说点什么，或交给我办件事……')
         : k === 'say' ? '说点什么……'
         : k === 'direct' ? '写一句导演指令（世界里的既成事实）……'
         : '做点什么，或说句话……';
@@ -325,7 +327,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (!action) return;
     if (offlineBlocked('这条消息')) return;
     const agentMsg = !!(meta && meta.kind === 'agent');
-    // chat（智能体）：玩家条目 kind 恒为 'do'，发给模型的行动不带内层标记（withKindMarker 对 chat 直接返回原文）
+    // chat（聊天）：玩家条目 kind 恒为 'do'，发给模型的行动不带内层标记（withKindMarker 对 chat 直接返回原文）
     const chatMode = !!(S.story && S.story.mode === 'chat');
     const kind = isChoice ? 'do'
       : (agentMsg ? null
@@ -485,7 +487,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
   }
 
   // 输入框预填接口（只为 forkBefore「改我说的」用）——不触发发送。
-  // 剧情 / 扮演还原「做 / 说 / 导演」选择；智能体（chat）没有这组语义，只填文本。
+  // 剧情还原「做 / 说 / 导演」选择；聊天（chat）没有这组语义，只填文本。
   function setComposerText(text, kind) {
     const inp = $('#player-input');
     if (inp) inp.value = String(text == null ? '' : text);
@@ -498,7 +500,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     if (inp && inp.focus) inp.focus();
   }
 
-  // 智能体引导 chip 的预填（不发送）：复用 setComposerText，光标落在尾部省略号前的「可编辑处」
+  // 聊天引导 chip 的预填（不发送）：复用 setComposerText，光标落在尾部省略号前的「可编辑处」
   function fillPlayerInput(text) {
     const s = String(text == null ? '' : text);
     setComposerText(s);

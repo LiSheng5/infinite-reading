@@ -16,7 +16,8 @@
   // 全局默认（globalValue）、本对话覆盖（storyOverride）、合并（effectiveInfo）全部从表里取。
   // 加一个键 = 往表里加一行，四处判定自动跟上——不再维护「键名数组 + 四个 switch 清单」两套东西。
   // trigger（出图时机）已下线——旧档 / 旧包里残留的 trigger 按未知键丢弃、不报错。
-  // 工具开关键（仅智能体用；true = 跟随全局可用性，false = 本对话关掉）
+  // 工具开关键（仅聊天用）：false = 本对话关掉（默认），true = 跟随全局可用性（sidecar / feature 由运行时求交）。
+  // 「测试中」四类（image / schedule / email / payment）默认关；memory 默认开（基础记忆召回）。
   const TOOL_KEYS = ['image', 'memory', 'schedule', 'email', 'payment'];
 
   const CHOICES_VALUES = ['tray', 'always'];
@@ -146,8 +147,10 @@
       case 'choices': return s.ui && s.ui.choices === 'always' ? 'always' : 'tray';
       case 'showReasoning': return s.showReasoning !== false;
       case 'tools': {
+        // 全局默认：「测试中」四类（生图 / 定时 / 邮件 / 下单）默认关，记忆默认开。
+        // 关着不占 token——请求里无工具时不带 tools 字段（见 round.js 的工具注入）。
         const out = {};
-        TOOL_KEYS.forEach((k) => { out[k] = true; });   // 跟随全局可用性（sidecar / feature 由运行时求交）
+        TOOL_KEYS.forEach((k) => { out[k] = (k === 'memory'); });
         return out;
       }
       default: return undefined;
@@ -199,6 +202,13 @@
       TOOL_KEYS.forEach((k) => {
         if (typeof over[k] === 'boolean') out[k] = over[k];
       });
+      // 有卡（characterCard）且本对话未显式设置时，邮件 / 下单的有效值为关：
+      // 副作用工具在角色对话里默认不下发，用户可在本对话工具开关里显式打开。
+      // 只在解析层收，不改写存档字段。
+      if (story && story.characterCard) {
+        if (typeof over.email !== 'boolean') out.email = false;
+        if (typeof over.payment !== 'boolean') out.payment = false;
+      }
       return { value: out, source: Object.keys(over).length ? 'story' : 'default', missing: false };
     }
     if (key === 'ui') {
@@ -281,19 +291,18 @@
   //   mode          推进模式（仅剧情，只读展示入口）
   //   choices       选项显示（仅剧情）
   //   showReasoning 显示思考过程
-  //   tools         工具开关组（仅智能体：生图 / 记忆 / 定时 / 邮件 / 下单）
-  //   schedule      定时主动开关（仅扮演：单开关，不是工具组）
-  //   characterCard 角色卡入口（仅扮演）
-  //   layout        页面布局（剧情：四布局 + 比例 + 舞台收起；扮演 / 智能体：字号 / 宽度 / 密度）
+  //   tools         工具开关组（仅聊天：生图 / 记忆 / 定时 / 邮件 / 下单）
+  //   layout        页面布局（剧情：四布局 + 比例 + 舞台收起；聊天：字号 / 宽度 / 密度）
+  // 角色卡入口不在这里：在「故事数据」区的聊天角色卡区块（添加 / 编辑 / 移除）。
+  // 原「定时主动」单开关（仅扮演）已并入工具开关组的 schedule。
   // trigger（出图时机）控件已下线，剧情模式作画只剩按钮触发
   const VISIBLE_FOR = {
     choice: ['model', 'style', 'mode', 'choices', 'showReasoning', 'layout'],
-    rp: ['model', 'characterCard', 'showReasoning', 'schedule', 'layout'],
     chat: ['model', 'tools', 'showReasoning', 'layout'],
   };
 
   function visibleFor(mode) {
-    const list = VISIBLE_FOR[mode] || VISIBLE_FOR.choice;
+    const list = VISIBLE_FOR[mode === 'rp' ? 'chat' : mode] || VISIBLE_FOR.choice;   // 旧 'rp' 归一为 chat
     return new Set(list);
   }
 

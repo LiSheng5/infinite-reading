@@ -1,6 +1,6 @@
 <script>
  /* 首页（Svelte 5 重写）
-   * 版式：双纽线符号 → 「继续上次」→ 三张模式卡 → 底部文字入口 → 版本文字。
+   * 版式：双纽线符号 → 「继续上次」→ 两张模式卡 → 底部文字入口 → 版本文字。
    * 主视觉每次打开随机播一颗：光流版（InfinityStage）或逐格版（GridStage）——
    * 两者同一位置、同一体量，都是 canvas 逐字粒子、无底板、角标与控件，
    * rich 档自动循环，其余档停在静态帧；无 JS 时 index.html 的兜底仍是 art.js 的静态字符画。
@@ -19,8 +19,7 @@
   const A = () => appApi;
   const MODES = [
     { mode: 'choice', icon: 'book', label: '剧情' },
-    { mode: 'chat', icon: 'chat', label: '智能体' },
-    { mode: 'rp', icon: 'mask', label: '扮演' },
+    { mode: 'chat', icon: 'chat', label: '聊天' },
   ];
 
   // 语言切换（右上角）：英文文案还没上线，先落按钮与偏好——

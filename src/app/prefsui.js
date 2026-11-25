@@ -603,9 +603,14 @@ import { A, renderChat, saveAll, toast } from './core.js';
       payment: !!(A.proposalToolsAvailable && A.proposalToolsAvailable().payment),
     };
     const LABELS = { image: '生图', memory: '记忆', schedule: '定时', email: '邮件', payment: '下单' };
+    // 「测试中」四类（生图 / 定时 / 邮件 / 下单）标注测试中；关着的再缀「本对话已关」
+    const TESTING = { image: true, schedule: true, email: true, payment: true };
     P().TOOL_KEYS.forEach(k => {
       if (!avail[k]) return;   // 只显示全局可用的
-      box.appendChild(chk(LABELS[k] + (tools[k] ? '' : '（本对话已关）'), tools[k], (v) => {
+      const tags = [];
+      if (TESTING[k]) tags.push('测试中');
+      if (!tools[k]) tags.push('本对话已关');
+      box.appendChild(chk(LABELS[k] + (tags.length ? '（' + tags.join(' · ') + '）' : ''), tools[k], (v) => {
         setPref('tools.' + k, v);
         saveAll();
         renderStoryPrefs();
@@ -690,7 +695,7 @@ import { A, renderChat, saveAll, toast } from './core.js';
     }
     const mode = S.story.mode || 'choice';
     const visible = P().visibleFor(mode);
-    const modeLabel = { choice: '剧情', chat: '智能体', rp: '扮演' }[mode] || '剧情';
+    const modeLabel = { choice: '剧情', chat: '聊天' }[mode] || '剧情';
     const head = document.createElement('p');
     head.className = 'hint';
     head.textContent = '当前对话：' + modeLabel + '模式 · 《' + (S.story.title || '未命名') + '》';
