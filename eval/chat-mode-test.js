@@ -101,7 +101,6 @@ function settingsWith(imageReady) {
 
 /* ---------- 3 / 4. 工具门控：拉起 round.js 的真实判定 ---------- */
 
-global.window = global;
 global.document = {
   querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {},
   getElementById: () => null, hidden: false, documentElement: { dataset: {}, lang: 'zh-CN' },
@@ -172,7 +171,7 @@ const SIDE_EFFECTS = ['schedule_once', 'email_propose', 'payment_propose'];
     SIDE_EFFECTS.every(n => !has(r.names, n)), r.names.join(','));
   H.check('侧车离线：记忆与生图不受影响（只关依赖本地服务的三类）',
     has(r.names, 'update_memory') && has(r.names, 'request_image'), r.names.join(','));
-  H.check('侧车离线：why 用「本地服务未启动」这一套口径',
+  H.check('侧车离线：why[k] 原样透传 sidecarFeatureWhy 的口径',
     r.why.schedule === '本地服务未启动' && r.why.email === '本地服务未启动', JSON.stringify(r.why));
 }
 
@@ -184,7 +183,8 @@ const SIDE_EFFECTS = ['schedule_once', 'email_propose', 'payment_propose'];
 }
 
 {
-  // 请求体：无工具时不带 tools 字段（与 ctxusage-test 的门同源，这里守住聊天默认态）
+  // 聊天默认态：Prefs.effective 解析出的开关里四类「测试中」为关、记忆为开
+  //（「没有工具就不带 tools 字段」在 ctxusage-test.js 第 6 节守）
   const chat = Prefs.effective(settingsWith(true), newStory('chat', { characterCard: CARD }), 'tools');
   H.check('聊天默认态：解析出的开关里四类「测试中」为关、记忆为开',
     chat.image === false && chat.schedule === false && chat.email === false && chat.payment === false

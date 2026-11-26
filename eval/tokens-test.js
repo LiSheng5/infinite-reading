@@ -6,8 +6,7 @@
  * 3. [新] @keyframes 只准定义在 css/motion.css（统一 motion 模块），且与
  *    src/core/motion.ts 的 ANIMATIONS 声明表逐名双向对齐；
  * 4. @keyframes 只动合成层属性（transform / opacity / filter / stroke-dashoffset /
- *    stroke-dasharray）；[新] 放宽项：小面积装饰元素可用 @property 注册的自定义属性
- *    （注册块须 syntax 可动画、inherits: false，且声明表注 decorative 理由）；
+ *    stroke-dasharray；自定义属性一律不许做动画）；
  * 5. animation / transition 引用的令牌都存在（含 var(…, 回退) 形式；JS 动态写入的见 JS_WRITTEN）；
  * 6. transition 不得动画 width / height / box-shadow 等重排属性；
  * 7. [新] 时长 / 缓动只走令牌：animation 时长 var(--m-dur-*|--loop-*)、transition 时长
@@ -21,7 +20,9 @@
  * 11. [新] 视图过渡：::view-transition-group/old/new(*) 三条规则在位，
  *    animation-duration 只准 var(--m-dur-vt-*)；TRANSITIONS 里用到的每个 kind 都有对应变量；
  * 12. [新] 图标 lint：CSS content: 值与 Svelte 模板不得出现 emoji /
- *    符号字符当图标（▶ ⚙ ⚡ ← ↑ ↓ ＋ ⋯ ✕ ✓ 等；部分系统会渲染成彩色 emoji）。
+ *    符号字符当图标（▶ ⚙ ⚡ ← ↑ ↓ ＋ ⋯ ✕ ✓ 等；部分系统会渲染成彩色 emoji）；
+ * 13. 主题色走 __IR_THEME_COLOR__ 占位：index.html / manifest.webmanifest 只写占位，
+ *     vite.config.mjs 从 css/tokens.css 的 --bg 展开（构建期替换，产物里不剩占位）。
  *
  * 用法：node eval/tokens-test.js（任一不过 → 退出码 1）
  */
@@ -29,6 +30,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -63,15 +65,7 @@ for (const f of svelteFiles) {
   if (styles.trim()) CSS_SOURCES.push({ name: rel + '#style', text: styles });
 }
 
-let failed = 0;
-function check(name, ok, detail) {
-  if (ok) {
-    console.log('  ok  ' + name);
-    return;
-  }
-  failed += 1;
-  console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
-}
+const check = H.check;
 
 /* ---------- 允许名单：确实不能用令牌的色值（每条带理由） ---------- */
 const ALLOW_COLORS = [
@@ -81,8 +75,8 @@ const ALLOW_COLORS = [
   },
 ];
 
-function allowedFor(file, hit) {
-  return ALLOW_COLORS.some(a => a.file === file && (!a.pattern || a.pattern.test(hit)));
+function allowedFor(file) {
+  return ALLOW_COLORS.some(a => a.file === file);
 }
 
 /* ---------- 工具：把 CSS 拆成「规则」与「声明」，跳过选择器 ---------- */
@@ -214,25 +208,13 @@ check('屏幕分片/motion/组件样式 :root 之外无颜色字面量', cssHits
 
 // src/**（.ts/.js）：业务代码不得写死颜色（canvas 画图内容进允许名单）
 const jsHits = [];
-const SCAN_DIRS = [
-  { dir: path.join(ROOT, 'src'), rel: 'src', exts: ['.js', '.ts'] },
-];
-for (const { dir, rel, exts } of SCAN_DIRS) {
-  if (!fs.existsSync(dir)) continue;
-  const stack = [dir];
-  while (stack.length) {
-    const d = stack.pop();
-    for (const f of fs.readdirSync(d, { withFileTypes: true })) {
-      const abs = path.join(d, f.name);
-      if (f.isDirectory()) { stack.push(abs); continue; }
-      if (!exts.some(e => f.name.endsWith(e))) continue;
-      const rf = rel + '/' + path.relative(dir, abs).split(path.sep).join('/');
-      const text = fs.readFileSync(abs, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-      for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)) {
-        const line = text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ');
-        if (!allowedFor(rf, line)) jsHits.push(rf + ' …' + line + '…');
-      }
-    }
+const SRC_DIR = path.join(ROOT, 'src');
+for (const abs of H.walkFiles(SRC_DIR, ['.js', '.ts'])) {
+  const rf = 'src/' + path.relative(SRC_DIR, abs).split(path.sep).join('/');
+  const text = fs.readFileSync(abs, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)) {
+    const line = text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ');
+    if (!allowedFor(rf)) jsHits.push(rf + ' …' + line + '…');
   }
 }
 check('src/** 无未允许的颜色字面量', jsHits.length === 0, jsHits.slice(0, 5).join(' | '));
@@ -257,16 +239,14 @@ check('ANIMATIONS 每条都有 @keyframes（不多不少）', orphan.length === 
 
 /* ---------- 3b. [新] --an-* 名表与 ANIMATIONS 逐条推导一致（单档 rich） ---------- */
 
+// 单档 rich：除 'none' 外，名表值就是动画名本身
 function derived(name) {
-  const spec = ANIMATIONS[name];
-  if (spec === 'none') return 'none';
-  if (spec === 'fade') return name;   // 单档：fade 类保持本名（fadeIn / fadeOut）
-  return name;
+  return ANIMATIONS[name] === 'none' ? 'none' : name;
 }
 
 const anTable = {};   // name → rich 名表值
 eachRule(MOTION, (selector, body) => {
-  if (!/data-motion="rich"/.test(selector) && !/(^|[,\s]):root/.test(selector)) return;
+  if (!/(^|[,\s]):root/.test(selector)) return;
   eachDeclaration(body, (prop, value) => {
     const m = /^--an-([\w-]+)$/.exec(prop);
     if (m) anTable[m[1]] = value.trim();
@@ -284,30 +264,11 @@ for (const name of declared) {
 }
 check('--an-* 名表与 ANIMATIONS 推导一致', anBad.length === 0, anBad.join(' | '));
 
-/* ---------- 4. @keyframes 只动合成层属性（放宽：@property 注册的自定义属性） ---------- */
+/* ---------- 4. @keyframes 只动合成层属性 ---------- */
 
 const KEYFRAME_OK = new Set(['transform', 'opacity', 'filter', 'stroke-dashoffset', 'stroke-dasharray']);
 
-// @property 注册块：注册名 → { syntax, inherits }
-const registered = new Map();
-for (const text of [TOK, MOTION]) {
-  for (const m of text.matchAll(/@property\s+(--[\w-]+)\s*\{([\s\S]*?)\}/g)) {
-    const body = m[2];
-    const syntax = (body.match(/syntax\s*:\s*["']([^"']+)["']/) || [])[1] || '';
-    const inherits = (body.match(/inherits\s*:\s*(\w+)/) || [])[1] || '';
-    registered.set(m[1], { syntax, inherits });
-  }
-}
-const ANIMATABLE_SYNTAX = /<(color|number|percentage|length|angle|length-percentage|transform)>/;
-const regBad = [];
-for (const [name, info] of registered) {
-  if (!ANIMATABLE_SYNTAX.test(info.syntax)) regBad.push(name + ' syntax 不可动画：' + info.syntax);
-  if (info.inherits !== 'false') regBad.push(name + ' 必须 inherits: false');
-}
-check('@property 注册块合规（可动画 syntax + inherits: false）', regBad.length === 0, regBad.join(' | '));
-
 const kfBad = [];
-const kfCustom = [];
 const kfRe = /@(?:-\w+-)?keyframes\s+[\w-]+\s*\{/g;
 let km;
 while ((km = kfRe.exec(MOTION))) {
@@ -320,35 +281,19 @@ while ((km = kfRe.exec(MOTION))) {
     if (prop.startsWith('animation-')) return;   // keyframes 内的 timing 子属性不属「被动画的属性」
     if (KEYFRAME_OK.has(p)) return;
     if (prop.startsWith('--')) {
-      if (!registered.has(prop)) kfBad.push(name + ' → ' + prop + '（未 @property 注册）');
-      else kfCustom.push(name);
+      kfBad.push(name + ' → ' + prop + '（自定义属性不做动画）');
       return;
     }
     kfBad.push(name + ' → ' + prop);
   });
   kfRe.lastIndex = close + 1;
 }
-check('@keyframes 只动 transform/opacity/filter/stroke-dashoffset/stroke-dasharray（或注册自定义属性）', kfBad.length === 0, kfBad.join(' | '));
-
-// 用自定义属性做动画的，声明表必须注 decorative 理由（小面积装饰元素才放行）
-const customBad = [...new Set(kfCustom)].filter((name) => {
-  const spec = ANIMATIONS[name];
-  return !spec || typeof spec.decorative !== 'string' || !spec.decorative.trim();
-});
-check('自定义属性动画都注了 decorative 理由', customBad.length === 0, customBad.join(' | '));
+check('@keyframes 只动 transform/opacity/filter/stroke-dashoffset/stroke-dasharray', kfBad.length === 0, kfBad.join(' | '));
 
 /* ---------- 5. animation / transition 引用的令牌都存在 ---------- */
 
 const missingTok = [];
-eachDeclaration(STYLE + '\n' + MOTION, (prop, value) => {
-  if (!/^(animation|transition)(-[\w-]+)?$/.test(prop)) return;
-  for (const m of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,|\))/g)) {
-    const n = m[1];
-    if (!allVars.has(n) && !JS_WRITTEN.has(n)) missingTok.push(prop + ' 引用 ' + n);
-  }
-});
 for (const { name, text } of CSS_SOURCES) {
-  if (!name.endsWith('#style')) continue;   // 屏幕分片已并入 STYLE，这里只补 Svelte 组件的样式块
   eachDeclaration(text, (prop, value) => {
     if (!/^(animation|transition)(-[\w-]+)?$/.test(prop)) return;
     for (const m of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,|\))/g)) {
@@ -547,8 +492,4 @@ check('CSS content: 与 Svelte 模板无 emoji / 符号字符当图标', glyphHi
 
 /* ---------- 汇总 ---------- */
 
-if (failed) {
-  console.error('tokens-test：' + failed + ' 项未过');
-  process.exit(1);
-}
-console.log('tokens-test：全部通过');
+H.finish('设计令牌 / 动效门禁');

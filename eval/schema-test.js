@@ -4,7 +4,7 @@
  *
  * 验收：「回归夹具导入 → 还原 → 导出，与原文件逐字段一致；
  * 当前形状的存档归一幂等；过旧文件明确拒绝」。这里跑**数据层**的同一口径：
- *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 IR.Schema 校验
+ *   ① schema 形状：三份真实夹具（acceptance/0.12.1/fixture）全部过 Schema 校验
  *      ——类型以真实档案形状为准的可执行证明，档案绝不反过来迁就类型；
  *   ② 导入 → 还原 → 导出逐字段一致：夹具 .irstory.json → storyFromPack（真实导入路径）
  *      → saveStory / loadStory（真实存盘往返）→ buildStoryPack（真实导出）→ 与原包逐字段比对
@@ -18,8 +18,7 @@
  */
 const path = require('path');
 const fs = require('fs');
-
-global.window = global;
+const H = require('./_harness.js');
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const Store = core('store').Store;
@@ -33,12 +32,7 @@ if (!Store || !Schema || !BackupPack) {
 }
 
 const FIX = path.join(__dirname, '..', 'acceptance', '0.12.1', 'fixture');
-let failed = 0;
-function check(name, ok, detail) {
-  if (ok) { console.log('  ok  ' + name); return; }
-  failed += 1;
-  console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
-}
+const check = H.check;
 
 function load(f) { return JSON.parse(fs.readFileSync(path.join(FIX, f), 'utf8')); }
 
@@ -87,7 +81,7 @@ function withModeMigrated(obj) {
 }
 
 /* ===================== ① 三份真实夹具过 schema 校验 ===================== */
-console.log('[1] 真实夹具过 IR.Schema 校验（类型以档案为准）');
+console.log('[1] 真实夹具过 Schema 校验（类型以档案为准）');
 {
   const choice = load('story-choice-full.irstory.json');
   const rp = load('story-rp-full.irstory.json');
@@ -134,7 +128,7 @@ function part2() {
     const saveOk = Store.saveStory(st);
     const reloaded = Store.loadStory(st.id);          // 还原：落盘再读回
     const images = (pack.images || []).map(im => Object.assign({}, im, { ts: undefined }));
-    const out = Store.buildStoryPack(reloaded, reloaded && reloaded.id ? 'full' : 'full', images, {});
+    const out = Store.buildStoryPack(reloaded, 'full', images, {});
     const problems = Schema.checkStoryPack(out);
     check(f + '：导出包过 schema 校验', problems.length === 0, problems.slice(0, 5).join(' | '));
     if (pack.mode === 'rp') {
@@ -290,13 +284,5 @@ function part4() {
   const pt = Schema.checkStory(plain);
   check('无树故事 ensure 后过检（线性链）', pt.length === 0 && plain.tree && plain.tree.root,
     pt.slice(0, 3).join(' | '));
-  done();
-}
-
-function done() {
-  if (failed) {
-    console.error('schema-test：' + failed + ' 项未过');
-    process.exit(1);
-  }
-  console.log('schema-test：全部通过');
+  H.finish('schema 回归测试（夹具导入 / 还原 / 导出逐字段一致）');
 }

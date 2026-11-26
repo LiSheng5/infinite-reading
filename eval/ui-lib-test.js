@@ -2,7 +2,7 @@
  *
  * 1. src/ 下所有 .svelte 组件都能被 Svelte 5 编译（语法 / runes 用法门禁）；
  * 2. 图标逐字对账：Icon.svelte 每个分支的图形与 index.html 的 <symbol id="i-名字"> 完全一致
- *    （「图标本身保持不变」），名字集合一致且 28 个；
+ *    （「图标本身保持不变」），名字集合一致且 27 个；
  * 3. 安全红线：src/** 不得出现 {@html} 与 innerHTML——用户 / 模型产出一律 textContent 等价渲染；
  * 4. 组件样式只走令牌：Svelte <style> 里不得出现颜色字面量（与 tokens-test 双保险）。
  *
@@ -13,26 +13,13 @@
 const fs = require('fs');
 const path = require('path');
 const { compile } = require('svelte/compiler');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
-let failed = 0;
-function check(name, ok, detail) {
-  if (ok) {
-    console.log('  ok  ' + name);
-    return;
-  }
-  failed += 1;
-  console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
-}
+const check = H.check;
 
-const svelteFiles = [];
-(function walk(d) {
-  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-    const p = path.join(d, e.name);
-    if (e.isDirectory()) walk(p);
-    else if (e.name.endsWith('.svelte')) svelteFiles.push(p);
-  }
-})(path.join(ROOT, 'src'));
+const SRC_DIR = path.join(ROOT, 'src');
+const svelteFiles = H.walkFiles(SRC_DIR, ['.svelte']);
 
 /* ---------- 1. Svelte 编译冒烟 ---------- */
 
@@ -88,15 +75,7 @@ check('实心圆点都在元素上直接写 fill', fillBad.length === 0, fillBad
 /* ---------- 3. 安全红线：{@html} / innerHTML ---------- */
 
 const unsafe = [];
-const srcFiles = [];
-(function walk(d) {
-  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-    const p = path.join(d, e.name);
-    if (e.isDirectory()) walk(p);
-    else if (/\.(svelte|js|ts)$/.test(e.name)) srcFiles.push(p);
-  }
-})(path.join(ROOT, 'src'));
-for (const f of srcFiles) {
+for (const f of H.walkFiles(SRC_DIR, ['.svelte', '.js', '.ts'])) {
   const rel = path.relative(ROOT, f).split(path.sep).join('/');
   // 剥掉注释再查：注释里提到 {@html} / innerHTML（红线说明）不算使用
   const text = fs.readFileSync(f, 'utf8')
@@ -122,8 +101,4 @@ check('Svelte <style> 无颜色字面量（只走令牌）', colorBad.length ===
 
 /* ---------- 汇总 ---------- */
 
-if (failed) {
-  console.error('ui-lib-test：' + failed + ' 项未过');
-  process.exit(1);
-}
-console.log('ui-lib-test：全部通过');
+H.finish('组件库门禁（Svelte 编译 / 图标对账 / 安全红线 / 样式取色）');

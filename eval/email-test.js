@@ -140,22 +140,28 @@ async function main() {
     const r = await mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
     check('resend 缺 key：MISSING_RESEND_API_KEY', r.ok === false && r.code === 'MISSING_RESEND_API_KEY', JSON.stringify(r));
 
+    // 假 fetch 用完即还：后面几节走 mock provider，别把假报文留给后续用例
+    const realFetch = global.fetch;
     const captured = [];
-    global.fetch = (url, init) => {
-      captured.push({ url: String(url), auth: (init && init.headers && init.headers.Authorization) || '', body: init && init.body });
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 're_123' }) });
-    };
-    const m2 = fresh({ provider: 'resend', allowlist: ['a@b.com'], dailyLimit: 5, resendApiKey: 'key-abc' });
-    const r2 = await m2.mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
-    check('resend 有 key：发送成功并回带 id', r2.ok === true && r2.id === 're_123', JSON.stringify(r2));
+    try {
+      global.fetch = (url, init) => {
+        captured.push({ url: String(url), auth: (init && init.headers && init.headers.Authorization) || '', body: init && init.body });
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 're_123' }) });
+      };
+      const m2 = fresh({ provider: 'resend', allowlist: ['a@b.com'], dailyLimit: 5, resendApiKey: 'key-abc' });
+      const r2 = await m2.mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
+      check('resend 有 key：发送成功并回带 id', r2.ok === true && r2.id === 're_123', JSON.stringify(r2));
+
+      global.fetch = () => Promise.resolve({ ok: false, status: 422, text: () => Promise.resolve('bad domain') });
+      const m3 = fresh({ provider: 'resend', allowlist: ['a@b.com'], dailyLimit: 5, resendApiKey: 'key-abc' });
+      const r3 = await m3.mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
+      check('resend 被服务商拒绝：结构化 PROVIDER_ERROR', r3.ok === false && r3.code === 'PROVIDER_ERROR', JSON.stringify(r3));
+    } finally {
+      global.fetch = realFetch;
+    }
     check('resend：打到正确端点并带 Bearer Key',
       captured.length === 1 && captured[0].url === 'https://api.resend.com/emails' && captured[0].auth === 'Bearer key-abc',
       JSON.stringify(captured[0] && captured[0].url));
-
-    global.fetch = () => Promise.resolve({ ok: false, status: 422, text: () => Promise.resolve('bad domain') });
-    const m3 = fresh({ provider: 'resend', allowlist: ['a@b.com'], dailyLimit: 5, resendApiKey: 'key-abc' });
-    const r3 = await m3.mail.send({ to: 'a@b.com', subject: 's', body: 'b', actor: 'user' });
-    check('resend 被服务商拒绝：结构化 PROVIDER_ERROR', r3.ok === false && r3.code === 'PROVIDER_ERROR', JSON.stringify(r3));
   }
 
   /* 9. 草稿：创建即留审计；丢弃 */
@@ -188,13 +194,13 @@ async function main() {
     const box = slowProviders();
     const { mail } = fresh({ provider: 'mock', allowlist: ['a@b.com'], dailyLimit: 2 }, box.providers);
     const rs = await Promise.all([1, 2, 3, 4, 5].map(i => mail.send({ to: 'a@b.com', subject: 's' + i, body: 'b', actor: 'user' })));
-    check('D22 并发：5 封同时发、上限 2 → 只成功 2 封（占位先行）',
+    check('并发：5 封同时发、上限 2 → 只成功 2 封（占位先行）',
       rs.filter(x => x.ok).length === 2 && box.calls === 2,
       'ok=' + rs.filter(x => x.ok).length + ' calls=' + box.calls);
-    check('D22 并发：其余都被 DAILY_LIMIT_EXCEEDED 拒绝',
+    check('并发：其余都被 DAILY_LIMIT_EXCEEDED 拒绝',
       rs.filter(x => !x.ok).every(x => x.code === 'DAILY_LIMIT_EXCEEDED'),
       JSON.stringify(rs.filter(x => !x.ok).map(x => x.code)));
-    check('D22 并发：当日计数 = 上限（没有多发）', mail.stats().sentToday === 2, JSON.stringify(mail.stats()));
+    check('并发：当日计数 = 上限（没有多发）', mail.stats().sentToday === 2, JSON.stringify(mail.stats()));
   }
 
   /* 12. 草稿双击 / 并发确认：只有第一个能抢占 pending → sending */
@@ -203,11 +209,11 @@ async function main() {
     const { mail } = fresh({ provider: 'mock', allowlist: [], dailyLimit: 5 }, box.providers);
     const d = mail.createDraft({ to: 'x@y.com', subject: 's', body: 'b' });
     const both = await Promise.all([mail.sendDraft(d.id, { actor: 'user' }), mail.sendDraft(d.id, { actor: 'user' })]);
-    check('D22 双击确认：只真正发一封', box.calls === 1 && both.filter(x => x.ok).length === 1,
+    check('双击确认：只真正发一封', box.calls === 1 && both.filter(x => x.ok).length === 1,
       'calls=' + box.calls + ' ' + JSON.stringify(both.map(x => x.code || 'ok')));
-    check('D22 双击确认：另一路返回 DRAFT_ALREADY_SENT',
+    check('双击确认：另一路返回 DRAFT_ALREADY_SENT',
       both.filter(x => x.code === 'DRAFT_ALREADY_SENT').length === 1, JSON.stringify(both.map(x => x.code || 'ok')));
-    check('D22 双击确认：草稿最终为 sent', mail.getDraft(d.id).status === 'sent', mail.getDraft(d.id).status);
+    check('双击确认：草稿最终为 sent', mail.getDraft(d.id).status === 'sent', mail.getDraft(d.id).status);
   }
 
   /* 13. 草稿发送失败要退回 pending（不能卡在 sending 里永远不可重试） */
@@ -215,9 +221,9 @@ async function main() {
     const { mail } = fresh({ allowlist: [], dailyLimit: 0 });
     const d = mail.createDraft({ to: 'x@y.com', subject: 's', body: 'b' });
     const r = await mail.sendDraft(d.id, { actor: 'user' });
-    check('D22 草稿失败：返回 DAILY_LIMIT_EXCEEDED', r.ok === false && r.code === 'DAILY_LIMIT_EXCEEDED', JSON.stringify(r));
-    check('D22 草稿失败：草稿回到 pending（可重试 / 可丢弃）', mail.getDraft(d.id).status === 'pending', mail.getDraft(d.id).status);
-    check('D22 草稿失败：不计入当日已发', mail.stats().sentToday === 0, JSON.stringify(mail.stats()));
+    check('草稿失败：返回 DAILY_LIMIT_EXCEEDED', r.ok === false && r.code === 'DAILY_LIMIT_EXCEEDED', JSON.stringify(r));
+    check('草稿失败：草稿回到 pending（可重试 / 可丢弃）', mail.getDraft(d.id).status === 'pending', mail.getDraft(d.id).status);
+    check('草稿失败：不计入当日已发', mail.stats().sentToday === 0, JSON.stringify(mail.stats()));
   }
 
 }

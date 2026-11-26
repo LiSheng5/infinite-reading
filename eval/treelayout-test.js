@@ -17,18 +17,14 @@
  * 用法：node eval/treelayout-test.js
  */
 const path = require('path');
-
-global.window = global;
+const H = require('./_harness.js');
 const TL = require(path.join(__dirname, '..', 'src', 'core', 'treeLayout.ts')).TreeLayout;
 if (!TL) {
   console.error('加载失败：TreeLayout 导出缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 /* ---------------- 测试脚手架：直接造树（不依赖 src/core/tree.ts 的提交流程） ---------------- */
 
@@ -196,7 +192,8 @@ function segHitsNode(out, a, b, allow) {
     by.root.onPath && by.t1.onPath && by.t2.onPath && by.t3.onPath && !by.x1.onPath && !by.x2.onPath && !by.x3.onPath && !by.t4.onPath);
   check('4. isHead 标记正确', by.t3.isHead === true && out.nodes.filter(n => n.isHead).length === 1);
   check('4. isFork 标记正确', by.t2.isFork === true && by.root.isFork === false && by.x1.isFork === false);
-  const rootOk = out.pathEdgeD.indexOf('M' + by.root.x) === 0 || out.pathEdgeD.indexOf('M ' + by.root.x) === 0 || out.pathEdgeD.split(' ')[0] === 'M' + by.root.x;
+  // treeLayout 固定拼 'M<x> <y>'，没有 'M <x>' 这种写法
+  const rootOk = out.pathEdgeD.startsWith('M' + by.root.x);
   const tailY = by.t3.y;
   check('4. pathEdgeD 覆盖 root→head', out.pathEdgeD.length > 0
     && out.pathEdgeD.split(/[MLQ]/).length >= 2
@@ -443,11 +440,4 @@ function segHitsNode(out, a, b, allow) {
   }
 }
 
-/* ---------------- 汇总 ---------------- */
-let bad = 0;
-for (const r of results) {
-  if (r.hit) console.log('  ✓ ' + r.name);
-  else { bad += 1; console.log('  ✗ ' + r.name + (r.detail ? '  → ' + r.detail : '')); }
-}
-console.log(bad ? ('treelayout-test：' + bad + ' 项未过') : 'treelayout-test：全部通过');
-process.exit(bad ? 1 : 0);
+H.finish('分支树布局测试');

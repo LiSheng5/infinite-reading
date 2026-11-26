@@ -122,7 +122,6 @@ async function main() {
   /* ---------- 3. dry 零副作用（buildAssembleOpts 唯一口径） ---------- */
   // 指示器的组装选项来自 src/app/round.js 的 buildAssembleOpts：这里把 app 层拉起来
   // （只加载 core.js + round.js，晚绑定依赖给桩），断言 dry 路径分毫不动共享状态。
-  global.window = global;
   global.document = { querySelector: () => null, addEventListener: () => {}, hidden: false };
   if (!global.navigator) global.navigator = { userAgent: 'node' };
   global.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };

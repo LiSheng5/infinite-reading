@@ -15,8 +15,8 @@
  * 用法：node eval/minimax-image-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
-global.window = global;
 const P = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts')).ImageProviders;
 const mm = P && P['minimax-image'];
 if (!mm) {
@@ -24,10 +24,7 @@ if (!mm) {
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 function jsonRes(status, obj) {
   return {
@@ -214,12 +211,5 @@ const cfg = patch => Object.assign({}, CFG, patch || {});
   const t3 = await mm.test(cfg({ apiKey: '' }));
   check('test 没填 Key → fail 且不发请求', t3.level === 'fail' && calls.length === 0, t3.message);
 
-  /* ---------- 汇总 ---------- */
-  const fails = results.filter(r => !r.hit);
-  for (const r of fails) console.error('❌ ' + r.name + (r.detail ? '（实际：' + r.detail + '）' : ''));
-  if (fails.length) {
-    console.error('minimax-image-test：' + fails.length + ' / ' + results.length + ' 项失败');
-    process.exit(1);
-  }
-  console.log('✅ minimax-image-test：' + results.length + ' 项全部通过（MiniMax image-01 / image-01-live 适配器）');
+  H.finish('MiniMax 生图适配器单测');
 })();

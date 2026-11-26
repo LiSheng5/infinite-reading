@@ -15,18 +15,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+// 本文件是 ESM，公用脚手架是 CJS：经 createRequire 取同一个实例
+const H = createRequire(import.meta.url)('./_harness.js');
+const ok = H.ok;
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP_DIR = path.join(ROOT, 'src', 'app');
 const ENTRY = 'src/main.js';
-let fails = 0;
-const ok = (cond, msg) => {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); fails++; }
-};
 
 const mainJs = 'app/main.js';
 const diskMods = fs.readdirSync(APP_DIR).filter(f => f.endsWith('.js')).sort().map(f => 'app/' + f);
+// 每个模块的全文只读一遍：后面五节都在同一批文件上做扫描
+const SRC = new Map(diskMods.map(p => [p, fs.readFileSync(path.join(ROOT, 'src', p), 'utf8')]));
 
 // ---------- 1. 入口引用顺序与双向一致 ----------
 console.log('[1] 唯一入口（src/main.js）引用顺序与磁盘一致性');
@@ -48,18 +50,20 @@ ok(!extra.length, '入口引用的模块都在磁盘上' + (extra.length ? '（�
 
 // ---------- 2. 行数上限 ----------
 console.log('[2] 行数上限（src/app/*.js ≤ 800，main.js ≤ 600）');
-const lineCount = p => fs.readFileSync(path.join(ROOT, 'src', p), 'utf8').split('\n').length;
+const lineCount = p => SRC.get(p).split('\n').length;
 for (const p of diskMods) {
   if (p === mainJs) continue;
-  ok(lineCount(p) <= 800, 'src/' + p + ' = ' + lineCount(p) + ' 行 ≤ 800');
+  const n = lineCount(p);
+  ok(n <= 800, 'src/' + p + ' = ' + n + ' 行 ≤ 800');
 }
-ok(lineCount(mainJs) <= 600, 'src/' + mainJs + ' = ' + lineCount(mainJs) + ' 行 ≤ 600');
+const nm = lineCount(mainJs);
+ok(nm <= 600, 'src/' + mainJs + ' = ' + nm + ' 行 ≤ 600');
 
 // ---------- 3. A.reg 键全局唯一 ----------
 console.log('[3] A.reg 键名全局唯一');
 const regKeys = new Map(); // name -> file
 for (const p of diskMods) {
-  const text = fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
+  const text = SRC.get(p);
   for (const m of text.matchAll(/A\.reg\(\{([\s\S]*?)\}\)/g)) {
     // 只取顶层标识符（支持 { a, b: c, d } 简写与重命名；跳过注释）
     const body = m[1].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -80,7 +84,7 @@ ok(regKeys.size > 0, '共扫描到 ' + regKeys.size + ' 个 A.reg 键');
 
 // ---------- 4. 顶层解构白名单（只能取 core.js 导出） ----------
 console.log('[4] 顶层解构白名单');
-const coreText = fs.readFileSync(path.join(ROOT, 'src', 'app', 'core.js'), 'utf8');
+const coreText = SRC.get('app/core.js');
 const coreExports = new Set();
 {
   const m = coreText.match(/A\.reg\(\{([\s\S]*?)\}\)/);
@@ -93,7 +97,7 @@ const coreExports = new Set();
 }
 ok(coreExports.size > 0, 'core.js 导出 ' + coreExports.size + ' 个名字（白名单真源）');
 for (const p of diskMods.filter(p => p !== 'app/core.js')) {
-  const text = fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
+  const text = SRC.get(p);
   // 只看顶层（缩进 2 空格）的 const { … } = A;
   for (const m of text.matchAll(/^  const \{([^}]*)\} = A;/gm)) {
     for (const piece of m[1].split(',')) {
@@ -109,7 +113,7 @@ console.log('[5] A.xxx 引用闭合性');
 {
   const infra = new Set(['state', 'reg']);
   for (const p of diskMods) {
-    const text = fs.readFileSync(path.join(ROOT, 'src', p), 'utf8')
+    const text = SRC.get(p)
       .replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/'(?:\\.|[^'\\])*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""');
     for (const m of text.matchAll(/(^|[^.\w$])A\.([A-Za-z_$][\w$]*)/g)) {
@@ -134,7 +138,7 @@ for (const p of diskMods) {
 console.log('[7] 高频入口显式导出（renderChat / saveAll / toast）');
 {
   const ENTRIES = ['renderChat', 'saveAll', 'toast'];
-  const coreSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'core.js'), 'utf8');
+  const coreSrc = SRC.get('app/core.js');
   const coreCode = coreSrc.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
   // core.js 的导出面：export { … } + export function …
@@ -154,7 +158,7 @@ console.log('[7] 高频入口显式导出（renderChat / saveAll / toast）');
   ok(coreSrc.includes('src/app/render.js'), 'core.js 的转接注释写明实现文件（Ctrl+Click 后的第二跳）');
 
   // 实现仍在原模块：render.js 定义并注册 renderChat；toast / saveAll 在 core.js 定义
-  const renderSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'render.js'), 'utf8');
+  const renderSrc = SRC.get('app/render.js');
   ok(/function\s+renderChat\s*\(/.test(renderSrc), 'src/app/render.js 仍是 renderChat 的定义处');
   ok(regKeys.get('renderChat') === 'app/render.js', 'renderChat 仍由 src/app/render.js 注册进 A');
   ok(/function\s+toast\s*\(/.test(coreCode) && /function\s+saveAll\s*\(/.test(coreCode), 'toast / saveAll 的定义仍在 core.js');
@@ -168,7 +172,7 @@ console.log('[7] 高频入口显式导出（renderChat / saveAll / toast）');
   const importedBy = { renderChat: new Set(), saveAll: new Set(), toast: new Set() };
   const violations = [];
   for (const p of diskMods.filter(x => x !== 'app/core.js')) {
-    const text = fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
+    const text = SRC.get(p);
     for (const n of ENTRIES) {
       if (new RegExp('\\bA\\.' + n + '\\b').test(text)) violations.push('src/' + p + ' 仍写 A.' + n);
     }
@@ -194,8 +198,8 @@ console.log('[7] 高频入口显式导出（renderChat / saveAll / toast）');
   }
 }
 
-if (fails) {
-  console.error('app-structure-test：' + fails + ' 项未通过');
+if (H.failed) {
+  console.error('app-structure-test：' + H.failed + ' 项未通过');
   process.exit(1);
 }
 console.log('app-structure-test：全部通过');

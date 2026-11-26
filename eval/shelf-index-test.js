@@ -11,21 +11,11 @@
  * 用法：node eval/shelf-index-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
-// 进程内 localStorage 垫片：让 store.js 走「无 IndexedDB → localStorage」回退路径，
-// 测试可以直接读写原始键（造旧索引夹具）。
-(function () {
-  const m = new Map();
-  global.localStorage = {
-    getItem: k => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => { m.set(k, String(v)); },
-    removeItem: k => { m.delete(k); },
-    key: i => Array.from(m.keys())[i] || null,
-    get length() { return m.size; },
-  };
-})();
-
-global.window = global;
+// 垫上 localStorage：让 store.ts 走「无 IndexedDB → localStorage」回退路径，
+// 测试直接读写原始键造旧索引夹具。
+H.installLocalStorage();
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const Store = core('store').Store;
@@ -35,10 +25,7 @@ if (!Store) {
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 const KEYS = Store.KEYS;
 
 /* ---------------- 1. saveStory 索引条目 ---------------- */
@@ -47,8 +34,8 @@ const KEYS = Store.KEYS;
   const st = Store.newStory({ title: '雨夜便利店', mode: 'chat' });
   st.turn = 3;
   st.log.push({ type: 'narration', text: '门铃响了，店员抬头看了一眼。', versions: ['门铃响了，店员抬头看了一眼。'], activeVersion: 0, ts: 1 });
-  check('newStory：chat 默认 titleAuto=true、标题「新对话」',
-    st.titleAuto === true && (st.title === '新对话' || st.title === '雨夜便利店'),   // 传了 title 就用传的
+  check('newStory：chat 默认 titleAuto=true、传入的 title 原样保留',
+    st.titleAuto === true && st.title === '雨夜便利店',
     'title=' + st.title + ' titleAuto=' + st.titleAuto);
   const okSave = Store.saveStory(st);
   const entry = Store.listIndex().find(x => x.id === st.id);
@@ -184,6 +171,8 @@ const KEYS = Store.KEYS;
     Store.newStory({ mode: 'chat' }).titleAuto === true
       && Store.newStory({ mode: 'rp' }).mode === 'chat'
       && Store.newStory({ mode: 'rp' }).titleAuto === true);
+  check('newStory：chat 不传 title → 默认「新对话」',
+    Store.newStory({ mode: 'chat' }).title === '新对话');
   check('newStory：choice 默认 titleAuto=false',
     Store.newStory({ mode: 'choice' }).titleAuto === false);
   const old = Store.migrateStory({
@@ -198,15 +187,4 @@ const KEYS = Store.KEYS;
     newer.titleAuto === true && newer.titleGen === 1);
 }
 
-/* ---------------- 报告 ---------------- */
-
-let fails = 0;
-for (const r of results) {
-  if (r.hit) console.log('  ok  ' + r.name + (r.detail ? '  [' + r.detail + ']' : ''));
-  else { console.error('  FAIL ' + r.name + (r.detail ? '  [' + r.detail + ']' : '')); fails++; }
-}
-if (fails) {
-  console.error('shelf-index-test：' + fails + ' 项未通过');
-  process.exit(1);
-}
-console.log('shelf-index-test：全部通过（' + results.length + ' 项）');
+H.finish('书架索引条目测试');

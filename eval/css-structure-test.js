@@ -22,19 +22,16 @@
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const rel = (abs) => path.relative(ROOT, abs).split(path.sep).join('/');
+// src/ 全量遍历（两节都要用）：walkFiles 已按扩展名过滤
+const srcFiles = (exts) => H.walkFiles(path.join(ROOT, 'src'), exts);
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed += 1; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 
 /* ---------- 清单：分片顺序 = 层叠顺序（改顺序 = 改优先级，必须同步改这里） ---------- */
 const ORDER = [
@@ -129,10 +126,7 @@ console.log('[4] 按钮词汇：唯一基座 .ui-btn');
   // 4.3 类名字符串：旧名字清零；修饰类必须带基座
   const OLD = /(?<![\w-])(btn|hud-btn|mini-btn|icon-btn)(?![\w-])/;
   const MODS = /(?<![\w-])(primary|ghost|danger|slim|mini|icon-only)(?![\w-])/;
-  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-    (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-  const markup = [...walk(path.join(ROOT, 'src')), path.join(ROOT, 'index.html')]
-    .filter((f) => /\.(js|svelte|html)$/.test(f));
+  const markup = [...srcFiles(['.js', '.svelte']), path.join(ROOT, 'index.html')];
 
   const legacyDom = [];
   const orphanMod = [];
@@ -237,10 +231,7 @@ console.log('[8] 表单字号只走 --fs-field（窄屏抬到 16px，防 iOS 聚
   const FIELD_SEL = /(?:^|[\s,>+~(])(?:input|select|textarea)(?![\w-])/;
   const FIELD_NAMES = ['#player-input', '.shelf-search-input', '#pw-prompt'];
   const sources = screenFiles.map((name) => ({ name: 'css/' + name, css: stripCss(read('css/' + name)) }));
-  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-    (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-  for (const f of walk(path.join(ROOT, 'src'))) {
-    if (!f.endsWith('.svelte')) continue;
+  for (const f of srcFiles(['.svelte'])) {
     const styleText = [...fs.readFileSync(f, 'utf8').matchAll(/<style>([\s\S]*?)<\/style>/g)]
       .map((m) => m[1]).join('\n');
     if (styleText.trim()) sources.push({ name: rel(f) + '#style', css: stripCss(styleText) });
@@ -267,8 +258,8 @@ console.log('[8] 表单字号只走 --fs-field（窄屏抬到 16px，防 iOS 聚
     + FIELD_NAMES.filter((n) => !seen.has(n)).join(' , '));
 }
 
-if (failed) {
-  console.error('css-structure-test：' + failed + ' 项未通过');
+if (H.failed) {
+  console.error('css-structure-test：' + H.failed + ' 项未通过');
   process.exit(1);
 }
 console.log('css-structure-test：全部通过');

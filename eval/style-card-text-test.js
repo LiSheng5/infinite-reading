@@ -11,19 +11,16 @@
  *   styleCardText(card)          → **给画师**：画风 / 媒介 / 色板 / 人物外观（英文）/ 负面 / 备注，原样
  *   styleCardTextForText(card)   → **给 AI1**：只留画风关键词（注明别复述）+ 中文备注；
  *                                  不含人物英文外观、媒介、色板、负面提示词
- *   recallBlock(story,'style') / forceInjectBlock(story) 一律用文本侧视图
+ *   recallBlock(story,'style') / forceInjectBlock(story, playerAction) 一律用文本侧视图
  *
  * 用法：node eval/style-card-text-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
 const C = require(path.join(__dirname, '..', 'src', 'core', 'context.ts')).Context;
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
+const { ok } = H;
 
 const CARD = {
   id: 'c1', locked: true,
@@ -106,8 +103,8 @@ console.log('[5] 未锚定：退到滚动风格摘要，不出现「（未锚定
   ok(C.recallBlock({ mode: 'choice' }, 'style').indexOf('还没有视觉设定卡') >= 0, '完全没有卡时给降级文案');
 }
 
-if (failed) {
-  console.error('style-card-text-test：' + failed + ' 项失败');
+if (H.failed) {
+  console.error('style-card-text-test：' + H.failed + ' 项失败');
   process.exit(1);
 }
 console.log('✅ style-card-text-test 全部通过');

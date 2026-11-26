@@ -152,7 +152,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 ## Contributing and license
 
-- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (44 `eval/*` gates, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
+- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (44 `eval/` gates plus 3 `tools/` checks, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -2,21 +2,20 @@
 // 两份冻结清单（冻结、只许平移不许丢，改名必须同步更新清单并在报告说明）：
 //   GLOBAL_SETTINGS_IDS —— #modal-settings 里的全局设置控件；
 //   STORY_PANEL_IDS     —— 「本对话设置」面板 #prefs-story 里的当前故事控件
-// （自全局设置「当前故事」组迁入；
-//      其中 btn-w-char-add 是迁移时随行卡控件一并补进清单的）。
-// 取样边界按两个容器各自收紧（旧口径到「通用确认」才截断，#prefs-story 恰好落在区间里，
-// 搬不搬家测试都绿——所以必须双向断言：在自己的段里出现、在对方的段里不出现）。
-// 能力位控件（思考档位 / 尺寸档位 / 质量）随参考表收窄下线，清单同步收缩（130 → 123），
-// 下线的 7 个 id 进 RETIRED_SETTINGS_IDS，回来即红。
+// （自全局设置「当前故事」组迁入；btn-w-char-add 是迁移时随行卡控件一并补进来的）。
+// 两边各自只扫自己的 Svelte 目录：必须双向断言——在自己的目录里出现、在对方的目录里不出现。
+// 能力位控件（思考档位 / 尺寸档位 / 质量）随参考表收窄下线，下线的 id 进
+// RETIRED_SETTINGS_IDS，再出现在源码或冻结清单里即红。
 // 用法：node eval/settings-ids-test.js        // 校验
 //       node eval/settings-ids-test.js --dump // 打印两个段里当前的 id（用于更新清单）
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const HTML_PATH = path.join(__dirname, '..', 'index.html');
 
-// === 冻结清单 A：#modal-settings 全局设置（147 个 id，含控件 / 按钮 / 提示位 / 面板） ===
+// === 冻结清单 A：#modal-settings 全局设置（控件 / 按钮 / 提示位 / 面板） ===
 const GLOBAL_SETTINGS_IDS = [
   'modal-settings',
   'dl-base-url',
@@ -78,7 +77,6 @@ const STORY_PANEL_IDS = [
   'w-place', 'w-time', 'w-scene', 'w-threads', 'w-characters',
   'w-rel-stage', 'w-rel-bonds', 'w-rel-notes', 'btn-save-world', 'world-scribe-at',
   'rc-status', 'btn-edit-card', 'sum-count', 'summary-list', 'tool-list',
-  // 随迁移补进清单（人物行编辑的「+ 添加人物」）
   'btn-w-char-add',
 ];
 
@@ -105,18 +103,11 @@ for (const id of MOUNT_IDS) {
 // / ModalCard 的 closeId="…"（组件里渲染成 id={closeId}，关闭钮走它）。
 function svelteIdsOf(dir) {
   const out = new Set();
-  const stack = [dir];
-  while (stack.length) {
-    const d = stack.pop();
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { stack.push(p); continue; }
-      if (!/\.(svelte|js|ts)$/.test(e.name)) continue;
-      const src = fs.readFileSync(p, 'utf8');
-      const re = /\b(?:closeId|wrapId|stateId|id)\s*[:=]\s*["']([^"']+)["']|\bdata-testid\s*[:=]\s*["']([^"']+)["']/g;
-      let m;
-      while ((m = re.exec(src))) out.add(m[1] || m[2]);
-    }
+  for (const p of H.walkFiles(dir, ['.svelte', '.js', '.ts'])) {
+    const src = fs.readFileSync(p, 'utf8');
+    const re = /\b(?:closeId|wrapId|stateId|id)\s*[:=]\s*["']([^"']+)["']|\bdata-testid\s*[:=]\s*["']([^"']+)["']/g;
+    let m;
+    while ((m = re.exec(src))) out.add(m[1] || m[2]);
   }
   return out;
 }
@@ -133,10 +124,10 @@ if (process.argv.includes('--dump')) {
 
 const problems = [];
 const missingGlobal = GLOBAL_SETTINGS_IDS.filter((id) => !MOUNT_IDS.includes(id) && !svelteSettingsIds.has(id));
-const missingStory = STORY_PANEL_IDS.filter((id) => !MOUNT_IDS.includes(id) && !svelteStoryIds.has(id));
+const missingStory = STORY_PANEL_IDS.filter((id) => !svelteStoryIds.has(id));
 // 双向：清单里的 id 不许出现在对方的屏幕源码里（搬漏会同时命中这两条）
 const globalLeak = GLOBAL_SETTINGS_IDS.filter((id) => !MOUNT_IDS.includes(id) && svelteStoryIds.has(id));
-const storyLeak = STORY_PANEL_IDS.filter((id) => !MOUNT_IDS.includes(id) && svelteSettingsIds.has(id));
+const storyLeak = STORY_PANEL_IDS.filter((id) => svelteSettingsIds.has(id));
 
 // 已下线的能力位控件：源码里不许回来，也不许重新混进冻结清单（清单自己也要自洽）
 const retiredBack = RETIRED_SETTINGS_IDS.filter((id) => svelteSettingsIds.has(id));

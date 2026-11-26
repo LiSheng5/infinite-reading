@@ -14,18 +14,13 @@
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const { WriteBack } = require(path.join(ROOT, 'src', 'core', 'writeBack.ts'));
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 
 /* ---------------- ① 契约纯逻辑 ---------------- */
 console.log('[1] 异步写回契约（src/core/writeBack.ts）');
@@ -87,12 +82,12 @@ console.log('[1] 异步写回契约（src/core/writeBack.ts）');
 console.log('[2] 续体收口与错误留痕（静态回归，改坏即失败）');
 const read = (p) => fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
 {
-  const round = read(path.join('app', 'round.js'));
-  const turn = read(path.join('app', 'turn.js'));
-  const painter = read(path.join('app', 'painter.js'));
-  const importer = read(path.join('app', 'importer.js'));
-  const settings = read(path.join('app', 'settings.js'));
-  const shelf = read(path.join('app', 'shelf.js'));
+  const round = read('app/round.js');
+  const turn = read('app/turn.js');
+  const painter = read('app/painter.js');
+  const importer = read('app/importer.js');
+  const settings = read('app/settings.js');
+  const shelf = read('app/shelf.js');
 
   // 回合 / 开局 / 重试的每个 await 写回段之前都有断言闸
   ok(round.indexOf('WriteBack.assertStory(S.story, sid, ') >= 0, 'round.js 回合/开局续体过 assertStory 闸');
@@ -125,5 +120,5 @@ const read = (p) => fs.readFileSync(path.join(ROOT, 'src', p), 'utf8');
     '世界卡面板区分「未启用 / 失败」（界面口径）');
 }
 
-console.log('\n异步写回契约单测：' + (failed ? '有 ' + failed + ' 项失败' : '全部通过'));
-if (failed) process.exitCode = 1;
+console.log('\n异步写回契约单测：' + (H.failed ? '有 ' + H.failed + ' 项失败' : '全部通过'));
+if (H.failed) process.exitCode = 1;

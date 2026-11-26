@@ -7,6 +7,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
@@ -14,11 +15,7 @@ const P = core('prefs').Prefs;
 const C = core('context').Context;
 const Store = core('store').Store;
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
+const { ok } = H;
 function eq(a, b, msg) {
   const same = JSON.stringify(a) === JSON.stringify(b);
   ok(same, msg + (same ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
@@ -145,17 +142,9 @@ console.log('[4] sanitizePrefs：丢未知键 / 剥凭证 / profileId 校验');
   ok(!('evil' in clean.ui), 'ui 深层未知键丢弃（连同其中的 baseUrl / key）');
   ok(!('fontScale' in clean.ui) || clean.ui.fontScale !== 'huge', 'ui.fontScale 非法值丢弃');
   eq(clean.ui.splitRatio, 0.72, 'ui.splitRatio 夹到 0.72');
-  // trigger（出图时机）随 PREF_KEYS 下线——旧包里的 trigger 按未知键丢弃、不报错
+  // trigger（出图时机）随 PREF_RULES 下线——旧包里的 trigger 按未知键丢弃、不报错
   ok(!('trigger' in clean), 'trigger 不在白名单 → 被丢弃（旧包导入不报错）');
-  {
-    let threw = false;
-    let dropped = null;
-    try { dropped = P.sanitizePrefs({ trigger: 'manual', profileId: 'p1' }); } catch (_) { threw = true; }
-    ok(!threw && dropped && !('trigger' in dropped) && dropped.profileId === 'p1',
-      '旧包带 trigger 导入 → 被丢弃、不报错（其余键正常）');
-  }
-
-  const badId = P.sanitizePrefs({ profileId: 123, trigger: 'manual' });
+  const badId = P.sanitizePrefs({ profileId: 123 });
   ok(!('profileId' in badId), 'profileId 非字符串被丢弃');
   const arrId = P.sanitizePrefs({ profileId: ['p1'] });
   ok(!('profileId' in arrId), 'profileId 数组被丢弃');
@@ -251,7 +240,7 @@ console.log('[7] migrateSettings：幂等补 profiles；已有数据原样保留
 
 console.log('[8] 压缩阈值：不同 profile 的 contextWindow → 不同 70% 阈值');
 {
-  ok(typeof C.compressThreshold === 'function', 'context.js 导出纯函数 compressThreshold');
+  ok(typeof C.compressThreshold === 'function', 'context.ts 导出纯函数 compressThreshold');
   const s = baseSettings();
   const c1 = P.resolveChatCfg(s, { prefs: { profileId: 'p1' } }).cfg;
   const c2 = P.resolveChatCfg(s, { prefs: { profileId: 'p2' } }).cfg;
@@ -279,18 +268,7 @@ console.log('[9] 生视频三参数唯一源 = 面板控件（双数据源）');
   eq(s2.video.extraParams, s.video.extraParams, '幂等：extraParams 不再变化');
 }
 
-console.log('[10] 依赖装配（阶段 6：静态 import，加载顺序不再是约束）');
-{
-  // store 静态 import tree / prefs，缺位路径在结构上不可能出现；这里验证两条依赖真的在位。
-  const clean = Store.sanitizePrefsSafe({ profileId: 'p1', unknownKey: 1 });
-  ok(clean.profileId === 'p1' && clean.unknownKey === undefined, 'store 依赖的 Prefs 在位（未知键被丢弃）');
-  ok(Store.serializeStory({ log: [], scenes: [], savepoints: [] }).log.length === 0
-    && Store.serializeStory({ log: [], scenes: [], savepoints: [] }).scenes.length === 0,
-  'store 依赖的 Tree 在位（裁剪窗口可用）');
-  ok(Store.assertDeps === undefined, '加载顺序自检已随静态 import 删除');
-}
-
-console.log('[11] prefs / ui 键表是唯一真源（清洗 · 全局默认 · 覆盖 · 合并同源）');
+console.log('[10] prefs / ui 键表是唯一真源（清洗 · 全局默认 · 覆盖 · 合并同源）');
 {
   // 六个布局键：合法值透传
   const ui = { layout: 'stack', splitRatio: 0.4, imageCollapsed: true, fontScale: 'lg', width: 'wide', density: 'compact' };
@@ -317,8 +295,8 @@ console.log('[11] prefs / ui 键表是唯一真源（清洗 · 全局默认 · �
     'sanitizePrefs 由 PREF_RULES 驱动（顶层键也只有一份）');
 }
 
-if (failed) {
-  console.error('prefs-test：' + failed + ' 项失败');
+if (H.failed) {
+  console.error('prefs-test：' + H.failed + ' 项失败');
   process.exit(1);
 }
 console.log('✅ prefs-test 全部通过');

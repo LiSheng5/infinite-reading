@@ -33,7 +33,7 @@ function makeIdb() {
     open() {
       const req = {
         result: null, error: null,
-        onsuccess: null, onerror: null, onblocked: null, onupgradeneeded: null,
+        onsuccess: null, onerror: null, onblocked: null,
       };
       this.calls.push(req);
       return req;
@@ -42,12 +42,11 @@ function makeIdb() {
 }
 
 // 够 Storage.get 用的最小连接：transaction → objectStore → get
+//（测试从不触发 onupgradeneeded，故不提供 objectStoreNames / createObjectStore）
 function makeDb(data) {
   return {
     closed: false,
     close() { this.closed = true; },
-    objectStoreNames: { contains: () => true },
-    createObjectStore() {},
     transaction() {
       const tx = { oncomplete: null, onerror: null, onabort: null, error: null };
       tx.objectStore = () => ({
@@ -80,11 +79,11 @@ async function checkStorage() {
   idb.calls[0].onblocked();
   const r1 = await first;
   const e1 = r1.error;
-  check('D20：blocked 的错误带 code / blocked 标记（可与真错误区分）',
+  check('blocked 的错误带 code / blocked 标记（可与真错误区分）',
     !r1.ok && e1 && e1.code === 'IDB_BLOCKED' && e1.blocked === true, e1 && String(e1.message));
-  check('D20：blocked 的提示能直接照做（说清是别的标签页、关掉即可）',
+  check('blocked 的提示能直接照做（说清是别的标签页、关掉即可）',
     !!(e1 && /标签页/.test(e1.message)), e1 && e1.message);
-  check('D20：blocked 不把整个会话判死（isBroken 仍为 false）',
+  check('blocked 不把整个会话判死（isBroken 仍为 false）',
     Storage.isBroken === false && Storage.isBlocked === true,
     'broken=' + Storage.isBroken + ' blocked=' + Storage.isBlocked);
 
@@ -92,12 +91,12 @@ async function checkStorage() {
   const late = makeDb(new Map());
   idb.calls[0].result = late;
   idb.calls[0].onsuccess();
-  check('D20：blocked 之后迟到的成功被丢弃，并关掉那条连接（不占住对方的升级）',
+  check('blocked 之后迟到的成功被丢弃，并关掉那条连接（不占住对方的升级）',
     late.closed === true, 'closed=' + late.closed);
 
   // ② 下一次调用必须重新 open（旧实现这里被 broken 永久短路）
   const second = settle(Storage.get('kv', 'k1'));
-  check('D20：blocked 之后的下一次调用会重新 open（不再永久短路）',
+  check('blocked 之后的下一次调用会重新 open（不再永久短路）',
     idb.calls.length === 2, 'open 次数 ' + idb.calls.length);
   if (idb.calls.length < 2) {
     // 已经短路了：后面的用例没有可观察的对象，前面的红条已经说明问题
@@ -108,8 +107,8 @@ async function checkStorage() {
   idb.calls[1].result = db;
   idb.calls[1].onsuccess();
   const r2 = await second;
-  check('D20：占用解除后能正常开库并读出数据', r2.ok && r2.value === 'v1', JSON.stringify(r2));
-  check('D20：开库成功后 isBlocked 复位', Storage.isBlocked === false);
+  check('占用解除后能正常开库并读出数据', r2.ok && r2.value === 'v1', JSON.stringify(r2));
+  check('开库成功后 isBlocked 复位', Storage.isBlocked === false);
 
   const again = await settle(Storage.get('kv', 'k1'));
   check('开库成功后复用连接（不重复 open）', idb.calls.length === 2 && again.ok && again.value === 'v1',
@@ -122,10 +121,10 @@ async function checkStorage() {
   idb.calls[2].error = new Error('库损坏');
   idb.calls[2].onerror();
   const r3 = await third;
-  check('D20：真正的打开错误仍然拒绝', !r3.ok && /库损坏/.test(String(r3.error && r3.error.message)));
-  check('D20：真错误之后 isBroken 为 true（说明这两类失败确实分开了）', Storage.isBroken === true);
+  check('真正的打开错误仍然拒绝', !r3.ok && /库损坏/.test(String(r3.error && r3.error.message)));
+  check('真错误之后 isBroken 为 true（说明这两类失败确实分开了）', Storage.isBroken === true);
   const fourth = await settle(Storage.get('kv', 'k3'));
-  check('D20：broken 之后不再发起新的 open（不做无意义重试）',
+  check('broken 之后不再发起新的 open（不做无意义重试）',
     !fourth.ok && idb.calls.length === 3, 'open 次数 ' + idb.calls.length);
 }
 
@@ -137,22 +136,18 @@ async function checkServiceWorker() {
   const listeners = {};
   let claimed = false;
 
+  // 只驱动 activate：install / fetch 处理器里用到的全局（skipWaiting / caches.open / fetch / URL）
+  // 不在这里桩，真跑起来漏桩就是失败信号
   const sandbox = {
     self: {
       addEventListener: (type, fn) => { listeners[type] = fn; },
-      skipWaiting: async () => {},
       clients: { claim: async () => { claimed = true; } },
-      location: { origin: 'https://lisheng5.github.io' },
     },
     // 同源混着别的项目：只允许删自己的前缀
     caches: {
       keys: async () => ['ir-v0.12.1', 'ir-v9.9.9', 'other-project-v3', 'workbox-precache-v2-https://lisheng5.github.io/other/'],
-      open: async () => ({ add: async () => {} }),
       delete: async k => { deleted.push(k); return true; },
-      match: async () => null,
     },
-    fetch: async () => ({ ok: false }),
-    URL: URL,
   };
   vm.runInNewContext(src, sandbox);
 
@@ -164,13 +159,13 @@ async function checkServiceWorker() {
   listeners.activate({ waitUntil: p => { pending = p; } });
   await pending;
 
-  check('D12：旧版本缓存被删（版本跟着发布节奏清）', deleted.indexOf('ir-v0.12.1') >= 0,
+  check('旧版本缓存被删（版本跟着发布节奏清）', deleted.indexOf('ir-v0.12.1') >= 0,
     JSON.stringify(deleted));
-  check('D12：当前版本的缓存不删', deleted.indexOf('ir-v9.9.9') === -1, JSON.stringify(deleted));
-  check('D12：同源其它项目的缓存一律不碰（只清 ir-v 前缀）',
+  check('当前版本的缓存不删', deleted.indexOf('ir-v9.9.9') === -1, JSON.stringify(deleted));
+  check('同源其它项目的缓存一律不碰（只清 ir-v 前缀）',
     deleted.indexOf('other-project-v3') === -1 && !deleted.some(k => k.indexOf('workbox') === 0),
     JSON.stringify(deleted));
-  check('D12：本次只动了该动的那一个', deleted.length === 1, JSON.stringify(deleted));
+  check('本次只动了该动的那一个', deleted.length === 1, JSON.stringify(deleted));
   check('activate 结束后接管已打开的页面', claimed === true);
 }
 

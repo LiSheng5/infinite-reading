@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * 无限阅读 · 前端 sidecar 客户端冒烟测试（src/core/sidecar.ts）
+ * 无限阅读 · 前端 sidecar 客户端冒烟测试 + 工具门控（src/core/sidecar.ts、context.ts）
  *
  * 用「假 fetch」模拟本地服务在 / 不在两种状态，验：
  *   - 探测失败 → 离线降级（能力位全关 + 可读原因），不影响前端其它功能；
  *   - 探测成功 → 在线，能力位按 /health 解析；
  *   - api() 自动带 Bearer token、401 抛结构化错误码；
  *   - configure() 改端口要反映到请求 URL；
- *   - Node 下没有 EventSource 时 startSSE() 不能抛错（纯前端降级友好）。
+ *   - Node 下没有 EventSource 时 startSSE() 不能抛错（纯前端降级友好）；
+ *   - Context：工具门控 / 聊天与剧情的系统提示 / stripKindMarker / request_image 变体
+ *     （行为细节在 chat-mode-test 与 ctxusage-test，这里守前端拼装侧不漂移）。
  *
  * 用法：node eval/frontend-smoke.js
  */
 const path = require('path');
 const { check, run } = require('./_harness.js');
 
-global.window = global;
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const S = core('sidecar').Sidecar;
@@ -112,13 +113,11 @@ async function main() {
   check('start()：离线时返回 false 且状态为 offline', startOk === false && S.status().online === false);
   S.stop();
 
-  S.stop();
-
   /* 7. 工具门控：调度工具只在聊天 + 后端已开启调度时下发 */
   const Ctx = core('context').Context;
   const namesOf = list => list.map(t => t.function.name);
   if (!Ctx) {
-    check('IR.Context 可用', false);
+    check('Context 可用', false);
   } else {
     const choiceNames = namesOf(Ctx.toolsForMode('choice', { schedule: true }));
     const chatOn = namesOf(Ctx.toolsForMode('chat', { schedule: true }));
@@ -129,10 +128,8 @@ async function main() {
     check('门控：后端没开调度 → 不下发调度工具', chatOff.indexOf('schedule_once') < 0);
     check('门控：旧值 rp 兜底与 chat 同清单（读档归一后不会再出现）',
       namesOf(Ctx.toolsForMode('rp', { schedule: true })).join(',') === chatOn.join(','));
-    check('门控：聊天仍有 request_image / update_memory；剧情模式少了 request_image',
-      chatOn.indexOf('request_image') >= 0 && chatOn.indexOf('update_memory') >= 0
-      && choiceNames.indexOf('update_memory') >= 0 && choiceNames.indexOf('request_image') < 0,
-      chatOn.join(',') + ' vs ' + choiceNames.join(','));
+    check('门控：聊天仍有 request_image / update_memory',
+      chatOn.indexOf('request_image') >= 0 && chatOn.indexOf('update_memory') >= 0, chatOn.join(','));
     check('isScheduleTool 判定正确',
       Ctx.isScheduleTool('schedule_once') === true && Ctx.isScheduleTool('request_image') === false);
     check('调度工具共 5 个', Ctx.TOOL_NAMES_SCHEDULE.length === 5, Ctx.TOOL_NAMES_SCHEDULE.join(','));
@@ -147,9 +144,7 @@ async function main() {
     check('request_image：聊天是直出变体（含 prompt 且必填）',
       !!chImg && !!propsOf(chImg).prompt && reqOf(chImg).indexOf('prompt') >= 0,
       JSON.stringify(Object.keys(propsOf(chImg))));
-    check('request_image：剧情模式工具名集合不含它（作画只能点按钮）',
-      !chChoiceImg && choiceNames.indexOf('request_image') < 0 && choiceNames.indexOf('update_memory') >= 0,
-      choiceNames.join(','));
+    check('request_image：剧情模式没有这个工具（作画只能点按钮）', !chChoiceImg, choiceNames.join(','));
     check('工具名集合：choice = chat 去掉 request_image',
       choiceNames.join(',') === chatOff.filter(n => n !== 'request_image').join(','),
       choiceNames.join(','));
@@ -158,17 +153,11 @@ async function main() {
       && Ctx.toolPolicyText(Ctx.toolNamesForMode('chat', {})).indexOf('request_image') >= 0, 'ok');
     check('剧情系统提示词不再出现「请画师作画 / 供画师作画参考」措辞',
       Ctx.systemForMode('choice').indexOf('请画师') < 0 && Ctx.systemForMode('choice').indexOf('画师作画') < 0, 'ok');
-  }
-
-  /* 7b. 聊天工具集 / 系统提示 / stripKindMarker（增补） */
-  if (!Ctx) {
-    check('IR.Context 可用（7b）', false);
-  } else {
-    const namesOf2 = list => list.map(t => t.function.name);
+    /* 7b. 聊天工具集 / 系统提示 / stripKindMarker（增补） */
     const all = { schedule: true, email: true, payment: true };
-    const chatAll = namesOf2(Ctx.toolsForMode('chat', all));
-    const choiceAll = namesOf2(Ctx.toolsForMode('choice', all));
-    const chatNone = namesOf2(Ctx.toolsForMode('chat', { schedule: false, email: false, payment: false }));
+    const chatAll = namesOf(Ctx.toolsForMode('chat', all));
+    const choiceAll = namesOf(Ctx.toolsForMode('choice', all));
+    const chatNone = namesOf(Ctx.toolsForMode('chat', { schedule: false, email: false, payment: false }));
     check('门控：聊天 + email/payment 开启 → 含 email_propose / payment_propose',
       chatAll.indexOf('email_propose') >= 0 && chatAll.indexOf('payment_propose') >= 0, chatAll.join(','));
     check('门控：choice 即便传了 true 也不下发邮件 / 下单工具',
@@ -210,26 +199,6 @@ async function main() {
     check('stripKindMarker：外层 [玩家行动] 前缀保持不变',
       sm('[设定]\\nxx\\n\\n[玩家行动] （做）动手') === '[设定]\\nxx\\n\\n[玩家行动] 动手',
       sm('[设定]\\nxx\\n\\n[玩家行动] （做）动手'));
-  }
-
-  /* 8. 主动触达编排：去重 + 排队 + 逐条送出 */
-  const F = core('features').Features;
-  if (!F) {
-    check('IR.Features 可用', false);
-  } else {
-    const delivered = [];
-    let allow = false;
-    F.attach({ canDeliver: () => allow, deliver: async p => { delivered.push(p.fireId); } });
-    F.accept({ fireId: 'f1', prompt: 'a' });
-    check('编排：条件不满足时先排队', F.test.size() === 1 && delivered.length === 0, F.test.size() + '/' + delivered.length);
-    allow = true;
-    await F.drain();
-    check('编排：条件满足后送出', delivered.length === 1 && F.test.size() === 0, delivered.length + '/' + F.test.size());
-    F.accept({ fireId: 'f1', prompt: 'a' });
-    check('编排：同一 fireId 去重（SSE 与补跑可能同时捞到）', F.test.size() === 0 && delivered.length === 1);
-    F.accept({ fireId: 'f2', prompt: '   ' });
-    check('编排：空 prompt 不入队', F.test.size() === 0);
-    F.clear();
   }
 }
 

@@ -109,7 +109,10 @@ async function main() {
   check('授权范围：额度与品类都满足 → 放行',
     evalWith(policyCfg(), { amountCents: 100, category: '图书' }, { mandate: { totalLimitCents: 9999, spent: 0, categories: ['图书'] } }).decision !== 'deny');
 
-  check('错误码表齐全（10 项）', PAYMENT_CODES.length >= 10, PAYMENT_CODES.join(','));
+  check('错误码表齐全（无重复，含金额 / 限额 / 授权 / 冲突四类）',
+    PAYMENT_CODES.length === new Set(PAYMENT_CODES).size
+    && ['BAD_AMOUNT', 'DAILY_LIMIT_EXCEEDED', 'MANDATE_EXPIRED', 'CURRENCY_MISMATCH', 'INTENT_ALREADY_RESOLVED']
+      .every(c => PAYMENT_CODES.indexOf(c) >= 0), PAYMENT_CODES.length + ' 项');
   check('剩余额度随金额递减（给确认弹窗用）', (() => {
     const v = evalWith(policyCfg({ daily: 1000, monthly: 5000 }), { amountCents: 400 }, { spentDaily: 100 });
     return v.remaining && v.remaining.dailyCents === 500 && v.remaining.monthlyCents === 4600;
@@ -183,13 +186,14 @@ async function main() {
   {
     // 防重复扣款：并发两次 charge，只应真正调用渠道一次
     let calls = 0;
+    const built = createPaymentProviders();
     const providers = {
       counting: {
         label: '计数桩',
         async charge() { calls += 1; await new Promise(r => setTimeout(r, 25)); return { ok: true, ref: 'ref-1', status: 'charged' }; },
       },
-      mock: createPaymentProviders().mock,
-      'manual-order': createPaymentProviders()['manual-order'],
+      mock: built.mock,
+      'manual-order': built['manual-order'],
     };
     const { pay } = fresh({ provider: 'counting', perTx: 10000, daily: 10000, monthly: 10000, autoApprove: 0 }, providers);
     const md = mkMandate(pay);
@@ -334,9 +338,9 @@ async function main() {
       await pay.purchase({ amountCents: -100, merchant: 'M', category: 'C', mandateId: md.id });
       await pay.purchase({ amountCents: 1e30, merchant: 'M', category: 'C', mandateId: md.id });
     } catch (e) { threw = e; }
-    check('D21：缺 / 非法金额 → BAD_AMOUNT 且不抛异常（HTTP 层能拿到 400）',
+    check('缺 / 非法金额 → BAD_AMOUNT 且不抛异常（HTTP 层能拿到 400）',
       !threw && !!miss && miss.ok === false && miss.code === 'BAD_AMOUNT', threw ? String(threw) : JSON.stringify(miss));
-    check('D21：非法金额不落台账（坏值不进 INTEGER 列）',
+    check('非法金额不落台账（坏值不进 INTEGER 列）',
       pay.listTransactions().length === 0, JSON.stringify(pay.listTransactions()));
   }
 
@@ -348,16 +352,16 @@ async function main() {
     const mdWin = { totalLimitCents: 9999, spent: 0, categories: [], periodStart: ps, periodEnd: pe };
 
     VNOW = localMs(2026, 1, 5, 12, 0);
-    check('D26 策略：有效期覆盖当前 → 正常裁决（不因有效期拒绝）',
+    check('策略：有效期覆盖当前 → 正常裁决（不因有效期拒绝）',
       evalWith(policyCfg(), { amountCents: 100 }, { mandate: mdWin }).decision !== 'deny');
     VNOW = localMs(2026, 2, 5, 12, 0);
-    check('D26 策略：授权已过期 → MANDATE_EXPIRED（旧实现忽略窗口、照常往下裁）',
+    check('策略：授权已过期 → MANDATE_EXPIRED（旧实现忽略窗口、照常往下裁）',
       evalWith(policyCfg(), { amountCents: 100 }, { mandate: mdWin }).code === 'MANDATE_EXPIRED');
-    check('D26 策略：授权未开始 → MANDATE_EXPIRED',
+    check('策略：授权未开始 → MANDATE_EXPIRED',
       evalWith(policyCfg(), { amountCents: 100 }, { mandate: Object.assign({}, mdWin, { periodStart: localMs(2026, 3, 1, 0, 0), periodEnd: localMs(2026, 4, 1, 0, 0) }) }).code === 'MANDATE_EXPIRED');
-    check('D26 策略：没签有效期（period 全 0，旧档口径）→ 不做有效期判定',
+    check('策略：没签有效期（period 全 0，旧档口径）→ 不做有效期判定',
       evalWith(policyCfg(), { amountCents: 100 }, { mandate: { totalLimitCents: 9999, spent: 0, categories: [] } }).decision !== 'deny');
-    check('D26：错误码表里有 MANDATE_EXPIRED', PAYMENT_CODES.indexOf('MANDATE_EXPIRED') >= 0);
+    check('错误码表里有 MANDATE_EXPIRED', PAYMENT_CODES.indexOf('MANDATE_EXPIRED') >= 0);
   }
 
   {
@@ -367,17 +371,17 @@ async function main() {
     const { pay } = fresh({ perTx: 10000, daily: 10000, monthly: 100000, autoApprove: 10000 });
     const jan = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [], periodStart: localMs(2026, 1, 1, 0, 0), periodEnd: localMs(2026, 2, 1, 0, 0) });
     const r1 = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: jan.id });
-    check('D26 网关：窗口内花满授权额度（窗口内累计口径不变）', r1.ok === true, JSON.stringify(r1).slice(0, 160));
+    check('网关：窗口内花满授权额度（窗口内累计口径不变）', r1.ok === true, JSON.stringify(r1).slice(0, 160));
     const r2 = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: jan.id });
-    check('D26 网关：窗口内累计超总额 → MANDATE_EXCEEDED', r2.ok === false && r2.code === 'MANDATE_EXCEEDED', JSON.stringify(r2).slice(0, 160));
+    check('网关：窗口内累计超总额 → MANDATE_EXCEEDED', r2.ok === false && r2.code === 'MANDATE_EXCEEDED', JSON.stringify(r2).slice(0, 160));
     VNOW = localMs(2026, 2, 5, 12, 0);
     const r3 = await pay.purchase({ amountCents: 100, merchant: 'M', category: 'C', mandateId: jan.id });
-    check('D26 网关：过了有效期的授权 → MANDATE_EXPIRED（旧实现是终身累计的 MANDATE_EXCEEDED）',
+    check('网关：过了有效期的授权 → MANDATE_EXPIRED（旧实现是终身累计的 MANDATE_EXCEEDED）',
       r3.ok === false && r3.code === 'MANDATE_EXPIRED', JSON.stringify(r3).slice(0, 160));
     const feb = pay.createMandate({ agent: 'a', totalLimitCents: 5000, currency: 'CNY', categories: [], periodStart: localMs(2026, 2, 1, 0, 0), periodEnd: localMs(2026, 3, 1, 0, 0) });
     const r4 = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: feb.id });
-    check('D26 网关：续签新授权（二月窗口）→ 一月的花费不占新额度，放行', r4.ok === true, JSON.stringify(r4).slice(0, 160));
-    check('D26 网关：台账挂在各自的 mandate 上（一月四笔、续签单带新授权 id）',
+    check('网关：续签新授权（二月窗口）→ 一月的花费不占新额度，放行', r4.ok === true, JSON.stringify(r4).slice(0, 160));
+    check('网关：台账挂在各自的 mandate 上（一月四笔、续签单带新授权 id）',
       pay.getTx(r4.intentId).mandateId === feb.id && pay.listTransactions({ agent: 'a' }).length === 4);
   }
 
@@ -392,18 +396,18 @@ async function main() {
       + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run('tx-old', 'pi-old', 'a', 5000, 'CNY', 'M', 'C', '[]', 'charged', '', '', md.id, localMs(2025, 12, 15, 12, 0), null, null);
     const r = await pay.purchase({ amountCents: 5000, merchant: 'M', category: 'C', mandateId: md.id });
-    check('D26 网关：窗口外的旧账不计入授权额度（按 period 过滤统计，旧实现终身累计会拒）',
+    check('网关：窗口外的旧账不计入授权额度（按 period 过滤统计，旧实现终身累计会拒）',
       r.ok === true, JSON.stringify(r).slice(0, 200));
   }
 
   /* 回归（前端侧，静态）：签发带本月窗口、复用前核有效期、文案说「本月额度」 */
   {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'features.js'), 'utf8');
-    check('D26 前端：签发授权带本月窗口（periodStart / periodEnd 随单下发）',
+    check('前端：签发授权带本月窗口（periodStart / periodEnd 随单下发）',
       src.indexOf('periodStart: b0.getTime()') >= 0 && src.indexOf('periodEnd: b1.getTime()') >= 0);
-    check('D26 前端：复用授权先核有效期（过期的签新的一份，不再终身复用最新一份）',
+    check('前端：复用授权先核有效期（过期的签新的一份，不再终身复用最新一份）',
       src.indexOf('m.periodEnd > t && m.periodStart <= t') >= 0 && src.indexOf('mds[0].id') === -1);
-    check('D26 前端：确认文案说「本月额度」与续签，不再把每月上限说成总额度',
+    check('前端：确认文案说「本月额度」与续签，不再把每月上限说成总额度',
       src.indexOf('本月额度') >= 0 && src.indexOf('有效期：到 ') >= 0 && src.indexOf('总额度：') === -1);
   }
 

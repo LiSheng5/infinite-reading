@@ -23,17 +23,12 @@
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed += 1; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 
 /* ---------------- 扫描面 ---------------- */
 const EXT = new Set(['.js', '.mjs', '.ts', '.svelte', '.css', '.html']);
@@ -103,7 +98,7 @@ const RULES = [
   { re: /(?:中危|低危|高危|Top|可维护性|文档一致性)\s*#?\s*\d/, why: '审查条目号' },
   { re: /(?<![A-Za-z0-9_])[DMSR]\d+(?:\.\d+)?(?![\dA-Za-z])/, why: '条目号（D5 / M9 / S3 / R13 这类）' },
   { re: /(?<![A-Za-z0-9_])P-?\d+(?![\dA-Za-z])/, why: '阶段编号（P-1 / P2 / P0 这类）' },
-  { re: /T-[A-Z]{1,2}-\d/, why: '任务书条目（T-M-1 / T-P5-3 这类）' },
+  { re: /T-[A-Z]{1,2}-\d/, why: '任务书条目（T-M-1 / T-UI-2 这类）' },
   { re: /UI-[1-4]/, why: '任务书屏号（UI-2 §3.1 这类）' },
   { re: /第[一二三四五六七八九十0-9]+ ?轮/, why: '轮次编号（第八轮 / 第十六轮 这类）' },
 ];
@@ -176,8 +171,8 @@ if (hits.length > 20) console.error('     …… 还有 ' + (hits.length - 20) +
 
 /* ---------------- 汇总 ---------------- */
 console.log('');
-if (failed) {
-  console.error('注释自解释门禁：' + failed + ' 项未过');
+if (H.failed) {
+  console.error('注释自解释门禁：' + H.failed + ' 项未过');
   process.exit(1);
 }
 console.log('注释自解释门禁：全部通过');

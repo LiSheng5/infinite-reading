@@ -9,22 +9,19 @@
  *   - 用一个逐位实现的 CRC32 复算每个条目的校验值（不信被测量的那个表）
  *   - 手工解析中央目录，检查偏移真的指向对应的本地头、名字与长度自洽
  *   - 手工构造一个 deflate（方法 8）压缩的包，验证读取路径能解开第三方工具的产物
- * 用法：node eval/zip-smoke.js   [--json]
+ * 用法：node eval/zip-smoke.js
  */
 const path = require('path');
 const zlib = require('zlib');
 
-global.window = global;
+const H = require('./_harness.js');
 const Zip = require(path.join(__dirname, '..', 'src', 'core', 'zip.ts')).Zip;
 if (!Zip || typeof Zip.build !== 'function' || typeof Zip.read !== 'function') {
   console.error('加载失败：Zip 导出缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 /* ---------------- 独立参照实现（刻意与被测代码不同写法） ---------------- */
 
@@ -176,17 +173,7 @@ const toBuf = async blob => Buffer.from(await blob.arrayBuffer());
   check('空包（没有条目）被拒绝', await Zip.build([]).then(() => false, () => true), 'ok');
 
   /* ---------------- 报告 ---------------- */
-  const hit = results.filter(r => r.hit).length;
-  if (process.argv.indexOf('--json') !== -1) {
-    console.log(JSON.stringify({ hit: hit, total: results.length, checks: results }, null, 2));
-  } else {
-    console.log('无限阅读 · ZIP 读写冒烟测试（src/core/zip.ts）');
-    for (const r of results) {
-      console.log((r.hit ? '[命中] ' : '[未中] ') + r.name + (r.detail ? '  —— ' + r.detail : ''));
-    }
-    console.log('\n合计：' + hit + '/' + results.length + (hit === results.length ? ' ✅' : ' ❌'));
-  }
-  if (hit !== results.length) process.exit(1);
+  H.finish('ZIP 读写冒烟测试');
 })().catch(e => {
   console.error('冒烟测试异常：' + (e && e.stack ? e.stack : e));
   process.exit(1);

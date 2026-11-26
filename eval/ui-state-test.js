@@ -5,38 +5,33 @@
  *
  *   1. 确认弹窗排队（src/core/confirmQueue.ts）——并发 irConfirm 不丢 Promise：
  *      只有队头显示、收掉队头后下一条就地接上、队列空了才算关窗；
- *   2. 静态回归 ：/src 里不再有「直接给 #modal-* 加 hidden」的关窗写法——
+ *   2. 静态回归：/src 里不再有「直接给 #modal-* 加 hidden」的关窗写法——
  *      绕开 closeModal 会让弹窗栈残留、aria-hidden 不设、焦点不还原；
- *   3. 静态回归 ：布局写回之后走 commitUi() 落盘（命中 story.prefs.ui 的键只
+ *   3. 静态回归：布局写回之后走 commitUi() 落盘（命中 story.prefs.ui 的键只
  *      persistSettings 等于没存），退出沉浸回到进入前的布局而不是一律 auto；
- *   4. 静态回归 ：覆盖层背景 inert + aria-hidden、聊天图与缩略图
- *      可键盘触发、本对话设置面板的滚动快照不反成 $effect 依赖、<html> 静态 data-motion="rich"；
- *   5. 静态回归 ：聊天流按条目 key 做 keyed 更新（不再 {#key} 整条销毁重建），
+ *   4. 静态回归：覆盖层背景 inert + aria-hidden、聊天图与缩略图
+ *      可键盘触发、本对话设置面板的滚动快照不被 $effect 读成依赖、<html> 静态 data-motion="rich"；
+ *   5. 静态回归：聊天流按条目 key 做 keyed 更新（不再 {#key} 整条销毁重建），
  *      每个条目模型带 readmodel 发的稳定 key，流式空壳回填幂等；
- *   6. 静态回归 ：弹窗外壳（头 / 身 / 脚 + 关闭）全站只有 ModalCard 一份，设置页复用，
+ *   6. 静态回归：弹窗外壳（头 / 身 / 脚 + 关闭）全站只有 ModalCard 一份，设置页复用，
  *      外壳不再是一个 Svelte 组件（modalHost 直接建 display:contents 层容器）；
- *   7. 静态回归 ：屏幕挂载外壳（取容器 → 清空 → data-impl → mount）只有
+ *   7. 静态回归：屏幕挂载外壳（取容器 → 清空 → data-impl → mount）只有
  *      src/screens/_mount.js 一份，7 个 index.js 只声明「容器 → 组件」，
  *      挂载 id 与 index.html 里的容器逐个对账；
- *   8. 静态回归 ：首页 ASCII 字符画只有 src/screens/home/art.js 一份——
+ *   8. 静态回归：首页 ASCII 字符画只有 src/screens/home/art.js 一份——
  *      组件直接 import，index.html 的无 JS 兜底由构建期从同一个源注入。
  *
  * 用法：node eval/ui-state-test.js
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const { createConfirmQueue } = require(path.join(ROOT, 'src', 'core', 'confirmQueue.ts'));
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
 }
@@ -123,22 +118,16 @@ async function main() {
   console.log('[2] 弹窗只经 closeModal 关');
   {
     const hits = [];
-    const walk = (dir) => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name);
-        if (e.isDirectory()) { walk(p); continue; }
-        if (!/\.(js|ts|svelte)$/.test(e.name)) continue;
-        const text = fs.readFileSync(p, 'utf8');
-        text.split('\n').forEach((line, i) => {
-          const t = line.trim();
-          if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;   // 注释不算
-          if (/modal-[a-z-]+/.test(line) && /classList\.(add|toggle|remove)\(\s*['"]hidden['"]\s*\)/.test(line)) {
-            hits.push(path.relative(ROOT, p) + ':' + (i + 1) + '  ' + t);
-          }
-        });
-      }
-    };
-    walk(path.join(ROOT, 'src'));
+    for (const p of H.walkFiles(path.join(ROOT, 'src'), ['.js', '.ts', '.svelte'])) {
+      const text = fs.readFileSync(p, 'utf8');
+      text.split('\n').forEach((line, i) => {
+        const t = line.trim();
+        if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;   // 注释不算
+        if (/modal-[a-z-]+/.test(line) && /classList\.(add|toggle|remove)\(\s*['"]hidden['"]\s*\)/.test(line)) {
+          hits.push(path.relative(ROOT, p) + ':' + (i + 1) + '  ' + t);
+        }
+      });
+    }
     ok(hits.length === 0, '没有直接给 #modal-* 加 hidden 的关窗写法' + (hits.length ? '：' + hits.join(' | ') : ''));
     const main = read('src/app/main.js');
     ok(main.indexOf("$('#modal-wizard').classList") < 0 && main.indexOf("$('#modal-export').classList") < 0,
@@ -269,18 +258,9 @@ async function main() {
   console.log('[6] 弹窗外壳只有一份');
   {
     /* 手写的 .modal-card 只准出现在 ModalCard.svelte：别处再写一次就是又长出第四份外壳 */
-    const dup = [];
-    const walkSvelte = (dir) => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name);
-        if (e.isDirectory()) { walkSvelte(p); continue; }
-        if (!e.name.endsWith('.svelte')) continue;
-        if (/class="modal-card"/.test(stripComments(fs.readFileSync(p, 'utf8')))) {
-          dup.push(path.relative(ROOT, p).split(path.sep).join('/'));
-        }
-      }
-    };
-    walkSvelte(path.join(ROOT, 'src'));
+    const dup = H.walkFiles(path.join(ROOT, 'src'), ['.svelte'])
+      .filter((p) => /class="modal-card"/.test(stripComments(fs.readFileSync(p, 'utf8'))))
+      .map((p) => path.relative(ROOT, p).split(path.sep).join('/'));
     eq(dup.join(' '), 'src/ui/ModalCard.svelte', '手写 .modal-card 的组件只剩 ModalCard 一份');
 
     const card = stripComments(read('src/ui/ModalCard.svelte'));
@@ -356,16 +336,9 @@ async function main() {
     ok(read(artFile).indexOf(NEEDLE) >= 0, '字符画真源是 src/screens/home/art.js');
 
     // 全仓只准这一份：index.html 兜底 / 组件常量 / 构建脚本里再抄一次就是第二真源
-    const owners = [];
-    const walkArt = (dir) => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name);
-        if (e.isDirectory()) { walkArt(p); continue; }
-        if (!/\.(js|ts|svelte|html|mjs)$/.test(e.name)) continue;
-        if (fs.readFileSync(p, 'utf8').indexOf(NEEDLE) >= 0) owners.push(path.relative(ROOT, p).split(path.sep).join('/'));
-      }
-    };
-    walkArt(path.join(ROOT, 'src'));
+    const owners = H.walkFiles(path.join(ROOT, 'src'), ['.js', '.ts', '.svelte', '.html', '.mjs'])
+      .filter((p) => fs.readFileSync(p, 'utf8').indexOf(NEEDLE) >= 0)
+      .map((p) => path.relative(ROOT, p).split(path.sep).join('/'));
     for (const f of ['index.html', 'vite.config.mjs']) {
       if (read(f).indexOf(NEEDLE) >= 0) owners.push(f);
     }
@@ -387,8 +360,8 @@ async function main() {
       '两种产物都有「占位没被替换就报错」的自检');
   }
 
-  if (failed) {
-    console.error('ui-state-test：' + failed + ' 项未通过');
+  if (H.failed) {
+    console.error('ui-state-test：' + H.failed + ' 项未通过');
     process.exit(1);
   }
   console.log('ui-state-test：全部通过');

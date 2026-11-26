@@ -4,8 +4,8 @@
  * 无限阅读 · 上下文组装评测（设计出处）
  *
  * 作用：离线量化「上下文组装 / 压缩逻辑」的好坏，改记忆机制前先跑它。
- *   - 重放长局剧本（eval/mock-story.js 的 IR.MockStory，32 回合）
- *   - 与运行时同源地跑 v2 组装（IR.Context.assembleAI1）与压缩链（IR.Context.compressStory）
+ *   - 重放长局剧本（eval/mock-story.js 的 MockStory，32 回合）
+ *   - 与运行时同源地跑 v2 组装（Context.assembleAI1）与压缩链（Context.compressStory）
  *   - 在第 10 / 20 / 30 回合插入「追问回合」，检查组装出的 prompt 里是否含探针事实
  *   - 只测组装/压缩逻辑本身，不调用任何 API
  *   - 输出 5 类探针命中率 + 总分，并对比记录的早期基线（60.0%）
@@ -16,13 +16,15 @@
  */
 const path = require('path');
 
-global.window = global;
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const Context = core('context').Context;
 const Store = core('store').Store;
 const RoleCard = core('roleCard').RoleCard;
 const { MockStory } = require(path.join(__dirname, 'mock-story.js'));
+
+/* 三个「探针 / 归档 / 工具」小节共用的结果收集器 */
+const pushTo = out => (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
 if (!Context || !MockStory) {
   console.error('加载失败：Context / MockStory 缺失。');
   process.exit(1);
@@ -40,7 +42,7 @@ function buildStory() {
 
 function applyToolCalls(story, calls) {
   // 归档语义与真实链路同源：工具吸收 / 提案留痕跳过 / 画像门控
-  // 都走 IR.Context.absorbToolCalls——这里只注入「画像门控开、合并去重同真源」的写入函数
+  // 都走 Context.absorbToolCalls——这里只注入「画像门控开、合并去重同真源」的写入函数
   Context.absorbToolCalls(story, calls, {
     applyProfile: entries => { story.userProfile = Context.mergeProfile(story.userProfile || [], entries); },
     now: 0,
@@ -55,7 +57,7 @@ function applyTurn(story, t, opening) {
   const r = t.reply;
   if (r.world) Context.mergeWorld(story.world, r.world);           // AI1 自报世界卡（增量浅合并）
   // 条目形状与 turn.js 同源：narrationEntry（含 versions / activeVersion）
-  // 与 assistantEntry（slimReply 四字段）都用 IR.Context 的唯一实现
+  // 与 assistantEntry（slimReply 四字段）都用 Context 的唯一实现
   const rr = {
     narration: r.narration || '', choices: r.choices || [],
     scene_change: !!r.scene_change, scene_summary: r.scene_summary || '',
@@ -100,7 +102,7 @@ function evaluate() {
       });
     }
   }
-  return { results, tokenSeries, story, heuristic: checkHeuristic(story), card: checkCardProfile(), archive: checkArchive(story), mockTools: checkMockTools() };
+  return { results, tokenSeries, heuristic: checkHeuristic(story), card: checkCardProfile(), archive: checkArchive(story), mockTools: checkMockTools() };
 }
 
 /* ----------  启发式注入校验 ----------
@@ -202,7 +204,7 @@ const V3_CARD = {
 
 function checkCardProfile() {
   const out = [];
-  const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
+  const push = pushTo(out);
 
   /* —— 角色卡：解析与映射 —— */
   const card2 = RoleCard && RoleCard.parsePNG(tEXTPNG('chara', b64(JSON.stringify(V2_CARD))));
@@ -382,11 +384,11 @@ function checkCardProfile() {
 
 /* ---------- 归档形状对齐校验 ----------
  * 复刻归档此前与 turn.js 字段漂移：缺 versions / activeVersion、提案留痕没跳过、画像无门控。
- * 现归档走 IR.Context 共享实现（narrationEntry / assistantEntry / absorbToolCalls），
+ * 现归档走 Context 共享实现（narrationEntry / assistantEntry / absorbToolCalls），
  * 这里把「形状契约」钉住：共享实现或复刻一漂移，评测即失败。 */
 function checkArchive(story) {
   const out = [];
-  const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
+  const push = pushTo(out);
 
   const narr = (story.log || []).filter(e => e && e.type === 'narration');
   push('旁白条目带 versions / activeVersion 版本栈（与 turn.js 同形状）',
@@ -425,7 +427,7 @@ function checkArchive(story) {
  * 工具名必须在注册表里、参数键必须是 schema properties 的子集。 */
 function checkMockTools() {
   const out = [];
-  const push = (name, hit, detail) => out.push({ name: name, hit: !!hit, detail: detail || '' });
+  const push = pushTo(out);
 
   const registry = {};
   for (const t of [].concat(
@@ -473,7 +475,7 @@ function report(out) {
   const { results, tokenSeries } = out;
   const lines = [];
   lines.push('无限阅读 · 上下文组装评测');
-  lines.push('组装实现：IR.Context.assembleAI1（v2：摘要行 + 摘要栈 + 保留窗口 ' + Context.DEFAULT_KEEP_MESSAGES + ' 条 + 启发式注入）');
+  lines.push('组装实现：Context.assembleAI1（v2：摘要行 + 摘要栈 + 保留窗口 ' + Context.DEFAULT_KEEP_MESSAGES + ' 条 + 启发式注入）');
   lines.push('剧本：' + MockStory.title + '（' + MockStory.turns.length + ' 回合）· 探针 ' + results.length + ' 条 · 不消耗任何 API');
   lines.push('');
   lines.push('—— 追问回合明细 ——');
@@ -533,7 +535,7 @@ function report(out) {
   const arch = out.archive || [];
   if (arch.length) {
     lines.push('');
-    lines.push('—— 归档形状对齐（与 turn.js 共用 IR.Context 归档）——');
+    lines.push('—— 归档形状对齐（与 turn.js 共用 Context 归档）——');
     for (const c of arch) lines.push(pad(c.name, 56) + (c.hit ? '[命中]' : '[未中]') + '  ' + c.detail);
     const ahit = arch.filter(x => x.hit).length;
     lines.push('归档校验：' + ahit + '/' + arch.length + (ahit === arch.length ? ' ✅' : ' ❌'));

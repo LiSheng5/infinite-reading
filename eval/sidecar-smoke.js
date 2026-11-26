@@ -123,10 +123,10 @@ async function checkLockRules() {
   empty.stderr.on('data', c => { emptyErr += c.toString(); });
   const emptyCode = await waitExit(empty, 10000);
   // 断言「主动拒绝」的文案：只看退出码会把启动崩溃（如未定义函数）误判成通过
-  check('D23：空锁文件（刚创建，可能还没写内容）→ 拒绝启动（而非崩溃）',
+  check('空锁文件（刚创建，可能还没写内容）→ 拒绝启动（而非崩溃）',
     emptyCode === 1 && emptyErr.indexOf('已有另一个 sidecar 实例在运行') !== -1,
     '退出码 ' + emptyCode + ' / ' + emptyErr.replace(/\s+/g, ' ').slice(0, 160));
-  check('D23：拒绝启动时不删别人的锁文件', fs.existsSync(lock), '锁文件被删了');
+  check('拒绝启动时不删别人的锁文件', fs.existsSync(lock), '锁文件被删了');
 
   fs.writeFileSync(lock, JSON.stringify({ pid: 999999, at: 0, nonce: 'stale' }));
   const takeover = spawnServer(dir, PORT + 1);
@@ -134,11 +134,10 @@ async function checkLockRules() {
   takeover.stdout.on('data', () => {});
   takeover.stderr.on('data', c => { takeoverErr += c.toString(); });
   const health = await waitHealth(12000, PORT + 1);
-  check('D23：陈旧锁（pid 已死）→ 允许启动并接管', !!health,
+  check('陈旧锁（pid 已死）→ 允许启动并接管', !!health,
     health ? '' : ('未能启动 ' + takeoverErr.slice(0, 300)));
   try { takeover.kill(); } catch (_) {}
   await waitExit(takeover, 5000);
-  return !!health;
 }
 
 async function main() {
@@ -189,49 +188,49 @@ async function main() {
 
     /* ---- 请求来源边界：Host 是 DNS rebinding 的唯一识别点；Origin: null 只对带凭据的请求开口 ---- */
     const rebind = await req('GET', '/api/config', null, token, { Host: 'evil.example' });
-    check('D27：Host 不是本机回环（DNS rebinding）→ 403 BAD_HOST',
+    check('Host 不是本机回环（DNS rebinding）→ 403 BAD_HOST',
       rebind.status === 403 && !!rebind.json && rebind.json.code === 'BAD_HOST',
       rebind.status + ' ' + String(rebind.raw).slice(0, 120));
 
     const foreign = await req('GET', '/api/config', null, token, { Origin: 'https://evil.example' });
-    check('D27：别的站点 Origin → 403 ORIGIN_NOT_ALLOWED，且不给 CORS 头',
+    check('别的站点 Origin → 403 ORIGIN_NOT_ALLOWED，且不给 CORS 头',
       foreign.status === 403 && !!foreign.json && foreign.json.code === 'ORIGIN_NOT_ALLOWED'
       && !foreign.headers['access-control-allow-origin'],
       foreign.status + ' / ACAO=' + String(foreign.headers['access-control-allow-origin']));
 
     const localOrigin = await req('GET', '/api/config', null, token, { Origin: 'http://localhost:8000' });
-    check('D27：本机页面 Origin 照常放行（回显同一个 Origin）',
+    check('本机页面 Origin 照常放行（回显同一个 Origin）',
       localOrigin.status === 200 && localOrigin.headers['access-control-allow-origin'] === 'http://localhost:8000',
       localOrigin.status + ' / ACAO=' + String(localOrigin.headers['access-control-allow-origin']));
 
     // Origin: null 是 file:// 的形态，但任意站点的沙箱 iframe 也是——浏览器不给可区分的信号，
     // 所以判据改成「带不带凭据」：不带凭据的页面读不到任何响应。
     const nullNoCred = await req('GET', '/api/config', null, '', { Origin: 'null' });
-    check('D27：Origin: null 且不带凭据 → 403，且不回显 ACAO（沙箱 iframe 读不到）',
+    check('Origin: null 且不带凭据 → 403，且不回显 ACAO（沙箱 iframe 读不到）',
       nullNoCred.status === 403 && !!nullNoCred.json && nullNoCred.json.code === 'ORIGIN_NOT_ALLOWED'
       && !nullNoCred.headers['access-control-allow-origin'],
       nullNoCred.status + ' / ACAO=' + String(nullNoCred.headers['access-control-allow-origin']));
 
     const nullHealth = await req('GET', '/health', null, '', { Origin: 'null' });
-    check('D27：file:// 的 /health 探测不用凭据也放行（只回布尔能力位）',
+    check('file:// 的 /health 探测不用凭据也放行（只回布尔能力位）',
       nullHealth.status === 200 && !!nullHealth.json && nullHealth.json.ok === true
       && nullHealth.headers['access-control-allow-origin'] === 'null',
       nullHealth.status + ' / ACAO=' + String(nullHealth.headers['access-control-allow-origin']));
 
     const nullCred = await req('GET', '/api/config', null, token, { Origin: 'null' });
-    check('D27：Origin: null + token（file:// 单文件产物）→ 200 且回显 ACAO: null',
+    check('Origin: null + token（file:// 单文件产物）→ 200 且回显 ACAO: null',
       nullCred.status === 200 && nullCred.headers['access-control-allow-origin'] === 'null',
       nullCred.status + ' / ACAO=' + String(nullCred.headers['access-control-allow-origin']));
 
     const preflight = await req('OPTIONS', '/api/config', null, '', {
       Origin: 'null', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization',
     });
-    check('D27：file:// 的预检放行（204 + ACAO: null）',
+    check('file:// 的预检放行（204 + ACAO: null）',
       preflight.status === 204 && preflight.headers['access-control-allow-origin'] === 'null',
       preflight.status + ' / ACAO=' + String(preflight.headers['access-control-allow-origin']));
 
     const nullSse = await req('GET', '/api/events?ticket=nope', null, '', { Origin: 'null' });
-    check('D27：Origin: null 的 SSE 按 ticket 算凭据（无效 ticket → 401，不是 403）',
+    check('Origin: null 的 SSE 按 ticket 算凭据（无效 ticket → 401，不是 403）',
       nullSse.status === 401, nullSse.status + ' ' + String(nullSse.raw).slice(0, 120));
 
     const cfg = await req('GET', '/api/config', null, token);
@@ -248,15 +247,15 @@ async function main() {
     await sleep(30);
     const mineOk = await req('GET', '/api/config', null, myToken);
     const oldDenied = await req('GET', '/api/config', null, token);
-    check('D25：自定义 token（非 32 位十六进制）照用，旧 token 失效',
+    check('自定义 token（非 32 位十六进制）照用，旧 token 失效',
       mineOk.status === 200 && oldDenied.status === 401, mineOk.status + ' / ' + oldDenied.status);
     const persisted = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token;
-    check('D25：自定义 token 原样留在 config.json（没被改写）', persisted === myToken, persisted);
+    check('自定义 token 原样留在 config.json（没被改写）', persisted === myToken, persisted);
 
     fs.writeFileSync(cfgPath, JSON.stringify(rawCfg, null, 2));
     await sleep(30);
     const restored = await req('GET', '/api/config', null, token);
-    check('D25：改回原 token 后立即生效（配置缓存按 mtime / size 失效）', restored.status === 200, restored.status);
+    check('改回原 token 后立即生效（配置缓存按 mtime / size 失效）', restored.status === 200, restored.status);
 
     const put = await req('PUT', '/api/config', { email: { enabled: true, dailyLimit: 3 } }, token);
     check('PUT 配置生效', put.status === 200 && put.json.config.email.enabled === true && put.json.config.email.dailyLimit === 3);
@@ -374,7 +373,7 @@ async function main() {
     const big = await req('POST', '/api/triggers',
       { name: 'big-body', type: 'interval', spec: { everyMs: 60000 }, prompt: 'x'.repeat(256 * 1024) }, token)
       .catch(e => ({ status: 0, json: null, raw: 'ERR:' + (e && e.message) }));
-    check('D44：body 超限 → 413 BODY_TOO_LARGE（不是 ECONNRESET）',
+    check('body 超限 → 413 BODY_TOO_LARGE（不是 ECONNRESET）',
       big.status === 413 && !!big.json && big.json.code === 'BODY_TOO_LARGE',
       big.status + ' ' + String(big.raw).slice(0, 120));
 
@@ -386,10 +385,10 @@ async function main() {
     await sleep(50);
     const afterEmpty = await req('GET', '/api/config', null, token);
     const freshToken = JSON.parse(fs.readFileSync(cfgPath, 'utf8')).token;
-    check('D25：token 置空 → 生成新值并落盘（旧 token 失效）',
+    check('token 置空 → 生成新值并落盘（旧 token 失效）',
       afterEmpty.status === 401 && typeof freshToken === 'string' && freshToken.length >= 32 && freshToken !== token,
       afterEmpty.status + ' / ' + (freshToken || '').length);
-    check('D25：生成新 token 有日志提示（不静默改 token）',
+    check('生成新 token 有日志提示（不静默改 token）',
       childErr.indexOf('已生成新 token') !== -1, childErr.replace(/\s+/g, ' ').slice(-160));
 
     // 释放锁只认自己的 nonce：把锁改成别人的内容，进程退出时不能顺手删掉
@@ -398,7 +397,7 @@ async function main() {
     fs.writeFileSync(liveLock, JSON.stringify({ pid: process.pid, at: 0, nonce: 'someone-else' }));
     try { child.kill(); } catch (_) {}
     await waitExit(child, 6000);
-    check('D23：退出时只删自己写的锁（外来的锁不被误删）', fs.existsSync(liveLock), '锁文件被删了');
+    check('退出时只删自己写的锁（外来的锁不被误删）', fs.existsSync(liveLock), '锁文件被删了');
   } finally {
     try { if (sseReq) sseReq.destroy(); } catch (_) {}
     try { child.kill(); } catch (_) {}

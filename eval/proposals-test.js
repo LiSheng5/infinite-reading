@@ -3,8 +3,7 @@
 /*
  * 无限阅读 · 提案模块单测（src/core/proposals.ts，Node 离线，不联网）
  *
- * 用手写的「假 sidecar」（记录每次调用的方法名与参数）验的 11 条，
- * 重点盯安全红线：
+ * 用手写的「假 sidecar」（记录每次调用的方法名与参数）分 11 组验，重点盯安全红线：
  *   - 提案路径绝不调用 emailSend（直发），只用 emailDraft → emailSendDraft；
  *   - paymentPurchase（额度内可能直接扣款）只出现在「用户点了确认」之后；
  *   - paymentApprove 只出现在「第二次确认」之后；拒绝走 paymentDeny；
@@ -16,18 +15,15 @@
  * 用法：node eval/proposals-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
-global.window = global;
 const P = require(path.join(__dirname, '..', 'src', 'core', 'proposals.ts')).Proposals;
 if (!P) {
   console.error('加载失败：Proposals 导出缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 /* ---- 假 sidecar：记录调用（方法名 + 参数），行为可编程 ---- */
 function makeSidecar(opts) {
@@ -36,7 +32,7 @@ function makeSidecar(opts) {
   const rec = (name, ret) => (...args) => {
     calls.push({ name: name, args: args });
     if (typeof o[name] === 'function') return o[name](...args);
-    return typeof ret === 'function' ? ret(...args) : Promise.resolve(ret);
+    return ret(...args);
   };
   return {
     calls: calls,
@@ -120,7 +116,7 @@ async function main() {
   const r4 = await P.confirm(p4, S4, T0);
   check('email 确认：调用顺序严格 emailDraft → emailSendDraft',
     S4.names().join('→') === 'emailDraft→emailSendDraft', S4.names().join('→'));
-  check('email 确认：emailSend 从未被调用（红线 2）', S4.countOf('emailSend') === 0);
+  check('email 确认：emailSend 从未被调用（不发直发）', S4.countOf('emailSend') === 0);
   check('email 确认：状态 done', r4.status === 'done' && p4.status === 'done', p4.status);
 
   /* 5. email 拒绝：不调用任何发送类方法 */
@@ -135,7 +131,7 @@ async function main() {
   /* 6. payment 确认（额度内直接放行）：purchase 只在 confirm 之后调用 1 次 */
   const S6 = makeSidecar();
   const p6 = P.create('payment', { amount: 12.34, merchant: '书店' }, T0).proposal;
-  check('payment 确认：confirm 之前 paymentPurchase 调用次数为 0（红线 3）', S6.countOf('paymentPurchase') === 0);
+  check('payment 确认：confirm 之前 paymentPurchase 调用次数为 0（不在确认前扣款）', S6.countOf('paymentPurchase') === 0);
   const r6 = await P.confirm(p6, S6, T0);
   check('payment 确认：confirm 之后 paymentPurchase 调用次数为 1', S6.countOf('paymentPurchase') === 1);
   check('payment 确认：返回 charged → 状态 done', r6.status === 'done' && p6.status === 'done', p6.status);
@@ -144,11 +140,7 @@ async function main() {
     S6.names().join(','));
 
   /* 7. payment 返回 needsApproval：不自动批准；二次点击才 approve，拒绝走 deny */
-  const S7 = makeSidecar({
-    paymentPurchase: () => Promise.resolve({
-      ok: true, needsApproval: true, intentId: 'pi-7', summary: { remaining: { daily: 100, monthly: 200 } },
-    }),
-  });
+  const S7 = makeSidecar({ paymentPurchase: needsApproval('pi-7') });
   const p7 = P.create('payment', { amount: 30, merchant: 'm' }, T0).proposal;
   const r7 = await P.confirm(p7, S7, T0);
   check('payment 二次确认：confirm 返回 needsSecondConfirm', !!(r7 && r7.needsSecondConfirm) && r7.intentId === 'pi-7',
@@ -331,13 +323,4 @@ async function main() {
   check('幂等：done 之后再点拒绝不触发任何 sidecar 调用', S12.calls.length === nBefore, S12.names().join(','));
 }
 
-main()
-  .catch(e => { check('测试过程无异常', false, e && e.message); })
-  .then(() => {
-    const pass = results.filter(r => r.hit).length;
-    for (const r of results) {
-      console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
-    }
-    console.log('\n提案模块单测：' + pass + '/' + results.length + ' 通过');
-    if (pass !== results.length) process.exitCode = 1;
-  });
+H.run('提案模块单测', main);

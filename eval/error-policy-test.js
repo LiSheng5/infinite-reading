@@ -19,20 +19,15 @@
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const {
   errorText, shortError, failureEntry,
 } = require(path.join(ROOT, 'src', 'core', 'errors.ts'));
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed += 1; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
 }
@@ -283,8 +278,8 @@ async function main() {
     eq(scanSilentCatches(noise).length, 0, '清理类 try（focus）不进「真实失败」统计');
   }
 
-  console.log('\n失败处理策略门禁：' + (failed ? '有 ' + failed + ' 项失败' : '全部通过'));
-  if (failed) process.exitCode = 1;
+  console.log('\n失败处理策略门禁：' + (H.failed ? '有 ' + H.failed + ' 项失败' : '全部通过'));
+  if (H.failed) process.exitCode = 1;
 }
 
 main().catch(err => {

@@ -18,8 +18,7 @@
  * 用法：node eval/video-provider-test.js
  */
 const path = require('path');
-
-global.window = global;
+const H = require('./_harness.js');
 const P = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts'));
 const V = P.VideoProviders;
 const fetchWithTimeout = P.fetchWithTimeout;
@@ -29,10 +28,7 @@ if (!mm) {
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 function jsonRes(status, obj) {
   return {
@@ -63,6 +59,17 @@ function abortError() {
   const e = new Error('The operation was aborted');
   e.name = 'AbortError';
   return e;
+}
+
+/* 假 fetch：永远不「自发」返回，只服从 abort（与浏览器 fetch 一致）。
+ * 超时 / 取消用例都靠它——计时器或外部 signal 一 abort，请求立刻 reject */
+function hangUntilAbort(url, init) {
+  return new Promise((_, reject) => {
+    const s = init && init.signal;
+    if (!s) return;                                   // 没信号就永远挂着
+    if (s.aborted) { reject(abortError()); return; }
+    s.addEventListener('abort', () => reject(abortError()), { once: true });
+  });
 }
 
 // 用例守卫：真挂住（不该挂的 await 没返回）就直接失败，别让整轮静默退出码 0
@@ -201,7 +208,6 @@ const cfg = {
   /* ---------- 提交阶段 TypeError → CORS 提示，不重试 ---------- */
   {
     let n = 0;
-    calls.length = 0;
     global.fetch = () => { n++; return Promise.reject(new TypeError('Failed to fetch')); };
     let threw = '';
     try { await mm.submit(cfg, { prompt: 'x', mode: 't2v' }); }
@@ -210,10 +216,9 @@ const cfg = {
     check('提交 TypeError：不重试（只发一次）', n === 1, 'fetch 次数 ' + n);
   }
 
-  /* ---------- 轮询连续 3 次网络错误才判失败（单次容忍） ---------- */
+  /* ---------- 轮询最多容忍 2 次连续网络错误，第 3 次才判失败 ---------- */
   {
     let n = 0;
-    calls.length = 0;
     global.fetch = (url, init) => {
       if (((init && init.method) || 'GET') === 'POST') return Promise.resolve(jsonRes(200, { task_id: 'tg-4' }));
       n++;
@@ -235,16 +240,10 @@ const cfg = {
     check('轮询连续 3 次失败才判失败', n === 3 && !!threw, '轮询次数 ' + n + ' / ' + threw);
   }
 
-  /* ---------- ：单次请求超时（fetchWithTimeout）与外部取消 ---------- */
+  /* ---------- 单次请求超时（fetchWithTimeout）与外部取消 ---------- */
   {
-    // 假 fetch 永远不「自发」返回，只服从 abort（与浏览器 fetch 一致）：
     // 超时由 fetchWithTimeout 的计时器 abort 触发，再按 timedOut 转成 TimeoutError
-    global.fetch = (url, init) => new Promise((_, reject) => {
-      const s = init && init.signal;
-      if (!s) return;                                  // 没信号就永远挂着
-      if (s.aborted) { reject(abortError()); return; }
-      s.addEventListener('abort', () => reject(abortError()), { once: true });
-    });
+    global.fetch = hangUntilAbort;
     let err = null;
     try { await guard(fetchWithTimeout('https://api.minimax.io/slow', {}, 20), 2000); } catch (e) { err = e; }
     check('超时：挂死请求按传入的 ms 抛 TimeoutError（带 timeoutMs）',
@@ -252,12 +251,7 @@ const cfg = {
       err ? err.name + ' / ' + err.message : '没有抛错');
 
     // 外部取消：立刻抛 AbortError（上层据此静默收尾），不会被误判成超时
-    global.fetch = (url, init) => new Promise((_, reject) => {
-      const s = init && init.signal;
-      if (!s) return;                                  // 没信号就永远挂着（本用例必须带信号）
-      if (s.aborted) { reject(abortError()); return; }
-      s.addEventListener('abort', () => reject(abortError()), { once: true });
-    });
+    global.fetch = hangUntilAbort;   // 本用例必须带信号
     const ctrl = new AbortController();
     const p = fetchWithTimeout('https://api.minimax.io/cancel', { signal: ctrl.signal }, 5000);
     ctrl.abort();
@@ -326,13 +320,7 @@ const cfg = {
   check('空提示词：直接拒绝', /提示词/.test(threw), threw);
 
   /* ---------- 输出 ---------- */
-  let pass = 0;
-  for (const r of results) {
-    if (r.hit) { pass += 1; console.log('  ✔ ' + r.name); }
-    else console.error('  ✘ ' + r.name + (r.detail ? '  → ' + r.detail : ''));
-  }
-  console.log(`\n生视频适配器单测：${pass}/${results.length} 通过`);
-  if (pass !== results.length) process.exit(1);
+  H.finish('生视频适配器单测');
 })().catch(e => {
   console.error('测试异常：', e);
   process.exit(1);

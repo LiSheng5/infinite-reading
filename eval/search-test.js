@@ -15,18 +15,14 @@
  * 用法：node eval/search-test.js
  */
 const path = require('path');
-
-global.window = global;
+const H = require('./_harness.js');
 const S = require(path.join(__dirname, '..', 'src', 'core', 'search.ts')).Search;
 if (!S) {
   console.error('加载失败：Search 导出缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 // 造一个最小 tree 形状的故事（节点字段与 src/core/tree.ts 建节点处同口径）
 function storyOf(opts) {
@@ -143,13 +139,11 @@ function storyOf(opts) {
     entries: [], sealed: true, turn: 1, ts: 2,
   };
   st.tree.nodes.n0.children.push('n-branch');
-  const doc = S.buildDoc(storyOf({ id: 'tmp' }));   // 占位，防止误用
   const doc2 = S.buildDoc(st);
   const r = S.query([doc2], '月台');
   check('query：非当前分支节点里的内容能被搜到',
     r.length === 1 && r[0].hits.length && r[0].hits[0].nid === 'n-branch',
     JSON.stringify(r[0] && r[0].hits[0] && r[0].hits[0].nid));
-  void doc;
 }
 
 /* ---------------- 4. ranges 与片段自洽（中文 + emoji） ---------------- */
@@ -280,15 +274,4 @@ function storyOf(opts) {
     S.query([doc], '没写完').length === 1);
 }
 
-/* ---------------- 报告 ---------------- */
-
-let fails = 0;
-for (const r of results) {
-  if (r.hit) console.log('  ok  ' + r.name + (r.detail ? '  [' + r.detail + ']' : ''));
-  else { console.error('  FAIL ' + r.name + (r.detail ? '  [' + r.detail + ']' : '')); fails++; }
-}
-if (fails) {
-  console.error('search-test：' + fails + ' 项未通过');
-  process.exit(1);
-}
-console.log('search-test：全部通过（' + results.length + ' 项）');
+H.finish('全文搜索单测');

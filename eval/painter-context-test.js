@@ -18,14 +18,11 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const C = require(path.join(__dirname, '..', 'src', 'core', 'context.ts')).Context;
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
+const { ok } = H;
 
 const MARKS = { do: '（做）', say: '（说）', direct: '（导演）' };
 
@@ -293,8 +290,8 @@ console.log('[7] 静态断言：turn.js / round.js 不再调用 enqueueImage（�
     '「构思 → 出图」仍集中在 runPaintTask 一处（画师分支未被误删）');
 }
 
-if (failed) {
-  console.error('painter-context-test：' + failed + ' 项失败');
+if (H.failed) {
+  console.error('painter-context-test：' + H.failed + ' 项失败');
   process.exit(1);
 }
 console.log('✅ painter-context-test 全部通过');

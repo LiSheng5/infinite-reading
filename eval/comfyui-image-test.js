@@ -17,8 +17,8 @@
  * 用法：node eval/comfyui-image-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
-global.window = global;
 const P = require(path.join(__dirname, '..', 'src', 'core', 'providers.ts')).ImageProviders;
 const cy = P && P['comfyui'];
 if (!cy) {
@@ -26,10 +26,7 @@ if (!cy) {
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 function jsonRes(status, obj) {
   return {
@@ -297,12 +294,5 @@ const FAST = { totalTimeoutMs: 5000, pollMs: 1 };   // 缩短轮询等待（只�
   const t4 = await cy.test(cfg({ baseUrl: '' }));
   check('test 没填地址 → fail 且不发请求', t4.level === 'fail' && calls.length === 0, t4.message);
 
-  /* ---------- 汇总 ---------- */
-  const fails = results.filter(r => !r.hit);
-  for (const r of fails) console.error('❌ ' + r.name + (r.detail ? '（实际：' + r.detail + '）' : ''));
-  if (fails.length) {
-    console.error('comfyui-image-test：' + fails.length + ' / ' + results.length + ' 项失败');
-    process.exit(1);
-  }
-  console.log('✅ comfyui-image-test：' + results.length + ' 项全部通过（ComfyUI 本地适配器：提交 → 轮询 → 取图）');
+  H.finish('ComfyUI 生图适配器单测');
 })();

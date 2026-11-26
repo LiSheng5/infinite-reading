@@ -23,18 +23,15 @@
  * 用法：node eval/paintqueue-test.js
  */
 const path = require('path');
+const H = require('./_harness.js');
 
-global.window = global;
 const PQ = require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts')).PaintQueue;
 if (!PQ || typeof PQ.create !== 'function') {
   console.error('加载失败：PaintQueue 导出缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 
 // 可控的 promise：任务体自己决定什么时候结束，不依赖真实定时器
 function deferred() {
@@ -269,13 +266,4 @@ async function main() {
   }
 }
 
-main()
-  .catch(e => { check('测试过程无异常', false, e && e.message); })
-  .then(() => {
-    const pass = results.filter(r => r.hit).length;
-    for (const r of results) {
-      console.log((r.hit ? '  ✔ ' : '  ✘ ') + r.name + (r.hit || !r.detail ? '' : '   → ' + r.detail));
-    }
-    console.log('\n作画队列单测：' + pass + '/' + results.length + ' 通过');
-    if (pass !== results.length) process.exitCode = 1;
-  });
+H.run('作画队列单测', main);

@@ -164,7 +164,7 @@ node sidecar/server.mjs            # 首次启动会打印 token
 
 ## 参与与许可
 
-- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 44 个 `eval/*` 门禁，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- **想改代码**：`npm ci` 后用 `npm run dev` 开发、`npm test` 跑全量离线套件（含 44 个 `eval/` 门禁脚本，不花 API）。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - **不写代码也能贡献**：`.irstory.json` 故事、画风包、角色卡、文档纠错、错别字，都欢迎。
 - **遇到问题**：安全相关请走私密渠道（见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「安全说明」），其余请提 Issue（有模板）。
 - **许可证**：[MIT](LICENSE)。第三方字体与资源的许可见 [CONTRIBUTING.md](CONTRIBUTING.md) 的「第三方资源与许可」。

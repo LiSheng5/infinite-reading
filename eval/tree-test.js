@@ -14,14 +14,14 @@
  *   8. 迁移：无树旧档 → 线性链、head 状态 = 当前、走神条目不进树、幂等；
  *   9. 失败回合：begin 后不 commit，树不变；
  *  10. 序列化往返：JSON 往返 → ensure → project，内容一致、引用重建；
- *  11. switchSibling：重试出兄弟后往返切换，world / log / messages 各自还原（用例 2）；
- *  12. 深分支：切兄弟沿 active 下探到叶子，切回停在「续写过的那条线」末端（用例 4）；
- *  13. pushLate：在路径上插到该节点末条之后；不在路径上只写节点、不泄漏（用例 5）；
- *  14. imageIdsOf：找得到非当前分支节点里的图（用例 8）；
- *  15. siblings / switchSibling 边界：单孩子、越界、根节点、未知节点无副作用（用例 10）；
+ *  11. switchSibling：重试出兄弟后往返切换，world / log / messages 各自还原；
+ *  12. 深分支：切兄弟沿 active 下探到叶子，切回停在「续写过的那条线」末端；
+ *  13. pushLate：在路径上插到该节点末条之后；不在路径上只写节点、不泄漏；
+ *  14. imageIdsOf：找得到非当前分支节点里的图；
+ *  15. siblings / switchSibling 边界：单孩子、越界、根节点、未知节点无副作用；
  *  16. switchTo：存档点回档落点 + active 记忆对齐（树侧）；
  *  17. store 集成：SCHEMA=3、migrateStory 透传 tree、serializeStory 不裁树、
- *      saveStory / loadStory 往返、imageIdsOf / knownImageIds 计入全树图集（用例 7 / 8）；
+ *      saveStory / loadStory 往返、imageIdsOf / knownImageIds 计入全树图集；
  *  19.  增补：站在非叶子继续 = 新分支（commit 以 head 为 parent）、
  *      forkBefore / latestLeaf / canResume、历史位置发送的完整序列投影无旧分支泄漏、
  *      seal 的 entries 起点（commit 记 meta.logFrom；log 被裁掉前缀后仍收进 postTurn 尾巴、
@@ -31,8 +31,7 @@
  * 用法：node eval/tree-test.js
  */
 const path = require('path');
-
-global.window = global;
+const H = require('./_harness.js');
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const T = core('tree').Tree;
@@ -47,10 +46,7 @@ if (!S) {
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
 /* ---------------- 测试脚手架（模拟 src/app/round.js 的一回合编排） ---------------- */
@@ -71,16 +67,18 @@ function newStory() {
 function playTurn(story, o) {
   o = o || {};
   const mark = T.begin(story);
-  story.log.push({ type: o.actionType || 'player', text: o.text, kind: o.kind || 'do', ts: 1 });
-  const um = { role: 'user', content: (o.premise ? '[设定]' + story.premise + '\n\n' : '') + '[玩家行动]' + (o.sent != null ? o.sent : '（做）' + o.text) };
-  const am = { role: 'assistant', content: JSON.stringify({ 旁白: o.narration, 选项: o.choices || [] }) };
+  // 本文件只走「（做）」这一种行动：kind / 带前缀的 sent / [设定] 段只出现在手写夹具里，不经 playTurn
+  const type = o.actionType || 'player';
+  story.log.push({ type: type, text: o.text, kind: 'do', ts: 1 });
+  const um = { role: 'user', content: '[玩家行动]（做）' + o.text };
+  const am = { role: 'assistant', content: JSON.stringify({ 旁白: o.narration, 选项: [] }) };
   story.turn += 1;
   story.log.push({ type: 'narration', text: o.narration, versions: [o.narration], activeVersion: 0, ts: 2 });
   story.messages.push(um, am);
   if (o.world) Object.assign(story.world, o.world);
   if (o.summariesPush) story.summaries.push(o.summariesPush);
   const node = T.commit(story, {
-    action: { type: o.actionType || 'player', text: o.text, kind: o.kind || 'do', sent: o.sent != null ? o.sent : '（做）' + o.text },
+    action: { type: type, text: o.text, kind: 'do', sent: '（做）' + o.text },
     userMsg: um, assistantMsg: am, logMark: mark.logMark,
   });
   // postTurn 会往 log 追加 tool 条目、可能压缩 messages（seal 必须在这之后）
@@ -334,7 +332,7 @@ function headTo(story, nodeId) {
 
 /* ---------------- 兄弟切换 / 晚到条目 / 全树图集 ---------------- */
 
-// 11. switchSibling：重试出兄弟，world / log / messages 各自还原（用例 2）
+// 11. switchSibling：重试出兄弟，world / log / messages 各自还原
 {
   const s = newStory();
   playTurn(s, { text: '行动 1', narration: '第 1 幕旁白', world: { time: '第一天' } });
@@ -352,7 +350,7 @@ function headTo(story, nodeId) {
   check('siblings：两兄弟含自身、按创建序', eq(T.siblings(s, a.id), [a.id, b.id]), JSON.stringify(T.siblings(s, a.id)));
 }
 
-// 12. 深分支：切兄弟沿 active 下探到叶子，切回停在「续写过的那条线」末端（用例 4）
+// 12. 深分支：切兄弟沿 active 下探到叶子，切回停在「续写过的那条线」末端
 {
   const s = newStory();
   const n1 = playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
@@ -371,7 +369,7 @@ function headTo(story, nodeId) {
   check('切换不动树结构', Object.keys(s.tree.nodes).length === 6 && s.tree.nodes[n1.id].children.length === 2);
 }
 
-// 13. pushLate：晚到条目 / 画面（用例 5）
+// 13. pushLate：晚到条目 / 画面
 {
   const s = newStory();
   const n1 = playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
@@ -409,7 +407,7 @@ function headTo(story, nodeId) {
   check('pushLate：节点不存在 → 丢弃', T.pushLate(s, 'nope', late) === false);
 }
 
-// 14. imageIdsOf：非当前分支的图也在（用例 8）
+// 14. imageIdsOf：非当前分支的图也在
 {
   const s = newStory();
   playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
@@ -433,7 +431,7 @@ function headTo(story, nodeId) {
   check('imageIdsOf：含视频 videoId（含非当前分支）', vids.indexOf('vid:A') >= 0 && vids.indexOf('vid:B') >= 0, vids.join(','));
 }
 
-// 15. siblings / switchSibling 边界（用例 10）
+// 15. siblings / switchSibling 边界
 {
   const s = newStory();
   const n1 = playTurn(s, { text: '行动 1', narration: '第 1 幕旁白' });
@@ -487,12 +485,12 @@ function headTo(story, nodeId) {
   T.pushLate(s, a.id, { id: 'scA', imageId: 'imgA', ts: 2 });
   T.project(s);
 
-  // ① migrateStory：tree 原样透传（不校验、不依赖 IR.Tree）；无 tree 的旧档不造字段
+  // ① migrateStory：tree 原样透传（不校验、不依赖 Tree）；无 tree 的旧档不造字段
   const m = S.migrateStory(JSON.parse(JSON.stringify(s)));
   check('store：migrateStory 透传 raw.tree（深相等）', !!m.tree && eq(m.tree, s.tree));
   check('store：无 tree 的旧档 migrate 后仍无 tree', S.migrateStory({ id: 'x', log: [] }).tree === undefined);
 
-  // ② serializeStory：log / scenes / savepoints 照旧裁剪，但裁剪不作用在 tree 上（用例 7）
+  // ② serializeStory：log / scenes / savepoints 照旧裁剪，但裁剪不作用在 tree 上
   const s2 = JSON.parse(JSON.stringify(s));
   for (let i = 0; i < 130; i++) s2.log.push({ type: 'tool', tool: 'pad', text: '填充 ' + i, ts: i });
   for (let i = 0; i < 14; i++) s2.scenes.push({ id: 'pad-sc-' + i, ts: i });
@@ -580,26 +578,26 @@ function headTo(story, nodeId) {
   const kidsBefore = n2.children.slice();
   const n3Before = JSON.stringify(s.tree.nodes[n3.id]);
   T.switchTo(s, n2.id);
-  check(' switchTo 到非叶子不下探：head 就落在 n2', s.tree.head === n2.id);
+  check('switchTo 到非叶子不下探：head 就落在 n2', s.tree.head === n2.id);
 
   const n4 = playTurn(s, { text: '行动四', narration: '第四幕', world: { time: '第四天' }, summariesPush: '摘要四' });
-  check(' 非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）',
+  check('非叶子继续 = 新分支：新节点是 n2 的新孩子（children.length + 1）',
     n2.children.length === kidsBefore.length + 1 && n2.children[n2.children.length - 1] === n4.id,
     n2.children.join(','));
-  check(' parent.active 指向新节点', n2.active === n4.id);
-  check(' 原有孩子与其子树不变', JSON.stringify(s.tree.nodes[n3.id]) === n3Before
+  check('parent.active 指向新节点', n2.active === n4.id);
+  check('原有孩子与其子树不变', JSON.stringify(s.tree.nodes[n3.id]) === n3Before
     && s.tree.nodes[n3.id].parent === n2.id);
 
   // 19.2 forkBefore
   const r = T.forkBefore(s, n3.id);
-  check(' forkBefore：head 落到 parent', !!r.ok && s.tree.head === n2.id);
-  check(' forkBefore：返回的 action 与原节点一致',
+  check('forkBefore：head 落到 parent', !!r.ok && s.tree.head === n2.id);
+  check('forkBefore：返回的 action 与原节点一致',
     r.ok && r.action.text === '行动三' && r.action.kind === 'do' && r.action.type === 'player',
     r.ok ? JSON.stringify(r.action) : r.reason);
   const rootRes = T.forkBefore(s, s.tree.root);
-  check(' forkBefore：根节点返回 ok:false', rootRes.ok === false && !!rootRes.reason);
+  check('forkBefore：根节点返回 ok:false', rootRes.ok === false && !!rootRes.reason);
   const missingRes = T.forkBefore(s, 'nope');
-  check(' forkBefore：未知节点返回 ok:false', missingRes.ok === false);
+  check('forkBefore：未知节点返回 ok:false', missingRes.ok === false);
 }
 
 // 19.3 开局节点不可改写
@@ -609,8 +607,8 @@ function headTo(story, nodeId) {
     actionType: 'opening', text: '（故事开场。请描写第一幕，把玩家带进场景。）', narration: '开场旁白',
   });
   const res = T.forkBefore(s, o1.id);
-  check(' forkBefore：开局节点返回 ok:false', res.ok === false && !!res.reason, res.reason);
-  check(' forkBefore：开局节点拒绝时不动 head', s.tree.head === o1.id);
+  check('forkBefore：开局节点返回 ok:false', res.ok === false && !!res.reason, res.reason);
+  check('forkBefore：开局节点拒绝时不动 head', s.tree.head === o1.id);
 }
 
 // 19.4 latestLeaf
@@ -622,13 +620,13 @@ function headTo(story, nodeId) {
 
   T.switchTo(s, p2.id);
   const p3 = playTurn(s, { text: '', narration: 'n3' });       // p2 续写 → p3
-  check(' latestLeaf：沿 active 下探到叶子', T.latestLeaf(s, p1.id).id === p3.id,
+  check('latestLeaf：沿 active 下探到叶子', T.latestLeaf(s, p1.id).id === p3.id,
     T.latestLeaf(s, p1.id).id);
-  check(' latestLeaf：叶子就是自己', T.latestLeaf(s, p3.id).id === p3.id);
+  check('latestLeaf：叶子就是自己', T.latestLeaf(s, p3.id).id === p3.id);
   s.tree.nodes[p1.id].active = null;
-  check(' latestLeaf：无 active 时取最后一个孩子', T.latestLeaf(s, p1.id).id === p2b.id,
+  check('latestLeaf：无 active 时取最后一个孩子', T.latestLeaf(s, p1.id).id === p2b.id,
     T.latestLeaf(s, p1.id).id);
-  check(' latestLeaf：未知节点返回 null', T.latestLeaf(s, 'nope') == null);
+  check('latestLeaf：未知节点返回 null', T.latestLeaf(s, 'nope') == null);
 }
 
 // 19.5 canResume
@@ -636,13 +634,13 @@ function headTo(story, nodeId) {
   const s = newStory();
   const c1 = playTurn(s, { text: 'C1', narration: 'c1' });
   const c2 = playTurn(s, { text: 'C2', narration: 'c2' });
-  check(' canResume：正常节点 → true', T.canResume(s, c1.id) === true && T.canResume(s, c2.id) === true);
+  check('canResume：正常节点 → true', T.canResume(s, c1.id) === true && T.canResume(s, c2.id) === true);
   s.tree.nodes[c1.id].sid = null;
-  check(' canResume：sid === null → false', T.canResume(s, c1.id) === false);
-  check(' canResume：未知节点 → false', T.canResume(s, 'nope') === false);
-  check(' canResume：直接传节点对象也认', T.canResume(s.tree.nodes[c1.id]) === false
+  check('canResume：sid === null → false', T.canResume(s, c1.id) === false);
+  check('canResume：未知节点 → false', T.canResume(s, 'nope') === false);
+  check('canResume：直接传节点对象也认', T.canResume(s.tree.nodes[c1.id]) === false
     && T.canResume(s.tree.nodes[c2.id]) === true);
-  // 旧档迁移：早期回合 sid 全是 null（用例 8 的形状）
+  // 旧档迁移：早期回合 sid 全是 null（早期回合只有 user/assistant，没有 sid）
   const old = newStory();
   old.log = [
     { type: 'player', text: '旧一', kind: 'do', ts: 1 },
@@ -660,7 +658,7 @@ function headTo(story, nodeId) {
   const t = T.ensure(old);
   const chain = T.pathOf(old, t.head);
   const early = t.nodes[chain[1]];
-  check(' 迁移旧档：早期回合被 canResume 拦住（sid === null）',
+  check('迁移旧档：早期回合被 canResume 拦住（sid === null）',
     early.sid == null && T.canResume(old, early.id) === false && T.canResume(old, t.head) === true);
 }
 
@@ -688,19 +686,19 @@ function headTo(story, nodeId) {
   T.seal(s, qn.id);
   T.project(s);
 
-  check(' 新节点是 q1 的新孩子、与 q2 成兄弟',
+  check('新节点是 q1 的新孩子、与 q2 成兄弟',
     q1.children.length === 2 && q1.children[1] === qn.id && q1.active === qn.id);
-  check(' log 只含新路径内容（无旧二 / 旧三）',
+  check('log 只含新路径内容（无旧二 / 旧三）',
     s.log.some(e => e.text === '新旁白一') && s.log.some(e => e.text === '旧旁白一')
     && !s.log.some(e => e.text === '旧旁白二') && !s.log.some(e => e.text === '旧旁白三'));
-  check(' messages 只含新路径窗口（无旧旁白二）',
+  check('messages 只含新路径窗口（无旧旁白二）',
     s.messages.some(m => m.content.indexOf('新旁白一') >= 0)
     && !s.messages.some(m => m.content.indexOf('旧旁白二') >= 0)
     && s.messages.length === 4);
-  check(' world / summaries 是新分支的',
+  check('world / summaries 是新分支的',
     s.world.time === '新时间' && s.summaries.indexOf('新摘要') >= 0
     && s.summaries.indexOf('旧摘要二') < 0 && s.summaries.indexOf('旧摘要三') < 0);
-  check(' 旧分支节点仍在树上（q2 / q3 不丢）',
+  check('旧分支节点仍在树上（q2 / q3 不丢）',
     !!s.tree.nodes[q2.id] && !!s.tree.nodes[q3.id] && s.tree.nodes[q2.id].parent === q1.id);
 }
 
@@ -721,13 +719,13 @@ function headTo(story, nodeId) {
     action: { type: 'player', text: '行动 2', kind: 'do', sent: '（做）行动 2' },
     userMsg: um, assistantMsg: am, logMark: mark.logMark,
   });
-  check(' seal：commit 把 entries 起点记进 meta.logFrom', node.meta.logFrom === mark.logMark, node.meta.logFrom);
+  check('seal：commit 把 entries 起点记进 meta.logFrom', node.meta.logFrom === mark.logMark, node.meta.logFrom);
 
   // postTurn 追加一条 tool 条目；再把 log 裁到只剩本回合末两条（模拟 120 条窗口切在本回合中间）
   s.log.push({ type: 'tool', tool: 'scribe', summary: '晚到的书记员条目', ts: 12 });
   s.log = s.log.slice(-2);          // [narration, tool]：本回合首条（player）已被裁掉
   T.seal(s, node.id);
-  check(' seal：首条被裁掉时按末条找回起点，收进 postTurn 条目',
+  check('seal：首条被裁掉时按末条找回起点，收进 postTurn 条目',
     node.entries.length === 3 && node.entries[0].text === '行动 2'
     && node.entries[1] === narration && node.entries[2].tool === 'scribe',
     node.entries.map(e => e.text || e.tool).join('|'));
@@ -749,10 +747,10 @@ function headTo(story, nodeId) {
   const realWarn = console.warn;
   console.warn = (...a) => warns.push(a.join(' '));
   try { T.seal(s, node.id); } finally { console.warn = realWarn; }
-  check(' seal：log 完全对不上 → entries 保持原样',
+  check('seal：log 完全对不上 → entries 保持原样',
     node.entries.length === 1 && node.entries[0].text === '新的',
     node.entries.map(e => e.text || e.tool).join('|'));
-  check(' seal：log 完全对不上 → 留一条 console.warn（不再静默）',
+  check('seal：log 完全对不上 → 留一条 console.warn（不再静默）',
     warns.some(x => x.indexOf('找不到本回合条目') >= 0), warns.join(' | '));
 }
 
@@ -817,16 +815,6 @@ function headTo(story, nodeId) {
   const clean = S.sanitizePrefsSafe({ profileId: 'p1', unknownKey: 1 });
   check('store 静态装配 Prefs：未知键被丢弃、已知键保留',
     clean.profileId === 'p1' && clean.unknownKey === undefined, JSON.stringify(clean));
-  check('加载顺序自检已随静态 import 删除', S.assertDeps === undefined);
 }
 
-/* ---------------- 汇总 ---------------- */
-
-let bad = 0;
-for (const r of results) {
-  if (!r.hit) bad += 1;
-  console.log((r.hit ? '✓' : '✗') + ' ' + r.name + (r.detail ? '  → ' + r.detail : ''));
-}
-console.log('—');
-console.log('tree-test：' + (results.length - bad) + '/' + results.length + ' 通过');
-process.exit(bad ? 1 : 0);
+H.finish('分支树数据层测试');

@@ -3,7 +3,8 @@
 /*
  * eval/videoqueue-test.js —— 视频队列专有场景：与作画队列互不干扰 + video key 去重口径
  *
- * 视频是独立的异步队列（IR.PaintQueue 的第二个实例，run() 内部就是整段轮询）。
+ * 视频是独立的异步队列（src/app/video.js 的 videoQ，第二个 PaintQueue 实例；
+ * run() 内部就是整段轮询）。
  * PaintQueue 单实例的串行推进 / 出错隔离 / anchor.dead / has/size 语义统一在
  * eval/paintqueue-test.js 覆盖（同一个实现，不在此重复）；这里只测视频侧专有的
  * 两件事（Node、不联网）：
@@ -14,18 +15,14 @@
  * 用法：node eval/videoqueue-test.js
  */
 const path = require('path');
-
-global.window = global;
+const H = require('./_harness.js');
 const PaintQueue = require(path.join(__dirname, '..', 'src', 'core', 'paintQueue.ts')).PaintQueue;
 if (!PaintQueue || !PaintQueue.create) {
   console.error('加载失败：PaintQueue.create 缺失');
   process.exit(1);
 }
 
-const results = [];
-function check(name, ok, detail) {
-  results.push({ name: name, hit: !!ok, detail: detail == null ? '' : String(detail) });
-}
+const check = H.check;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
@@ -85,13 +82,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   /* ---------- 输出 ---------- */
-  let pass = 0;
-  for (const r of results) {
-    if (r.hit) { pass += 1; console.log('  ✔ ' + r.name); }
-    else console.error('  ✘ ' + r.name + (r.detail ? '  → ' + r.detail : ''));
-  }
-  console.log(`\n视频队列单测：${pass}/${results.length} 通过`);
-  if (pass !== results.length) process.exit(1);
+  H.finish('视频队列单测');
 })().catch(e => {
   console.error('测试异常：', e);
   process.exit(1);

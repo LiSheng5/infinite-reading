@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /* 参考表的职责边界 —— 纯静态扫描 + 一次 require。
  *
  * 背景：`src/core/modelCapabilities.ts` 的三张表默认全空（本项目不预置厂商数据），
@@ -16,6 +17,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -24,11 +26,7 @@ const stripComments = (src) => src
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 
-let fails = 0;
-const ok = (cond, msg) => {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL  ' + msg); fails++; }
-};
+const ok = H.ok;
 
 /* ---------- 扫描器（纯函数：反向自检直接喂片段） ---------- */
 
@@ -135,8 +133,8 @@ console.log('[4] 反向自检（扫描器能失败）');
     '只剩上下文窗口的片段不误报');
 }
 
-if (fails) {
-  console.error('capability-scope-test：' + fails + ' 项未通过');
+if (H.failed) {
+  console.error('capability-scope-test：' + H.failed + ' 项未通过');
   process.exit(1);
 }
 console.log('capability-scope-test：全部通过');

@@ -138,7 +138,6 @@ async function main() {
   fresh();
   Features.accept({ fireId: 'r1', prompt: '一' });
   Features.test.resetSeen();
-  Features.test.size();
   const req = Features.accept({ fireId: 'r1', prompt: '一' });
   H.check('resetSeen：队列保持原样、同一 fireId 可再次入队',
     req === true && Features.test.size() === 2, 'ret=' + req + ' size=' + Features.test.size());

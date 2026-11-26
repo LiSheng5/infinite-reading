@@ -22,19 +22,9 @@ const path = require('path');
 const H = require('./_harness.js');
 const check = H.check;
 
-// 进程内 localStorage 垫片：store.ts 在没有 IndexedDB 时走这条回退路径（与书架索引测试同款）
-(function () {
-  const m = new Map();
-  global.localStorage = {
-    getItem: k => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => { m.set(k, String(v)); },
-    removeItem: k => { m.delete(k); },
-    key: i => Array.from(m.keys())[i] || null,
-    get length() { return m.size; },
-  };
-})();
+// 垫上 localStorage：store.ts 在没有 IndexedDB 时走这条回退路径
+H.installLocalStorage();
 
-global.window = global;
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const Tree = core('tree');
@@ -75,7 +65,7 @@ const json = o => JSON.stringify(o);
     JSON.stringify(plainReply(json({ narration: '' }))));
 }
 
-/* ---------------- 2. trim 选项（与旧 titles 版逐字一致） ---------------- */
+/* ---------------- 2. trim 选项 ---------------- */
 
 {
   const cases = [
@@ -83,7 +73,7 @@ const json = o => JSON.stringify(o);
     [json({ narration: '  雨声渐大  ' }), '雨声渐大'],
     [json({ '旁白': '  旧的  ' }), '旧的'],
     [json({ text: '  正文  ' }), '正文'],
-    [json({ choices: [' A ', 'B'] }), ' A  B'],         // choices 逐项原样、只用空格拼接（照旧）
+    [json({ choices: [' A ', 'B'] }), ' A  B'],         // choices 逐项原样、只用空格拼接
     ['{"narration": 坏掉的', '{"narration": 坏掉的'],
     ['  ', ''],
   ];

@@ -15,17 +15,12 @@
  */
 const fs = require('fs');
 const path = require('path');
+const H = require('./_harness.js');
 
 const { BackupPack } = require(path.join(__dirname, '..', 'src', 'core', 'backupPack.ts'));
 
-let failed = 0;
-function ok(cond, msg) {
-  if (cond) console.log('  ok  ' + msg);
-  else { console.error('  FAIL ' + msg); failed++; }
-}
-function eq(a, b, msg) {
-  ok(a === b, msg + (a === b ? '' : '（实际 ' + JSON.stringify(a) + ' ≠ 期望 ' + JSON.stringify(b) + '）'));
-}
+const { ok, eq } = H;
+
 // 数组 / 对象按序列化后比对（上面的 eq 是严格相等，只适合原始值）
 function eqList(a, b, msg) {
   const sa = JSON.stringify(a), sb = JSON.stringify(b);
@@ -40,6 +35,7 @@ const base = {
 };
 const stories = [{ id: 's1', title: 't' }];
 
+console.log('[1] 脱敏与导入：token / API Key 的取舍');
 for (const withKeys of [false, true]) {
   const pack = BackupPack.buildBackupPack(base, [], stories, !withKeys);
   const text = JSON.stringify(pack);
@@ -82,7 +78,7 @@ eq(base.sidecar.token, SECRET, '不修改调用方 settings（先 clone 再剥�
   eq(local.sidecar.token, 'local-token', '导入合并不修改本机入参对象');
 }
 
-/* ---------------- 带原图备份：并发上限 / 清单顺序 / 进度 ---------------- */
+/* ---------------- [2] 带原图备份：并发上限 / 清单顺序 / 进度 ---------------- */
 console.log('[2] buildBackupZip：并发上限 4、清单顺序与串行一致、进度单调');
 
 async function zipChecks() {
@@ -105,7 +101,7 @@ async function zipChecks() {
     // 第一张最慢：串行实现会一直等它，并发实现能让后面几张同时上路
     await new Promise((r) => setTimeout(r, id === 'img-1' ? 40 : 10));
     inflight--;
-    if (id === 'img-4') return null;   // 没有原图（空图）不落清单，与原实现同口径
+    if (id === 'img-4') return null;   // 没有原图（空图）：buildBackupZip 跳过它，不落清单
     return new Blob([new Uint8Array(sizeOf(id))], { type: 'image/png' });
   };
 
@@ -142,13 +138,13 @@ async function zipChecks() {
 
   // 静态：串行逐张读的写法不许回来
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'backupPack.ts'), 'utf8');
+  // 静态：并发上限写成常量（串行回退由上面 maxInflight ≥ 2 抓）
   ok(/const ZIP_IMAGE_CONCURRENCY = 4;/.test(src), '并发上限写成常量 4（改上限只改一处）');
-  ok(src.indexOf('await Store.getImage(ids[i])') < 0, '逐张 await 的串行循环已移除');
 }
 
 zipChecks().then(() => {
-  console.log('\n备份包脱敏单测：' + (failed ? '有 ' + failed + ' 项失败' : '全部通过'));
-  if (failed) process.exitCode = 1;
+  console.log('\n备份包脱敏单测：' + (H.failed ? '有 ' + H.failed + ' 项失败' : '全部通过'));
+  if (H.failed) process.exitCode = 1;
 }, (e) => {
   console.error('  FAIL 带原图备份段异常：' + ((e && e.stack) || e));
   process.exitCode = 1;

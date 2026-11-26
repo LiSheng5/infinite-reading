@@ -15,9 +15,9 @@
  * store 只通过 Storage 这个门面访问存储，换掉门面就等价于换掉整个后端（不需要伪造事务 / 游标）。
  */
 const path = require('path');
+const H = require('./_harness.js');
 
 global.indexedDB = {};
-global.window = global;
 const core = f => require(path.join(__dirname, '..', 'src', 'core', f + '.ts'));
 
 const Storage = core('storage').Storage;
@@ -41,12 +41,7 @@ if (!Store) {
   process.exit(1);
 }
 
-let failed = 0;
-function check(name, ok, detail) {
-  if (ok) { console.log('  ok  ' + name); return; }
-  failed += 1;
-  console.error('FAIL  ' + name + (detail ? ' — ' + detail : ''));
-}
+const check = H.check;
 
 // 原图在库里的原始记录（绕开 blobCache，确认的才是真正落盘状态）
 function rawImage(id) {
@@ -120,8 +115,7 @@ async function main() {
 }
 
 main().then(() => {
-  console.log('\n删除故事原图归属：' + (failed ? '有 ' + failed + ' 项失败' : '全部通过'));
-  if (failed) process.exitCode = 1;
+  H.finish('删除故事与原图归属');
 }).catch(e => {
   console.error('测试异常：' + ((e && e.stack) || e));
   process.exit(1);

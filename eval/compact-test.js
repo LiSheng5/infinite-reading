@@ -134,7 +134,6 @@ async function main() {
   }
 
   /* ---------- 5. compactNow 编排（app 层：只加载 core.js + compact.js，晚绑定依赖给桩） ---------- */
-  global.window = global;
   // toast 需要 DOM：给每个选择器一个惰性假元素（classList / textContent 可写即可）
   const fakeEl = () => ({
     textContent: '', onclick: null, hidden: false,
