@@ -1,7 +1,7 @@
 /* ==================== 动效模块（统一 motion 模块 · CSS 端） ====================
    · 动效声明 → src/core/motion.ts（ANIMATIONS 是真源）
    · 政策变量（--m-*）与 @keyframes → 本文件（全仓唯一允许定义 @keyframes 的地方）
-   · DOM 接线（data-paused / 循环预算 / 子树暂停）→ src/ui/motion.js
+   · DOM 接线（data-paused / 子树暂停 / 过渡期冻结）→ src/ui/motion.js
    eval/tokens-test.js 会对账：本文件的 --an-* 名表必须与 src/core/motion.ts 的
    ANIMATIONS 声明表逐条推导一致；@keyframes 必须一条不多、一条不少。
 
@@ -137,13 +137,6 @@ html[data-paused] *::after {
 [data-loops-paused] *,
 [data-loops-paused] *::before,
 [data-loops-paused] *::after {
-  animation-play-state: paused !important;
-}
-/* 循环预算兜底：运行时登记（registerLoop）已随自查页删除，预算由设计固定、motion-probe 测量；
-   这条选择器保留给以后确实需要「排队让位」的循环（挂 data-loop="wait" 即可停住）。 */
-[data-loop="wait"],
-[data-loop="wait"]::before,
-[data-loop="wait"]::after {
   animation-play-state: paused !important;
 }
 

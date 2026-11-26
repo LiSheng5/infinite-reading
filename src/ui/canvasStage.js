@@ -7,11 +7,14 @@
  * 现在收口到这里的 mountCanvas：
  *
  *   · 暂停判定 = src/ui/motion.js 的 isSuspended——与 CSS 循环同一套
- *     （页面不可见 / html[data-paused] / 自身或祖先 data-loops-paused / data-loop="wait"），
+ *     （页面不可见 / html[data-paused] / 自身或祖先 data-loops-paused），
  *     分支页打开时 canvas 与 CSS 循环一起停，不再各停一半；
  *   · 播放状态变化 → onMotion()（组件重置累加器 / 节拍基准）；
  *   · 只有播放中才调 step(deltaMs)，返回 true 表示「这一帧有新内容」→ 调 draw()；
  *   · 挂载即建尺寸观察 + rAF，返回的清理函数供 onMount 里 return。
+ *
+ * 组件侧的公共小件也在这里，三颗各抄一份的样板收成一份：
+ *   clamp / fitCanvas（dpr 与 setTransform）/ monoFontOf（读 --font-mono）/ fixedStep（固定帧率累加器）。
  *
  * readInkRamp / rampAt —— 首页两颗主视觉共用的 --inf-light / --accent / --inf-deep 色带：
  * 一边读令牌、一边写死 RGB 会漂色，改令牌时两颗一起变。
@@ -74,6 +77,65 @@ export function rampAt(value, ramp, stops) {
   return ramp[ramp.length - 1];
 }
 
+/** 钳制到 [min, max] */
+export function clamp(value, min, max) {
+  return value < min ? min : value > max ? max : value;
+}
+
+/** 等宽字体栈（与 tokens.css 的 --font-mono 同值，令牌读不到时用它） */
+export const MONO_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+/** 读元素实际的等宽字体：画布字体跟着令牌走，不在这里另抄一份字体名 */
+export function monoFontOf(el) {
+  const mono = window.getComputedStyle(el).getPropertyValue('--font-mono').trim();
+  return mono || MONO_STACK;
+}
+
+/**
+ * 按宿主尺寸重设画布（含 dpr ≤ 2 与 setTransform），返回 CSS 像素尺寸。
+ * @param {HTMLCanvasElement} canvasEl
+ * @param {Element} hostEl   取 getBoundingClientRect 的容器
+ * @param {CanvasRenderingContext2D} ctx
+ * @returns {{width: number, height: number}}
+ */
+export function fitCanvas(canvasEl, hostEl, ctx) {
+  const rect = hostEl.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvasEl.width = Math.round(width * dpr);
+  canvasEl.height = Math.round(height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { width, height };
+}
+
+/**
+ * 固定帧率步进器：累加 deltaMs，够一帧才推进（帧率与屏幕刷新率无关）。
+ * @param {number} fps
+ * @param {() => void} onFrame 每推进一帧调用一次
+ * @returns {{step: (deltaMs: number) => boolean, reset: () => void}}
+ *          step 给 mountCanvas 的 step（true = 有新内容），reset 给 onMotion
+ */
+export function fixedStep(fps, onFrame) {
+  const frameMs = 1000 / fps;
+  let acc = 0;
+  return {
+    step(deltaMs) {
+      acc += deltaMs;
+      let advanced = false;
+      while (acc >= frameMs) {
+        acc -= frameMs;
+        onFrame();
+        advanced = true;
+      }
+      return advanced;
+    },
+    reset() {
+      acc = 0;
+    },
+  };
+}
+
 /**
  * canvas 逐帧组件的挂载脚手架。
  * @param {object} o
@@ -82,7 +144,6 @@ export function rampAt(value, ramp, stops) {
  * @param {() => void} o.draw           同步画一帧
  * @param {(deltaMs: number) => boolean} o.step  播放中每帧调用；返回 true = 需要重画
  * @param {() => void} [o.onMotion]     播放状态变化时调用（重置累加器）
- * @param {boolean} [o.staticFrame]     挂载时先同步画一帧（后台标签页 rAF 被暂停也有画面）
  * @returns {() => void} 清理函数（onMount 直接 return 它）
  */
 export function mountCanvas(o) {
@@ -109,12 +170,12 @@ export function mountCanvas(o) {
     dirty = true;
   }
 
-  // 暂停口径来自属性：data-paused（页面不可见）/ data-loops-paused（子树挂起）/ data-loop="wait"
+  // 暂停口径来自属性：data-paused（页面不可见）/ data-loops-paused（子树挂起）
   const motionObserver = new MutationObserver(syncMotion);
   motionObserver.observe(html, {
     attributes: true,
     subtree: true,
-    attributeFilter: ['data-paused', 'data-loops-paused', 'data-loop'],
+    attributeFilter: ['data-paused', 'data-loops-paused'],
   });
   document.addEventListener('visibilitychange', syncMotion);
   reducedMotion.addEventListener('change', syncMotion);
@@ -139,10 +200,9 @@ export function mountCanvas(o) {
 
   o.resize();
   syncMotion();
-  if (o.staticFrame) {
-    o.draw();
-    dirty = false;
-  }
+  // 挂载时先同步画一帧：后台标签页 rAF 被暂停也有画面
+  o.draw();
+  dirty = false;
   rafId = window.requestAnimationFrame(tick);
 
   return function stopCanvas() {

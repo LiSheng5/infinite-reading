@@ -24,7 +24,7 @@ export function suspendLoops(el) {
   el.setAttribute('data-loops-paused', '');
   // CSS 的 animation-play-state 在 WAAPI play() 之后不一定会把已有 Animation 收回来（Chromium 实测：
   // 计算值已是 paused，getAnimations() 的 playState 仍是 running），这里显式 pause 子树里的循环；
-  // 恢复时只 play() 自己暂停的那批，且仍被挂起的（data-paused / 预算排队）不动。
+  // 恢复时只 play() 自己暂停的那批，且仍被挂起的（data-paused / data-loops-paused）不动。
   const paused = [];
   try {
     for (const anim of document.getAnimations()) {
@@ -56,11 +56,11 @@ export function suspendLoops(el) {
  * 为什么需要：视图过渡一开，页面被新旧两张快照盖住，但 live DOM 里的循环并没有停。
  * 过渡 220ms 后撤掉快照那一下，Ken Burns / 环境光 / 流光 / 呼吸已经从「快照里的相位」
  * 自己往前跑了 220ms —— 看起来就是跳一下。而且 ::view-transition-* 伪元素
- * 匹配不到 html[data-paused] * / [data-loop="wait"] 这类选择器，暂停要单独处理。
+ * 匹配不到 html[data-paused] * / [data-loops-paused] * 这类选择器，暂停要单独处理。
  *
  * 做法：在 VT 的 update 回调里（新快照拍摄之前）把所有**正在跑**的真实 DOM 循环暂停，
  * 过渡收尾（含 skipTransition / 被下一段顶掉）再逐个 play() —— 只恢复自己暂停的那些：
- * 本来就因 data-paused / data-loop="wait" / data-loops-paused 停着的不动。
+ * 本来就因 data-paused / data-loops-paused 停着的不动。
  *
  * 三条边界：
  *   · 只认循环（iterations 无限或 >1）；一次性的入场动画不归这里管（各屏自己让位 / 等过渡结束再开）。
@@ -89,7 +89,7 @@ function isLoopAnimation(anim) {
   }
 }
 
-// 元素是否已被挂起：页面不可见 / html[data-paused] / 自身或祖先 data-loops-paused / data-loop="wait"。
+// 元素是否已被挂起：页面不可见 / html[data-paused] / 自身或祖先 data-loops-paused。
 // CSS 规则与 canvas 逐帧组件都走这一份，免得「CSS 停了、canvas 还在跑」。
 // 为什么不能只看 playState：分支页 open 与 VT 的 update 在同一帧里改 DOM，属性刚写上时
 // 样式重算还没把 playState 变成 paused，捕获阶段会把它当成「正在跑」；过渡收尾 play()
@@ -102,7 +102,7 @@ export function isSuspended(target) {
   try {
     let node = target.nodeType === 1 ? target : target.parentElement;
     while (node && node !== document.documentElement) {
-      if (node.hasAttribute && (node.hasAttribute('data-loops-paused') || node.getAttribute('data-loop') === 'wait')) return true;
+      if (node.hasAttribute && node.hasAttribute('data-loops-paused')) return true;
       node = node.parentElement;
     }
   } catch (_) {}
@@ -115,7 +115,7 @@ function captureRunningLoops() {
   try { list = document.getAnimations(); } catch (_) { return; }
   for (const anim of list) {
     try {
-      if (anim.playState !== 'running') continue;   // 已停着的（data-paused / 预算排队）不接管
+      if (anim.playState !== 'running') continue;   // 已停着的（data-paused / 子树挂起）不接管
       if (isViewTransitionAnimation(anim) || !isLoopAnimation(anim)) continue;
       if (frozenLoops.indexOf(anim) >= 0) continue;
       if (isSuspended(anim.effect && anim.effect.target)) continue;   // 见 isSuspended 注释

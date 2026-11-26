@@ -15,8 +15,8 @@
  *    声明表必须是 'loop'；
  * 9. [新] 动画名一律经声明表：animation 简写必须 var(--an-*)，--an-* 名表值
  *    与 ANIMATIONS 逐条推导一致（运行时只有 rich 一档）；
- * 10. [新] 暂停机制在位：data-paused / data-loops-paused / data-loop="wait" 都有
- *    animation-play-state: paused 规则（页面不可见、子树挂起、循环预算排队）；
+ * 10. [新] 暂停机制在位：data-paused / data-loops-paused 都有
+ *    animation-play-state: paused 规则（页面不可见、子树挂起）；
  * 11. [新] 视图过渡：::view-transition-group/old/new(*) 三条规则在位，
  *    animation-duration 只准 var(--m-dur-vt-*)；TRANSITIONS 里用到的每个 kind 都有对应变量；
  * 12. [新] 图标 lint：CSS content: 值与 Svelte 模板不得出现 emoji /
@@ -388,7 +388,6 @@ function ruleHasMotionPause(text, selectorNeedle) {
 }
 check('页面不可见暂停（html[data-paused]）规则在位', ruleHasMotionPause(MOTION, 'html[data-paused]'));
 check('子树挂起（[data-loops-paused]）规则在位', ruleHasMotionPause(MOTION, '[data-loops-paused]'));
-check('循环预算排队（[data-loop="wait"]）规则在位', ruleHasMotionPause(MOTION, '[data-loop="wait"]'));
 
 /* ---------- 11. [新] 视图过渡：伪元素规则在位，时长只走 --m-dur-vt-* ---------- */
 

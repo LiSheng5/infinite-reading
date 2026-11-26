@@ -10,18 +10,19 @@
    *   · 墨色是画布内容色，按 tokens.css 的 --inf-deep / --accent / --inf-light 取同一族蓝。
    */
   import { onMount } from 'svelte';
-  import { mountCanvas, readInkRamp, rampAt, INK_RAMP_FALLBACK } from '../../ui/canvasStage.js';
+  import {
+    mountCanvas, readInkRamp, rampAt, clamp, fitCanvas, monoFontOf, fixedStep, MONO_STACK,
+    INK_RAMP_FALLBACK,
+  } from '../../ui/canvasStage.js';
 
   let gridEl;
   let canvasEl;
   let ctx = null;
 
-  let accumulator = 0;
   let frame = 0;
 
   let width = 0;
   let height = 0;
-  let dpr = 1;
   let cols = 0;
   let rows = 0;
   let cellW = 0;
@@ -29,24 +30,19 @@
   let gridX = 0;
   let gridY = 0;
   let fontSize = 10;
-  let glyphFont = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  let glyphFont = MONO_STACK;
   let cellEnergy = new Float32Array(0);
   let cellDepth = new Float32Array(0);
   let cellGlyph = [];
   let samples = 1500;
 
   const TAU = Math.PI * 2;
-  const FRAME_MS = 1000 / 12;
   const LOOP_FRAMES = 96;
 
   /* 画布内容色（白底可读的墨蓝）：与光流版共用 src/ui/canvasStage.js 的色带读取，
    * 三色来自 :root 的 --inf-light / --accent / --inf-deep——改令牌两颗主视觉一起变，
    * 不会一边读令牌、一边写死 RGB 而漂色 */
   let ramp = INK_RAMP_FALLBACK;
-
-  function clamp(value, min, max) {
-    return value < min ? min : value > max ? max : value;
-  }
 
   function layoutMetrics() {
     const availableWidth = Math.max(100, width - (width < 480 ? 26 : 32));
@@ -68,17 +64,10 @@
   }
   function resize() {
     if (!gridEl || !canvasEl || !ctx) return;
-    const rect = gridEl.getBoundingClientRect();
-    width = Math.max(1, Math.round(rect.width));
-    height = Math.max(1, Math.round(rect.height));
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvasEl.width = Math.round(width * dpr);
-    canvasEl.height = Math.round(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const mono = window.getComputedStyle(canvasEl).getPropertyValue('--font-mono').trim();
-    glyphFont = mono || glyphFont;
-
+    const box = fitCanvas(canvasEl, gridEl, ctx);
+    width = box.width;
+    height = box.height;
+    glyphFont = monoFontOf(canvasEl);
     ramp = readInkRamp();
     layoutMetrics();
   }
@@ -255,24 +244,15 @@
     ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    // 挂载脚手架统一在 src/ui/canvasStage.js（含「页面不可见 / 减少动效 / 分支页挂起」的停帧）；
-    // staticFrame 让后台标签页（rAF 被暂停）挂载时也立刻有一整颗逐格 ∞
+    // 挂载脚手架统一在 src/ui/canvasStage.js（含「页面不可见 / 减少动效 / 分支页挂起」的停帧与首帧）；
+    // 12 FPS 由 fixedStep 累加，与屏幕刷新率无关
+    const ticker = fixedStep(12, () => { frame += 1; });
     return mountCanvas({
       target: gridEl,
-      resize: resize,
+      resize,
       draw: render,
-      staticFrame: true,
-      onMotion: () => { accumulator = 0; },
-      step: (deltaMs) => {
-        accumulator += deltaMs;
-        let advanced = false;
-        while (accumulator >= FRAME_MS) {
-          accumulator -= FRAME_MS;
-          frame += 1;
-          advanced = true;
-        }
-        return advanced;
-      },
+      onMotion: ticker.reset,
+      step: ticker.step,
     });
   });
 </script>

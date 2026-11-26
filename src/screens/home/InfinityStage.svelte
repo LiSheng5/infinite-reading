@@ -13,7 +13,9 @@
    *     画布内容色不算 UI 配色，但仍然跟着令牌走，不在脚本里另抄一份色值。
    */
   import { onMount } from 'svelte';
-  import { mountCanvas, readInkRamp, rampAt, INK_RAMP_FALLBACK } from '../../ui/canvasStage.js';
+  import {
+    mountCanvas, readInkRamp, rampAt, clamp, fitCanvas, monoFontOf, MONO_STACK, INK_RAMP_FALLBACK,
+  } from '../../ui/canvasStage.js';
 
   let canvasEl;
 
@@ -21,9 +23,8 @@
   let clock = 0;
   let width = 0;
   let height = 0;
-  let dpr = 1;
   let sampleCount = 190;
-  let glyphFont = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  let glyphFont = MONO_STACK;
 
   const TAU = Math.PI * 2;
   const LOOP_SECONDS = 8.4;
@@ -32,10 +33,6 @@
   /* 画布色带：三色从 :root 的 --inf-light / --accent / --inf-deep 读（与格线版共用
    * src/ui/canvasStage.js 的同一份实现），读不到才用与 tokens.css 同值的退路 */
   let ramp = INK_RAMP_FALLBACK;
-
-  function clamp(value, min, max) {
-    return value < min ? min : value > max ? max : value;
-  }
 
   function project(t, rotation, scale, centerX, centerY) {
     const x = Math.sin(t) * 1.02;
@@ -71,18 +68,13 @@
 
   function resize() {
     if (!canvasEl || !ctx) return;
-    const rect = canvasEl.getBoundingClientRect();
-    width = Math.max(1, Math.round(rect.width));
-    height = Math.max(1, Math.round(rect.height));
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvasEl.width = Math.round(width * dpr);
-    canvasEl.height = Math.round(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const box = fitCanvas(canvasEl, canvasEl, ctx);
+    width = box.width;
+    height = box.height;
     sampleCount = Math.round(clamp(width * 0.34, 110, 210));
 
     ramp = readInkRamp();
-    const mono = window.getComputedStyle(canvasEl).getPropertyValue('--font-mono').trim();
-    glyphFont = mono || glyphFont;
+    glyphFont = monoFontOf(canvasEl);
   }
 
   function computeLayout(time) {
@@ -212,9 +204,8 @@
     // 页面不可见、系统「减少动态效果」、分支页挂起时停在当前帧
     return mountCanvas({
       target: canvasEl,
-      resize: resize,
+      resize,
       draw: render,
-      staticFrame: true,
       step: (deltaMs) => {
         clock += deltaMs / 1000;
         return true;
