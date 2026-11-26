@@ -53,7 +53,7 @@ icons/                  应用图标（由 tools/make-icons.mjs 生成，产物�
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx 托管 dist/site）
 启动.bat                Windows 一键启动（构建 + 本地服务）
 tools/                  构建与验收脚本（版本号同步 sync-version、单文件打包 bundle-single-file、图标生成 make-icons、本地服务器 serve.py / serve.ps1、video-proxy、WCAG 对比度 contrast-check、裸调用检查 check-free-calls（白名单 free-calls-allow.json）、压测树 make-big-tree），不属于运行时代码
-acceptance/             发布前的人工验收（不进 npm test）：tools/ 下的 Playwright 脚本（截图 / 冒烟 / 动效实测）与按版本存档的 shot 基线（0.12.1 / 0.14.0 / mode-entry）
+acceptance/             发布前的人工验收（不进 npm test）：tools/ 下的 Playwright 脚本（截图 / 冒烟 / 动效实测 / 夹具生成）。截图与夹具产物按需生成、不入库（旧版存档与截图基线已清理）
 .github/                CI 与协作模板：workflows/ci.yml（check + eval 两个 job）、pages.yml（发布在线 Demo）、release.yml（打 tag 出包），以及 Issue / PR 模板
 ```
 

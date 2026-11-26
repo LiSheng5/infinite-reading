@@ -10,8 +10,8 @@
  *   story-choice-full.irstory.json  单故事完整档案（剧情 + 分支 + 图 + 视频 + 存档点，带原图）
  *   story-chat-card-full.irstory.json  单故事完整档案（聊天 + 角色卡 + 用户画像）
  *
- * 旧值 rp（原「扮演」）已并入 chat，新导出一律写 'chat'；迁移用例的输入用
- * acceptance/0.12.1/fixture/story-rp-full.irstory.json（旧版留档，不要重生成）。
+ * 旧值 rp（原「扮演」）已并入 chat，新导出一律写 'chat'；旧 rp 形状的迁移用例由
+ * eval/schema-test.js 构造（历史夹具存档已清理，不再保留旧版留档文件）。
  *   fixture-seed.json               播种清单 + 各产物 sha256 + 易变字段口径
  *   roundtrip-report.json           roundtrip 逐字段比对报告（roundtrip 命令写）
  *

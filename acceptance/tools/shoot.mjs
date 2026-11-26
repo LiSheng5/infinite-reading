@@ -4,7 +4,7 @@
  * 产出：
  *   acceptance/0.14.0/shots/{序号}-{状态}-{屏幕}-{宽度}.png
  *   acceptance/0.14.0/shots/manifest.json（每张图的元信息 + 未能截图项及原因 + console error / pageerror）
- *   （acceptance/0.12.1/shots 是旧版留档，不再覆盖）
+ *   （截图基线按需生成、不入库）
  *
  * 用法：node acceptance/tools/shoot.mjs [--state=empty|seeded] [--width=390|1280]
  *                                [--out=acceptance/…/shots] [--only=<PLAN.key>]

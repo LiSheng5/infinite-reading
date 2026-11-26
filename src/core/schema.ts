@@ -1,17 +1,17 @@
 /*
  * src/core/schema.ts —— 档案形状的唯一口径（类型 + schema 回归测试的真源）
  *
- * 【类型以真实档案为准】下面的 interface 全部从 acceptance/0.12.1/fixture/ 的真实导出
- * （backup-plain.irbackup.json / story-choice-full.irstory.json / story-rp-full.irstory.json）
- * 与 store.ts 的 newStory / migrateStory / buildStoryPack 逐字段核对写成——
- * **不能反过来改档案**：校验器只检查必需字段的存在与基本类型，档案里的多余旧字段一律放行
- * （老存档带的历史键是数据，不是错误）。
+ * 【类型以真实档案为准】下面的 interface 最初从 v0.12.1 真实导出档案（backup-plain.irbackup.json /
+ * story-choice-full.irstory.json / story-rp-full.irstory.json）与 store.ts 的
+ * newStory / migrateStory / buildStoryPack 逐字段核对写成（历史夹具存档已随 acceptance/
+ * 精简清理，需要时从 git 历史找回）——**不能反过来改档案**：校验器只检查必需字段的存在
+ * 与基本类型，档案里的多余旧字段一律放行（老存档带的历史键是数据，不是错误）。
  *
  * 【消费方式】
  *   - store.ts / tree.ts 的公开 API 用这些 interface 约束签名（TS 类型）；
- *   - eval/schema-test.js 用下面的 check* 运行时校验器跑夹具回归（schema 回归测试）：
- *     ① 三份真实夹具全部过检；② 导入 → 还原 → 导出逐字段一致；③ 全量备份往返逐字段一致；
- *     ④ 当前形状归一幂等，过旧存档 / 过旧导出包明确拒绝、不半加载。
+ *   - eval/schema-test.js 用下面的 check* 运行时校验器跑数据层回归（schema 回归测试）：
+ *     ① 构造故事经真实导出路径产出的包全部过检；② 导入 → 还原 → 导出逐字段一致；
+ *     ③ 全量备份往返逐字段一致；④ 当前形状归一幂等，过旧存档 / 过旧导出包明确拒绝、不半加载。
  */
 
 /* ============================ 世界 / 风格 / 角色 ============================ */
