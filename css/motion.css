@@ -81,7 +81,7 @@
 
 /* ==================== @keyframes（唯一定义点；逐条在 src/core/motion.ts 声明行为） ====================
    动画属性白名单：transform / opacity / filter / stroke-dashoffset / stroke-dasharray；
-   小面积装饰元素可用 @property 注册的自定义属性（目前没有注册任何一条）。不得动画 width / height / top / left /
+   自定义属性一律不做动画（`@property` 注册的也一样）。不得动画 width / height / top / left /
    margin / box-shadow 等触发重排的属性（eval/tokens-test.js 把这条变成可执行检查）。 */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes leafIn {

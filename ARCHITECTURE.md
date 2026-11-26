@@ -30,6 +30,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 |---|---|---|
 | `src/core/providers.ts` | 适配器层，唯一碰网络的地方 | `ChatProviders['openai-compatible'].chat()`、`ImageProviders['openai-images'] / ['minimax-image'] / ['comfyui'].generate()`、`VideoProviders['minimax-video'].submit/poll/generate` |
 | `src/core/context.ts` | 上下文组装 + 压缩 + 回包解析，运行时与评测**同源**共用 | `assembleAI1`、`assemblePainter`、`compressStory`、`planCompression`、`mergeWorld`、`matchEntityTerms`、`tolerantJSONParse`、`normalizeAIReply` |
+| `src/core/ctxusage.ts` | 上下文用量指示器的纯逻辑层（**只读零副作用**）：与压缩判定同源估算，`opts.trace` 的层区间做前缀差分摊出分层明细，各层之和恒等于整体估算 | `describeContextUsage`、`usageMemoKey`、`describeContextUsageCached` |
 | `src/core/tree.ts` | 分支树数据层（**纯逻辑**，Node 可 `require`）：回合树是唯一真源，`log / messages / scenes / world / …` 是「根 → head」路径的投影；重试 = 新增兄弟、‹ n/m › 切换；任意节点继续 / 分叉。另承载 `genId / clone / sleep / plainReply` 四个根级纯工具 | `Tree.ensure` / `begin` / `commit` / `seal`、`Tree.project`、`switchSibling` / `switchTo`、`latestLeaf` / `forkBefore` / `canResume`、`pushLate`、`imageIdsOf` |
 | `src/core/treeLayout.ts` | 分支页画布几何（**纯逻辑**）：泳道分配（贪心 + 区间打包）、折叠长单链、标签截断、`pathEdgeD`；确定性输出，分四段纯函数（各自可单测） | `TreeLayout.compute`、`buildKids` / `assignRows` / `packLanes`（分层三段）、`pointsToD` |
 | `src/core/storage.ts` | IndexedDB 适配器（**唯一碰 IndexedDB 的地方**）：开库 + 增删改查，`available=false` 时上层自然退回 localStorage | `Storage.available`、`get` / `put` / `del` / `keys` / `entries`、`estimate` |
@@ -40,10 +41,12 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/core/roleCard.ts` | SillyTavern V2/V3 PNG 角色卡解析 | `parsePNG`、`normalize`、`worldCharacter`、`sourceLabel` |
 | `src/core/zip.ts` | 极简 ZIP 读写（**零依赖、手写**）：带原图备份打包 / 解包 | `build`、`read`、`crc32` |
 | `src/core/sidecar.ts`（测试中） | 可选本地服务的客户端：`/health` 探测与离线降级、token、`api()`、SSE 退避重连（重连与复探共用一条退避链，计时器只有 `probeTimer` 一个、`stop()` 必清，见 `eval/sidecar-client-test.js`） | `probe`、`api`、`on`、`status`、`configure` |
-| `src/core/features.ts`（测试中） | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`size`、`clear`、`resetSeen` |
+| `src/core/features.ts`（测试中） | 主动触达的去重与排队（投递回调由 `src/app/sidecar.js` 的 `initFeatures` 注册）；`clear()` 撤回待送时连去重记忆一起清——撤掉的触达还能再收，不会被同一份 `seen` 永久挡住 | `attach`、`accept`、`drain`、`clear` |
 | `src/core/paintQueue.ts` | 作画串行队列（**纯逻辑**）：时机 / 工具 / 手动 / 重画共用一条 FIFO，画师构思也在队列里；带兜底超时与取消（`run(signal)` / `timeoutMs`），任务体挂死也不会堵死队列 | 模块只导出 `PaintQueue = { create }`；`enqueue / has / size / cancel` 是 `create()` 返回的实例方法 |
 | `src/core/proposals.ts`（测试中） | 提案（**纯逻辑**）：模型发起的邮件 / 下单**只能产生提案**，执行由用户点「确认」触发；状态机（pending / awaiting_confirm / executing / 四个终态）以 `p.status` 为唯一真源 | `create`、`reconcile`、`isActionable`、`confirm`、`approveSecond`、`deny` |
+| `src/core/confirmQueue.ts` | 通用确认弹窗的排队（**纯逻辑**）：多条异步流程同时 `irConfirm` 时按调用顺序排队、只有队头显示在弹窗里（旧实现单槽 resolve 会让前一个 await 永久挂起）；显示与关窗在 `src/app/core.js` | `createConfirmQueue` |
 | `src/core/errors.ts` | 失败处理策略的纯逻辑端（**纯逻辑**）：原因归一 / 截短 / tool 留痕拼装；DOM 与 toast 出口在 `src/app/core.js` | `errorText`、`shortError`、`failureEntry` |
+| `src/core/writeBack.ts` | 异步写回契约（**纯逻辑**）：发起时快照目标、写回前过闸——断言式 / 闸门式 / 归位式三种形态，换档或关档后的回包不串写到新档 | `WriteBack.isSameStory` / `assertStory` / `writeBackIfSameStory` / `writeBackIfSameJob` / `writeBackToStory` |
 | `src/core/motion.ts` | 动效声明的纯逻辑端：rich 单档政策 `TIERS`、`ANIMATIONS` 逐动画与 `TRANSITIONS` 逐过渡的单值声明表（系统「减少动态效果」是 JS 侧的静默例外，不属档位） | `TIERS` `ANIMATIONS` `TRANSITIONS` |
 | `src/core/titles.ts` | 自动标题（**纯逻辑**）：触发判定、给小模型的 prompt、输出清洗、本地兜底 | `needsTitle`、`buildPrompt`、`sanitize`、`fallback`、`applyTitle` |
 | `src/core/search.ts` | 全文搜索（**纯逻辑**）：标题 + 全部分支节点的子串检索，片段带 `ranges`（**输出零 HTML**） | `buildDoc`、`query`、`createIndex`、`notifySave`、`drop` |
@@ -77,9 +80,9 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/core.js` | 默认值与提示词；共享状态 `A.state`；请求中断；小工具；弹窗栈转发；高频入口的命名导出面 | `toast`、`irConfirm`、`openModal` / `closeModal`、`requestChatStop`、`persistSettings`、`saveAll`、`renderChat`（命名导出） |
 | `src/app/models.js` | 模型能力 | `chatContextWindow`、`renderCapabilityFields`、`thumb` |
 | `src/app/modelLists.js` | `GET /models` 回填与模型名拼写提示 | `fetchModelList`、`refreshModelDatalists`、`noteModelList`、`checkModelSpelling` |
-| `src/app/modelStatus.js` | 测试连接（只读探测）、失焦自动测、设置页「模型」三色概览 | `testConnection`、`autoTestSweep`、`renderModelOverview`、`describeRole` |
+| `src/app/modelStatus.js` | 测试连接（只读探测）、失焦自动测、设置页「模型」概览（状态点只有通过 / 失败 / 未测三种，warn 也画绿点） | `testConnection`、`autoTestSweep`、`renderModelOverview`、`describeRole` |
 | `src/app/library.js` | 原图（Blob）；存档点；开始页与开局入口；导入 / 导出 | `showShelf`、`startFromStart`、`doExport`、`storeOriginal` |
-| `src/app/shelf.js` | 书架页：会话列表 + 搜索 + 自动标题 + 行菜单 | `renderShelf`、`openStory`、`maybeAutoTitle`、`regenTitle`、`initShelf` |
+| `src/app/shelf.js` | 书架页：会话列表 + 搜索 + 自动标题 + 行菜单 | `renderShelf`、`openStory`、`maybeAutoTitle`、`initShelf`、`openRowMenu` |
 | `src/app/backup.js` | 本地存储与备份（数据安全） | `initStorageGuard`、`doBackupAll`、`handleImportFile`、`importZipFile` |
 | `src/app/importer.js` | 剧情文本导入 | `openImportText`、`runImportText`、`startFromImport` |
 | `src/app/cards.js` | 角色卡；用户画像（数据与导入） | `openCardEditor`、`importCardFile`、`applyProfileEntries` |
@@ -90,21 +93,21 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | `src/app/compact.js` | 手动压缩（回合之外）：前置检查、书记员双职或本地兜底、`resyncHead` 写回、toast 撤销 | `compactNow`、`compactUndo` |
 | `src/app/sidecar.js` | 本地服务连接状态、主动消息投递、下拉菜单 | `sidecarReady`、`initSidecar`、`pullProactive`、`toggleMenu` |
 | `src/app/features.js` | 调度工具；安全项读写；主动联系 / 邮件 / 购物支付；提案卡 | `runScheduleTool`、`runProposalTool`、`confirmProposal`、`openEmailModal` |
-| `src/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `runPaintTask`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench`、`forceRedrawByCard`（后两个是同一实现 `redraw({ byCard })` 的薄入口） |
-| `src/app/video.js` | 生视频（MiniMax V2）：`videoQ` 独立串行队列、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB → 写回 story | `enqueueVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`videoSrc` |
+| `src/app/painter.js` | 画师子代理 + 生图 + 作画队列；画师工作台；视频动态提示词 | `submitToolPaint`、`enqueueImage`、`painterVideoPrompt`、`openWorkbench`、`redrawFromWorkbench`、`forceRedrawByCard`（后两个是同一实现 `redraw({ byCard })` 的薄入口） |
+| `src/app/video.js` | 生视频（MiniMax V2）：独立的串行排队（不占作画队列）、付费确认、提交 → 轮询 → 下载 / 降级 → 存 IndexedDB → 写回 story | `generateVideo`、`videoFromCurrentImage`、`videoFromPlot`、`resumePendingVideos`、`stopVideoWaiting`、`videoSrc` |
 | `src/app/styleanchor.js` | 画风锚定 | `openAnchor`、`runAnchorBatch`、`anchorLock` |
 | `src/app/render.js` | 聊天记录视图模型推进、画面面板、进入 / 离开故事、灯箱 | `renderChat`、`renderStage`、`enterGame`、`closeLightbox` |
 | `src/app/readmodel.js` | 阅读页视图模型（聊天流 / 缩略条 / 选项托盘的推送数据） | `readChatModel`、`readThumbsModel` |
 | `src/app/layout.js` | 布局状态：`#screen-game` 的 `data-layout`、字号 / 宽度 / 密度三档、舞台收起与沉浸模式 | `effectiveLayout`、`applyLayout`、`bindSplitter` |
 | `src/app/settings.js` | 设置表单读回、故事记忆面板、注入记忆、用户画像面板 | `syncSettingsToForm`、`applyFormToSettings`、`renderStoryPanels`、`saveWorldFromForm` |
 | `src/app/prefsui.js` | 设置分层界面：分组导航（桌面左导航 / 窄屏下钻）、模型库管理、本对话设置面板 | `initSettingsNav`、`renderModelProfiles`、`renderStoryPrefs`、`openStoryPrefs` |
-| `src/app/branch.js` | 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作 | `initBranch`、`openBranch`、`closeBranch`、`updateHistoryBar`、`branchUiOn` |
+| `src/app/branch.js` | 分支页：整页分支树（SVG 渲染 / 平移缩放 / 键盘树导航）、节点面板三操作 | `initBranch`、`openBranch`、`afterSwitch`、`updateHistoryBar`、`branchUiOn` |
 | `src/app/main.js`（保留） | 组合根：安装弹窗外壳、事件绑定、启动 | `bind`、`init` |
 
 **三条约定**：
 
 1. **共享可变状态集中在 `A.state`**：模块顶部 `const S = A.state;`，之后用 `S.story`、`S.busy`。只在一个模块内用的变量保持模块私有。局部变量遮蔽共享名（形参、`const story = …`）的地方保持原样不改写。
-2. **跨模块调用一律走注册表、晚绑定**：文件末尾 `A.reg({ fnA, fnB })`（重名直接抛错），调用方写 `A.fnA(...)`，**不要在模块顶部解构别的模块的函数**（避免 ESM 环上的 TDZ）。唯一例外：`core.js` 不依赖任何 app 模块，其他模块（含 `src/app/main.js`）可在顶部 `const { $, toast, irConfirm, … } = A;` 解构 **core 的导出**——白名单 = `core.js` 的 `A.reg` 键，由 `eval/app-structure-test.js` 门禁强制。跨模块的回调引用写作 `() => A.fn()` / `e => A.fn(e)`。
+2. **跨模块调用一律走注册表、晚绑定**：文件末尾 `A.reg({ fnA, fnB })`（重名直接抛错），调用方写 `A.fnA(...)`，**不要在模块顶部解构别的模块的函数**（避免 ESM 环上的 TDZ）。唯一例外：`core.js` 不依赖任何 app 模块，其他模块（含 `src/app/main.js`）可在顶部 `const { $, irConfirm, … } = A;` 解构 **core 的导出**——白名单 = `core.js` 的 `A.reg` 键，由 `eval/app-structure-test.js` 门禁强制。跨模块的回调引用写作 `() => A.fn()` / `e => A.fn(e)`。
    高频入口例外（IDE 跳转面）：`toast` / `saveAll` / `renderChat` 三个调用点最多的入口改成**命名 import**，调用方不再写 `A.toast` / `A.saveAll` / `A.renderChat`，也不再把它们放回 `= A` 解构。`toast` / `saveAll` 在 `core.js` 有真实定义；`renderChat` 的实现仍在 `src/app/render.js`（`A.reg` 登记），`core.js` 只做一层函数内转接——**不能**写成 `export { renderChat } from './render.js'`，反向 import 会成环，`render.js` 顶部的 `= A` 解构会在 `A` 初始化前触发 TDZ。`showScreen` 不在例外里：它在 `src/ui/navigation.js` 本来就是真实命名导出（`Nav.showScreen`）。新增条目的门槛是「全仓 ≥10 个 app 模块命名 import」，由 `eval/app-structure-test.js` 第 7 节守。
 3. **状态桥 / 界面模块直连**：屏幕的 `$state` 模块（如 `src/screens/read/read.svelte.js`）导出 `setChat / setThumbs` 这类推模型函数，app 模块直接 `import`；`src/ui/navigation.js` 导出 `Nav`，`modalHost.js` 导出弹窗栈函数。**不再有 `window.IR` 桥**（阶段 6 已删）。验收脚本另有一个只在 URL 带 `?ir-test=1` 时才挂载的 `window.__IR_TEST__` 观测面（`src/main.js` 末尾），应用代码零引用。
 
@@ -112,7 +115,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 ### 2.2 失败处理策略（全应用唯一口径）
 
-失败按「用户能不能行动」分三类，出口只有两个 + 一条禁令：
+失败按「用户能不能行动」分三类，**上报出口是两个函数 + 一条禁令**（见下表）。另有一类不属于失败上报的第三类：**输入校验的前置拦截**——「还没填 Key」「先画一张」「只在剧情模式可用」这类在动手之前就挡回去的提示，`video.js` / `features.js` / `styleanchor.js` / `settings.js` / `shelf.js` 等处直接 `toast(msg, true, true)`，不写 `console.warn`、也不走 `report*`。
 
 | 形态 | 判据 | 出口 | 典型场景 |
 |---|---|---|---|
@@ -239,7 +242,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **分支页（`src/app/branch.js` + `src/core/treeLayout.ts`）**：整页覆盖层，git-graph 式布局（主干 = 当前路径固定 lane 0，支线贪心 + 区间打包到右侧泳道、子树结束可复用）；折叠 ≥8 个纯单链节点成「··· N 回合」超级节点（视图态 `expanded`，不进存档）；节点面板三操作 = 回到这里并从此继续 / 改我说的，从这之前分叉 / 切到最新处。**打开分支页只读 `story.tree`**（不 `ensure` 写盘、不改 `active`），只有面板操作经 `Tree.*` 改树；忙碌（`busy` 或未 `sealed` 的 head）时切换类操作全部拒绝。键盘：`↑↓←→` 树导航（`role="tree"` / `treeitem` + `aria-activedescendant`）、`Enter` 开面板、`Esc` 关面板 / 返回。搜索命中不在当前路径 → 剧情模式直接开分支页选中该节点（**不**自动 `switchTo`）；聊天没有分支入口（HUD 行菜单 / 搜索兜底统一由 `A.branchUiOn(story)` 判定，仅 `mode === 'choice'` 为真），只提示「该结果在其他版本里」。
 
-**布局算法分四段**：`buildKids`（children 表：防环 / 剔除自引用 / 补 parent 指针）→ `assignRows`（BFS 行号 + 唯一父指针 + `tracePath` 出的 root→head 路径）→ `packLanes`（泳道：主干 lane 0，支线按子树行区间贪心打包，`rangeMemo` / `forkQueue` 只在这一段内）→ `foldChains` + `geometryOf`（折叠与几何）。`layerTree` 只剩十来行装配，四段各自在 `eval/treelayout-test.js` 第 10 节有单测（同一入参 → 同一出参、不改入参）；改布局先跑该节，失败点能直接定位到段。
+**布局算法分四段**：`buildKids`（children 表：防环 / 剔除自引用 / 补 parent 指针）→ `assignRows`（BFS 行号 + 唯一父指针 + `tracePath` 出的 root→head 路径）→ `packLanes`（泳道：主干 lane 0，支线按子树行区间贪心打包，`rangeMemo` / `forkQueue` 只在这一段内）→ `foldChains` + `geometryOf`（折叠与几何）。`layerTree` 只剩十来行装配：`buildKids` / `assignRows`（含 `tracePath`）/ `packLanes` 三段在 `eval/treelayout-test.js` 第 10 节各有纯函数单测（同一入参 → 同一出参、不改入参）；`foldChains` / `geometryOf` 不单独导出，折叠与几何经 `compute` 在第 1–5 节对账。改布局先跑该门禁，失败点能直接定位到段。
 
 **动效预算**（走令牌）：rich = 边按深度描边生长（封顶 ~600ms）+ 节点弹簧弹出（WAAPI，只动 `transform` / `opacity`，新节点「长出来」）+ **流光只挂 `pathEdgeD` 合成的一条 path** + head 呼吸 + 选中脉冲（循环动画恰好 3 条）；`data-paused` 全局暂停循环；>400 节点视口裁剪（只建可见行附近的 SVG 元素）。
 
@@ -247,19 +250,19 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 | 不变量 | 位置 | 为什么 |
 |---|---|---|
-| **不把 `tool_calls` 写进历史** | `src/core/context.ts`：`slimReply`（定义与导出）、`assistantMessage`；消费方 `src/app/turn.js` | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
+| **不把 `tool_calls` 写进历史** | `src/core/context.ts`：`slimReply`（定义与导出）、`assistantEntry`（条目形状的唯一口径）；消费方 `src/app/turn.js` 的 `assistantMessage`（转接 `Context.assistantEntry`） | assistant 消息带 `tool_calls` 却没有配对 `tool` 结果会触发 400；工具调用只留一条 `{type:'tool'}` 日志 |
 | **`reasoning` 不进请求体** | `src/core/context.ts`：`assembleAI1` 只取 `role/content` | 思考链只用于显示 |
 | **`usage` 只存不发** | 旁白条目可带 `usage { prompt, completion, total, cached?, reasoning? }`（`src/core/providers.ts` 的 `normalizeUsage`；一回合多次请求由 `mergeUsage` 相加，`turn.js` 的 `pushNarrationEntry` 写入）。服务商没上报就没有这个字段；不进请求体、不参与上下文预算，只用于气泡底部的用量小字。流式请求默认带 `stream_options.include_usage`，服务商 400 点名它时去掉重发一次 | 用量显示是附加信息，缺失不影响回合；旧档与 0.13.0 导出格式不受影响（新增可选字段） |
 | **压缩阈值 70%，保留窗口按 token 自适应** | `src/core/context.ts`：`COMPRESS_RATIO`、`fitWindow`、`planCompression` | 已知容量时组装窗口按 token 动态（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条（评测口径不变）；超预算但无可压时降级保留窗口自救；组装前先查预算、超了就地先压再组 |
 | **每轮工具调用上限 2 次** | `src/core/context.ts`：`MAX_TOOL_CALLS_PER_TURN` | 防止模型反复调工具烧钱；超限调用留痕并告知模型，不静默丢弃 |
-| **工具结果按语义分流** | `src/app/round.js`：`callAI1` | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（聊天）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
+| **工具结果按语义分流** | `src/app/round.js`：`invokeAI1`（`callAI1` 只是一层转接） | `recall_*` 调了就注入重发（模型要的信息）；`request_image`（聊天）已异步化——写了正文就不重发，仅 `noProse` 时把「已排队生图」提示注入；剧情模式的 `request_image`（旧历史诱导）按「该工具不可用」回传重发，不入队；`update_memory` / 调度工具 / 提案工具（`email_propose` / `payment_propose`，事后动作）仅无正文时重发；重发永不再带工具 |
 | **剧情作画只能点按钮**（v0.11.0） | `src/app/round.js`（删 `maybeEnqueueImage` 与开局出图）、`src/core/context.ts`：`toolsForMode('choice')` 无 `request_image` | 回合结束 / 开局不再自动出图，`S.turnPaintedByTool` 已随去重需求一起删除；省掉没要求时的画师构思 + 生图开销 |
 | **画师上下文隔离规则** | `src/core/context.ts`：`assemblePainter`（scene）/ `recentTurnLines`、`PAINTER_RECENT_TURNS` / `PAINTER_RECENT_LINE_CHARS` | 画师每次调用只看固定几块（画风锚 / 最近两张图 / 基底 prompt / 最近 3 回合剧情 / 画面参考）；更早对话、世界卡、摘要栈、剧情规则、画像一律不进（`eval/painter-context-test.js` 固定） |
 | **画风稳定靠「差分 prompt」** | `src/core/context.ts`：`lastImagePrompt`、`PAINTER_SYSTEM`（差分规则）；`src/core/providers.ts`：`clipPromptText` | 生图是纯文生图（不传图），风格只能靠文字锚：把上一次出图的完整 prompt 作为基底、只重写变化部分；超长 prompt 截断时保留尾部画风词（不许被 1500 字上限切掉） |
 | **视觉设定卡有两套视图** | `src/core/context.ts`：`styleCardText`（画师）/ `styleCardTextForText` + `textAnchorText`（AI1） | 卡里的英文人物外观、媒介、色板、负面提示词都是**生图参数**，灌给旁白模型就会漏进思考链与正文（「画师的提示词混进来了」）；召回与 🧠 注入一律走文本侧视图（画风关键词 + 中文备注，并注明不要复述）。`eval/style-card-text-test.js` 固定 |
 | **参考图是唯一「真传图」的口子** | `src/app/library.js`：`refImageDataUrl`；`src/app/painter.js`：`runPaint`；`src/core/providers.ts`：`minimax-image.supportsReference` + `subject_reference` | 仅当 `settings.image.refMode === 'prev'` 且适配器声明 `supportsReference` 时才把上一张图（长边 ≤1024 JPEG）塞进 `subject_reference`；拿不到图**不拦**这次作画（退化成本文生图），第一次作画自然跳过 |
 | **作画只有一条串行队列，构思也在里面** | `src/core/paintQueue.ts`、`src/app/painter.js`：`paintQ` / `runPaintTask` | 手动 / 工具 / 重画严格 FIFO；画师构思不与队列外的活并发（`painterThread` 只有用户显式对话才写）；「构思 → 出图」集中在 `runPaintTask` 一处 |
-| **队列不许被一次挂死请求堵死** | `src/core/paintQueue.ts`（`timeoutMs` / `cancel` / `run(signal)`）、`src/core/providers.ts`（`fetchWithTimeout` 是全仓唯一的「超时 + 可中断」请求口） | 生图 3 分钟、视频提交 60 秒、视频轮询 30 秒、视频下载 5 分钟各有上限；队列再给整段任务兜底（作画 20 分钟 / 视频 25 分钟），到点先 abort 再放行下一个——`has(key)` 不会永真，`finally` 里一定删 key |
+| **队列不许被一次挂死请求堵死** | `src/core/paintQueue.ts`（`timeoutMs` / `cancel` / `run(signal)`）、`src/core/providers.ts`（`fetchWithTimeout`：聊天 / 生图 / 生视频共用的「超时 + 可中断」请求口，`src/core/sidecar.ts` 另有一份精简版） | 生图 3 分钟、视频提交 60 秒、视频轮询 30 秒、视频下载 5 分钟各有上限；队列再给整段任务兜底（作画 20 分钟 / 视频 25 分钟），到点先 abort 再放行下一个——`has(key)` 不会永真，`finally` 里一定删 key |
 | **回合锚点 `turnAnchor`** | `S.turnAnchor`（`A.state`）；`src/app/round.js` / `src/app/turn.js` 的 commit / catch、`src/app/painter.js` 的 `runPaint` 写回前核对 | 工具出图在 commit 之前提交：`dead` 必须在**所有**失败 / 停止分支置位，漏一处就有图落进不存在的节点；`nodeId` 为空时写 `story.log`，由 `commit` 的 `logMark` 切片（含 `scenesFor` 对 `scenes` 的收集）收进节点 |
 | **「停止」只中断聊天回合** | `S.chatAbortCtrl`（`A.state`）只有 `src/app/turn.js` 的 `streamAI1` 写入 | 后台作画与「停止」脱钩：不中断在途作画，也不抢走聊天的 abort；在途结果写回前再核 `dead` |
 | **`tools` 降级**：显式 400 拒绝的模型记入「黑名单」 | `src/app/turn.js`：`isToolsRejection`、`rememberNoTools`、`noToolsFor` | 试错降级，不做预探测 |
@@ -269,19 +272,18 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 | **视频不进作画队列** | `src/app/video.js`：`videoQ = .create()`（第二个实例）、`#video-status` 独立胶囊 | 视频 1~3 分钟且 run() 内整段轮询，绝不能堵出图；提交成功立刻写 `story.pendingVideos[]`，切档 / 刷新只停本地等待，回到该故事用 `poll` 续同一 `task_id`（不重复提交）；下载被拦走 `remoteUrl` 限时降级 |
 | **AI 文本一律按纯文本渲染** | `src/screens/read/*.svelte`（Svelte 文本插值，主聊天流 / 气泡 / 面板预览）+ `src/app/render.js`（流式临时 DOM 的 `fillLiveDom` / `reasonLiveInto`，`textContent` 回填） | 模型输出与导入内容不可信，禁止拼 `innerHTML` / `{@html}`；缩略图另过 `safeThumb` 白名单 |
 | **树是唯一真源，其余字段是投影** | `src/core/tree.ts`：`project` / `stateOf`；`src/app/*` 只读投影 | 切分支 = 换 head + 重新投影，既有读取点一行不改；条目与消息**按引用共享**（就地修改落树上），**State 才 clone**（`world` 会被 `mergeWorld` 原地改写，绝不存引用） |
-| **`seal` 必须在 `postTurn` 之后** | `src/app/round.js`：`sendPlayerAction`、`src/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态。seal 再切 entries 的起点来自 `commit` 记进 `node.meta.logFrom` 的 `logMark`（`eval/tree-test.js` 19.7 / 19.8 固定）：log 被 120 条窗口裁过之后 `indexOf(entries[0])` 会返回 -1，尾巴就静默丢了；对不上时按末条倒推，全都找不到才保留原 entries 并 `console.warn` |
+| **`seal` 必须在 `postTurn` 之后** | `src/app/round.js`：`sendPlayerAction` / `runOpening`、`src/app/turn.js`：`retryLast` | 书记员 / 压缩会改 `world / summaries / messages` 并往 log 追加 tool 条目，先 seal 存的是「半结算」状态。seal 再切 entries 的起点来自 `commit` 记进 `node.meta.logFrom` 的 `logMark`（`eval/tree-test.js` 19.7 / 19.8 固定）：log 被 120 条窗口裁过之后 `indexOf(entries[0])` 会返回 -1，尾巴就静默丢了；对不上时按末条倒推，全都找不到才保留原 entries 并 `console.warn` |
 | **全树图集必须含非当前分支** | `src/core/tree.ts`：`imageIdsOf`（树遍历**唯一实现**）；`src/core/store.ts`：`imageIdsOf`（扫 log / scenes 后委托树遍历）、`knownImageIds` | 漏掉 `tree.nodes[*]` 的 scenes / entries 图引用就会**静默删掉别的分支的图**（清理孤儿 / 删除 / 备份共用一条口径；树遍历只留一份实现，两处漂移过就是删档级事故） |
 | **晚到条目 / 画面带 `nodeId` 校验** | `src/app/painter.js`：`runPaint` 写回（`nodeId` 来自任务或 `turnAnchor`）、`src/core/tree.ts`：`pushLate` | 节点不存在 → 丢弃；已 sealed 且不在当前路径 → 只写节点，不得泄漏进当前 log（retry / 切分支时在途任务落回原节点，正是靠这条） |
-| **模型发起的有副作用动作一律走提案** | `src/core/proposals.ts`：`STATUS` / `reconcile` / `confirm` / `approveSecond` / `deny`；`src/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作。状态机以 `p.status` 为唯一真源（0.13.0 收口）：`pending → executing → done`，sidecar 要求二次确认时转 `awaiting_confirm`（与 pending 共用同一份 TTL，卡片给「继续确认」，`confirm` 对它可重入、绝不自动批准），关窗即拒绝并清理 intent；读档时不在在途集合里的 `executing` 一律由 `reconcile` 收敛为 `failed`（上次执行随页面关闭中断，结果未知、不自动重试）；发信失败保留 `draftId` 并尽力丢弃残留草稿，清不掉时卡片给「清理草稿」。`isWaitingSecond` / `reconcile` 是唯一判定与收敛入口 |
-| **动画只动合成层属性** | `css/motion.css` 的 `@keyframes`（全仓唯一定义点）与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`，小面积装饰元素可用 `@property` 注册的自定义属性（注册块须可动画 syntax + `inherits: false`）；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
+| **模型发起的有副作用动作一律走提案** | `src/core/proposals.ts`：`STATUS` / `reconcile` / `confirm` / `approveSecond` / `deny`；`src/app/features.js`：`runProposalTool`、`confirmProposal`、`denyProposal` | **前端永不在没有用户点击时调用 `emailSend` / `paymentPurchase` / `paymentApprove` / `paymentCharge` / `paymentMarkPaid`**（提案路径只用 `emailDraft`→`emailSendDraft`；`paymentPurchase` 只出现在用户点「确认」之后，返回 `needsApproval` 时必须再弹一次带额度的确认，不得自动批准）。确认幂等（`confirm` 同步抢占状态）、提案有 TTL、只在所属节点处于当前分支路径上时可操作。状态机以 `p.status` 为唯一真源（0.13.0 收口）：`pending → executing → done`，sidecar 要求二次确认时转 `awaiting_confirm`（与 pending 共用同一份 TTL，卡片给「继续确认」，`confirm` 对它可重入、绝不自动批准），关窗即拒绝并清理 intent；读档时不在在途集合里的 `executing` 一律由 `reconcile` 收敛为 `failed`（上次执行随页面关闭中断，结果未知、不自动重试）；发信失败保留 `draftId` 并尽力丢弃残留草稿，清不掉时卡片给「清理草稿」。判定与收敛入口：`isActionable`（app 用它决定卡片能否操作）、`isWaitingSecond`（判断是否在等第二次确认，目前只有 `eval/proposals-test.js` 用）、`reconcile`（收敛） |
+| **动画只动合成层属性** | `css/motion.css` 的 `@keyframes`（全仓唯一定义点）与 transition；`eval/tokens-test.js` 有可执行检查 | `@keyframes` 只允许 `transform / opacity / filter / stroke-dashoffset / stroke-dasharray`，自定义属性一律不做动画（`@property` 注册的也一样）；transition 不得动画 `width / height / top / left / margin / box-shadow` 等触发重排的属性。阴影只做静态值；`will-change` 只在动画进行时临时加、结束移除 |
 | **颜色只从令牌来** | `css/tokens.css` 的 `:root`（唯一改色的地方，阶段 3 起独立成文件）；`tools/contrast-check.mjs`、`eval/tokens-test.js` | 组件规则里不写 `#hex / rgb()`；改色先跑 `node tools/contrast-check.mjs`（WCAG 对比度）与 `node eval/tokens-test.js`（令牌回归）。暗色主题将来加 `[data-theme="dark"]` 一套令牌即可，不在组件层写死 |
-| **自动标题写回护栏** | `src/core/titles.ts`：`applyTitle(story, id, title)`；触发在 `src/app/round.js` / `src/app/turn.js` 的 `seal` 之后、编排在 `src/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
+| **自动标题写回护栏** | `src/core/titles.ts`：`applyTitle(story, id, title, opts)`（`opts.force` = 手动重新生成，跳过 `titleAuto` 检查、由调用方先收掉它）；触发在 `src/app/round.js` / `src/app/turn.js` 的 `seal` 之后、编排在 `src/app/shelf.js`：`maybeAutoTitle` | 写回前核 `story.id` 一致且 `titleAuto` 仍为真（用户期间改过名就丢弃结果）；任务异步、不占 `busy`、不阻塞下一次发送；每个故事同时只允许一个标题任务；模型走 `resolveSub('scribe')`，书记员未启用 / 无 key / 无模型 → 直接本地兜底**不发网络请求**；失败静默不计次 |
 | **搜索输出零 HTML、高亮只走 ranges** | `src/core/search.ts`：`query`（片段 + ranges）；`src/screens/shelf/ShelfScreen.svelte`（`<mark>` + 文本插值） | 查询结果只有纯文本与 `[start,end]` 下标；UI 高亮不得拼 `innerHTML`（对抗内容如 `<script>` 原样保留为文本）。搜索文档遍历**全部分支节点**；内存索引不持久化，首次聚焦搜索框惰性构建（分批 ~5 个故事让出主线程），`saveStory` 防抖 ~800ms 增量重建该 id，`deleteStory` 同步移除 |
 | **助手回复只有一种纯文本口径** | `src/core/tree.ts`：`plainReply(raw, { trim })`；消费方 `src/core/titles.ts`（buildPrompt）、`src/core/treeLayout.ts`（`replyText`，标签与分支页面板预览共用）、`src/core/search.ts`（`buildDoc`）、`src/core/store.ts`（`storySnippet`） | 剧情模式的 `{"narration":"…"}` 与 chat 的纯文本在同一处拍平：坏 JSON / 无旁白字段一律当纯文本，中文键「旁白」兼容旧档；`trim` 只在标题提示词显式开启，摘要 / 标签按自己的用途再裁。全仓「`JSON.parse` + 取旁白」只允许 `tree.ts` 本体与两处特例（书记员压缩输入另要 `scene_change`、`context.ts` 零 import），`eval/reply-text-test.js` 有可执行检查 |
 | **书架只读索引** | `src/core/store.ts`：索引条目 `{ id, title, updatedAt, thumb, mode, turn, titleAuto, snippet, profileId }`、`ensureIndexComplete`；`src/app/shelf.js`：`renderShelf` | `renderShelf` 不再对每个故事 `loadStory`；`snippet` 每次 `saveStory` 重算（切兄弟 / 重试会变，不缓存）；旧索引条目由 `ensureIndexComplete` 按需补齐并整体回写一次（幂等）；空标题只显示兜底文案、**不回写存档** |
-
 | **故事与导出里绝不带密钥** | `src/core/prefs.ts`：`sanitizePrefs` / `stripSecrets` / `exportPrefs`；`src/core/store.ts`：`migrateStory` / `serializeStory` / `buildStoryPack` | 故事会被导出 / 分享 / 备份：`story.prefs` 只存 `profileId`（不透明引用）与 `profileLabel`（显示用）；导出包整包剥 `apiKey / key / token / baseUrl`（任意嵌套层级），`eval/prefs-test.js` 有可执行断言 |
-| **主模型配置走 `resolveChatCfg`** | `src/core/prefs.ts`：`resolveChatCfg`；`src/app/models.js`：`chatCfg` / `chatContextWindow`；`src/app/round.js`：`callAI1` | 每对话可选自己的模型（profile），派生量（压缩阈值 / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
+| **主模型配置走 `resolveChatCfg`** | `src/core/prefs.ts`：`resolveChatCfg`；`src/app/models.js`：`chatCfg` / `chatContextWindow`；`src/app/round.js`：`buildAssembleOpts`（组装选项的唯一口径） | 每对话可选自己的模型（profile），派生量（压缩阈值 / extraParams / noTools 键）必须跟着**有效**配置走；`profileId` 找不到 → 回退默认并提示，绝不硬失败 |
 | **工具集 = 全局可用性 ∩ `prefs.tools`** | `src/app/round.js`：`toolInjection()`（`Context.toolsForMode(...)` 之后内联 `.filter(t => !why[Prefs.toolCategory(t.function.name)])`，与界面 chip 共用同一判定）；`src/core/prefs.ts`：`toolCategory` | 对话里可单独关掉「下单 / 邮件 / …」，默认跟随全局；其它对话不受影响 |
 | **手改派生数据后 `resyncState`** | `src/core/tree.ts`：`resyncState`；`src/app/settings.js`：`saveWorldFromForm` | 树是真源、`project` 会用 head 的内联状态覆盖 `world / summaries / …`——手改世界卡后必须把 head 的状态换成当前值，否则下次进故事 / 切分支会把编辑回滚掉 |
 | **回合之外压缩后 `resyncHead`** | `src/core/tree.ts`：`resyncHead`（`resyncState` + 按当前 `messages` 重算窗口） | 手动压缩改的是 `messages / summaries`，而 head 已 `sealed`：只同步 State 不重算 `msgFloor / msgSnap`，切分支或重进故事会按旧窗口展开，把已压进摘要的消息重新塞回请求、与摘要重叠（`eval/tree-test.js` 用例 20 固定切兄弟往返与存档重进） |
@@ -301,7 +303,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 
 **颜色**：全站只从 `css/tokens.css` 的 `:root` 令牌取色（阶段 3 起独立成文件）——白做底（`--bg #FFFFFF`）、蓝做强调（`--accent #2563EB`）、黑做文字和主按钮（`--ink` / `--on-ink`）。主按钮是黑底白字，蓝色只做强调（链接、选中态、分支线、进度线、焦点环）；`--line-strong` 是输入框 / 按钮描边（≥3:1）。**页面之外的颜色也归令牌**：地址栏 `theme-color` 与 manifest 的 `theme_color` / `background_color` 在源码里是 `__IR_THEME_COLOR__` 占位，构建期由 `vite.config.mjs` 从 `--bg` 展开——各写一份白底值，换主题时必然漏一处。护栏：`node tools/contrast-check.mjs`（WCAG 对比度表）+ `node eval/tokens-test.js`（:root 之外无颜色字面量、index.html / manifest 的颜色占位、@keyframes 属性白名单、动效令牌存在性）。暗色主题**只预留结构**：将来加 `[data-theme="dark"]` 一整套令牌即可，组件规则里没有任何字面色。
 
-**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow/inf` 与 `--dur-flash/none`。**表单字号** `--fs-field: 14px` / `--fs-field-mono: 12px`（等宽提示词编辑器）：`input / select / textarea` 只读它们，≤720px 由 `css/responsive.css` 在 `:root` 上一起抬到 16px（iOS Safari 聚焦小于 16px 的输入框会自动放大页面；把 16px 直接写在控件选择器上是 0,0,1 特异性，会被 `#player-input` / `.shelf-search-input` / `label input` / 组件里的 `input.svelte-*` 整条盖掉），`eval/css-structure-test.js` 对账「表单控件的 font-size 一律 `var(--fs-field)` / `var(--fs-field-mono)`」。**主圆角** `--radius: 8px`（卡片 / 按钮 / 输入框 / 舞台与灯箱大图；阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。圆角不是全站一个值——例外按用途登记在 `css/style.css` 的「圆角标尺」里：胶囊（状态 / 模式标签、计数徽标、作画提示、进度线）用 `999px`，面板内次级卡片与大图预览用 `10px`，缩略图与行内小件用 `6px`，行内 `code` 用 `4px`，`<mark>` 与视频角标用 `3px`，窄屏底部抽屉用 `14px 14px 0 0` / `var(--radius) var(--radius) 0 0`，贴边用 `0`；`eval/css-structure-test.js` 对账「分片里的每个圆角取值都在标尺上」，新数值先登记再写。
+**动效令牌**（同样在 `:root`，调手感只改这里）：`--dur-fast/base/slow`、`--ease-out/spring/inout`、`--loop-busy/kb/ambient/flow`（循环周期：忙碌线 / Ken Burns / 环境光 / 分支页流光）与 `--dur-flash/none`。**表单字号** `--fs-field: 14px` / `--fs-field-mono: 12px`（等宽提示词编辑器）：`input / select / textarea` 只读它们，≤720px 由 `css/responsive.css` 在 `:root` 上一起抬到 16px（iOS Safari 聚焦小于 16px 的输入框会自动放大页面；把 16px 直接写在控件选择器上是 0,0,1 特异性，会被 `#player-input` / `.shelf-search-input` / `label input` / 组件里的 `input.svelte-*` 整条盖掉），`eval/css-structure-test.js` 对账「表单控件的 font-size 一律 `var(--fs-field)` / `var(--fs-field-mono)`」。**主圆角** `--radius: 8px`（卡片 / 按钮 / 输入框 / 舞台与灯箱大图；阶段 3 补上定义：0.12.1 漏定义，实际渲染成了方角）。圆角不是全站一个值——例外按用途登记在 `css/style.css` 的「圆角标尺」里：胶囊（状态 / 模式标签、计数徽标、作画提示、进度线）用 `999px`，面板内次级卡片与大图预览用 `10px`，缩略图与行内小件用 `6px`，行内 `code` 用 `4px`，`<mark>` 与视频角标用 `3px`，窄屏底部抽屉用 `14px 14px 0 0` / `var(--radius) var(--radius) 0 0`，贴边用 `0`；`eval/css-structure-test.js` 对账「分片里的每个圆角取值都在标尺上」，新数值先登记再写。
 
 **动效（统一 motion 模块）**：运行时只有 rich 一档（完整动效）。语义真源 `src/core/motion.ts`（`TIERS` / `LOOP_BUDGET` / `ANIMATIONS` 逐动画单值声明 / `TRANSITIONS` 逐过渡动作单值声明），CSS 端 `css/motion.css`（`@keyframes` 唯一定义点 + 收口变量 `--m-*` + 动画名表 `--an-*` + `::view-transition-*` 时长收口 + 暂停规则），DOM 端 `src/ui/motion.js`（`applyPaused` / `suspendLoops` 子树挂起 / `holdLoops` 过渡期冻结）。`<html>` 静态写 `data-motion="rich"`（不再有首帧内联脚本，也不再写 localStorage 镜像）。
 
@@ -342,7 +344,7 @@ src/app/core.js（应用层内核：注册表 A / 共享状态 / 小工具）
 3. **世界状态卡** + **当前情势一行** `buildSummaryLine`。
 4. **前情摘要栈** `summaries[]`（`trimSummaries` 限长）。
 5. **启发式注入** `matchEntityTerms` + `heuristicBlock`：玩家话里出现世界卡实体词时，按条数上限带回对应条目；无实体词则零成本不注入。
-6. **按需召回**：AI1 只有 `recall_world_state` / `recall_style_card` 两个工具，客户端以「单次重发」实现（`RECALL_TOOL_SCOPE` 同时决定注入哪一块）。画师工作台对话另有一个 `recall_recent_plot`（取最近 10 条原文，`RECALL_RECENT_PLOT_TOOL`），它不属于 AI1 工具集、只在 `assemblePainter` 的 chat / cardchat 模式按 `opts.tools` 下发。
+6. **按需召回**：召回类工具只有 `recall_world_state` / `recall_style_card` 两个（此外还有 `update_memory` 与聊天的 `request_image`），客户端以「单次重发」实现（`RECALL_TOOL_SCOPE` 同时决定注入哪一块）。画师工作台对话另有一个 `recall_recent_plot`（取最近 10 条原文）：工具**定义**是 `RECALL_RECENT_PLOT_TOOL`，由 `src/app/painter.js` 挂到 `cfg.tools`；`assemblePainter` 只在 `opts.mode === 'chat'` 分支读 `opts.tools`，据此决定要不要拼「[可用工具]」那一行提示。
 7. **最近消息窗口**：已知容量时按 token 动态装（最多吃窗口一半，条数 ∈ [4, 40]），未知退回 8 条；更早的内容在超过 70% 预算时由 `compressStory` 压进摘要栈（组装前先查预算、超了先压再组）。
 
 召回结果、工具回传、启发式与强制注入统一**并入本轮 user 消息前缀**（不插中段 system 块，规避兼容层吞中段 system）。
@@ -386,7 +388,7 @@ PWA 是「装个帽子」，不是「换条路」：`src/pwa.js` 在 https / `lo
 
 - **接新的模型服务**：在 `src/core/providers.ts` 的 `ChatProviders` / `ImageProviders` 上注册一个 key，保持签名 `chat(cfg, messages, hooks)` / `generate(cfg, prompt)`；再在设置面板的 provider 选项里加上它。不需要改 `src/app/*` 的业务逻辑。异步任务型服务在适配器内部包掉轮询（`['comfyui']` 就是这么做的：提交 → 轮询 → 取图，对上仍是同步 `generate` → dataURL）。
 - **ComfyUI 本地生图（`['comfyui']`）**：参数真源是用户贴的 **API 格式 workflow JSON**（`settings.image.workflow`）——模型 / 步数 / CFG 全在 workflow 里，适配器每次只注入正向提示词、随机 seed、宽高（折 8 的倍数）；负向提示词保留 workflow 原文。节点定位默认自动（采样器 `positive`/`negative` 链接 + 空潜空间节点），`settings.image.nodes`（如 `positive=6, randomSeed=off`）可覆盖。CORS 走 ComfyUI 自带的 `--enable-cors-header "*"` 启动参数（新版还有 origin 校验中间件，Host/Origin 不匹配会 403，同一个参数放行），不需要本地转发。取消只停本地等待、不打 `/interrupt`（ComfyUI 是共享服务）。总超时 10 分钟（低于作画队列的 20 分钟兜底）。
-- **视频**：`['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 保留。恢复轮询用 `poll` 续同一 `task_id`（`src/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。启动参数支持「只给上游 URL」（`node tools/video-proxy.mjs https://api.minimaxi.com`），端口 / 上游不合法与端口被占用都给可读报错、不裸崩；转发带上游空闲超时（5 分钟）与断开清理——客户端先断即掐掉在途请求、上游断流回 5xx 而不是崩进程，门禁 `eval/video-proxy-test.js` 用桩上游对账。
+- **视频**：`['minimax-video']`（MiniMax V2）的约定是把**异步任务**拆成分步接口——`submit(cfg, {prompt, image?, mode}) -> {taskId}`、`poll(cfg, taskId) -> {status, url?, error?}`（`queued|running|succeeded|failed|cancelled|expired`）、`generate(cfg, req, hooks)`（= submit + 每 10 秒 poll；`hooks.onTaskId / onStatus / signal`；总超时常量 `VIDEO_TOTAL_TIMEOUT_MS` 默认 15 分钟）。旧约定 `generate(cfg, {prompt, image}) -> {url}` 已不成立：`generate` 恒返回 `{ url, taskId, params }`（`params` 是本次生效的时长 / 分辨率 / 比例，取自设置面板 + `extraParams`）。恢复轮询用 `poll` 续同一 `task_id`（`src/app/video.js`），不在适配器里做。「测试连接」只走只读列任务探测，绝不提交生成任务。新增渠道（可灵 / Vidu 等）只需实现这几个方法并注册 key。浏览器直连被 CORS 拦（2026-10-22 实测 MiniMax 不带 `Access-Control-Allow-*`）时，用 `tools/video-proxy.mjs`（零依赖本地转发：只监听 `127.0.0.1`、转发目标钉死 MiniMax 两个域名〔绝对 URI / 协议相对 URI 一律拒〕、回包只补本机来源的 CORS 头；**不改 sidecar**），把设置里的 Base URL 填 `http://127.0.0.1:4320` 即可；下载 mp4 仍走应用内 remoteUrl 降级，不过代理。启动参数支持「只给上游 URL」（`node tools/video-proxy.mjs https://api.minimaxi.com`），端口 / 上游不合法与端口被占用都给可读报错、不裸崩；转发带上游空闲超时（5 分钟）与断开清理——客户端先断即掐掉在途请求、上游断流回 5xx 而不是崩进程，门禁 `eval/video-proxy-test.js` 用桩上游对账。
 - **主题**：`css/tokens.css` 的 `:root` 就是主题入口（颜色 / 时长 / 缓动全走令牌）。当前是白底蓝强调浅色主题；暗色只要再写一套 `[data-theme="dark"]` 的令牌覆盖即可，组件规则里没有字面色。
 - **格式与内容**：`.irstory.json` / 角色卡的解析入口集中在 `src/core/store.ts` 与 `src/core/roleCard.ts`，新增字段请同步 `migrateStory` 与 `src/core/schema.ts`。
 
@@ -430,4 +432,4 @@ node sidecar/server.mjs --show-token
 
 **页面关闭时**：侧车到点只把触发**写入待处理队列**（不打扰、不猜）；前端下次打开时按 `SKIP / RUN_ONCE / RUN_ALL` 补跑，补跑时走的是与真实用户消息完全相同的回合链路（合成一条入站消息 → `sendPlayerAction`）。「页面开着」则由 SSE 实时推送 `trigger.fire`。这一处做成了可替换的策略点（见 `scheduler.mjs` 的 `missedPolicy`）。
 
-**测试**：`eval/scheduler-test.js`（虚拟时钟）、`eval/email-test.js`、`eval/payment-test.js`（策略边界）、`eval/sidecar-smoke.js`（真启子进程走 HTTP）、`eval/frontend-smoke.js`（假 fetch 验离线降级与工具门控），全部接入 `npm test`。
+**测试**：`eval/scheduler-test.js`（虚拟时钟）、`eval/email-test.js`、`eval/payment-test.js`（策略边界）、`eval/sidecar-client-test.js`（客户端的探活 / 退避重连与计时器收口）、`eval/sidecar-smoke.js`（真启子进程走 HTTP）、`eval/frontend-smoke.js`（假 fetch 验离线降级与工具门控），全部接入 `npm test`。
