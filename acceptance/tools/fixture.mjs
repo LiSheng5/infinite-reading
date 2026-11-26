@@ -336,7 +336,6 @@ async function buildFixture() {
     const seedManifest = {
       project: 'infinite-reading',
       version: APP_VERSION,
-      stage: '0（迁移基线）· 回归夹具',
       generatedAt: new Date().toISOString(),
       tool: 'acceptance/tools/fixture.mjs build',
       entry: APP_URL,
@@ -351,7 +350,7 @@ async function buildFixture() {
         backup: RULES_BACKUP,
         story: RULES_STORY,
         zipExtra: 'zip 里的 images/* 按 manifest 的 id 对齐后逐字节 sha256 比对（path 编号差异放行）',
-        note: '除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚该阶段。',
+        note: '除以上放行字段外，任何字段不一致都算回归失败；发现不一致立即回滚这次改动。',
       },
       consoleErrors,
     };
@@ -624,7 +623,6 @@ async function seedInPage(page) {
         characterCard: !!st.characterCard,
       });
       out.stories = [stA, stB, stC].map(dump);
-      window.__fixtureSeeded = out;
     } catch (e) {
       out.ok = false;
       out.errors.push(String(e && e.stack || e));
@@ -868,7 +866,6 @@ async function roundtrip() {
   const report = {
     project: 'infinite-reading',
     version: APP_VERSION,
-    stage: '阶段 6 · 收尾发布 · 回归夹具 roundtrip',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/fixture.mjs roundtrip',
     how: '每个夹具文件各起一个干净浏览器上下文（file://）：真实 UI 导入（#file-import）→ 还原 → 真实 UI 再导出 → 与夹具原文件逐字段比对',

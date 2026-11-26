@@ -1,17 +1,21 @@
-# 构建上下文瘦身：镜像只需要 index.html / css / js / icons / manifest / sw.js
+# 构建上下文瘦身。两段式的产物需求不同：
+#   构建段需要 src/ 与根配置（package*.json / vite.config.mjs / css / icons / sw.js / index.html / manifest.webmanifest）；
+#   运行段只用构建出来的 dist/site。
 .git/
 .github/
 dist/
 node_modules/
 
-docs/
+# 本地服务的凭证与数据（sidecar/data 里有 token、SQLite 与邮件密钥）、验收脚本与截图、
+# 个人存档——一律不进构建上下文
+sidecar/
+acceptance/
+*.irstory.json
+
 eval/
 tools/
 
 *.md
 !README.md
-.codebuddy/
-.playwright-cli/
 .vscode/
 .idea/
-_note-preview.html

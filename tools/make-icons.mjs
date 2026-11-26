@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'icons');
 
-/* ---------- 配色：与 css/style.css 的 :root 保持一致 ---------- */
+/* ---------- 配色：与 css/tokens.css 的 :root 保持一致 ---------- */
 const BG = [37, 99, 235];      // --accent  #2563eb
 const FG = [255, 255, 255];    // --on-accent
 
@@ -122,7 +122,7 @@ function draw(size, bleed, glyphPct) {
       const py = y + 0.5 - size / 2;
 
       // 底色
-      let r = BG[0], g = BG[1], bl = BG[2], alpha = 255;
+      let r = BG[0], g = BG[1], bl = BG[2];
 
       // 离曲线最近的距离（够近就画图形）
       if (x >= x0 && x < x1 && y >= y0 && y < y1) {
@@ -144,7 +144,7 @@ function draw(size, bleed, glyphPct) {
       rgba[i] = r;
       rgba[i + 1] = g;
       rgba[i + 2] = bl;
-      rgba[i + 3] = alpha;
+      rgba[i + 3] = 255;             // 圆角外已 continue，这里一律不透明
     }
   }
   return encodePNG(size, rgba);

@@ -2,8 +2,7 @@
  * acceptance/tools/prefs-smoke.mjs —— 设置屏 + 本对话设置面板的行为冒烟
  *
  * 跑法：先 npm run build:single，再 node acceptance/tools/prefs-smoke.mjs
- * 目标：dist/single/index.html（file:// 双击的真实形态），页面内播种一个故事（不调用任何模型）。
- * ?ui=legacy 旧屏逃生口已删，只跑 Svelte 新屏这一轮。
+ * 目标：dist/single/index.html（file:// 双击的真实形态），页面内播种一个故事（不调用任何模型）。只跑 Svelte 屏。
  * 覆盖：设置屏挂载 / id 就位 / 保存读回 / 折叠块自动展开两条规则 / 分组切换；
  *       本对话面板下钻（滚动 / 焦点 / Esc 层级）/ 人物行卡 / sticky 保存栏 / 判变禁用。
  */
@@ -42,7 +41,7 @@ async function seedStory(page) {
   if (!r.ok) throw new Error('播种失败：' + r.error);
 }
 
-async function run(browser, label, suffix, fn) {
+async function run(browser, label, fn) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const errors = [];
   // 本地服务不在跑：把启动探测的 /health 接住，避免把「连不上 127.0.0.1」当成页面错误
@@ -53,9 +52,8 @@ async function run(browser, label, suffix, fn) {
   }));
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
- // 应用不再有全局 IR；测试面只在 ?ir-test=1 时挂载。
-  const extra = suffix ? '&' + String(suffix).replace(/^[?&]/, '') : '';
-  await page.goto(APP + '?ir-test=1' + extra);
+  // 测试面只在 ?ir-test=1 时挂载。
+  await page.goto(APP + '?ir-test=1');
   await page.waitForFunction(() => !!(window.__IR_TEST__ && __IR_TEST__.App && __IR_TEST__.App.state && __IR_TEST__.App.state.settings), null, { timeout: 15000 });
   await page.waitForTimeout(300);
   await seedStory(page);
@@ -67,8 +65,8 @@ async function run(browser, label, suffix, fn) {
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 
-// ============ 默认：Svelte 新屏 ============
-await run(browser, 'svelte: ', '', async (page, ok) => {
+// ============ 设置屏 + 本对话设置 ============
+await run(browser, 'svelte: ', async (page, ok) => {
   ok('settings mounted', await page.evaluate(() => !!document.querySelector('#modal-settings[data-impl="svelte"]')));
   ok('set-panels impl', await page.evaluate(() => !!document.querySelector('#set-panels[data-impl="svelte"]')));
   await page.evaluate(() => window.__IR_TEST__.App.openSettings());

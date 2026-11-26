@@ -6,7 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
-# 经 Vite 构建：CI 做五件事——语法检查、构建产物自检、版本号一致性、离线评测、功能单测。
+# 两个 job：
+#   check —— 语法 / 结构门禁 / 版本号 / 对比度 / PWA 清单 / tsc / 构建 + sw 预缓存自检 / 单文件冒烟；
+#   eval  —— 完整的 npm test（清单唯一真源是 package.json 的 test 链）。
+# check 里与 npm test 重叠的几项是**快速失败层**：语法与构建类错误几十秒内就红，不必等整轮回归。
 # Node 版本与 package.json 的 engines 对齐（>=24）：可选本地服务用 node:sqlite。
 jobs:
   check:
@@ -21,10 +24,12 @@ jobs:
 
       - name: JS 语法检查
         run: |
-          for f in src/*.js src/app/*.js src/screens/*/*.js src/ui/*.js eval/*.js sidecar/*.mjs tools/*.mjs sw.js; do
+          for f in src/*.js src/app/*.js src/screens/*.js src/screens/*/*.js src/ui/*.js eval/*.js sidecar/*.mjs tools/*.mjs acceptance/tools/*.mjs sw.js; do
             node --check "$f"
           done
 
+      # 以下四步与 eval job 的 npm test 重叠，故意保留：它们是纯 node、秒级完成，
+      # 改坏结构 / 版本号 / 配色时先在这里红，不必等整轮离线套件跑完。
       # 拆分结构门禁：脚本顺序 / 行数上限 / A.reg 唯一 / 顶层解构白名单
       - name: 拆分结构门禁（node eval/app-structure-test.js）
         run: node eval/app-structure-test.js

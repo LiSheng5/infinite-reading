@@ -69,7 +69,7 @@ const PLAN = [
   { key: 'painter', state: 'seeded', screen: 'painter', expect: '#modal-painter:not(.hidden)', note: '画师工作台（看 / 改这张图的提示词）' },
   { key: 'anchor', state: 'seeded', screen: 'anchor', expect: '#modal-anchor:not(.hidden)', note: '画风锚定：4 张候选试画（本地占位图）' },
   { key: 'card', state: 'seeded', screen: 'card', expect: '#modal-card:not(.hidden)', note: '角色卡编辑弹窗' },
-  { key: 'story-prefs', state: 'seeded', screen: 'story-prefs', expect: '#story-prefs:not(.hidden)', note: '本对话设置面板（覆盖行 + 故事数据：推进模式/存档点/世界状态卡，阶段 4 屏 2 迁入）' },
+  { key: 'story-prefs', state: 'seeded', screen: 'story-prefs', expect: '#story-prefs:not(.hidden)', note: '本对话设置面板（覆盖行 + 故事数据：推进模式/存档点/世界状态卡）' },
   { key: 'modal-confirm', state: 'seeded', screen: 'modal-confirm', expect: '#modal-confirm:not(.hidden)', note: '确认弹窗（打一个存档点，带名字输入框）' },
   { key: 'toast', state: 'seeded', screen: 'toast', expect: '#toast:not(.hidden)', note: '提示条（打完存档点的「已打存档点」）' },
   { key: 'modal-export', state: 'seeded', screen: 'modal-export', expect: '#modal-export:not(.hidden)', note: '导出弹窗（书架行「⋯」→ 导出）' },
@@ -88,7 +88,7 @@ const KNOWN_GAPS = [
   { item: 'modal-anchor（画风锚定）', state: 'empty', reason: '试画 4 张候选要生图适配器；empty 是未配置的普通模式，点了只会报「没配模型」' },
   { item: 'modal-email / modal-payment / 定时主动', state: 'empty', reason: '入口只在聊天模式出现，empty 无故事可切模式' },
   { item: 'settings-nav（设置分组列表）', state: 'seeded', reason: '与 empty 的设置弹窗同构，全局设置只在 empty 逐分组截；seeded 只补「本对话设置」与「定时主动」' },
-  { item: '10 号序（原 settings-story）', state: 'empty', reason: '「当前故事」组已迁出全局设置（阶段 4 屏 2 commit 1），empty 里无故事可截；PLAN 序号原地复用为 seeded 的世界卡二级视图（story-world-edit），序号不重排' },
+  { item: '10 号序（原 settings-story）', state: 'empty', reason: '「当前故事」组归本对话设置（全局设置只放全局项），empty 里无故事可截；PLAN 序号原地复用为 seeded 的世界卡二级视图（story-world-edit），序号不重排' },
 ];
 
 /* ================= 小工具 ================= */
@@ -189,7 +189,6 @@ async function main() {
   const manifest = {
     project: 'infinite-reading',
     version: VERSION,
-    stage: '阶段 6 · 收尾发布 · 逐屏截图',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/shoot.mjs',
     entry: APP_URL,
@@ -201,7 +200,7 @@ async function main() {
     },
     motion: null,
     notes: [
-      '阶段 6 起应用没有全局 IR：页面一律以 ?ir-test=1 打开，经 src/main.js 的验收钩子（window.__IR_TEST__）播种 / 锁档位；不带该参数时产物没有这个对象（pwa-offline 已做负向检查）。',
+      '页面一律以 ?ir-test=1 打开，经 src/main.js 的验收钩子（window.__IR_TEST__）播种 / 锁档位；不带该参数时产物没有这个对象。',
       '截图前隐藏瞬态 toast、鼠标移到 (2,2) 中性点（阅读页特意悬停舞台以完整显示舞台按钮），避免半悬停态。',
       'modal-email / modal-payment / 定时主动的入口只在聊天(chat)模式出现：seeded 尾段用「本对话设置 → 推进模式」把播种故事切到聊天后再截，其余截图都保持剧情(choice)模式。',
       '全部截图只截 viewport（fullPage:false）。',

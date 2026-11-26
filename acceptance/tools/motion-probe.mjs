@@ -6,7 +6,7 @@
  *
  *   screen   切屏：首页 → 书架 → 首页 → 阅读页
  *   stage    舞台换画：点缩略条换图（换画交叉淡入 / 原图升级 blur-up）
- *   sibling  切兄弟：点旁白的 ‹ n/m › 换分支（旧 WAAPI animateSwap）
+ *   sibling  切兄弟：点旁白的 ‹ n/m › 换分支
  *   modal    设置弹窗开 / 关
  *
  * 每个动作窗口内用 document.getAnimations() 逐帧采集（rAF 采样 + 动作收尾再补一次），
@@ -17,19 +17,19 @@
  *
  * 系统「减少动态效果」是静默例外，不参与本工具：上下文固定 reducedMotion:'no-preference'。
  *
- * 产出（--out 默认 acceptance/phase5/1）：
+ * 产出（--out 默认 acceptance/motion/rich）：
  *   {out}/rich/rich-{动作}-{序}-{pre|mid|end}.png   动作前 / 动作中 / 动作后的画面
  *   {out}/manifest.json                             单档结果（重跑即替换）
  *
  *   node acceptance/tools/motion-probe.mjs
- *        [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal]
+ *        [--out=acceptance/motion/rich] [--actions=screen,stage,sibling,modal]
  *        [--width=1280|390] [--strict]
  *
  * 退出码：0 = 动作全部跑完且 console error / pageerror 为 0
  *         1 = 有动作没跑完、或出现 console error / pageerror
  *         2 = 用法错误
- * --strict：额外要求「零违规」（违规 = 超出 rich 上限）。默认不 strict：
- *          当前多数动作还没有过渡（属正常），测量结果里的 violations 是后续步骤的待办清单。
+ * --strict：额外要求「零违规」（违规 = 超出 rich 上限）。默认不 strict：断言只查上限、
+ *          不要求动画存在，没跑起来的动作不算失败。
  *
  *  - 只新增文件，不改产品代码；页面一律 file:// 打开，不联网（本地服务探测被本地路由接住）。
  *  - Chromium 走系统 Chrome（channel:'chrome'），不下载浏览器。
@@ -51,17 +51,17 @@ const VERSION = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
 
 const ACTIONS = ['screen', 'stage', 'sibling', 'modal'];
 const ACTION_NOTES = {
-  screen: '切屏：首页 → 书架 → 首页 → 阅读页（当前实现只切 .hidden，无过渡属正常）',
-  stage: '舞台换画：缩略条点第 1 / 第 2 张（换画交叉淡入 + 模糊底延后换）',
-  sibling: '切兄弟：旁白 ‹ n/m › 上一条 / 下一条（旧 WAAPI animateSwap）',
-  modal: '设置弹窗：顶栏「⋯」→ 全局设置 → 关闭（.modal-card 入场动画）',
+  screen: '切屏：首页 → 书架 → 首页 → 阅读页（视图过渡 ≈220ms）',
+  stage: '舞台换画：缩略条点第 1 / 第 2 张（共享元素过渡 ≈220ms，模糊底延后换）',
+  sibling: '切兄弟：旁白 ‹ n/m › 上一条 / 下一条（视图过渡 ≈220ms，旧 WAAPI 位移留作降级）',
+  modal: '设置弹窗：顶栏「⋯」→ 全局设置 → 关闭（缩放 / 位移 + 背景渐隐 ≈220ms）',
 };
 
 const log = (...a) => console.log('[motion-probe]', ...a);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function parseArgs() {
-  const out = { out: 'acceptance/phase5/1', actions: ACTIONS.join(','), width: '1280', strict: false };
+  const out = { out: 'acceptance/motion/rich', actions: ACTIONS.join(','), width: '1280', strict: false };
   for (const a of process.argv.slice(2)) {
     const m = a.match(/^--([\w-]+)(?:=(.*))?$/);
     if (!m) continue;
@@ -73,7 +73,7 @@ function parseArgs() {
 
 function usage(msg) {
   console.error('[motion-probe] ' + msg);
-  console.error('用法：node acceptance/tools/motion-probe.mjs [--out=acceptance/phase5/1] [--actions=screen,stage,sibling,modal] [--width=1280|390] [--strict]');
+  console.error('用法：node acceptance/tools/motion-probe.mjs [--out=acceptance/motion/rich] [--actions=screen,stage,sibling,modal] [--width=1280|390] [--strict]');
   process.exit(2);
 }
 
@@ -660,7 +660,7 @@ async function main() {
   if (!fs.existsSync(path.join(ROOT, 'dist', 'single', 'index.html'))) {
     usage('没有 dist/single/index.html：先 npm run build:single（探针按双击的真实产物测）');
   }
-  const outDir = path.resolve(ROOT, args.out || 'acceptance/phase5/1');
+  const outDir = path.resolve(ROOT, args.out || 'acceptance/motion/rich');
   fs.mkdirSync(outDir, { recursive: true });
 
   log('== rich  out=' + path.relative(ROOT, outDir) + ' ==');
@@ -676,7 +676,6 @@ async function main() {
   const manifest = {
     project: 'infinite-reading',
     version: VERSION,
-    stage: '阶段 6 · 收尾发布 · 动效单档（rich）复测',
     generatedAt: new Date().toISOString(),
     tool: 'acceptance/tools/motion-probe.mjs',
     entry: APP_URL,
@@ -686,7 +685,7 @@ async function main() {
       actions: ACTION_NOTES,
       capture: '动作窗口内 requestAnimationFrame 逐帧 document.getAnimations() + 收尾补采；记时长 / 迭代次数 / 动的属性 / 目标 / 伪元素 / 触发步',
       assert: '按页面真源 __IR_TEST__.Motion.TIERS.rich 与 LOOP_BUDGET 判上限：位移 ≤220ms、透明度 ≤420ms、颜色 ≤220ms、循环 ≤3 组（同名多实例按 1 组）',
-      note: '断言只查上限，不要求动画存在。当前多数动作还没有过渡（切屏 / 弹窗关闭 / 舞台换画之外的多数路径），属正常；violations 是后续步骤的待办清单。',
+      note: '断言只查上限，不要求动画存在；violations 是超限明细（默认只记录，--strict 时才算失败）。',
       strict: '--strict 时违规也算失败；默认只把「动作没跑完 / console error」当失败。',
     },
     rich: run,

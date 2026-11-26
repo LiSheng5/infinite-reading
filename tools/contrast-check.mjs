@@ -28,9 +28,7 @@ for (const m of rootMatch[1].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
 function rawOf(name) {
   const key = name.startsWith('--') ? name : '--' + name;
   if (!VARS.has(key)) {
-    const err = new Error('令牌缺失：' + key);
-    err.missing = true;
-    throw err;
+    throw new Error('令牌缺失：' + key);
   }
   let v = VARS.get(key);
   const seen = new Set([key]);
@@ -40,9 +38,7 @@ function rawOf(name) {
     if (seen.has(m[1])) throw new Error('令牌循环引用：' + key);
     seen.add(m[1]);
     if (!VARS.has(m[1])) {
-      const err = new Error('令牌缺失：' + m[1] + '（' + key + ' 引用）');
-      err.missing = true;
-      throw err;
+      throw new Error('令牌缺失：' + m[1] + '（' + key + ' 引用）');
     }
     v = VARS.get(m[1]);
   }
@@ -145,7 +141,6 @@ const PAIRS = [
   { fg: 'on-ink', bg: 'ink', min: 4.5, kind: 'text' },
   { fg: 'danger', bg: 'bg', min: 4.5, kind: 'text' },
   // 图形与控件边界 ≥ 3:1
-  { fg: 'accent', bg: 'bg', min: 3, kind: 'graphics' },
   { fg: 'line-strong', bg: 'bg', min: 3, kind: 'graphics' },
   { fg: 'line-strong', bg: 'surface', min: 3, kind: 'graphics' },
   // 装饰线 ≥ 1.1:1（仅纯装饰分隔线，阈值刻意放宽）

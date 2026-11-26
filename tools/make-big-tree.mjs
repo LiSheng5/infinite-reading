@@ -8,19 +8,22 @@
  * 节点数达到 TARGET 后停止（实际数会打印出来）。
  *
  *   node tools/make-big-tree.mjs [输出路径] [--legacy]
+ *   输出路径省略时写 dist/big-tree.irstory.json（dist 不进仓库）
  *   --legacy   把主干最早的 20 个回合做成 sid === null 的「旧存档迁移」形状
  *              （分支页里这些节点两个继续类操作应置灰，用于验收）
  *
  * 导入：生成的 .irstory.json 拖进书架（或「导入」按钮）即可。
  */
-import { writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const LEGACY = args.includes('--legacy');
 const outArg = args.find(a => !a.startsWith('--'));
-const OUT = outArg || join(dirname(fileURLToPath(import.meta.url)), '..', 'big-tree.irstory.json');
+// 默认落在 dist/（构建产物目录，已被 .gitignore 忽略），别把 800 节点的测试档丢进仓库根
+const OUT = resolve(ROOT, outArg || join('dist', 'big-tree.irstory.json'));
 const TARGET = 800;
 
 const nodes = {};
@@ -46,7 +49,7 @@ function addState(id, worldTime) {
   return sid;
 }
 
-function addNode(parentId, kind, legacy) {
+function addNode(parentId, legacy) {
   seq += 1;
   turnSeq += 1;
   const id = 'n' + String(seq).padStart(4, '0');
@@ -92,7 +95,7 @@ function spine(parentId, length, legacy, depth) {
   for (let i = 0; i < length; i++) {
     if (seq >= TARGET) return last;
     const legacyThis = legacy && depth === 0 && turnSeq < 20;
-    const n = addNode(last, 'turn', legacyThis);
+    const n = addNode(last, legacyThis);
     last = n.id;
     // 多层嵌套分叉：主干 → 支线 → 子支线 → 孙支线
     // 间隔留大些（≥ 折叠阈值 8）：验收要能看到「··· N 回合」折叠与展开
@@ -103,35 +106,31 @@ function spine(parentId, length, legacy, depth) {
   return last;
 }
 
-const root = addNode(null, 'root', false);
+const root = addNode(null, false);
 const head = spine(root.id, 240, LEGACY, 0);
 
-// 存档点（书签图标用）：挂在主干靠前的三个节点上
-const mainChain = [];
+// 主干 root→head 的祖链（存档点与投影字段共用这一条）
+const chain = [];
 {
   let cur = nodes[head];
-  while (cur) { mainChain.push(cur.id); cur = cur.parent ? nodes[cur.parent] : null; }
-  mainChain.reverse();
+  while (cur) { chain.push(cur); cur = cur.parent ? nodes[cur.parent] : null; }
+  chain.reverse();
 }
-const savepoints = [10, 30, 60].filter(i => mainChain[i]).map((i, k) => ({
-  id: 'sp-big-' + k, name: '存档点 ' + (k + 1) + '（第 ' + nodes[mainChain[i]].turn + ' 回合）',
-  turn: nodes[mainChain[i]].turn, nodeId: mainChain[i], ts: 1600000000000,
+
+// 存档点（书签图标用）：挂在主干靠前的三个节点上
+const savepoints = [10, 30, 60].filter(i => chain[i]).map((i, k) => ({
+  id: 'sp-big-' + k, name: '存档点 ' + (k + 1) + '（第 ' + chain[i].turn + ' 回合）',
+  turn: chain[i].turn, nodeId: chain[i].id, ts: 1600000000000,
 }));
 
 // 投影字段（导入时会被 project 重建，但导入口径需要完整一份）
 const headNode = nodes[head];
 const log = [];
 const messages = [];
-{
-  let cur = headNode;
-  const chain = [];
-  while (cur) { chain.push(cur); cur = cur.parent ? nodes[cur.parent] : null; }
-  chain.reverse();
-  for (const n of chain) {
-    for (const e of n.entries) log.push(e);
-    if (n.userMsg) messages.push(n.userMsg);
-    if (n.assistantMsg) messages.push(n.assistantMsg);
-  }
+for (const n of chain) {
+  for (const e of n.entries) log.push(e);
+  if (n.userMsg) messages.push(n.userMsg);
+  if (n.assistantMsg) messages.push(n.assistantMsg);
 }
 
 const pack = {
@@ -161,6 +160,7 @@ const pack = {
   tree: { v: 1, root: root.id, head: head, nodes: nodes, states: states },
 };
 
+mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(pack), 'utf8');
 console.log('已生成 ' + OUT);
 console.log('  节点数：' + Object.keys(nodes).length + '（目标 ~' + TARGET + '）');

@@ -5,7 +5,7 @@
 #   docker run --rm -p 8080:80 infinite-reading      # → http://localhost:8080/
 #
 # 运行段依旧零依赖、零状态（不装 node、不挂卷）；构建段只在 docker build 时跑一次。
-# 构建上下文靠 .dockerignore 瘦身（docs / eval / tools / .git 不进镜像）。
+# 构建上下文靠 .dockerignore 瘦身（.git / sidecar / acceptance / eval / tools 不进上下文）。
 
 FROM node:24-alpine AS build
 WORKDIR /app

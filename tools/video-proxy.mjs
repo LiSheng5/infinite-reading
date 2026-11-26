@@ -14,7 +14,7 @@
  *   - 不改 sidecar（可选本地服务照旧零改动）；
  *   - 只放行 MiniMax 两个域名（api.minimax.io / api.minimaxi.com），上游启动时定死，防 SSRF；
  *   - 下载 mp4 不走这里：仍按应用内「下载失败 → remoteUrl 限时链接 + 新标签页打开」降级；
- *   - 只监听 127.0.0.1；只放行 GET / POST / OPTIONS。
+ *   - 只监听 127.0.0.1；只放行 GET / POST / HEAD / OPTIONS。
  *
  * 用法（端口 / 上游都可省，也可以只给上游 URL）：
  *   node tools/video-proxy.mjs                               # 端口 4320 + 上游 api.minimax.io
@@ -196,7 +196,7 @@ function createProxyServer(upstream) {
     }
     if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'HEAD') {
       res.writeHead(405, Object.assign({ 'Content-Type': 'text/plain; charset=utf-8' }, cors));
-      res.end('只放行 GET / POST / OPTIONS');
+      res.end('只放行 GET / POST / HEAD / OPTIONS');
       return;
     }
     forward(req, res, upstream, cors);

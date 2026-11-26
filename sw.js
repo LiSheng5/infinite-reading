@@ -8,7 +8,7 @@
  *   - 导航请求（打开页面）：网络优先，断网回退到预缓存的 index.html
  *     （网络优先是为了让更新永远不被缓存卡住——这类项目最容易死在「改了没生效」上）
  *   - 同源静态资源：缓存优先 + 后台静默更新（stale-while-revalidate）
- *   - 跨域请求（对话 / 生图 API、字体 CDN）：一律不缓存、直接放行 —— 密钥与剧情绝不进缓存
+ *   - 跨域请求（对话 / 生图 / 生视频 API）：一律不缓存、直接放行 —— 密钥与剧情绝不进缓存
  *   - 非 GET 请求：不碰
  *
  * 「用户卡旧版」的风险全在导航请求上——导航保持网络优先、绝不缓存优先；hash 文件名本身
@@ -75,7 +75,7 @@ async function cacheFirst(request) {
     return hit;
   }
   const res = await fetch(request);
-  if (res && res.ok && res.type === 'basic') cache.put(request, res.clone());
+  if (res && res.ok) cache.put(request, res.clone());
   return res;
 }
 
@@ -85,7 +85,7 @@ self.addEventListener('fetch', event => {
 
   let url;
   try { url = new URL(req.url); } catch (_) { return; }
-  if (url.origin !== self.location.origin) return;   // 跨域（API / 字体）：放行，不缓存
+  if (url.origin !== self.location.origin) return;   // 跨域（对话 / 生图 API）：放行，不缓存
 
   event.respondWith(req.mode === 'navigate' ? networkFirst(req) : cacheFirst(req));
 });

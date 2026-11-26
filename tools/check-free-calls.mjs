@@ -10,15 +10,15 @@
 //   2) JS 内置与浏览器全局（下方 GLOBALS 白名单）；
 //   3) tools/free-calls-allow.json 里登记的名字（每条带一行理由）。
 // 未解析的名字 → 失败。这能抓住「搬家后忘了改成 A.xxx(...)」的大部分情况。
-// 已知局限（靠允许名单消化，见 free-calls-allow.json 顶部说明）：
-// 正则字面量与模板字符串内的伪匹配、对象方法简写与「后跟 { 的调用」难以区分、
-// 多声明符（const a = 1, b = 2）只登记第一个名字等。
+// 已知局限（启发式，靠允许名单兜底）：正则字面量与模板字符串里的伪匹配、
+// 对象方法简写与「后跟 { 的调用」难以区分、跨文件同名函数识别不到。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ALLOW = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'free-calls-allow.json'), 'utf8'));
+delete ALLOW._readme;   // 说明键，不是允许名
 
 // ---------------- 词法：剔除字符串 / 注释 / 正则 / 模板原始段（${} 内表达式保留为代码） ----------------
 const REGEX_PREV_KW = ['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'instanceof', 'await', 'yield', 'throw'];

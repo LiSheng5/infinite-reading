@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 tools/serve.py —— 「无限阅读」便携静态服务（Python 3，零依赖）
 
 被根目录的启动.bat 调用（机器上有 Python 时优先用它）。
-服务目录是构建产物 dist/site（阶段 1 起源码经 Vite 构建；先 npm run build）。
+服务目录是构建产物 dist/site（源码经 Vite 构建；先 npm run build）。
 为什么不用 `python -m http.server`：它没有任何排除能力，服务仓库根会把
 sidecar/data/（本地服务的 token，以及 SQLite 库里的邮件草稿 / 审计 / 支付台账；
 启用邮件后还可能有 Resend API Key）直接端出去。

@@ -21,14 +21,14 @@ npm run dev     # 开发服务器（热更新）
 
 | 方式 | 命令 / 操作 | 说明 |
 |---|---|---|
-| 多文件产物 | `npm run build:site` → `npm run serve`（`npx serve`，开发期工具，首次需联网） | 与 GitHub Pages / Docker 同一份产物，PWA 可安装 |
+| 多文件产物 | `npm run build:site` → `npm run serve`（`npx serve`，开发期工具，首次需联网） | 与 GitHub Pages / Docker 同一份产物，PWA 可安装。注意 `npx serve` 默认监听**所有网卡**，只想本机访问请用 `启动.bat` 或 `python tools/serve.py`（都只绑回环） |
 | 单文件产物 | `npm run build:single` → 双击 `dist/single/index.html` | `file://` 的真实形态（JS/CSS/图片全内联） |
 | 二次打包 | `npm run bundle` → `dist/ir.html` | 把单文件产物复制成对外发布的名字 |
 | 一键启动 | 双击 `启动.bat`（Windows） | 没有产物会先构建，再起本地服务（Python 优先，退回 `tools/serve.ps1`） |
 
 > ⚠️ `file://` 和 `http://localhost` 是**两套独立的本地存储（IndexedDB / localStorage 都按 origin 隔离）**，开发时固定用其中一种，别来回切。
 
-验收脚本（`acceptance/`）需要读 / 写内部状态时，给产物 URL 加 `?ir-test=1`：`src/main.js` 末尾会把当前模块的真实导出挂到 `window.__IR_TEST__`（`App / Store / Tree / Context / Motion / Nav / ModalHost / providers / Sidecar`）。不带该参数时这个对象不存在，产物与普通双击完全一致；**应用代码不得引用它**。
+验收脚本（`acceptance/`）需要读 / 写内部状态时，给产物 URL 加 `?ir-test=1`：`src/main.js` 末尾会把当前模块的真实导出挂到 `window.__IR_TEST__`（`App / Store / Tree / Context / genId / Motion / MotionDOM / Nav / ModalHost / ChatProviders / ImageProviders / Sidecar / VERSION`）。不带该参数时这个对象不存在，产物与普通双击完全一致；**应用代码不得引用它**。
 
 ## 二、目录地图
 
@@ -119,7 +119,7 @@ npm run sync:version       # 2) 同步 package.json / package-lock.json 与 READ
 1. Fork → 建分支（`feat/xxx`、`fix/xxx`）→ 改代码 → `npm test` + `npm run build` 本地自检 → 提 PR。
 2. 一个 PR 只做一件事。提交信息用 `feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 前缀，一句话说清「改了什么、为什么」。
 3. PR 里请写：**改了什么**、**为什么**、**怎么验证的**（贴 `npm test` 的结果最好；界面改动请附 390 / 1280 两个宽度的前后截图）。
-4. CI 会跑语法检查、结构门禁、版本号、离线评测、构建与产物自检，以及一部分功能单测——**不是** `npm test` 的全量清单（哪些门禁只在本地跑见 `.github/workflows/ci.yml` 与 `package.json` 的 `test` 链）；红了请先修再请人 review。提交前请在本地跑完整的 `npm test`。
+4. CI 分两个 job：`check` 做语法检查、结构门禁、版本号、对比度 / 令牌 / 动效护栏、PWA 清单、`tsc`、构建 + sw 预缓存自检、单文件冒烟（其中与 `npm test` 重叠的几项只为快速失败）；`eval` 跑**完整的** `npm test`。清单真源始终是 `package.json` 的 `test` 链，见 `.github/workflows/ci.yml`；红了请先修再请人 review，提交前请在本地跑一遍 `npm test`。
 5. 新增用户可见功能请同步更新 `README.md` 与（必要时）`ARCHITECTURE.md`。
 
 ## 八、想帮忙但不知道从哪下手

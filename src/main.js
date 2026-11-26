@@ -49,16 +49,16 @@ import './screens/read/index.js';
 import './screens/branch/index.js';
 import './screens/modal/index.js';
 
-// —— 4：组合根（启动时先安装弹窗外壳，再绑定事件 + boot）——
+// —— 4/5：组合根（启动时先安装弹窗外壳，再绑定事件 + boot）——
 import './app/main.js';
 
 // —— 6：PWA 注册（file:// 自动跳过）——
 import './pwa.js';
 
 // —— 验收测试钩子（仅 ?ir-test=1）——
-// 删掉了全局 IR 兼容层，acceptance/* 仍需要一个稳定的观测面：这里把当前模块
-// 的真实导出（不是副本）按旧 IR 的键名挂出来，脚本只读 / 驱动，应用代码不引用它。
-// 不带 ?ir-test=1 时 window.__IR_TEST__ 不存在，产物行为与普通打开完全一致。
+// acceptance/* 需要一个稳定的观测面：这里把当前模块的真实导出（不是副本）按应用层的键名挂出来，
+// 脚本只读 / 驱动，应用代码不引用它。不带 ?ir-test=1 时 window.__IR_TEST__ 不存在，
+// 产物行为与普通打开完全一致。
 import { A } from './app/core.js';
 import { Store } from './core/store.ts';
 import { Tree, genId } from './core/tree.ts';

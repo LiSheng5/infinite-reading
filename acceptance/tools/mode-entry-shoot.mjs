@@ -1,5 +1,5 @@
 /*
- * acceptance/tools/mode-entry-shoot.mjs —— 「三种模式点进去」的页面重设计 · 验收截图与行为自检
+ * acceptance/tools/mode-entry-shoot.mjs —— 「两种模式点进去」的页面重设计 · 验收截图与行为自检
  *
  * 产出：
  *   acceptance/mode-entry/shots/{序号}-{视图}-{宽度}.png
@@ -27,6 +27,7 @@ import { createRequire } from 'module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Zip } from '../../src/core/zip.ts';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -41,21 +42,6 @@ const VIEWPORTS = [
 ];
 
 /* ---------------- PNG 夹具：一张内嵌 SillyTavern V2 角色卡（tEXt keyword=chara）的 1x1 PNG ---------------- */
-
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(buf) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
 
 const ST_CARD = {
   name: '周叙',
@@ -74,7 +60,7 @@ function buildPngWithCard(card) {
   const text = Buffer.from('chara\0' + Buffer.from(JSON.stringify(card)).toString('base64'), 'latin1');
   const len = Buffer.alloc(4); len.writeUInt32BE(text.length);
   const type = Buffer.from('tEXt', 'latin1');
-  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([type, text])));
+  const crc = Buffer.alloc(4); crc.writeUInt32BE(Zip.crc32(Buffer.concat([type, text])));
   const iendAt = base.indexOf(Buffer.from('IEND', 'latin1')) - 4;
   return Buffer.concat([base.subarray(0, iendAt), len, type, text, crc, base.subarray(iendAt)]);
 }
