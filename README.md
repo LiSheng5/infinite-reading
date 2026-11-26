@@ -40,9 +40,9 @@ cd infinite-reading
    ```
 
    然后任选一种方式启动：
-   - **Windows 一键**：双击 `启动.bat`——没有产物会先构建，再起本地服务并自动打开浏览器（优先用 Python，没有就退回内置的 PowerShell 服务器）
+   - **Windows 一键**：双击 `启动.bat`——没有产物会先构建，再起一个**只绑 `127.0.0.1`** 的本地服务并自动打开浏览器（优先用 Python，没装就退回内置的 `tools/serve.ps1`：零依赖、含目录穿越防护）
    - **单文件双击**：直接双击 `dist/single/index.html`（JS / CSS / 图标全部内联成一个 HTML，`file://` 可开；也可 `npm run bundle` 复制成 `dist/ir.html`）
-   - 本地静态服务（更稳，推荐）：`python tools/serve.py`（仓库自带、离线；Windows 也可直接双击 `启动.bat`）；已装 Node 时可用 `npm run serve`（`npx serve`，开发期工具，首次需联网）
+   - 本地静态服务（更稳，推荐）：`python tools/serve.py`（仓库自带、离线，同样只绑回环）；已装 Node 时可用 `npm run serve`（`npx serve`，开发期工具，首次需联网，默认监听**所有网卡**）
    - 开发模式：`npm run dev`（Vite dev server，热更新；发布前请用构建产物验收）
 2. **接入模型配置向导**（首次启动自动弹出；设置里「接入向导」随时重开）：四步走——**选接入方式**（厂商预设只预填 Base URL / 自定义地址 / 聚合模式）→ **填 API Key**（Key 只存浏览器本地，请求由浏览器直发所选服务商，不经过任何中转；Ollama / LM Studio / vLLM 等本地模型自动跳过这步）→ **选模型**（自动 `GET /models` 拉取列表下拉可选，拉不到就手填，不阻塞）→ **测试连接**。任何一步都能「跳过，直接填完整表单」——完整设置表单（含生图 / 视频 / 辅助模型）仍是高级入口。**预设只带地址不带模型名**：模型名只来自 `GET /models` 或手填，跟着厂商实时变动、不做内置清单。
    - **聚合模式（可选）** = 走现成第三方聚合商（OpenRouter / 硅基流动）中转，不是自建网关：**你的对话正文与 API Key 会先经过该聚合商服务器再转发到模型厂商（浏览器 → 第三方 → 模型厂商）**，仅在接受这一点时使用；选中后设置页顶部有常驻琥珀徽章标明「对话经由 {运营方} 转发」，可一键切回直连。
@@ -113,14 +113,12 @@ node sidecar/server.mjs            # 首次启动会打印 token
 | 走法 | 命令 / 操作 | 适合 |
 |---|---|---|
 | 本地服务 | 双击 `启动.bat`（Windows）或 `python tools/serve.py` | 日常使用：绕开 `file://` 的 CORS 与数据隔离 |
-| 单文件 | `npm run bundle` → `dist/ir.html`（约 708 KB） | 发给别人：一个 HTML 文件，双击即玩 |
+| 单文件 | `npm run bundle` → `dist/ir.html`（约 700 KB） | 发给别人：一个 HTML 文件，双击即玩 |
 | 在线 Demo | 仓库自带 GitHub Pages 工作流 | 零安装体验：`https://LiSheng5.github.io/infinite-reading/` |
 | 自托管 | `docker compose up -d` → `http://localhost:8080/` | NAS / 内网 / 长期挂机（容器无状态，数据仍在各人浏览器里） |
 | 可选本地服务 | `node sidecar/server.mjs` | 想用「邮件 / 定时主动 / 代下单」时另开一个终端跑它（需 Node ≥ 24：内置 `node:sqlite`，见 `sidecar/README.md`） |
 
 **可安装（PWA）**：用 `https` 或 `localhost` 打开后，浏览器会出现「安装」入口；装完有桌面图标、可离线打开（Service Worker 只缓存本站静态资源，**跨域 API 请求与密钥一律不进缓存**）。
-
-**Windows 一键启动**：`启动.bat` 起一个只绑 `127.0.0.1` 的静态服务并自动开浏览器；优先用 Python，没装 Python 就退回内置的 `tools/serve.ps1`（零依赖，含目录穿越防护）。
 
 **自己改图标**：图标是脚本生成的，`node tools/make-icons.mjs` 会重画 `icons/`（矢量 + 各尺寸 PNG，含 maskable 与 iOS 主屏图标），产物已随仓库提交，正常使用无需运行。
 

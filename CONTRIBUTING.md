@@ -36,12 +36,12 @@ npm run dev     # 开发服务器（热更新）
 index.html              单页骨架：只留挂载容器（旧 DOM 已删）+ 图标 sprite + 唯一入口 <script type="module" src="src/main.js">
 src/main.js             唯一入口：应用层 → 各屏 → 组合根 → PWA（import 顺序即依赖顺序）
 src/app/                界面行为层（25 个 ES module + 组合根 main.js）：事件绑定 / 回合编排 / 渲染推进 / 弹窗流程；A.state 共享状态 + A.reg 注册表
-src/core/               核心逻辑（25 个 TS 模块 + 仅类型声明的 globals.d.ts，Node 可 require）：providers / context / ctxusage / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / writeBack / confirmQueue / errors / modelCapabilities / version
+src/core/               核心逻辑（25 个 TS 模块 + 仅类型声明的 globals.d.ts + 只含 {"type":"module"} 的 package.json，后者让 Node 按 ESM 解析这些 .ts，Node 可 require）：providers / context / ctxusage / tree / treeLayout / storage / store / schema / prefs / motion / titles / search / roleCard / zip / sidecar / features / paintQueue / proposals / importText / backupPack / writeBack / confirmQueue / errors / modelCapabilities / version
 src/ui/                 基础组件库（Svelte 5）+ 动效 / 切屏 / 弹窗栈 / 视图过渡内核
 src/screens/            7 个屏幕的组件与 $state 模块：home / settings / storyPrefs / shelf / read / branch / modal
 css/tokens.css          设计令牌真源（颜色 / 时长 / 缓动 / 圆角 / 表单字号 --fs-field）；:root 之外不写颜色字面量
 css/style.css           屏幕样式入口（只有 @import + 设计原则 / 断点标尺 / 按钮词汇）
-css/{base,home,shelf,read,overlays,responsive,settings,branch,icons}.css   9 个分片：import 顺序 = 层叠顺序（M4）；某个屏的样式就改它那一片
+css/{base,home,shelf,read,overlays,responsive,settings,branch,icons}.css   9 个分片：import 顺序 = 层叠顺序；某个屏的样式就改它那一片
 css/motion.css          动效政策收口 + @keyframes 唯一定义点 + 暂停规则
 eval/run.js             离线评测（不花 API）
 eval/mock-story.js      评测用的 32 回合长局剧本
@@ -53,6 +53,8 @@ icons/                  应用图标（由 tools/make-icons.mjs 生成，产物�
 Dockerfile / docker-compose.yml / docker/nginx.conf   自托管（纯静态 nginx 托管 dist/site）
 启动.bat                Windows 一键启动（构建 + 本地服务）
 tools/                  构建与验收脚本（版本号同步 sync-version、单文件打包 bundle-single-file、图标生成 make-icons、本地服务器 serve.py / serve.ps1、video-proxy、WCAG 对比度 contrast-check、裸调用检查 check-free-calls（白名单 free-calls-allow.json）、压测树 make-big-tree），不属于运行时代码
+acceptance/             发布前的人工验收（不进 npm test）：tools/ 下的 Playwright 脚本（截图 / 冒烟 / 动效实测）与按版本存档的 shot 基线（0.12.1 / 0.14.0 / mode-entry）
+.github/                CI 与协作模板：workflows/ci.yml（check + eval 两个 job）、pages.yml（发布在线 Demo）、release.yml（打 tag 出包），以及 Issue / PR 模板
 ```
 
 架构与数据流的细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
