@@ -43,13 +43,16 @@ cd infinite-reading
    ```
 
    Then run it — either way works:
+   - **Windows one-click**: double-click `启动.bat` — it builds first if there is no output, then serves on **`127.0.0.1` only** and opens your browser (Python if available, otherwise the bundled `tools/serve.ps1`: zero dependencies, with directory-traversal protection)
    - **Single file**: double-click `dist/single/index.html` (JS / CSS / icons all inlined into one HTML, `file://` works; `npm run bundle` copies it to `dist/ir.html`)
-   - **Local server** (more robust, recommended): `python tools/serve.py` (bundled, offline; on Windows just double-click `启动.bat`); with Node installed you can also use `npm run serve` (`npx serve`, a dev-only tool that downloads on first run)
+   - **Local server** (more robust, recommended): `python tools/serve.py` (bundled, offline, also loopback-only); with Node installed you can also use `npm run serve` (`npx serve`, a dev-only tool that downloads on first run and listens on **all interfaces** by default)
    - **Development**: `npm run dev` (Vite dev server with HMR; ship the built output)
-2. Click **⚙ Connect a model** and fill in **Base URL** (pick from the dropdown or type your own), **API Key**, and **model name**. Image models are configured the same way.
+2. **The connect wizard** (opens by itself on first launch; reopen it any time with **向导重新配置** next to the chat-model section in settings) walks four steps: **pick how to connect** (vendor preset — which only pre-fills the Base URL — your own URL, or aggregate mode) → **enter the API key** (stored in your browser only; requests go straight from the browser to the provider you picked, with no relay in between; local runtimes such as Ollama / LM Studio / vLLM skip this step) → **pick a model** (the list is fetched with `GET /models` and shown as a dropdown; if that fails just type the name — nothing is blocked) → **test the connection**. Every step also offers "skip and fill the full form instead" — the full settings form (including image / video / helper models) stays the advanced entry point. **Presets carry Base URLs only, never model names**: a model name comes from `GET /models` or from you, because vendors change them all the time and no built-in list can keep up.
+   - **Aggregate mode (optional)** routes through an existing third-party aggregator (OpenRouter / SiliconFlow) — it is not a gateway you host: **your chat text and API key first pass through that aggregator's servers before being forwarded to the model vendor (browser → third party → vendor)**, so use it only if you accept that. While it is on, the chat-model section shows a persistent amber badge saying "conversations relayed via {operator}", with a one-click "switch back to direct".
+   - Every **model** field in settings (story chat / model library / painter / scribe / drafter / image / video) auto-fills its `/models` list for the matching base URL; typing a name by hand always works.
 3. **Click one of the two mode cards to start** — Story (uses the premise box) or Chat (a tool-using assistant: draw, remember, schedule, draft email, buy — the last two need your confirmation) — there is no separate "Start" button; the premise box is always on screen and is only used by Story mode. A new chat opens empty; its intro page offers an optional "add character card" entry.
    - **📄 Import text**: hand over existing text (a setting document, a novel fragment, a chat log) and let the AI turn it into a starting premise.
-   - **☰ My shelf** lists your stories (continue / rename / delete / export); **↶ Continue last** jumps straight back in.
+   - **☰ My shelf** lists your stories (continue / rename / delete / export); **↶ Continue last** jumps straight back in; the shelf's **＋ New** button also lets you pick a mode.
    - **Story mode is split-screen**: text on the left (narration is plain body copy; your own turns are quiet side-lines tagged 做 / 说 / 导演), the stage on the right (current image + thumbnails). **Chat is a pure chat layout** (no stage — images sit inline in the chat stream, click for a lightbox). The top-left `←` returns home next to the shelf and title; save points, new story, draw this scene and model settings live under the top-right `⋯`.
    - Above the input, **💡 灵感** keeps this turn's choices folded away (Story mode only) — open it for a row of options, or ignore it and type anything. The 做 / 说 / 导演 switch appears in Story mode only (chat has no such switch, with or without a card) and tells the model how to read your line; it is remembered per story.
 
@@ -103,7 +106,7 @@ Everything lives in the **current browser** (main store: IndexedDB, sized by the
 | Way | Command / action | Good for |
 |---|---|---|
 | Local server | `启动.bat` on Windows, or `python tools/serve.py` | Daily use: avoids the `file://` CORS and storage split |
-| Single file | `npm run bundle` → `dist/ir.html` (~708 KB) | Sharing: one HTML file, double-click and play |
+| Single file | `npm run bundle` → `dist/ir.html` (~700 KB) | Sharing: one HTML file, double-click and play |
 | Online demo | GitHub Pages workflow ships with the repo | Zero install: `https://LiSheng5.github.io/infinite-reading/` |
 | Self-hosted | `docker compose up -d` → `http://localhost:8080/` | NAS / LAN / always-on (the container is stateless; data stays in each visitor's browser) |
 | Optional local service | `node sidecar/server.mjs` | Only if you want email / proactive scheduling / delegated purchase (Node ≥ 24 — needs the built-in `node:sqlite`; see `sidecar/README.md`) |
@@ -144,6 +147,7 @@ player action ─► AI1 (story chat) ─► JSON: narration / choices / scene_c
 | `src/pwa.js` + `sw.js` | PWA: registers the Service Worker; caches same-origin static assets only |
 | `eval/run.js` | Offline evaluation (mock long game + probes, zero API cost) |
 | `eval/tree-test.js` | Branch-tree data-layer tests (offline Node: projection / sibling switching / legacy migration / store integration) |
+| `eval/proposals-test.js` | Proposal module tests (fake sidecar: model-initiated email / purchase can only produce a proposal, executes only after confirmation, idempotent / expiring, offline Node) |
 | `eval/zip-smoke.js` etc. | ZIP smoke test and sidecar / frontend feature tests (all run by `npm test`) |
 | `sidecar/` (testing) | Optional local service (Node process): email / proactive scheduling / delegated purchase; binds `127.0.0.1` only |
 | `tools/` | Optional scripts: version sync, single-file bundle, icon generation, local server, `video-proxy.mjs` local relay for image/video generation (not runtime code) |
@@ -152,7 +156,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module duties, the full round-trip ca
 
 ## Contributing and license
 
-- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (44 `eval/` gates plus 3 `tools/` checks, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
+- **Code**: `npm ci`, then `npm run dev` for development and `npm test` for the full offline suite (44 `eval/` gates + 3 `tools/` checks + `tsc`, 48 steps in total, zero API cost). See [CONTRIBUTING.md](CONTRIBUTING.md) (in Chinese).
 - **No code required**: `.irstory.json` stories, style packs, character cards, doc fixes and translations are all welcome.
 - **Security**: report privately per the "Security" section of [CONTRIBUTING.md](CONTRIBUTING.md); everything else goes to Issues (templates provided).
 - **License**: [MIT](LICENSE). Third-party fonts and resources are listed in the "Third-party resources" section of [CONTRIBUTING.md](CONTRIBUTING.md).
