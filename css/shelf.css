@@ -96,6 +96,12 @@
 .shelf-row:hover .shelf-row-more, .shelf-row-more:focus-visible { opacity: 1; }
 @media (hover: none) { .shelf-row-more { opacity: 1; } }   /* 触屏常显 */
 .row-menu { top: calc(100% - 8px); right: 8px; }
+/* 菜单打开时把这一行抬到兄弟行之上。行入场（rowIn 配 fill-mode: both）让每一行都成了层叠
+ * 上下文，行内的 .menu（z-index 40）只能在本行内部排序，后面几行按 DOM 顺序盖在它上面：
+ * 菜单看得见（行本身没有底色），点击却全落到下面的行上——表现为「菜单弹出来了，点不了」。
+ * 取值低于吸顶分组头的 5，菜单不会盖住分组头。 */
+.shelf-row:has(.row-menu), .shelf-hit:has(.row-menu) { z-index: 1; }
+
 .shelf-more { display: block; margin: 14px auto 6px; }
 
 /* 行进入：错峰淡入上移（rowIn 只在 rich 跑，见 ANIMATIONS.rowIn） */

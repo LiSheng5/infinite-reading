@@ -17,6 +17,8 @@
  *      否则「主圆角 8px」会在各分片里重新长出 5 / 7 / 12px。
  *   7. 表单字号收口：input / select / textarea 的 font-size 只准 var(--fs-field)，窄屏由
  *      responsive.css 在 :root 上抬到 16px——写在控件选择器上的 16px 会被更高特异性盖掉。
+ *   8. 书架行菜单的层级：行内菜单靠 .shelf-row:has(.row-menu) 抬升才点得到——行入场动画让每行
+ *      都成了层叠上下文，这条规则删掉界面毫无提示，等于「菜单看得见、点不了」。
  *
  * 用法：node eval/css-structure-test.js（任一不过 → 退出码 1）
  */
@@ -256,6 +258,23 @@ console.log('[8] 表单字号只走 --fs-field（窄屏抬到 16px，防 iOS 聚
     + (bad.length ? '：' + bad.slice(0, 6).join(' | ') : ''));
   ok(FIELD_NAMES.every((n) => seen.has(n)), '登记过的字段控件都还在（改名 / 删控件后同步 FIELD_NAMES）：'
     + FIELD_NAMES.filter((n) => !seen.has(n)).join(' , '));
+}
+
+/* ---------- 8. 书架行菜单的层级：行内菜单必须能跳出行的层叠上下文 ---------- */
+{
+  // 行入场动画（rowIn 配 fill-mode: both）让每一行都成了层叠上下文，行内 z-index:40 的 .menu
+  // 只能在本行内部排序——后面几行按 DOM 顺序盖在它上面：菜单看得见（行没有底色），点击却全落到
+  // 下面的行上（表现为「菜单弹出来了，点不了」）。这条 :has 抬升是菜单可点击的唯一保证，
+  // 删掉它没有任何视觉提示，所以放进门禁。
+  const css = stripCss(read('css/shelf.css'));
+  const lift = /\.shelf-row:has\(\.row-menu\)[^{]*\{([^}]*)\}/.exec(css);
+  ok(!!lift, 'shelf.css 有「菜单打开时抬升整行」的 .shelf-row:has(.row-menu) 规则');
+  const z = lift ? Number((/z-index:\s*(-?\d+)/.exec(lift[1]) || [])[1]) : NaN;
+  ok(Number.isFinite(z), '抬升规则写的是具体 z-index（不能是 auto）：' + (lift ? lift[1].trim() : '无规则'));
+  const head = /\.shelf-group-head\s*\{[^}]*z-index:\s*(\d+)/.exec(css);
+  const hz = head ? Number(head[1]) : 5;
+  ok(Number.isFinite(z) && z < hz, '抬升值低于吸顶分组头（z-index ' + hz + '），菜单不盖住分组头');
+  ok(/\.shelf-hit:has\(\.row-menu\)/.test(css), '搜索结果行 .shelf-hit 同样抬升');
 }
 
 if (H.failed) {

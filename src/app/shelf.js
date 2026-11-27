@@ -187,6 +187,11 @@ import { A, saveAll, toast } from './core.js';
     add('导出', () => A.openExport(it.id));
     add('删除', () => removeStory(it.id));
     row.appendChild(menu);
+    // 下方放不下就翻到行上方（.menu-up）：最下面几行否则会把末项「删除」落到视口外
+    const host = (row.closest && row.closest('#screen-shelf')) || document.documentElement;
+    const mr = menu.getBoundingClientRect();
+    const hr = host.getBoundingClientRect();
+    if (mr.bottom > hr.bottom - 8 && row.getBoundingClientRect().top - hr.top > mr.height) menu.classList.add('menu-up');
   }
 
   async function renameStory(id) {
